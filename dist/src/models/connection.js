@@ -9,7 +9,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const connectDB = async () => {
     try {
-        await mongoose_1.default.connect(process.env.MongoDB_URI_Online || "");
+        await mongoose_1.default.connect(process.env.MongoDB_URI || "");
         console.log("MongoDB connected successfully");
     }
     catch (error) {

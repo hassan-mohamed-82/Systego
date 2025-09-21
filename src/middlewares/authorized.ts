@@ -1,15 +1,16 @@
-import { NextFunction, Request, Response, RequestHandler } from "express";
+import { NextFunction, Response, RequestHandler } from "express";
 import { UnauthorizedError } from "../Errors/unauthorizedError";
-
+import { AuthenticatedRequest } from "../types/custom";
 
 export const authorizeRoles = (...roles: string[]): RequestHandler => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user?.role || !roles.includes(req.user.role)) {
-      throw new UnauthorizedError();
+      throw new UnauthorizedError("You are not authorized to access this resource");
     }
     next();
   };
 };
+
 
 
 // import { NextFunction, Request, Response, RequestHandler } from "express";
