@@ -7,22 +7,14 @@ exports.deleteUser = exports.updateUser = exports.getUserById = exports.getAllUs
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const User_1 = require("../models/schema/User");
 const BadRequest_1 = require("../Errors/BadRequest");
-const unauthorizedError_1 = require("../Errors/unauthorizedError");
 const response_1 = require("../utils/response");
 const handleImages_1 = require("../utils/handleImages");
 const Errors_1 = require("../Errors");
 const createUser = async (req, res, next) => {
     const currentUser = req.user;
-    if (!currentUser || currentUser.role !== "Admin") {
-        throw new unauthorizedError_1.UnauthorizedError("Only Admin can create users");
-    }
-    const { username, email, password, role, company_name, phone, image_base64 } = req.body;
-    if (!username || !email || !password || !role) {
-        throw new BadRequest_1.BadRequest("Username, email, password, and role are required");
-    }
-    const allowedRoles = ["Admin", "Cashier", "Storesman"];
-    if (!allowedRoles.includes(role)) {
-        throw new BadRequest_1.BadRequest("Invalid role");
+    const { username, email, password, positionId, company_name, phone, image_base64 } = req.body;
+    if (!username || !email || !password || !positionId) {
+        throw new BadRequest_1.BadRequest("Username, email, password, and positionId are required");
     }
     // ✅ التأكد من تكرار البيانات
     const existingUser = await User_1.UserModel.findOne({ $or: [{ email }, { username }] });
@@ -38,22 +30,22 @@ const createUser = async (req, res, next) => {
         image_url = await (0, handleImages_1.saveBase64Image)(image_base64, username, req, "users");
     }
     // ✅ إنشاء المستخدم
-    const newUser = await User_1.UserModel.create({
+    const newUser = await (await (User_1.UserModel.create({
         username,
         email,
         password_hash,
-        role,
+        positionId,
         company_name,
         phone,
         image_url,
-    });
+    }))).populate("positionId");
     (0, response_1.SuccessResponse)(res, {
         message: "User created successfully",
         user: {
             id: newUser._id,
             username: newUser.username,
             email: newUser.email,
-            role: newUser.role,
+            positionId: newUser.possitionId,
             status: newUser.status,
             image_url: newUser.image_url,
         },
@@ -61,10 +53,6 @@ const createUser = async (req, res, next) => {
 };
 exports.createUser = createUser;
 const getAllUsers = async (req, res, next) => {
-    const currentUser = req.user;
-    if (!currentUser || currentUser.role !== "Admin") {
-        return next(new unauthorizedError_1.UnauthorizedError("Only Admin can get all users"));
-    }
     const users = await User_1.UserModel.find();
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
@@ -73,10 +61,6 @@ const getAllUsers = async (req, res, next) => {
 };
 exports.getAllUsers = getAllUsers;
 const getUserById = async (req, res, next) => {
-    const currentUser = req.user;
-    if (!currentUser || currentUser.role !== "Admin") {
-        return next(new unauthorizedError_1.UnauthorizedError("Only Admin can get all users"));
-    }
     const { id } = req.params;
     if (!id) {
         throw new BadRequest_1.BadRequest("User id is required");
@@ -89,12 +73,8 @@ const getUserById = async (req, res, next) => {
 };
 exports.getUserById = getUserById;
 const updateUser = async (req, res, next) => {
-    const currentUser = req.user;
-    if (!currentUser || currentUser.role !== "Admin") {
-        throw new unauthorizedError_1.UnauthorizedError("Only Admin can update users");
-    }
     const { id } = req.params;
-    const { username, email, password, role, company_name, phone, status, image_base64 } = req.body;
+    const { username, email, password, positionId, company_name, phone, status, image_base64 } = req.body;
     const user = await User_1.UserModel.findById(id);
     if (!user) {
         throw new Errors_1.NotFound("User not found");
@@ -103,8 +83,8 @@ const updateUser = async (req, res, next) => {
         user.username = username;
     if (email)
         user.email = email;
-    if (role)
-        user.role = role;
+    if (positionId)
+        user.possitionId = positionId;
     if (company_name)
         user.company_name = company_name;
     if (phone)
@@ -125,7 +105,7 @@ const updateUser = async (req, res, next) => {
             id: user._id,
             username: user.username,
             email: user.email,
-            role: user.role,
+            positionId: user.possitionId,
             status: user.status,
             image_url: user.image_url,
         },
@@ -133,10 +113,6 @@ const updateUser = async (req, res, next) => {
 };
 exports.updateUser = updateUser;
 const deleteUser = async (req, res, next) => {
-    const currentUser = req.user;
-    if (!currentUser || currentUser.role !== "Admin") {
-        throw new unauthorizedError_1.UnauthorizedError("Only Admin can delete users");
-    }
     const { id } = req.params;
     if (!id) {
         throw new BadRequest_1.BadRequest("User id is required");

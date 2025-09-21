@@ -33,20 +33,10 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserModel = void 0;
+exports.ActionModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const UserSchema = new mongoose_1.Schema({
-    username: { type: String, required: true, unique: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    password_hash: { type: String, required: true },
-    company_name: { type: String },
-    phone: { type: String },
-    possitionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position", required: true },
-    status: { type: String, default: "active", enum: ["active", "inactive"] },
-    image_url: { type: String },
-    address: { type: String },
-    vat_number: { type: String },
-    state: { type: String },
-    postal_code: { type: String },
+const ActionSchema = new mongoose_1.Schema({
+    roleId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Role", required: true },
+    name: { type: String, required: true },
 }, { timestamps: true });
-exports.UserModel = mongoose_1.default.model("User", UserSchema);
+exports.ActionModel = mongoose_1.default.model("Action", ActionSchema);

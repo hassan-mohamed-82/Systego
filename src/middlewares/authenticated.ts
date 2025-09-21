@@ -1,5 +1,5 @@
 import { verifyToken } from "../utils/auth";
-import { Request, Response, NextFunction, RequestHandler } from 'express';
+import { Request, Response, NextFunction } from "express";
 import { UnauthorizedError } from "../Errors/unauthorizedError";
 
 export function authenticated(req: Request, res: Response, next: NextFunction) {
@@ -7,11 +7,10 @@ export function authenticated(req: Request, res: Response, next: NextFunction) {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new UnauthorizedError("Invalid Token");
   }
+
   const token = authHeader.split(" ")[1];
   const decoded = verifyToken(token);
-  req.user = decoded;
+
+  req.user = decoded; // { id, name, positionId }
   next();
 }
-
-
-

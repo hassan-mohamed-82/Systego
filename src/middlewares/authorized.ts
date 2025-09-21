@@ -2,14 +2,14 @@ import { NextFunction, Response, RequestHandler } from "express";
 import { UnauthorizedError } from "../Errors/unauthorizedError";
 import { AuthenticatedRequest } from "../types/custom";
 
-export const authorizeRoles = (...roles: string[]): RequestHandler => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user?.role || !roles.includes(req.user.role)) {
-      throw new UnauthorizedError("You are not authorized to access this resource");
-    }
-    next();
-  };
-};
+// export const authorizeRoles = (...roles: string[]): RequestHandler => {
+//   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+//     if (!req.user?.role || !roles.includes(req.user.role)) {
+//       throw new UnauthorizedError("You are not authorized to access this resource");
+//     }
+//     next();
+//   };
+// };
 
 
 
@@ -101,3 +101,38 @@ export const authorizeRoles = (...roles: string[]): RequestHandler => {
 //     next(new UnauthorizedError("Invalid or expired token"));
 //   }
 // };
+
+
+interface ExtendedRequest extends Request {
+  user: {
+    roles?: string[];
+    actions?: string[];
+  };
+}
+
+
+// authorize("UserManagement", "add")
+export const authorize = (requiredRole: string, requiredAction: string) => {
+  return (req: ExtendedRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+
+    if (!user) {
+      throw new UnauthorizedError("Not authenticated");
+    }
+
+    const userRoles = user.roles || [];
+    const userActions = user.actions || [];
+
+    // ✅ لازم يبقى معاه الرول المطلوب
+    if (!userRoles.includes(requiredRole)) {
+      throw new UnauthorizedError("You don't have the required role");
+    }
+
+    // ✅ ولازم يبقى معاه الـ action المطلوب
+    if (!userActions.includes(requiredAction)) {
+      throw new UnauthorizedError("You don't have the required action");
+    }
+
+    next();
+  };
+};

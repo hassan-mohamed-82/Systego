@@ -16,27 +16,44 @@ const login = async (req, res, next) => {
     if (!email || !password) {
         throw new BadRequest_1.BadRequest("Email and password are required");
     }
-    const user = await User_1.UserModel.findOne({ email });
+    // ✅ نجيب اليوزر + position + roles + actions
+    const user = await User_1.UserModel.findOne({ email })
+        .populate({
+        path: "possitionid",
+        model: "Position",
+        populate: {
+            path: "roles",
+            model: "Role",
+            populate: {
+                path: "actions",
+                model: "Action",
+            },
+        },
+    })
+        .lean(); // 👈 يخلي النتيجة تاخد شكل AppUser
     if (!user) {
         throw new NotFound_1.NotFound("User not found");
     }
-    // التحقق من كلمة المرور باستخدام bcrypt مباشرة
+    // ✅ التحقق من كلمة المرور
     const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
     if (!isMatch) {
-        return next(new Errors_1.UnauthorizedError("Invalid email or password"));
+        throw new Errors_1.UnauthorizedError("Invalid email or password");
     }
+    // ✅ توليد التوكن
     const token = (0, auth_1.generateToken)({
         id: user._id,
-        role: user.role,
+        position: user.positionId?.name, // نرجع اسم الـ Position
         name: user.username,
     });
-    (0, response_1.SuccessResponse)(res, { message: "Login successful",
+    // ✅ استجابة منظمة
+    (0, response_1.SuccessResponse)(res, {
+        message: "Login successful",
         token,
         user: {
             id: user._id,
             username: user.username,
             email: user.email,
-            role: user.role,
+            position: user.positionId, // فيه جواه الـ roles + actions
             status: user.status,
         },
     });

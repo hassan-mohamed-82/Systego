@@ -10,6 +10,6 @@ function authenticated(req, res, next) {
     }
     const token = authHeader.split(" ")[1];
     const decoded = (0, auth_1.verifyToken)(token);
-    req.user = decoded;
+    req.user = decoded; // { id, name, positionId }
     next();
 }

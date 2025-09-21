@@ -5,14 +5,13 @@ import { loginSchema } from '../validation/auth';
 import { catchAsync } from '../utils/catchAsync';
 import { authenticated } from '../middlewares/authenticated';
 import { createUserSchema,updateUserSchema } from '../validation/Admin';
-import { authorizeRoles } from '../middlewares/authorized';
 export const route = Router();
 
-route.post("/",authenticated,authorizeRoles("Admin") ,validate(createUserSchema), catchAsync(createUser));
-route.get("/", authenticated,authorizeRoles("Admin"),catchAsync(getAllUsers));
-route.get("/:id",authenticated,authorizeRoles("Admin") ,catchAsync(getUserById));
-route.put("/:id",authenticated ,authorizeRoles("Admin"),validate(updateUserSchema), catchAsync(updateUser));
-route.delete("/:id", authenticated,authorizeRoles("Admin"),catchAsync(deleteUser));
+route.post("/",authenticated,validate(createUserSchema), catchAsync(createUser));
+route.get("/", authenticated,catchAsync(getAllUsers));
+route.get("/:id",authenticated,catchAsync(getUserById));
+route.put("/:id",authenticated ,validate(updateUserSchema), catchAsync(updateUser));
+route.delete("/:id", authenticated,catchAsync(deleteUser));
 
 // Export the authRouter to be used in the main app
 export default route;

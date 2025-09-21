@@ -10,20 +10,13 @@ import { NotFound } from "../Errors";
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const currentUser = req.user;
 
-  if (!currentUser || currentUser.role !== "Admin") {
-    throw new UnauthorizedError("Only Admin can create users");
+  const { username, email, password, positionId, company_name, phone, image_base64 } = req.body;
+
+  if (!username || !email || !password || !positionId) {
+    throw new BadRequest("Username, email, password, and positionId are required");
   }
 
-  const { username, email, password, role, company_name, phone, image_base64 } = req.body;
 
-  if (!username || !email || !password || !role) {
-    throw new BadRequest("Username, email, password, and role are required");
-  }
-
-  const allowedRoles = ["Admin", "Cashier", "Storesman"];
-  if (!allowedRoles.includes(role)) {
-    throw new BadRequest("Invalid role");
-  }
 
   // ✅ التأكد من تكرار البيانات
   const existingUser = await UserModel.findOne({ $or: [{ email }, { username }] });
@@ -42,15 +35,15 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   }
 
   // ✅ إنشاء المستخدم
-  const newUser = await UserModel.create({
-    username,
-    email,
-    password_hash,
-    role,
-    company_name,
-    phone,
-    image_url,
-  });
+  const newUser = await (await (UserModel.create({
+      username,
+      email,
+      password_hash,
+      positionId,
+      company_name,
+      phone,
+      image_url,
+  }))).populate("positionId");
 
   SuccessResponse(res, {
     message: "User created successfully",
@@ -58,7 +51,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
       id: newUser._id,
       username: newUser.username,
       email: newUser.email,
-      role: newUser.role,
+      positionId: newUser.possitionId,
       status: newUser.status,
       image_url: newUser.image_url,
     },
@@ -67,11 +60,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
 
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
-  const currentUser = req.user;
-
-  if (!currentUser || currentUser.role !== "Admin") {
-    return next(new UnauthorizedError("Only Admin can get all users"));
-  }
 
   const users = await UserModel.find();
 
@@ -83,12 +71,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 }
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
-  const currentUser = req.user;
-
-  if (!currentUser || currentUser.role !== "Admin") {
-    return next(new UnauthorizedError("Only Admin can get all users"));
-  }
-
+ 
   const { id } = req.params;
 
   if (!id) {
@@ -107,14 +90,10 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
 
 
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
-  const currentUser = req.user;
-
-  if (!currentUser || currentUser.role !== "Admin") {
-    throw new UnauthorizedError("Only Admin can update users");
-  }
+ 
 
   const { id } = req.params;
-  const { username, email, password, role, company_name, phone, status, image_base64 } = req.body;
+  const { username, email, password, positionId, company_name, phone, status, image_base64 } = req.body;
 
   const user = await UserModel.findById(id);
   if (!user) {
@@ -123,7 +102,7 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
   if (username) user.username = username;
   if (email) user.email = email;
-  if (role) user.role = role;
+  if (positionId) user.possitionId = positionId;
   if (company_name) user.company_name = company_name;
   if (phone) user.phone = phone;
   if (status) user.status = status;
@@ -145,7 +124,7 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
       id: user._id,
       username: user.username,
       email: user.email,
-      role: user.role,
+      positionId: user.possitionId,
       status: user.status,
       image_url: user.image_url,
     },
@@ -154,11 +133,6 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
 
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
-  const currentUser = req.user;
-
-  if (!currentUser || currentUser.role !== "Admin") {
-    throw new UnauthorizedError("Only Admin can delete users");
-  }
 
   const { id } = req.params;
 
