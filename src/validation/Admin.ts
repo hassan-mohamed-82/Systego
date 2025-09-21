@@ -1,7 +1,7 @@
 import Joi from "joi";
 
 export const createUserSchema = Joi.object({
-    name: Joi.string().required(),
+    username: Joi.string().required(),
     email: Joi.string().email().required(),
     password: Joi.string().required(),
     role: Joi.string().required(),
@@ -15,7 +15,7 @@ export const createUserSchema = Joi.object({
 });
 
 export const updateUserSchema = Joi.object({
-    name: Joi.string().optional(),
+    username: Joi.string().optional(),
     email: Joi.string().email().optional(),
     password: Joi.string().optional(),
     role: Joi.string().optional(),

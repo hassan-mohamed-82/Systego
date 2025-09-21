@@ -8,11 +8,11 @@ import { createUserSchema,updateUserSchema } from '../validation/Admin';
 import { authorizeRoles } from '../middlewares/authorized';
 export const route = Router();
 
-route.post("/",authenticated,authorizeRoles("admin") ,validate(createUserSchema), catchAsync(createUser));
-route.get("/", authenticated,authorizeRoles("admin"),catchAsync(getAllUsers));
-route.get("/:id",authenticated,authorizeRoles("admin") ,catchAsync(getUserById));
-route.put("/:id",authenticated ,authorizeRoles("admin"),validate(updateUserSchema), catchAsync(updateUser));
-route.delete("/:id", authenticated,authorizeRoles("admin"),catchAsync(deleteUser));
+route.post("/",authenticated,authorizeRoles("Admin") ,validate(createUserSchema), catchAsync(createUser));
+route.get("/", authenticated,authorizeRoles("Admin"),catchAsync(getAllUsers));
+route.get("/:id",authenticated,authorizeRoles("Admin") ,catchAsync(getUserById));
+route.put("/:id",authenticated ,authorizeRoles("Admin"),validate(updateUserSchema), catchAsync(updateUser));
+route.delete("/:id", authenticated,authorizeRoles("Admin"),catchAsync(deleteUser));
 
 // Export the authRouter to be used in the main app
 export default route;

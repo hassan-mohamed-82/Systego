@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateUserSchema = exports.createUserSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.createUserSchema = joi_1.default.object({
-    name: joi_1.default.string().required(),
+    username: joi_1.default.string().required(),
     email: joi_1.default.string().email().required(),
     password: joi_1.default.string().required(),
     role: joi_1.default.string().required(),
@@ -19,7 +19,7 @@ exports.createUserSchema = joi_1.default.object({
     postal_code: joi_1.default.string().optional(),
 });
 exports.updateUserSchema = joi_1.default.object({
-    name: joi_1.default.string().optional(),
+    username: joi_1.default.string().optional(),
     email: joi_1.default.string().email().optional(),
     password: joi_1.default.string().optional(),
     role: joi_1.default.string().optional(),

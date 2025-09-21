@@ -7,10 +7,10 @@ import { authenticated } from "../middlewares/authenticated";
 
 const route = Router();
 
-route.post("/",authenticated ,validate(createBrandSchema), catchAsync(createBrand));
-route.get("/", authenticated,catchAsync(getBrands));
-route.get("/:id",authenticated ,catchAsync(getBrandById));
-route.put("/:id",authenticated ,validate(updateBrandSchema), catchAsync(updateBrand));
-route.delete("/:id", authenticated,catchAsync(deleteBrand));
+route.post("/" ,validate(createBrandSchema), catchAsync(createBrand));
+route.get("/",catchAsync(getBrands));
+route.get("/:id" ,catchAsync(getBrandById));
+route.put("/:id" ,validate(updateBrandSchema), catchAsync(updateBrand));
+route.delete("/:id",catchAsync(deleteBrand));
 
 export default route;
