@@ -7,6 +7,7 @@ import permissionRouter from './permission';
 import productRouter from './products';
 import supplierRouter from './suppliers';
 import BillerRouter from "./Biller"
+import WarehouseRouter from "./Warehouse"
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -17,5 +18,6 @@ route.use("/category",CategoryRouter);
 route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
 route.use("/biller",BillerRouter);
+route.use("/warehouse",WarehouseRouter)
 
 export default route;
