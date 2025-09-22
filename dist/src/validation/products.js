@@ -18,6 +18,8 @@ exports.createproductSchema = joi_1.default.object({
     stock_worth: joi_1.default.number().required(),
     exp_date: joi_1.default.date().required(),
     notify_near_expiry: joi_1.default.boolean().required(),
+    barcode_number: joi_1.default.string().required(),
+    barcode_image: joi_1.default.string().optional(),
 });
 exports.updateproductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
@@ -32,4 +34,6 @@ exports.updateproductSchema = joi_1.default.object({
     stock_worth: joi_1.default.number().optional(),
     exp_date: joi_1.default.date().optional(),
     notify_near_expiry: joi_1.default.boolean().optional(),
+    barcode_number: joi_1.default.string().optional(),
+    barcode_image: joi_1.default.string().optional(),
 });

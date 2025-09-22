@@ -13,6 +13,9 @@ export const createproductSchema = Joi.object({
     stock_worth: Joi.number().required(),
     exp_date: Joi.date().required(),
     notify_near_expiry: Joi.boolean().required(),
+    barcode_number: Joi.string().required(),
+    barcode_image: Joi.string().optional(),
+    
 });
 
 export const updateproductSchema = Joi.object({
@@ -28,4 +31,6 @@ export const updateproductSchema = Joi.object({
     stock_worth: Joi.number().optional(),
     exp_date: Joi.date().optional(),
     notify_near_expiry: Joi.boolean().optional(),
+    barcode_number: Joi.string().optional(),
+    barcode_image: Joi.string().optional(),
 });
