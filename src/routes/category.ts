@@ -8,10 +8,10 @@ import { authenticated } from "../middlewares/authenticated";
 
 const route = Router();
 
-route.post("/" ,authenticated,validate(createCategorySchema), catchAsync(createcategory));
-route.get("/",authenticated,catchAsync(getCategories));
-route.get("/:id" ,authenticated,catchAsync(getCategoryById));
-route.put("/:id",authenticated ,validate(updateCategorySchema), catchAsync(updateCategory));
-route.delete("/:id",authenticated,catchAsync(deleteCategory));
+route.post("/" ,validate(createCategorySchema), catchAsync(createcategory));
+route.get("/",catchAsync(getCategories));
+route.get("/:id" ,catchAsync(getCategoryById));
+route.put("/:id" ,validate(updateCategorySchema), catchAsync(updateCategory));
+route.delete("/:id",catchAsync(deleteCategory));
 
 export default route;

@@ -33,14 +33,22 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CategoryModel = void 0;
+exports.ProductsModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const categorySchema = new mongoose_1.Schema({
+const ProductsSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
-    image: { type: String },
-    parentId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category" },
-    number_of_products: { type: Number, default: 0 },
-    stock_quantity: { type: Number, default: 0 },
-    value: { type: Number, default: 0 },
+    icon: { type: String },
+    code: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    brand_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Brand", required: true },
+    category_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category", required: true },
+    unit: {
+        type: String, enum: ["piece", "kilogram", "liter", "meter"], required: true,
+    },
+    price: { type: Number, required: true },
+    cost: { type: Number, required: true },
+    stock_worth: { type: Number, required: true },
+    exp_date: { type: Date, required: true },
+    notify_near_expiry: { type: Boolean, required: true },
 }, { timestamps: true });
-exports.CategoryModel = mongoose_1.default.model("Category", categorySchema);
+exports.ProductsModel = mongoose_1.default.model("Products", ProductsSchema);

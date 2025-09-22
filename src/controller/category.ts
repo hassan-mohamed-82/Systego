@@ -7,15 +7,15 @@ import { BadRequest } from "../Errors/BadRequest";
 import { NotFound } from "../Errors/";
 
 export const createcategory = async (req: Request, res: Response) => {
-  const { name, image } = req.body;
-  if (!name) throw new BadRequest("Category name is required");
+  const { name, image, parentId, number_of_products, stock_quantity, value } = req.body;
+  if (!name || !number_of_products || !stock_quantity) throw new BadRequest("Category name is required");
 
   let imageUrl = "";
   if (image) {
     imageUrl = await saveBase64Image(image, Date.now().toString(), req, "category");
   }
 
-  const category = await CategoryModel.create({ name, image: imageUrl });
+  const category = await CategoryModel.create({ name, image: imageUrl , parentId, number_of_products, stock_quantity, value });
   SuccessResponse(res, { message: "create category successfully", category });
 };
 

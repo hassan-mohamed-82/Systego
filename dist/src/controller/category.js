@@ -7,14 +7,14 @@ const handleImages_1 = require("../utils/handleImages");
 const BadRequest_1 = require("../Errors/BadRequest");
 const Errors_1 = require("../Errors/");
 const createcategory = async (req, res) => {
-    const { name, image } = req.body;
-    if (!name)
+    const { name, image, parentId, number_of_products, stock_quantity, value } = req.body;
+    if (!name || !number_of_products || !stock_quantity)
         throw new BadRequest_1.BadRequest("Category name is required");
     let imageUrl = "";
     if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
     }
-    const category = await category_1.CategoryModel.create({ name, image: imageUrl });
+    const category = await category_1.CategoryModel.create({ name, image: imageUrl, parentId, number_of_products, stock_quantity, value });
     (0, response_1.SuccessResponse)(res, { message: "create category successfully", category });
 };
 exports.createcategory = createcategory;
