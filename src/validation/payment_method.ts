@@ -1,0 +1,15 @@
+import Joi from "joi";
+
+export const CreatePaymentMethodSchema = Joi.object({
+  name: Joi.string().required(),
+  discription: Joi.string().required(),
+  isActive: Joi.boolean().default(true),
+  icon: Joi.string().required(),
+ });
+
+export const UpdatePaymentMethodSchema = Joi.object({
+        name: Joi.string().optional(),
+        discription: Joi.string().optional(),
+        isActive: Joi.boolean().optional(),
+        icon: Joi.string().optional(),
+    });
