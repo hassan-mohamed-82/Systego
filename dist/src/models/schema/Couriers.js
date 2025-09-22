@@ -33,28 +33,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProductsModel = void 0;
+exports.CourierModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const ProductsSchema = new mongoose_1.Schema({
-    name: { type: String, required: true, unique: true },
-    icon: { type: String },
-    code: { type: String, required: true },
-    quantity: { type: Number, required: true },
-    brand_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Brand", required: true },
-    category_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category", required: true },
-    unit: {
-        type: String,
-        enum: ["piece", "kilogram", "liter", "meter"],
-        required: true,
-    },
-    price: { type: Number, required: true },
-    cost: { type: Number, required: true },
-    stock_worth: { type: Number, required: true },
-    exp_date: { type: Date, required: true },
-    notify_near_expiry: { type: Boolean, required: true },
-    // ✅ باركود يجي من الأدمن
-    barcode_number: { type: String, required: true, unique: true },
-    // ✅ الصورة اللي هتتولد
-    barcode_image: { type: String },
+const CourierSchema = new mongoose_1.Schema({
+    name: { type: String, required: true, maxlength: 100 },
+    phone_number: { type: String, required: true, maxlength: 20, unique: true },
+    address: { type: String, required: true },
 }, { timestamps: true });
-exports.ProductsModel = mongoose_1.default.model("Products", ProductsSchema);
+exports.CourierModel = mongoose_1.default.model("Courier", CourierSchema);

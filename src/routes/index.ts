@@ -8,6 +8,7 @@ import productRouter from './products';
 import supplierRouter from './suppliers';
 import BillerRouter from "./Biller"
 import WarehouseRouter from "./Warehouse"
+import CouriersRouter from "./Couriers"
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -19,5 +20,5 @@ route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
 route.use("/biller",BillerRouter);
 route.use("/warehouse",WarehouseRouter)
-
+route.use("/courier",CouriersRouter)
 export default route;
