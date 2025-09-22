@@ -25,3 +25,19 @@ export const generateBarcodeImage = async (
 
   return `/${filePath}`; // يرجع لينك الصورة
 };
+
+
+export function generateEAN13Barcode() {
+  const base = Array.from({ length: 12 }, () =>
+    Math.floor(Math.random() * 10)
+  ).join("");
+
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const digit = parseInt(base[i]);
+    sum += i % 2 === 0 ? digit : digit * 3;
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+
+  return base + checkDigit;
+}

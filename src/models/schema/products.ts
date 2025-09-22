@@ -19,11 +19,8 @@ const ProductsSchema = new Schema(
     exp_date: { type: Date, required: true },
     notify_near_expiry: { type: Boolean, required: true },
 
-    // ✅ باركود يجي من الأدمن
     barcode_number: { type: String, required: true, unique: true },
 
-    // ✅ الصورة اللي هتتولد
-    barcode_image: { type: String },
   },
   { timestamps: true }
 );
