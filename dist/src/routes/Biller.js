@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Biller_1 = require("../controller/Biller");
+const validation_1 = require("../middlewares/validation");
+const Biller_2 = require("../validation/Biller");
+const catchAsync_1 = require("../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Biller_2.createBillerSchema), (0, catchAsync_1.catchAsync)(Biller_1.createBiller));
+route.get("/", (0, catchAsync_1.catchAsync)(Biller_1.getBillers));
+route.get("/:id", (0, catchAsync_1.catchAsync)(Biller_1.getBillerById));
+route.put("/:id", (0, validation_1.validate)(Biller_2.updateBillerSchema), (0, catchAsync_1.catchAsync)(Biller_1.updateBiller));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(Biller_1.deleteBiller));
+exports.default = route;
