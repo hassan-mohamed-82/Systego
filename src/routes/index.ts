@@ -11,6 +11,7 @@ import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
 import paymentMethodRouter from "./payment_method";
 import ExpeenseCategoryRouter from "./ExpenseCategory";
+import expensesRouter from './expenses'
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -25,4 +26,5 @@ route.use("/warehouse",WarehouseRouter)
 route.use("/courier",CouriersRouter)
 route.use("/expense_category",ExpeenseCategoryRouter)
 route.use("/payment_method",paymentMethodRouter)
+route.use("/expense",expensesRouter)
 export default route;
