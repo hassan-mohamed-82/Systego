@@ -13,6 +13,7 @@ import paymentMethodRouter from "./payment_method";
 import ExpeenseCategoryRouter from "./ExpenseCategory";
 import expensesRouter from './expenses'
 import CouponsRouter from './coupons'
+import DepartmentRouter from './departments'
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -29,4 +30,5 @@ route.use("/expense_category",ExpeenseCategoryRouter)
 route.use("/payment_method",paymentMethodRouter)
 route.use("/expense",expensesRouter)
 route.use("/coupon",CouponsRouter)
+route.use("/department",DepartmentRouter)
 export default route;
