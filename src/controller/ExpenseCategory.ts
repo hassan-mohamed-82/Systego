@@ -24,7 +24,7 @@ export const getExpenseCategory = async (req: Request, res: Response) => {
 };
 
 export const getExpenseCategories = async (req: Request, res: Response) => {
-  const categories = await ExpenseCategoryModel.find({}).populate("parentId");
+  const categories = await ExpenseCategoryModel.find({})
   if (!categories || categories.length === 0) throw new NotFound("No categories found");
   SuccessResponse(res, { message: "get categories successfully", categories });
 };

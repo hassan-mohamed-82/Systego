@@ -10,6 +10,7 @@ import BillerRouter from "./Biller"
 import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
 import paymentMethodRouter from "./payment_method";
+import ExpeenseCategoryRouter from "./ExpenseCategory";
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -22,5 +23,6 @@ route.use("/supplier",supplierRouter);
 route.use("/biller",BillerRouter);
 route.use("/warehouse",WarehouseRouter)
 route.use("/courier",CouriersRouter)
+route.use("/expense_category",ExpeenseCategoryRouter)
 route.use("/payment_method",paymentMethodRouter)
 export default route;
