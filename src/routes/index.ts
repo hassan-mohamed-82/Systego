@@ -15,6 +15,8 @@ import expensesRouter from './expenses'
 import CouponsRouter from './coupons'
 import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
+import incomeCategoryRouter from "./income_categories";
+
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -33,4 +35,5 @@ route.use("/expense",expensesRouter)
 route.use("/coupon",CouponsRouter)
 route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)
+route.use("/income_category",incomeCategoryRouter)
 export default route;
