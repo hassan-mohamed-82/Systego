@@ -38,7 +38,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const ProductsSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
     icon: { type: String },
-    code: { type: String, required: true },
+    code: { type: String, required: true, unique: true },
     quantity: { type: Number, required: true },
     brand_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Brand", required: true },
     category_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category", required: true },
@@ -52,6 +52,5 @@ const ProductsSchema = new mongoose_1.Schema({
     stock_worth: { type: Number, required: true },
     exp_date: { type: Date, required: true },
     notify_near_expiry: { type: Boolean, required: true },
-    barcode_number: { type: String, required: true, unique: true },
 }, { timestamps: true });
 exports.ProductsModel = mongoose_1.default.model("Products", ProductsSchema);

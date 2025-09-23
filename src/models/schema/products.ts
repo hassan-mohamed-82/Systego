@@ -4,7 +4,7 @@ const ProductsSchema = new Schema(
   {
     name: { type: String, required: true, unique: true },
     icon: { type: String },
-    code: { type: String, required: true },
+    code: { type: String, required: true, unique: true },
     quantity: { type: Number, required: true },
     brand_id: { type: Schema.Types.ObjectId, ref: "Brand", required: true },
     category_id: { type: Schema.Types.ObjectId, ref: "Category", required: true },
@@ -19,7 +19,6 @@ const ProductsSchema = new Schema(
     exp_date: { type: Date, required: true },
     notify_near_expiry: { type: Boolean, required: true },
 
-    barcode_number: { type: String, required: true, unique: true },
 
   },
   { timestamps: true }

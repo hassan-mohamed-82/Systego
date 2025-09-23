@@ -8,7 +8,7 @@ import { NotFound } from "../Errors/";
 import mongoose from "mongoose";
 import { BrandModel } from "../models/schema/brand";
 import { CategoryModel } from "../models/schema/category";
-import {generateEAN13Barcode} from "../utils/barcode"
+import {generateEAN13Barcode, generateBarcodeImage} from "../utils/barcode"
 import crypto from "crypto";
 
 
@@ -41,10 +41,11 @@ export const deleteProduct = async (req: Request, res: Response) => {
 };
 
 
-export const createproduct = async (req: Request, res: Response) => {
+
+export const createProduct = async (req: Request, res: Response) => {
   const {
     name,
-    code,
+    code,      // لازم المستخدم يدخل الكود أو يضغط زرار generate
     icon,
     quantity,
     brand_id,
@@ -55,48 +56,24 @@ export const createproduct = async (req: Request, res: Response) => {
     stock_worth,
     exp_date,
     notify_near_expiry,
-    barcode_number,
   } = req.body;
 
-  // ✅ تحقق من الحقول الأساسية (من غير الباركود دلوقتي)
-  if (
-    !name ||
-    !code ||
-    !quantity ||
-    !brand_id ||
-    !category_id ||
-    !unit ||
-    !price ||
-    !stock_worth ||
-    !exp_date ||
-    notify_near_expiry === undefined
-  ) {
-    throw new BadRequest("All fields are required except barcode_number (auto-generated if missing)");
+  if (!name || !code || !quantity || !brand_id || !category_id || !unit || !price || !stock_worth || !exp_date || notify_near_expiry === undefined) {
+    throw new BadRequest("All fields are required and code cannot be empty. Use generate button if needed.");
   }
 
-  // ✅ تحقق من brand_id و category_id
-  if (!mongoose.Types.ObjectId.isValid(brand_id)) {
-    throw new BadRequest("Invalid brand_id format");
-  }
+  if (!mongoose.Types.ObjectId.isValid(brand_id)) throw new BadRequest("Invalid brand_id format");
   const brand = await BrandModel.findById(brand_id);
   if (!brand) throw new NotFound("Brand not found");
 
-  if (!mongoose.Types.ObjectId.isValid(category_id)) {
-    throw new BadRequest("Invalid category_id format");
-  }
+  if (!mongoose.Types.ObjectId.isValid(category_id)) throw new BadRequest("Invalid category_id format");
   const category = await CategoryModel.findById(category_id);
   if (!category) throw new NotFound("Category not found");
 
-  // ✅ الباركود: استخدم اللي جاي أو ولّد واحد جديد
-  let finalBarcode = barcode_number || generateEAN13Barcode();
+  // التأكد من أن الكود فريد
+  const exists = await ProductsModel.findOne({ code });
+  if (exists) throw new BadRequest("Product code already exists");
 
-  // تأكد إنه مش مكرر
-  const existingBarcode = await ProductsModel.findOne({ barcode_number: finalBarcode });
-  if (existingBarcode) {
-    throw new BadRequest("Barcode number already exists");
-  }
-
-  // ✅ حفظ صورة الايقونة لو موجودة
   let imageUrl = "";
   if (icon) {
     imageUrl = await saveBase64Image(icon, Date.now().toString(), req, "product");
@@ -115,37 +92,59 @@ export const createproduct = async (req: Request, res: Response) => {
     stock_worth,
     exp_date,
     notify_near_expiry,
-    barcode_number: finalBarcode,
   });
 
-  SuccessResponse(res, {
-    message: "create product successfully",
-    product,
-  });
+  SuccessResponse(res, { message: "Create product successfully", product });
 };
 
 export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Product id is required");
 
-  let updateData = { ...req.body };
+  const updateData = { ...req.body };
 
-  // ✅ لو فيه باركود جديد، اتأكد إنه مش مكرر
-  if (updateData.barcode_number) {
+  if (updateData.code) {
     const exists = await ProductsModel.findOne({
-      barcode_number: updateData.barcode_number,
+      code: updateData.code,
       _id: { $ne: id }
     });
-    if (exists) {
-      throw new BadRequest("Barcode number already exists");
-    }
-  } else {
-    // لو مش موجود في التحديث، ممكن نولّد واحد جديد
-    updateData.barcode_number = generateEAN13Barcode();
+    if (exists) throw new BadRequest("Product code already exists");
   }
 
   const product = await ProductsModel.findByIdAndUpdate(id, updateData, { new: true });
   if (!product) throw new NotFound("Product not found");
 
-  SuccessResponse(res, { message: "update product successfully", product });
+  SuccessResponse(res, { message: "Update product successfully", product });
+};
+
+export const generateBarcodeImageController = async (req: Request, res: Response) => {
+  try {
+    const { product_id } = req.params;
+    if (!product_id) throw new BadRequest("Product ID is required");
+
+    const product = await ProductsModel.findById(product_id);
+    if (!product) throw new NotFound("Product not found");
+
+
+const productCode = product.code;
+const imageLink = await generateBarcodeImage(productCode, productCode);
+
+    const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
+
+    res.status(200).json({ success: true, barcode: fullImageUrl });
+  } catch (error: any) {
+    res.status(error.status || 500).json({ success: false, message: error.message });
+  }
+};
+
+
+export const generateProductCode = async (req: Request, res: Response) => {
+  let newCode = generateEAN13Barcode();
+
+  // التأكد من عدم التكرار
+  while (await ProductsModel.findOne({ code: newCode })) {
+    newCode = generateEAN13Barcode();
+  }
+
+  SuccessResponse(res, { code: newCode });
 };
