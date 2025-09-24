@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.login = void 0;
+exports.signup = exports.login = void 0;
 const User_1 = require("../models/schema/User");
 const auth_1 = require("../utils/auth");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
@@ -59,3 +59,40 @@ const login = async (req, res, next) => {
     });
 };
 exports.login = login;
+const signup = async (req, res) => {
+    const data = req.body;
+    // ✅ check if user already exists
+    const existingUser = await User_1.UserModel.findOne({
+        $or: [{ email: data.email }, { phone: data.phone }],
+    });
+    if (existingUser) {
+        if (existingUser.email === data.email) {
+            throw new Errors_1.ConflictError("Email is already registered");
+        }
+        if (existingUser.phone === data.phone) {
+            throw new Errors_1.ConflictError("Phone Number is already used");
+        }
+    }
+    // ✅ hash password
+    const hashedPassword = await bcryptjs_1.default.hash(data.password, 10);
+    // ✅ create new user
+    const newUser = await User_1.UserModel.create({
+        username: data.username,
+        email: data.email,
+        password_hash: hashedPassword,
+        phone: data.phone,
+        company_name: data.company_name,
+        role: data.role, // default = admin لو مش مبعوتة
+        possitionId: data.possitionId,
+        address: data.address,
+        vat_number: data.vat_number,
+        state: data.state,
+        postal_code: data.postal_code,
+        image_url: data.image_url,
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "User Signup Successfully. Please login.",
+        userId: newUser._id,
+    }, 201);
+};
+exports.signup = signup;

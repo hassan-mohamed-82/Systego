@@ -41,6 +41,7 @@ const UserSchema = new mongoose_1.Schema({
     password_hash: { type: String, required: true },
     company_name: { type: String },
     phone: { type: String },
+    role: { type: String, enum: ["superadmin", "admin"], default: "admin" },
     possitionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position", required: true },
     status: { type: String, default: "active", enum: ["active", "inactive"] },
     image_url: { type: String },

@@ -8,5 +8,6 @@ const auth_2 = require("../validation/auth");
 const catchAsync_1 = require("../utils/catchAsync");
 exports.authRouter = (0, express_1.Router)();
 exports.authRouter.post('/login', (0, validation_1.validate)(auth_2.loginSchema), (0, catchAsync_1.catchAsync)(auth_1.login));
+exports.authRouter.post('/signup', (0, validation_1.validate)(auth_2.signupSchema), (0, catchAsync_1.catchAsync)(auth_1.signup));
 // Export the authRouter to be used in the main app
 exports.default = exports.authRouter;

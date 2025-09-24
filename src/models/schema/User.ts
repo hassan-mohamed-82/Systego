@@ -8,6 +8,7 @@ const UserSchema = new Schema(
 
     company_name: { type: String },
     phone: { type: String },
+    role: { type: String,enum: ["superadmin", "admin"] ,default:"admin"}, 
     
     possitionId: { type: Schema.Types.ObjectId, ref: "Position", required: true },
     status: { type: String, default: "active", enum: ["active", "inactive"] },
