@@ -10,7 +10,7 @@ const UserSchema = new Schema(
     phone: { type: String },
     role: { type: String,enum: ["superadmin", "admin"] ,default:"admin"}, 
     
-    possitionId: { type: Schema.Types.ObjectId, ref: "Position", required: true },
+    positionId: { type: Schema.Types.ObjectId, ref: "Position"},
     status: { type: String, default: "active", enum: ["active", "inactive"] },
 
     image_url: { type: String },

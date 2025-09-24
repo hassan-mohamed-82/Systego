@@ -42,7 +42,7 @@ const UserSchema = new mongoose_1.Schema({
     company_name: { type: String },
     phone: { type: String },
     role: { type: String, enum: ["superadmin", "admin"], default: "admin" },
-    possitionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position", required: true },
+    positionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position" },
     status: { type: String, default: "active", enum: ["active", "inactive"] },
     image_url: { type: String },
     address: { type: String },

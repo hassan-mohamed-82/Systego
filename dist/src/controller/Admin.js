@@ -45,7 +45,7 @@ const createUser = async (req, res, next) => {
             id: newUser._id,
             username: newUser.username,
             email: newUser.email,
-            positionId: newUser.possitionId,
+            positionId: newUser.positionId,
             status: newUser.status,
             image_url: newUser.image_url,
         },
@@ -84,7 +84,7 @@ const updateUser = async (req, res, next) => {
     if (email)
         user.email = email;
     if (positionId)
-        user.possitionId = positionId;
+        user.positionId = positionId;
     if (company_name)
         user.company_name = company_name;
     if (phone)
@@ -105,7 +105,7 @@ const updateUser = async (req, res, next) => {
             id: user._id,
             username: user.username,
             email: user.email,
-            positionId: user.possitionId,
+            positionId: user.positionId,
             status: user.status,
             image_url: user.image_url,
         },

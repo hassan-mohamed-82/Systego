@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoleModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const RoleSchema = new mongoose_1.Schema({
-    possitionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position", required: true },
+    positionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position", required: true },
     name: { type: String, required: true, unique: true }, // زي "UserManagement" أو "Inventory"
 }, { timestamps: true });
 exports.RoleModel = mongoose_1.default.model("Role", RoleSchema);

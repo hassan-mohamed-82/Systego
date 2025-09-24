@@ -12,7 +12,10 @@ const generateToken = (user) => {
     return jsonwebtoken_1.default.sign({
         id: user._id?.toString(),
         name: user.username,
-        positionId: user.positionId?.toString(), // بدل role
+        role: user.role,
+        positionId: user.positionId?.toString(),
+        roles: Array.isArray(user.roles) ? user.roles.map((role) => role.name) : [],
+        actions: Array.isArray(user.actions) ? user.actions.map((action) => action.name) : [],
     }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
 exports.generateToken = generateToken;
@@ -22,7 +25,10 @@ const verifyToken = (token) => {
         return {
             id: decoded.id,
             name: decoded.name,
+            role: decoded.role,
             positionId: decoded.positionId,
+            roles: decoded.roles ?? [],
+            actions: decoded.actions ?? [],
         };
     }
     catch (error) {

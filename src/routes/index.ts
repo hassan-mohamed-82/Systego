@@ -16,10 +16,11 @@ import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
 import incomeCategoryRouter from "./income_categories";
 import BankAccountRouter from "./bank_accounts";
-
+import { authenticated } from "../middlewares/authenticated";
 export const route = Router();
 
 route.use("/auth", authRouter);
+route.use(authenticated);
 route.use("/brand", brandRouter);
 route.use("/admin", AdminRouter);
 route.use("/permission",permissionRouter);

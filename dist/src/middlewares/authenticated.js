@@ -9,7 +9,7 @@ function authenticated(req, res, next) {
         throw new unauthorizedError_1.UnauthorizedError("Invalid Token");
     }
     const token = authHeader.split(" ")[1];
-    const decoded = (0, auth_1.verifyToken)(token);
-    req.user = decoded; // { id, name, positionId }
+    const decoded = (0, auth_1.verifyToken)(token); // 👈 بيرجع { id, name, role, positionId, roles, actions }
+    req.user = decoded; // ✅ نضيف كل البيانات للـ request
     next();
 }

@@ -51,7 +51,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
       id: newUser._id,
       username: newUser.username,
       email: newUser.email,
-      positionId: newUser.possitionId,
+      positionId: newUser.positionId,
       status: newUser.status,
       image_url: newUser.image_url,
     },
@@ -102,7 +102,7 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
   if (username) user.username = username;
   if (email) user.email = email;
-  if (positionId) user.possitionId = positionId;
+  if (positionId) user.positionId = positionId;
   if (company_name) user.company_name = company_name;
   if (phone) user.phone = phone;
   if (status) user.status = status;
@@ -124,7 +124,7 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
       id: user._id,
       username: user.username,
       email: user.email,
-      positionId: user.possitionId,
+      positionId: user.positionId,
       status: user.status,
       image_url: user.image_url,
     },

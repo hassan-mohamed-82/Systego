@@ -9,59 +9,76 @@ import { SuccessResponse } from "../utils/response";
 import { AppUser } from "../types/custom";
 import { sendEmail } from "../utils/sendEmails";
 import { randomInt } from "crypto";
+import { saveBase64Image } from "../utils/handleImages"
+import { RoleModel } from "../models/schema/roles";
+import { ActionModel } from "../models/schema/Action";
+
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  if (!email || !password) {
-    throw new BadRequest("Email and password are required");
-  }
+    if (!email || !password) {
+      throw new BadRequest("Email and password are required");
+    }
 
-  // ✅ نجيب اليوزر + position + roles + actions
-  const user = await UserModel.findOne({ email })
-    .populate({
-      path: "possitionid",
-      model: "Position",
-      populate: {
-        path: "roles",
-        model: "Role",
-        populate: {
-          path: "actions",
-          model: "Action",
-        },
-      },
-    })
-    .lean<AppUser>(); // 👈 يخلي النتيجة تاخد شكل AppUser
+    // ✅ نجيب المستخدم
+    const user = await UserModel.findOne({ email })
+      .populate("positionId")
+      .lean<AppUser>();
 
-  if (!user) {
-    throw new NotFound("User not found");
-  }
+    if (!user) {
+      throw new NotFound("User not found");
+    }
 
-  // ✅ التحقق من كلمة المرور
-  const isMatch = await bcrypt.compare(password, user.password_hash as string);
-  if (!isMatch) {
-    throw new UnauthorizedError("Invalid email or password");
-  }
+    // ✅ تحقق من كلمة السر
+    const isMatch = await bcrypt.compare(password, user.password_hash as string);
+    if (!isMatch) {
+      throw new UnauthorizedError("Invalid email or password");
+    }
 
-  // ✅ توليد التوكن
-  const token = generateToken({
-    id: user._id,
-    position: (user.positionId as any)?.name, // نرجع اسم الـ Position
-    name: user.username,
-  });
+    // ✅ نجيب الـ roles المرتبطة بالـ position
+    const roles = await RoleModel.find({ positionId: user.positionId?._id }).lean();
 
-  // ✅ استجابة منظمة
-  SuccessResponse(res, {
-    message: "Login successful",
-    token,
-    user: {
-      id: user._id,
+    // ✅ نجيب الـ actions المرتبطة بالـ roles
+    let actions: any[] = [];
+    if (roles && roles.length > 0) {
+      actions = await ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
+    }
+
+    // 📌 Debugging logs (ممكن تشيلها بعد ما تتأكد)
+    console.log("user.positionId:", user.positionId);
+    console.log("roles:", roles);
+    console.log("actions:", actions);
+
+    // ✅ نولد التوكن
+    const token = generateToken({
+      _id: user._id,
       username: user.username,
-      email: user.email,
-      position: user.positionId, // فيه جواه الـ roles + actions
-      status: user.status,
-    },
-  });
+      role: user.role,
+      positionId: user.positionId?._id || null,
+      roles: roles || [],
+      actions: actions || [],
+    });
+
+    // ✅ نرجّع الاستجابة
+    SuccessResponse(res, {
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        position: user.positionId || null,
+        status: user.status,
+        role: user.role,
+        roles: roles?.map(r => r.name) || [],
+        actions: actions?.map(a => a.name) || [],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 
@@ -98,15 +115,26 @@ export const signup = async (req: Request, res: Response) => {
     vat_number: data.vat_number,
     state: data.state,
     postal_code: data.postal_code,
-    image_url: data.image_url,
   });
+
+  // ✅ save image if exists
+  if (data.imageBase64) {
+    const imageUrl = await saveBase64Image(
+      data.imageBase64,
+      newUser._id.toString(),
+      req,
+      "users"
+    );
+    newUser.image_url = imageUrl;
+    await newUser.save();
+  }
+
 
   SuccessResponse(
     res,
     {
       message: "User Signup Successfully. Please login.",
-      userId: newUser._id,
-    },
+      },
     201
   );
 };

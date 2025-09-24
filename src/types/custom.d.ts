@@ -33,6 +33,8 @@ export interface AppUser {
   email: string;
   status: "active" | "inactive";
 
+  role: "superadmin" | "admin";
+
   company_name?: string;
   phone?: string;
   image_url?: string;
@@ -51,7 +53,11 @@ export interface AppUser {
 export interface JwtUserPayload {
   id: string;
   name: string;
+  role:string;   // 👈 نفس الـ enum
   positionId: string;
+  roles: string[];
+  actions: string[];
+
 }
 
 // ========== Request مع User ==========

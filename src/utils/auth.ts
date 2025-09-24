@@ -9,12 +9,17 @@ export const generateToken = (user: any): string => {
     {
       id: user._id?.toString(),
       name: user.username,
-      positionId: user.positionId?.toString(), // بدل role
+      role: user.role,
+      positionId: user.positionId?.toString(),
+      roles: Array.isArray(user.roles) ? user.roles.map((role: any) => role.name) : [],
+      actions: Array.isArray(user.actions) ? user.actions.map((action: any) => action.name) : [],
     },
     process.env.JWT_SECRET as string,
     { expiresIn: "7d" }
   );
 };
+
+
 
 export const verifyToken = (token: string) => {
   try {
@@ -26,7 +31,10 @@ export const verifyToken = (token: string) => {
     return {
       id: decoded.id as string,
       name: decoded.name as string,
+      role: decoded.role as string,
       positionId: decoded.positionId as string,
+      roles: decoded.roles ?? [],
+      actions: decoded.actions ?? [],
     };
   } catch (error) {
     throw new UnauthorizedError("Invalid token");
