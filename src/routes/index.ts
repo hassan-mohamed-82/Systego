@@ -6,7 +6,6 @@ import CategoryRouter from "./category";
 import permissionRouter from './permission';
 import productRouter from './products';
 import supplierRouter from './suppliers';
-import BillerRouter from "./Biller"
 import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
 import paymentMethodRouter from "./payment_method";
@@ -27,7 +26,6 @@ route.use("/permission",permissionRouter);
 route.use("/category",CategoryRouter);
 route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
-route.use("/biller",BillerRouter);
 route.use("/warehouse",WarehouseRouter)
 route.use("/courier",CouriersRouter)
 route.use("/expense_category",ExpeenseCategoryRouter)
