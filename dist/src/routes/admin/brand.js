@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const barnd_1 = require("../../controller/admin/barnd");
+const validation_1 = require("../../middlewares/validation");
+const brand_1 = require("../../validation/admin/brand");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(brand_1.createBrandSchema), (0, catchAsync_1.catchAsync)(barnd_1.createBrand));
+route.get("/", (0, catchAsync_1.catchAsync)(barnd_1.getBrands));
+route.get("/:id", (0, catchAsync_1.catchAsync)(barnd_1.getBrandById));
+route.put("/:id", (0, validation_1.validate)(brand_1.updateBrandSchema), (0, catchAsync_1.catchAsync)(barnd_1.updateBrand));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(barnd_1.deleteBrand));
+exports.default = route;

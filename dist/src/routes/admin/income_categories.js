@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const income_categories_1 = require("../../controller/admin/income_categories");
+const validation_1 = require("../../middlewares/validation");
+const ExpenseCategory_1 = require("../../validation/admin/ExpenseCategory");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(ExpenseCategory_1.ExpenseCategorySchema), (0, catchAsync_1.catchAsync)(income_categories_1.createIncomeCategories));
+route.get("/", (0, catchAsync_1.catchAsync)(income_categories_1.getIncomeCategories));
+route.get("/:id", (0, catchAsync_1.catchAsync)(income_categories_1.getIncomeCategoriesById));
+route.put("/:id", (0, validation_1.validate)(ExpenseCategory_1.UpdateExpenseCategorySchema), (0, catchAsync_1.catchAsync)(income_categories_1.updateIncomeCategoriesgory));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(income_categories_1.deleteIncomeCategories));
+exports.default = route;

@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
-const routes_1 = __importDefault(require("./routes"));
+const admin_1 = __importDefault(require("./routes/admin"));
 const errorHandler_1 = require("./middlewares/errorHandler");
 const Errors_1 = require("./Errors");
 const dotenv_1 = __importDefault(require("dotenv"));
@@ -24,7 +24,7 @@ app.use(express_1.default.json({ limit: "20mb" }));
 app.use(express_1.default.urlencoded({ extended: true, limit: "20mb" }));
 app.use("/uploads", express_1.default.static("uploads"));
 // Routes
-app.use("/api", routes_1.default);
+app.use("/api", admin_1.default);
 app.use((req, res, next) => {
     throw new Errors_1.NotFound("Route not found");
 });

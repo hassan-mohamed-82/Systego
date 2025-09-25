@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Warehouse_1 = require("../../controller/admin/Warehouse");
+const validation_1 = require("../../middlewares/validation");
+const Warehouse_2 = require("../../validation/admin/Warehouse");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Warehouse_2.createWarehouseSchema), (0, catchAsync_1.catchAsync)(Warehouse_1.createWarehouse));
+route.get("/", (0, catchAsync_1.catchAsync)(Warehouse_1.getWarehouses));
+route.get("/:id", (0, catchAsync_1.catchAsync)(Warehouse_1.getWarehouseById));
+route.put("/:id", (0, validation_1.validate)(Warehouse_2.updateWarehouseSchema), (0, catchAsync_1.catchAsync)(Warehouse_1.updateWarehouse));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(Warehouse_1.deleteWarehouse));
+exports.default = route;
