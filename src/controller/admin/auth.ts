@@ -46,10 +46,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       actions = await ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
     }
 
-    // 📌 Debugging logs (ممكن تشيلها بعد ما تتأكد)
-    console.log("user.positionId:", user.positionId);
-    console.log("roles:", roles);
-    console.log("actions:", actions);
+   
 
     // ✅ نولد التوكن
     const token = generateToken({

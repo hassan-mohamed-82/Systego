@@ -16,6 +16,9 @@ import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
 import incomeCategoryRouter from "./income_categories";
 import BankAccountRouter from "./bank_accounts";
+import CountryRouter from "./Country";
+import CityRouter from "./City";
+import ZoneRouter from "./Zone";
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -38,6 +41,7 @@ route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)
 route.use("/income_category",incomeCategoryRouter)
 route.use("/bank_account",BankAccountRouter)
-
-
+route.use("/country",CountryRouter);
+route.use("/city",CityRouter);
+route.use("/zone",ZoneRouter);
 export default route;
