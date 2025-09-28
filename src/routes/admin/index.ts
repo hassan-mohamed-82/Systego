@@ -1,7 +1,7 @@
 import { Router } from "express";
 import authRouter from "./auth";
 import brandRouter from "./brand";
-import AdminRouter from ".";
+import AdminRouter from "./Admin";
 import CategoryRouter from "./category";
 import permissionRouter from './permission';
 import productRouter from './products';
@@ -38,4 +38,6 @@ route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)
 route.use("/income_category",incomeCategoryRouter)
 route.use("/bank_account",BankAccountRouter)
+
+
 export default route;

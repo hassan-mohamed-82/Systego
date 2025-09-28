@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
-import ApiRoute from "./routes/admin";
+import ApiRoute from "./routes/index";
 import { errorHandler } from "./middlewares/errorHandler";
 import { NotFound } from "./Errors";
 import dotenv from "dotenv";
