@@ -7,8 +7,8 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
 
 export const createcategory = async (req: Request, res: Response) => {
-  const { name, image, parentId, number_of_products, stock_quantity, value } = req.body;
-  if (!name || !number_of_products || !stock_quantity) throw new BadRequest("Category name is required");
+  const { name, image, parentId } = req.body;
+  if (!name ) throw new BadRequest("Category name is required");
   const existingCategory = await CategoryModel.findOne({ name });
   if (existingCategory) throw new BadRequest("Category already exists");
 
@@ -17,7 +17,8 @@ export const createcategory = async (req: Request, res: Response) => {
     imageUrl = await saveBase64Image(image, Date.now().toString(), req, "category");
   }
 
-  const category = await CategoryModel.create({ name, image: imageUrl , parentId, number_of_products, stock_quantity, value });
+
+  const category = await CategoryModel.create({ name, image: imageUrl , parentId });
   SuccessResponse(res, { message: "create category successfully", category });
 };
 
