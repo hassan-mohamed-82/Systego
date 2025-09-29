@@ -14,4 +14,5 @@ router.delete("/:id", (0, catchAsync_1.catchAsync)(Variation_1.deleteVariation))
 //option
 router.put("/options/:optionId", (0, catchAsync_1.catchAsync)(Variation_1.updateOption));
 router.delete("/options/:optionId", (0, catchAsync_1.catchAsync)(Variation_1.deleteOption));
+router.post("/:variationId/options", (0, catchAsync_1.catchAsync)(Variation_1.addOptionToVariation));
 exports.default = router;

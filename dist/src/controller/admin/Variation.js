@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteOption = exports.updateOption = exports.deleteVariation = exports.updateVariation = exports.getVariationById = exports.getVariations = exports.createVariation = void 0;
+exports.addOptionToVariation = exports.deleteOption = exports.updateOption = exports.deleteVariation = exports.updateVariation = exports.getVariationById = exports.getVariations = exports.createVariation = void 0;
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Variation_2 = require("../../models/schema/admin/Variation");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -100,3 +100,28 @@ const deleteOption = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Option deleted successfully" });
 };
 exports.deleteOption = deleteOption;
+// Add option to an existing variation
+const addOptionToVariation = async (req, res) => {
+    const { variationId } = req.params;
+    const { name, status } = req.body;
+    // 1. تأكد أن الفارييشن موجود
+    const variation = await Variation_1.VariationModel.findById(variationId);
+    if (!variation) {
+        throw new Errors_1.NotFound("Variation not found");
+    }
+    // 2. تأكد أن الاسم موجود
+    if (!name) {
+        throw new BadRequest_1.BadRequest("Option name is required");
+    }
+    // 3. إنشاء الأوبشن وربطه بالـ variation
+    const option = await Variation_2.OptionModel.create({
+        variationId,
+        name,
+        status: status ?? true,
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Option added successfully",
+        option,
+    });
+};
+exports.addOptionToVariation = addOptionToVariation;

@@ -6,7 +6,8 @@ import {
   updateVariation,
   deleteVariation,
   deleteOption,
-  updateOption
+  updateOption,
+  addOptionToVariation 
 } from "../../controller/admin/Variation";
 import { catchAsync } from "../../utils/catchAsync";
 import { validate } from "../../middlewares/validation";
@@ -23,5 +24,6 @@ router.delete("/:id", catchAsync(deleteVariation));
 //option
 router.put("/options/:optionId", catchAsync(updateOption));
 router.delete("/options/:optionId", catchAsync(deleteOption));
+router.post("/:variationId/options", catchAsync(addOptionToVariation));
 
 export default router;

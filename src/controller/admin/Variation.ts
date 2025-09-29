@@ -141,3 +141,33 @@ export const deleteOption = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Option deleted successfully" });
 };
+
+
+// Add option to an existing variation
+export const addOptionToVariation = async (req: Request, res: Response) => {
+  const { variationId } = req.params;
+  const { name, status } = req.body;
+
+  // 1. تأكد أن الفارييشن موجود
+  const variation = await VariationModel.findById(variationId);
+  if (!variation) {
+    throw new NotFound("Variation not found");
+  }
+
+  // 2. تأكد أن الاسم موجود
+  if (!name) {
+    throw new BadRequest("Option name is required");
+  }
+
+  // 3. إنشاء الأوبشن وربطه بالـ variation
+  const option = await OptionModel.create({
+    variationId,
+    name,
+    status: status ?? true,
+  });
+
+  SuccessResponse(res, {
+    message: "Option added successfully",
+    option,
+  });
+};
