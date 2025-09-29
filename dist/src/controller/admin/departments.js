@@ -13,6 +13,9 @@ const createDepartment = async (req, res) => {
     if (!description) {
         throw new BadRequest_1.BadRequest("Department description is required");
     }
+    const existingDepartment = await departments_1.DepartmentModel.findOne({ name });
+    if (existingDepartment)
+        throw new BadRequest_1.BadRequest("Department already exists");
     const department = await departments_1.DepartmentModel.create({ name, description });
     (0, response_1.SuccessResponse)(res, { message: "create department successfully", department });
 };

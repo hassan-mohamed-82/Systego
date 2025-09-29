@@ -23,6 +23,8 @@ export const getBrandById = async (req: Request, res: Response) => {
 export const createBrand = async (req: Request, res: Response) => {
   const { name, logo } = req.body;
   if (!name) throw new BadRequest("Brand name is required");
+  const existingBrand = await BrandModel.findOne({ name });
+  if (existingBrand) throw new BadRequest("Brand already exists");
 
   let logoUrl = "";
   if (logo) {

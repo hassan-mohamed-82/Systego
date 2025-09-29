@@ -26,6 +26,9 @@ const createCountry = async (req, res) => {
     const { name } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Country name, code and phone code are required");
+    const existingCountry = await Country_1.Country.findOne({ name });
+    if (existingCountry)
+        throw new BadRequest_1.BadRequest("Country already exists");
     const country = await Country_1.Country.create({ name });
     (0, response_1.SuccessResponse)(res, { message: "create country successfully", country });
 };

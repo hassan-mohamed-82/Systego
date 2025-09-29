@@ -12,6 +12,11 @@ const createSupplier = async (req, res) => {
     if (!username || !email || !phone_number) {
         throw new BadRequest_1.BadRequest("Username, email, and phone number are required");
     }
+    const existingSupplier = await suppliers_1.SupplierModel.findOne({
+        $or: [{ username }, { email }, { phone_number }],
+    });
+    if (existingSupplier)
+        throw new BadRequest_1.BadRequest("Supplier with given username, email, or phone number already exists");
     let imageUrl = "";
     if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "suppliers");

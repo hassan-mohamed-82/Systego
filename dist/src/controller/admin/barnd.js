@@ -27,6 +27,9 @@ const createBrand = async (req, res) => {
     const { name, logo } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Brand name is required");
+    const existingBrand = await brand_1.BrandModel.findOne({ name });
+    if (existingBrand)
+        throw new BadRequest_1.BadRequest("Brand already exists");
     let logoUrl = "";
     if (logo) {
         logoUrl = await (0, handleImages_1.saveBase64Image)(logo, Date.now().toString(), req, "brands");

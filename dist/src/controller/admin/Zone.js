@@ -37,6 +37,9 @@ const createZone = async (req, res) => {
     const existwarehouse = await Warehouse_1.WarehouseModel.findById(Warehouse);
     if (!existwarehouse)
         throw new Errors_1.NotFound("Warehouse not found");
+    const existingZone = await Zone_1.Zone.findOne({ name, city });
+    if (existingZone)
+        throw new BadRequest_1.BadRequest("Zone already exists in this city");
     const zone = await Zone_1.Zone.create({ name, city, shippingCost: sum, Warehouse });
     (0, response_1.SuccessResponse)(res, { message: "create zone successfully", zone });
 };

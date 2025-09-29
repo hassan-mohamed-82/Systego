@@ -21,6 +21,8 @@ export const getCountryById = async (req: Request, res: Response) => {
 export const createCountry = async (req: Request, res: Response) => {
     const { name} = req.body;
     if (!name ) throw new BadRequest("Country name, code and phone code are required");
+    const existingCountry = await Country.findOne({ name });
+    if (existingCountry) throw new BadRequest("Country already exists");
     const country = await Country.create({ name });
     SuccessResponse(res, { message: "create country successfully", country });
 }

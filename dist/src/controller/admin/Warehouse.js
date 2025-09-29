@@ -10,6 +10,9 @@ const createWarehouse = async (req, res) => {
     if (!name || !address || !phone || !email) {
         throw new BadRequest_1.BadRequest("Name, address, phone, and email are required");
     }
+    const existingWarehouse = await Warehouse_1.WarehouseModel.findOne({ name });
+    if (existingWarehouse)
+        throw new BadRequest_1.BadRequest("Warehouse already exists");
     const warehouse = await Warehouse_1.WarehouseModel.create({
         name,
         address,

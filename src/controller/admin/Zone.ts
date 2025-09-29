@@ -28,6 +28,8 @@ export const createZone = async (req: Request, res: Response) => {
     if(sum<0) throw new BadRequest("Total shipping cost can not be negative");
     const existwarehouse = await WarehouseModel.findById(Warehouse);
     if(!existwarehouse) throw new NotFound("Warehouse not found");
+    const existingZone = await Zone.findOne({ name, city });
+    if (existingZone) throw new BadRequest("Zone already exists in this city");
     const zone = await Zone.create({ name, city, shippingCost:sum , Warehouse});
     SuccessResponse(res, { message: "create zone successfully", zone });
 }   

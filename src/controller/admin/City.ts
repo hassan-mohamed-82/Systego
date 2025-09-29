@@ -12,6 +12,8 @@ export const createCity = async (req: Request, res: Response) => {
   if (!name || !country || shippingCost === undefined) {
     throw new BadRequest("City name, country and shippingCost are required");
   }
+  const existingCity = await City.findOne({ name, country });
+  if (existingCity) throw new BadRequest("City already exists in this country");
 
   const countryExists = await Country.findById(country);
   if (!countryExists) throw new NotFound("Country not found");

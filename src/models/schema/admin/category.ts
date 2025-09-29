@@ -2,7 +2,7 @@ import mongoose, { Schema } from "mongoose";
  
 const categorySchema =new Schema(
   {
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true },
     image: { type: String },
     parentId: { type: Schema.Types.ObjectId, ref: "Category" },
     number_of_products: { type: Number, default: 0 },

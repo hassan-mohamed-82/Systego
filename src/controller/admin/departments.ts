@@ -12,6 +12,8 @@ export const createDepartment = async (req: Request, res: Response) => {
 if (!description) {
   throw new BadRequest("Department description is required");
 }
+    const existingDepartment = await DepartmentModel.findOne({ name });
+    if (existingDepartment) throw new BadRequest("Department already exists");
 
     const department = await DepartmentModel.create({ name, description });
     SuccessResponse(res, { message: "create department successfully", department });

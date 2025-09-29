@@ -9,6 +9,8 @@ import { NotFound } from "../../Errors/";
 export const createcategory = async (req: Request, res: Response) => {
   const { name, image, parentId, number_of_products, stock_quantity, value } = req.body;
   if (!name || !number_of_products || !stock_quantity) throw new BadRequest("Category name is required");
+  const existingCategory = await CategoryModel.findOne({ name });
+  if (existingCategory) throw new BadRequest("Category already exists");
 
   let imageUrl = "";
   if (image) {

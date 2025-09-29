@@ -10,6 +10,9 @@ const createcategory = async (req, res) => {
     const { name, image, parentId, number_of_products, stock_quantity, value } = req.body;
     if (!name || !number_of_products || !stock_quantity)
         throw new BadRequest_1.BadRequest("Category name is required");
+    const existingCategory = await category_1.CategoryModel.findOne({ name });
+    if (existingCategory)
+        throw new BadRequest_1.BadRequest("Category already exists");
     let imageUrl = "";
     if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");

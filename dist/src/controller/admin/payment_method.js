@@ -11,6 +11,9 @@ const createPaymentMethod = async (req, res) => {
     if (!name || !discription) {
         throw new BadRequest_1.BadRequest("Please provide all the required fields");
     }
+    const existingPaymentMethod = await payment_methods_1.PaymentMethodModel.findOne({ name });
+    if (existingPaymentMethod)
+        throw new BadRequest_1.BadRequest("Payment method already exists");
     let icon = "";
     if (icon) {
         icon = await (0, handleImages_1.saveBase64Image)(icon, Date.now().toString(), req, "payment_methods");

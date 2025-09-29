@@ -23,6 +23,10 @@ export const createSupplier = async (req: Request, res: Response) => {
   if (!username || !email || !phone_number) {
     throw new BadRequest("Username, email, and phone number are required");
   }
+  const existingSupplier = await SupplierModel.findOne({
+    $or: [{ username }, { email }, { phone_number }],
+  })
+  if (existingSupplier) throw new BadRequest("Supplier with given username, email, or phone number already exists");
 
   let imageUrl = "";
   if (image) {
