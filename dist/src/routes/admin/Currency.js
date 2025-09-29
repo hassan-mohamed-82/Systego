@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Currency_1 = require("../../controller/admin/Currency");
+const validation_1 = require("../../middlewares/validation");
+const Currency_2 = require("../../validation/admin/Currency");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Currency_2.createCurrencySchema), (0, catchAsync_1.catchAsync)(Currency_1.createCurrency));
+route.get("/", (0, catchAsync_1.catchAsync)(Currency_1.getCurrencies));
+route.get("/:id", (0, catchAsync_1.catchAsync)(Currency_1.getCurrencyById));
+route.put("/:id", (0, validation_1.validate)(Currency_2.updateCurrencySchema), (0, catchAsync_1.catchAsync)(Currency_1.updateCurrency));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(Currency_1.deleteCurrency));
+exports.default = route;

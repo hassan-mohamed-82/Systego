@@ -19,6 +19,7 @@ import BankAccountRouter from "./bank_accounts";
 import CountryRouter from "./Country";
 import CityRouter from "./City";
 import ZoneRouter from "./Zone";
+import CurrencyRouter from "./Currency";
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -44,4 +45,5 @@ route.use("/bank_account",BankAccountRouter)
 route.use("/country",CountryRouter);
 route.use("/city",CityRouter);
 route.use("/zone",ZoneRouter);
+route.use("/currency",CurrencyRouter);
 export default route;
