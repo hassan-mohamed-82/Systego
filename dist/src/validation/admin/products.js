@@ -18,7 +18,7 @@ exports.createProductSchema = joi_1.default.object({
     image: joi_1.default.string().optional(),
     categoryId: joi_1.default.array().items(joi_1.default.string()).required(),
     brandId: joi_1.default.string().required(),
-    unit: joi_1.default.string().valid("piece", "kilogram", "liter", "meter").required(),
+    unit: joi_1.default.string().required(),
     price: joi_1.default.number().required(),
     quantity: joi_1.default.number().required(),
     description: joi_1.default.string().optional(),
@@ -33,14 +33,14 @@ exports.createProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
-    prices: joi_1.default.array().items(exports.priceSchema).optional(), // prices array
+    prices: joi_1.default.array().items(exports.priceSchema).required(), // prices array
 });
 exports.updateProductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     image: joi_1.default.string().optional(),
     categoryId: joi_1.default.array().items(joi_1.default.string()).optional(),
     brandId: joi_1.default.string().optional(),
-    unit: joi_1.default.string().valid("piece", "kilogram", "liter", "meter").optional(),
+    unit: joi_1.default.string().optional(),
     price: joi_1.default.number().optional(),
     quantity: joi_1.default.number().optional(),
     description: joi_1.default.string().optional(),

@@ -22,8 +22,7 @@ const createProduct = async (req, res) => {
     const existitbrand = await brand_1.BrandModel.findById(brandId);
     if (!existitbrand)
         throw new BadRequest_1.BadRequest("Brand not found");
-    const sum = existitcategory.product_quantity + quantity;
-    existitcategory.product_quantity = sum;
+    existitcategory.product_quantity += 1;
     // 🖼️ حفظ الصورة الأساسية لو Base64
     let imageUrl = image;
     if (image && image.startsWith("data:")) {

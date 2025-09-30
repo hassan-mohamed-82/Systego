@@ -17,7 +17,7 @@ export const createProductSchema = Joi.object({
   image: Joi.string().optional(),
   categoryId: Joi.array().items(Joi.string()).required(),
   brandId: Joi.string().required(),
-  unit: Joi.string().valid("piece", "kilogram", "liter", "meter").required(),
+  unit: Joi.string().required(),
   price: Joi.number().required(),
   quantity: Joi.number().required(),
   description: Joi.string().optional(),
@@ -32,7 +32,7 @@ export const createProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  prices: Joi.array().items(priceSchema).optional(), // prices array
+  prices: Joi.array().items(priceSchema).required(), // prices array
 });
 
 
@@ -43,7 +43,7 @@ export const updateProductSchema = Joi.object({
   image: Joi.string().optional(),
   categoryId: Joi.array().items(Joi.string()).optional(),
   brandId: Joi.string().optional(),
-  unit: Joi.string().valid("piece", "kilogram", "liter", "meter").optional(),
+  unit: Joi.string().optional(),
   price: Joi.number().optional(),
   quantity: Joi.number().optional(),
   description: Joi.string().optional(),

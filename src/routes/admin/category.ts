@@ -4,7 +4,6 @@ import {createcategory,getCategoryById,getCategories,updateCategory,deleteCatego
 import {validate} from"../../middlewares/validation";
 import {createCategorySchema,updateCategorySchema} from "../../validation/admin/category"
 import { catchAsync } from "../../utils/catchAsync";
-import { authenticated } from "../../middlewares/authenticated";
 
 const route = Router();
 
