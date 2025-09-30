@@ -7,167 +7,86 @@ import { SuccessResponse } from "../../utils/response";
 import {  Types } from "mongoose";
 import { IOption } from "../../models/schema/admin/Variation";
 
-// Create Variation + Options
-export const createVariation = async (req: Request, res: Response) => {
-  const { name, options } = req.body;
-    if (!name) {
-      throw new BadRequest("Variation name is required");
-    }
+export const createVariationWithOptions = async (req: Request, res: Response) => {
 
-    const existingVariation = await VariationModel.findOne({ name });
-    if (existingVariation) {
-      throw new BadRequest("Variation already exists");
-    }
+const { name, options } = req.body;
+    if (!name) throw new BadRequest("Variation name is required");
 
-
-    let createdOptions: IOption[] = [];
-    if (Array.isArray(options) && options.length > 0) {
-      const optionDocs = options.map((opt) => {
-        if (typeof opt === "string") {
-          // لو مبعوت كـ string
-          return { variationId: variation._id, name: opt };
-        } else if (typeof opt === "object" && opt.name) {
-          // لو مبعوت كـ object { name: "Small" }
-          return {
-            variationId: variation._id,
-            name: opt.name,
-            status: opt.status ?? true,
-          };
-        }
-      });
-      createdOptions = await OptionModel.insertMany(optionDocs);
-    }
+    // إنشاء الـ Variation
     const variation = await VariationModel.create({ name });
 
-
-    SuccessResponse(res, { message: "Variation created successfully", variation, createdOptions });  
-};
-
-
-
-
-export const getVariations = async (req: Request, res: Response) => {
-    const variations = await VariationModel.find().lean();
-
-    const populated = await Promise.all(
-      variations.map(async (variation) => {
-        const options = await OptionModel.find({ variationId: variation._id }).lean();
-        return { ...variation, options };
-      })
-    );
-
-    SuccessResponse(res, { message: "Get variations successfully", populated });
-  
-};
-
-
-
-export const getVariationById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-
-    const variation = await VariationModel.findById(id).lean();
-    if (!variation) {
-      return res.status(404).json({ message: "Variation not found" });
+    // إنشاء الـ Options لو موجودة
+    if (options && Array.isArray(options)) {
+      for (const opt of options) {
+        await OptionModel.create({ variationId: variation._id, name: opt.name, status: opt.status ?? true });
+      }
     }
 
-    const options = await OptionModel.find({ variationId: id }).lean();
+    SuccessResponse(res, { variation });
+};
 
-    SuccessResponse(res, { message: "Get variation successfully", variation: { ...variation, options } });
+
+export const getAllVariations = async (req: Request, res: Response) => {
+    const variations = await VariationModel.find().lean();
+
+    for (const v of variations) {
+      const options = await OptionModel.find({ variationId: v._id }).lean();
+      (v as any).options = options;
+    }
+
+    SuccessResponse(res, { variations });
   
 };
 
 
-export const updateVariation = async (req: Request, res: Response) => {
+
+export const getOneVariation = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const variation = await VariationModel.findById(id).lean();
+    if (!variation) throw new NotFound("Variation not found");
+
+    const options = await OptionModel.find({ variationId: id }).lean();
+    (variation as any).options = options;
+
+    SuccessResponse(res, { variation });
+  
+};
+
+export const updateVariationWithOptions = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, options } = req.body;
 
-    // 1. Update variation
-    const variation = await VariationModel.findByIdAndUpdate(
-      id,
-      { name },
-      { new: true }
-    );
+    const variation = await VariationModel.findById(id);
+    if (!variation) throw new NotFound("Variation not found");
 
-    // 2. Update options (هنا ممكن نمسح القديم ونضيف الجديد أو نعدل)
-    if (options) {
-      await OptionModel.deleteMany({ variationId: id });
-      const optionDocs = options.map((opt: string) => ({
-       variationId: id,
-      name: opt,
-        }));
-      await OptionModel.insertMany(optionDocs);
+    if (name) variation.name = name;
+    await variation.save();
+
+    if (options && Array.isArray(options)) {
+      for (const opt of options) {
+        if (opt._id) {
+          // تحديث Option موجود
+          await OptionModel.findByIdAndUpdate(opt._id, { name: opt.name, status: opt.status ?? true });
+        } else {
+          // إنشاء Option جديد
+          await OptionModel.create({ variationId: id, name: opt.name, status: opt.status ?? true });
+        }
+      }
     }
 
-    SuccessResponse(res, { message: "Variation updated successfully", variation });
-  
+    SuccessResponse(res, { message: "Variation and options updated successfully" });
+ 
 };
 
-
-
-export const deleteVariation = async (req: Request, res: Response) => {
+// DELETE Variation مع كل Options
+export const deleteVariationWithOptions = async (req: Request, res: Response) => {
     const { id } = req.params;
 
+    const variation = await VariationModel.findByIdAndDelete(id);
+    if (!variation) throw new NotFound("Variation not found");
+
     await OptionModel.deleteMany({ variationId: id });
-    await VariationModel.findByIdAndDelete(id);
 
-    SuccessResponse(res, { message: "Variation deleted successfully" }); 
-};
-
-export const updateOption = async (req: Request, res: Response) => {
-  const { optionId } = req.params;
-  const { name, status } = req.body;
-
-  const option = await OptionModel.findByIdAndUpdate(
-    optionId,
-    { name, status },
-    { new: true }
-  );
-
-  if (!option) {
-    throw new NotFound("Option not found");
-  }
-
-  SuccessResponse(res, { message: "Option updated successfully", option });
-};
-
-export const deleteOption = async (req: Request, res: Response) => {
-  const { optionId } = req.params;
-
-  const option = await OptionModel.findByIdAndDelete(optionId);
-
-  if (!option) {
-    throw new NotFound("Option not found");
-  }
-
-  SuccessResponse(res, { message: "Option deleted successfully" });
-};
-
-
-// Add option to an existing variation
-export const addOptionToVariation = async (req: Request, res: Response) => {
-  const { variationId } = req.params;
-  const { name, status } = req.body;
-
-  // 1. تأكد أن الفارييشن موجود
-  const variation = await VariationModel.findById(variationId);
-  if (!variation) {
-    throw new NotFound("Variation not found");
-  }
-
-  // 2. تأكد أن الاسم موجود
-  if (!name) {
-    throw new BadRequest("Option name is required");
-  }
-
-  // 3. إنشاء الأوبشن وربطه بالـ variation
-  const option = await OptionModel.create({
-    variationId,
-    name,
-    status: status ?? true,
-  });
-
-  SuccessResponse(res, {
-    message: "Option added successfully",
-    option,
-  });
+    SuccessResponse(res, { message: "Variation and all related options deleted successfully" });
+ 
 };

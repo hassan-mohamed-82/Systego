@@ -1,127 +1,76 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addOptionToVariation = exports.deleteOption = exports.updateOption = exports.deleteVariation = exports.updateVariation = exports.getVariationById = exports.getVariations = exports.createVariation = void 0;
+exports.deleteVariationWithOptions = exports.updateVariationWithOptions = exports.getOneVariation = exports.getAllVariations = exports.createVariationWithOptions = void 0;
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Variation_2 = require("../../models/schema/admin/Variation");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
-// Create Variation + Options
-const createVariation = async (req, res) => {
+const createVariationWithOptions = async (req, res) => {
     const { name, options } = req.body;
-    if (!name) {
+    if (!name)
         throw new BadRequest_1.BadRequest("Variation name is required");
-    }
-    const existingVariation = await Variation_1.VariationModel.findOne({ name });
-    if (existingVariation) {
-        throw new BadRequest_1.BadRequest("Variation already exists");
-    }
-    let createdOptions = [];
-    if (Array.isArray(options) && options.length > 0) {
-        const optionDocs = options.map((opt) => {
-            if (typeof opt === "string") {
-                // لو مبعوت كـ string
-                return { variationId: variation._id, name: opt };
-            }
-            else if (typeof opt === "object" && opt.name) {
-                // لو مبعوت كـ object { name: "Small" }
-                return {
-                    variationId: variation._id,
-                    name: opt.name,
-                    status: opt.status ?? true,
-                };
-            }
-        });
-        createdOptions = await Variation_2.OptionModel.insertMany(optionDocs);
-    }
+    // إنشاء الـ Variation
     const variation = await Variation_1.VariationModel.create({ name });
-    (0, response_1.SuccessResponse)(res, { message: "Variation created successfully", variation, createdOptions });
+    // إنشاء الـ Options لو موجودة
+    if (options && Array.isArray(options)) {
+        for (const opt of options) {
+            await Variation_2.OptionModel.create({ variationId: variation._id, name: opt.name, status: opt.status ?? true });
+        }
+    }
+    (0, response_1.SuccessResponse)(res, { variation });
 };
-exports.createVariation = createVariation;
-const getVariations = async (req, res) => {
+exports.createVariationWithOptions = createVariationWithOptions;
+const getAllVariations = async (req, res) => {
     const variations = await Variation_1.VariationModel.find().lean();
-    const populated = await Promise.all(variations.map(async (variation) => {
-        const options = await Variation_2.OptionModel.find({ variationId: variation._id }).lean();
-        return { ...variation, options };
-    }));
-    (0, response_1.SuccessResponse)(res, { message: "Get variations successfully", populated });
+    for (const v of variations) {
+        const options = await Variation_2.OptionModel.find({ variationId: v._id }).lean();
+        v.options = options;
+    }
+    (0, response_1.SuccessResponse)(res, { variations });
 };
-exports.getVariations = getVariations;
-const getVariationById = async (req, res) => {
+exports.getAllVariations = getAllVariations;
+const getOneVariation = async (req, res) => {
     const { id } = req.params;
     const variation = await Variation_1.VariationModel.findById(id).lean();
-    if (!variation) {
-        return res.status(404).json({ message: "Variation not found" });
-    }
+    if (!variation)
+        throw new Errors_1.NotFound("Variation not found");
     const options = await Variation_2.OptionModel.find({ variationId: id }).lean();
-    (0, response_1.SuccessResponse)(res, { message: "Get variation successfully", variation: { ...variation, options } });
+    variation.options = options;
+    (0, response_1.SuccessResponse)(res, { variation });
 };
-exports.getVariationById = getVariationById;
-const updateVariation = async (req, res) => {
+exports.getOneVariation = getOneVariation;
+const updateVariationWithOptions = async (req, res) => {
     const { id } = req.params;
     const { name, options } = req.body;
-    // 1. Update variation
-    const variation = await Variation_1.VariationModel.findByIdAndUpdate(id, { name }, { new: true });
-    // 2. Update options (هنا ممكن نمسح القديم ونضيف الجديد أو نعدل)
-    if (options) {
-        await Variation_2.OptionModel.deleteMany({ variationId: id });
-        const optionDocs = options.map((opt) => ({
-            variationId: id,
-            name: opt,
-        }));
-        await Variation_2.OptionModel.insertMany(optionDocs);
-    }
-    (0, response_1.SuccessResponse)(res, { message: "Variation updated successfully", variation });
-};
-exports.updateVariation = updateVariation;
-const deleteVariation = async (req, res) => {
-    const { id } = req.params;
-    await Variation_2.OptionModel.deleteMany({ variationId: id });
-    await Variation_1.VariationModel.findByIdAndDelete(id);
-    (0, response_1.SuccessResponse)(res, { message: "Variation deleted successfully" });
-};
-exports.deleteVariation = deleteVariation;
-const updateOption = async (req, res) => {
-    const { optionId } = req.params;
-    const { name, status } = req.body;
-    const option = await Variation_2.OptionModel.findByIdAndUpdate(optionId, { name, status }, { new: true });
-    if (!option) {
-        throw new Errors_1.NotFound("Option not found");
-    }
-    (0, response_1.SuccessResponse)(res, { message: "Option updated successfully", option });
-};
-exports.updateOption = updateOption;
-const deleteOption = async (req, res) => {
-    const { optionId } = req.params;
-    const option = await Variation_2.OptionModel.findByIdAndDelete(optionId);
-    if (!option) {
-        throw new Errors_1.NotFound("Option not found");
-    }
-    (0, response_1.SuccessResponse)(res, { message: "Option deleted successfully" });
-};
-exports.deleteOption = deleteOption;
-// Add option to an existing variation
-const addOptionToVariation = async (req, res) => {
-    const { variationId } = req.params;
-    const { name, status } = req.body;
-    // 1. تأكد أن الفارييشن موجود
-    const variation = await Variation_1.VariationModel.findById(variationId);
-    if (!variation) {
+    const variation = await Variation_1.VariationModel.findById(id);
+    if (!variation)
         throw new Errors_1.NotFound("Variation not found");
+    if (name)
+        variation.name = name;
+    await variation.save();
+    if (options && Array.isArray(options)) {
+        for (const opt of options) {
+            if (opt._id) {
+                // تحديث Option موجود
+                await Variation_2.OptionModel.findByIdAndUpdate(opt._id, { name: opt.name, status: opt.status ?? true });
+            }
+            else {
+                // إنشاء Option جديد
+                await Variation_2.OptionModel.create({ variationId: id, name: opt.name, status: opt.status ?? true });
+            }
+        }
     }
-    // 2. تأكد أن الاسم موجود
-    if (!name) {
-        throw new BadRequest_1.BadRequest("Option name is required");
-    }
-    // 3. إنشاء الأوبشن وربطه بالـ variation
-    const option = await Variation_2.OptionModel.create({
-        variationId,
-        name,
-        status: status ?? true,
-    });
-    (0, response_1.SuccessResponse)(res, {
-        message: "Option added successfully",
-        option,
-    });
+    (0, response_1.SuccessResponse)(res, { message: "Variation and options updated successfully" });
 };
-exports.addOptionToVariation = addOptionToVariation;
+exports.updateVariationWithOptions = updateVariationWithOptions;
+// DELETE Variation مع كل Options
+const deleteVariationWithOptions = async (req, res) => {
+    const { id } = req.params;
+    const variation = await Variation_1.VariationModel.findByIdAndDelete(id);
+    if (!variation)
+        throw new Errors_1.NotFound("Variation not found");
+    await Variation_2.OptionModel.deleteMany({ variationId: id });
+    (0, response_1.SuccessResponse)(res, { message: "Variation and all related options deleted successfully" });
+};
+exports.deleteVariationWithOptions = deleteVariationWithOptions;

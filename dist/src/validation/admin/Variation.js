@@ -10,13 +10,13 @@ exports.createVariationSchema = joi_1.default.object({
     options: joi_1.default.array().items(joi_1.default.alternatives().try(joi_1.default.string().trim().min(1).max(200), joi_1.default.object({
         name: joi_1.default.string().trim().min(1).max(200).required(),
         status: joi_1.default.boolean().optional()
-    }))).optional()
+    })))
 });
 exports.updateVariationSchema = joi_1.default.object({
     name: joi_1.default.string().trim().min(1).max(200).optional(),
-    options: joi_1.default.array().items(joi_1.default.alternatives().try(joi_1.default.string().trim().min(1).max(200), joi_1.default.object({
-        _id: joi_1.default.string().optional(),
+    options: joi_1.default.array().items(joi_1.default.object({
+        _id: joi_1.default.string().optional(), // لو موجود → update
         name: joi_1.default.string().trim().min(1).max(200).required(),
         status: joi_1.default.boolean().optional()
-    }))).optional()
+    })).optional()
 });
