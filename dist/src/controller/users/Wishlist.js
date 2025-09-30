@@ -25,7 +25,7 @@ exports.addProductToWishlist = (0, express_async_handler_1.default)(async (req, 
         throw new NotFound_1.NotFound('User not found');
     }
     // Check if product exists
-    const product = await products_1.ProductsModel.findById(productId);
+    const product = await products_1.ProductModel.findById(productId);
     if (!product) {
         throw new NotFound_1.NotFound('Product not found');
     }

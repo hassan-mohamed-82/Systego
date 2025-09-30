@@ -39,5 +39,7 @@ const categorySchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
     image: { type: String },
     parentId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category" },
+    stock_quantity: { type: Number, default: 0 },
+    product_quantity: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.CategoryModel = mongoose_1.default.model("Category", categorySchema);

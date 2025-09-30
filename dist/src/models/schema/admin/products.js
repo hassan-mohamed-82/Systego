@@ -1,56 +1,29 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProductsModel = void 0;
-const mongoose_1 = __importStar(require("mongoose"));
-const ProductsSchema = new mongoose_1.Schema({
-    name: { type: String, required: true, unique: true },
-    icon: { type: String },
-    code: { type: String, required: true, unique: true },
-    quantity: { type: Number, required: true },
-    brand_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Brand", required: true },
-    category_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category", required: true },
-    unit: {
-        type: String,
-        enum: ["piece", "kilogram", "liter", "meter"],
-        required: true,
-    },
+exports.ProductModel = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
+const productSchema = new mongoose_1.default.Schema({
+    name: { type: String, required: true },
+    image: { type: String },
+    categoryId: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Category" }],
+    brandId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Brand" },
+    unit: { type: String },
     price: { type: Number, required: true },
-    cost: { type: Number, required: true },
-    stock_worth: { type: Number, required: true },
-    exp_date: { type: Date, required: true },
-    notify_near_expiry: { type: Boolean, required: true },
+    quantity: { type: Number, required: true },
+    description: { type: String },
+    exp_ability: { type: Boolean, default: false }, // هل له صلاحية
+    date_of_expiery: { type: Date },
+    minimum_quantity_sale: { type: Number, default: 1 },
+    low_stock: { type: Number },
+    whole_price: { type: Number },
+    start_quantaty: { type: Number },
+    taxesId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" },
+    product_has_imei: { type: Boolean, default: false },
+    different_price: { type: Boolean, default: false }, // هل له أسعار مختلفة
+    show_quantity: { type: Boolean, default: true },
+    maximum_to_show: { type: Number },
 }, { timestamps: true });
-exports.ProductsModel = mongoose_1.default.model("Products", ProductsSchema);
+exports.ProductModel = mongoose_1.default.model("Product", productSchema);

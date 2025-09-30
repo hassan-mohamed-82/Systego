@@ -1,27 +1,28 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose from "mongoose";
 
-const ProductsSchema = new Schema(
+const productSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, unique: true },
-    icon: { type: String },
-    code: { type: String, required: true, unique: true },
-    quantity: { type: Number, required: true },
-    brand_id: { type: Schema.Types.ObjectId, ref: "Brand", required: true },
-    category_id: { type: Schema.Types.ObjectId, ref: "Category", required: true },
-    unit: {
-      type: String,
-      enum: ["piece", "kilogram", "liter", "meter"],
-      required: true,
-    },
+    name: { type: String, required: true },
+    image: { type: String },
+    categoryId: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
+    brandId: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
+    unit: { type: String },
     price: { type: Number, required: true },
-    cost: { type: Number, required: true },
-    stock_worth: { type: Number, required: true },
-    exp_date: { type: Date, required: true },
-    notify_near_expiry: { type: Boolean, required: true },
-
-
+    quantity: { type: Number, required: true },
+    description: { type: String },
+    exp_ability: { type: Boolean, default: false }, // هل له صلاحية
+    date_of_expiery: { type: Date },
+    minimum_quantity_sale: { type: Number, default: 1 },
+    low_stock: { type: Number },
+    whole_price: { type: Number },
+    start_quantaty: { type: Number },
+    taxesId: { type: mongoose.Schema.Types.ObjectId, ref: "Taxes" },
+    product_has_imei: { type: Boolean, default: false },
+    different_price: { type: Boolean, default: false }, // هل له أسعار مختلفة
+    show_quantity: { type: Boolean, default: true },
+    maximum_to_show: { type: Number },
   },
   { timestamps: true }
 );
 
-export const ProductsModel = mongoose.model("Products", ProductsSchema);
+export const ProductModel = mongoose.model("Product", productSchema);

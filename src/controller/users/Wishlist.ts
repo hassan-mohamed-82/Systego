@@ -1,5 +1,5 @@
 import { Platform_User } from '../../models/schema/users/platformUser';
-import { ProductsModel } from '../../models/schema/admin/products';
+import { ProductModel } from '../../models/schema/admin/products';
 import asyncHandler from 'express-async-handler';
 import { NotFound } from '../../Errors/NotFound';
 import { BadRequest } from '../../Errors/BadRequest';
@@ -22,7 +22,7 @@ export const addProductToWishlist = asyncHandler(async (req, res) => {
   }
 
   // Check if product exists
-  const product = await ProductsModel.findById(productId);
+  const product = await ProductModel.findById(productId);
   if (!product) {
     throw new NotFound('Product not found');
   }

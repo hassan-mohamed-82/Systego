@@ -1,148 +1,338 @@
-import { UnauthorizedError } from "../../Errors/";
-import { SuccessResponse } from "../../utils/response";
 import { Request, Response } from "express";
-import { ProductsModel } from "../../models/schema/admin/products";
-import { saveBase64Image } from "../../utils/handleImages";
+import { ProductModel } from "../../models/schema/admin/products";
+import { ProductPriceModel } from "../../models/schema/admin/product_price";
+import { ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
-import { NotFound } from "../../Errors/";
-import mongoose from "mongoose";
-import { BrandModel } from "../../models/schema/admin/brand";
+import { NotFound } from "../../Errors/NotFound";
+import { saveBase64Image } from "../../utils/handleImages";
+import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
 import { CategoryModel } from "../../models/schema/admin/category";
-import {generateEAN13Barcode, generateBarcodeImage} from "../../utils/barcode"
-import crypto from "crypto";
-
-
-
-// ✅ باقي CRUD زي ما هي
-export const getProducts = async (req: Request, res: Response) => {
-  const products = await ProductsModel.find({})
-    .populate("brand_id", "name")
-    .populate("category_id", "name");
-  if (!products || products.length === 0) throw new NotFound("No products found");
-  SuccessResponse(res, { message: "get products successfully", products });
-};
-
-export const getProductById = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!id) throw new BadRequest("Product id is required");
-  const product = await ProductsModel.findById(id)
-    .populate("brand_id", "name")
-    .populate("category_id", "name");
-  if (!product) throw new NotFound("Product not found");
-  SuccessResponse(res, { message: "get product successfully", product });
-};
-
-export const deleteProduct = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!id) throw new BadRequest("Product id is required");
-  const product = await ProductsModel.findByIdAndDelete(id);
-  if (!product) throw new NotFound("Product not found");
-  SuccessResponse(res, { message: "delete product successfully" });
-};
-
+import { BrandModel } from "../../models/schema/admin/brand";
 
 
 export const createProduct = async (req: Request, res: Response) => {
+    const {
+      name,
+      image,
+      categoryId,
+      brandId,
+      unit,
+      price,
+      quantity,
+      description,
+      exp_ability,
+      date_of_expiery,
+      minimum_quantity_sale,
+      low_stock,
+      whole_price,
+      start_quantaty,
+      taxesId,
+      product_has_imei,
+      different_price,
+      show_quantity,
+      maximum_to_show,
+      prices, // array of { price, code, gallery, options: [option_id] }
+    } = req.body;
+
+    if (!name) throw new BadRequest("Product name is required");
+    const existitcategory = await CategoryModel.findById(categoryId);
+    if (!existitcategory) throw new BadRequest("Category not found");
+    const existitbrand = await BrandModel.findById(brandId);
+    if (!existitbrand) throw new BadRequest("Brand not found");
+
+    const sum = existitcategory.product_quantity+quantity;
+    existitcategory.product_quantity=sum;
+
+    // 🖼️ حفظ الصورة الأساسية لو Base64
+    let imageUrl = image;
+    if (image && image.startsWith("data:")) {
+      imageUrl = await saveBase64Image(image, Date.now().toString(), req, "products");
+    }
+
+    // 1️⃣ إنشاء المنتج الأساسي
+    const product = await ProductModel.create({
+      name,
+      image: imageUrl,
+      categoryId,
+      brandId,
+      unit,
+      price,
+      quantity,
+      description,
+      exp_ability,
+      date_of_expiery,
+      minimum_quantity_sale,
+      low_stock,
+      whole_price,
+      start_quantaty,
+      taxesId,
+      product_has_imei,
+      different_price,
+      show_quantity,
+      maximum_to_show,
+    });
+
+    // 2️⃣ إنشاء الأسعار (ProductPrice) + الصور + الـ options
+    if (prices && Array.isArray(prices)) {
+      for (const p of prices) {
+        // ✅ حفظ صور الـ gallery (base64)
+        let galleryUrls: string[] = [];
+        if (p.gallery && Array.isArray(p.gallery)) {
+          for (const g of p.gallery) {
+            if (g.startsWith("data:")) {
+              const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
+              galleryUrls.push(gUrl);
+            } else {
+              galleryUrls.push(g);
+            }
+          }
+        }
+
+        const productPrice = await ProductPriceModel.create({
+          productId: product._id,
+          price: p.price,
+          code: p.code,
+          gallery: galleryUrls,
+        });
+
+        // 3️⃣ إضافة الـ Options في pivot (ProductPriceOption)
+        if (p.options && Array.isArray(p.options)) {
+          for (const opt of p.options) {
+            await ProductPriceOptionModel.create({
+              product_price_id: productPrice._id,
+              option_id: opt,
+            });
+          }
+        }
+      }
+    }
+        await existitcategory.save();
+
+    SuccessResponse(res, { message: "Product created successfully", product });
+  
+};
+
+
+// ✅ READ (with populate)
+export const getProduct = async (req: Request, res: Response): Promise<void> => {
+    
+    const products = await ProductModel.find()
+      .populate("categoryId")
+      .populate("brandId")
+      .populate("taxesId")
+      .lean();
+
+    // ✅ نجيب الأسعار + options لكل منتج
+    for (const product of products) {
+      const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+
+      for (const price of prices) {
+        const options = await ProductPriceOptionModel.find({
+          product_price_id: price._id,
+        })
+          .populate("option_id")
+          .lean();
+
+    (price as any).options = options.map((o) => o.option_id);
+      }
+
+(product as any).prices = prices;
+    }
+
+    SuccessResponse(res, products); 
+  };
+
+export const updateProduct = async (req: Request, res: Response)=> {
+  const { id } = req.params;
   const {
     name,
-    code,      // لازم المستخدم يدخل الكود أو يضغط زرار generate
-    icon,
-    quantity,
-    brand_id,
-    category_id,
+    image,
+    categoryId,
+    brandId,
     unit,
     price,
-    cost,
-    stock_worth,
-    exp_date,
-    notify_near_expiry,
+    quantity,
+    description,
+    exp_ability,
+    date_of_expiery,
+    minimum_quantity_sale,
+    low_stock,
+    whole_price,
+    start_quantaty,
+    taxesId,
+    product_has_imei,
+    different_price,
+    show_quantity,
+    maximum_to_show,
+    prices, // Array of prices with optional _id and options
   } = req.body;
 
-  if (!name || !code || !quantity || !brand_id || !category_id || !unit || !price || !stock_worth || !exp_date || notify_near_expiry === undefined) {
-    throw new BadRequest("All fields are required and code cannot be empty. Use generate button if needed.");
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(brand_id)) throw new BadRequest("Invalid brand_id format");
-  const brand = await BrandModel.findById(brand_id);
-  if (!brand) throw new NotFound("Brand not found");
-
-  if (!mongoose.Types.ObjectId.isValid(category_id)) throw new BadRequest("Invalid category_id format");
-  const category = await CategoryModel.findById(category_id);
-  if (!category) throw new NotFound("Category not found");
-
-  // التأكد من أن الكود فريد
-  const exists = await ProductsModel.findOne({ code });
-  if (exists) throw new BadRequest("Product code already exists");
-
-  let imageUrl = "";
-  if (icon) {
-    imageUrl = await saveBase64Image(icon, Date.now().toString(), req, "product");
-  }
-
-  const product = await ProductsModel.create({
-    name,
-    code,
-    icon: imageUrl,
-    quantity,
-    brand_id,
-    category_id,
-    unit,
-    price,
-    cost,
-    stock_worth,
-    exp_date,
-    notify_near_expiry,
-  });
-
-  SuccessResponse(res, { message: "Create product successfully", product });
-};
-
-export const updateProduct = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!id) throw new BadRequest("Product id is required");
-
-  const updateData = { ...req.body };
-
-  if (updateData.code) {
-    const exists = await ProductsModel.findOne({
-      code: updateData.code,
-      _id: { $ne: id }
-    });
-    if (exists) throw new BadRequest("Product code already exists");
-  }
-
-  const product = await ProductsModel.findByIdAndUpdate(id, updateData, { new: true });
+  const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
-  SuccessResponse(res, { message: "Update product successfully", product });
+  // ✅ تحديث الصورة لو Base64
+  if (image && image.startsWith("data:")) {
+    product.image = await saveBase64Image(image, Date.now().toString(), req, "products");
+  } else if (image) {
+    product.image = image;
+  }
+
+  // ✅ تحديث باقي الحقول
+  product.name = name ?? product.name;
+  product.categoryId = categoryId ?? product.categoryId;
+  product.brandId = brandId ?? product.brandId;
+  product.unit = unit ?? product.unit;
+  product.price = price ?? product.price;
+  product.quantity = quantity ?? product.quantity;
+  product.description = description ?? product.description;
+  product.exp_ability = exp_ability ?? product.exp_ability;
+  product.date_of_expiery = date_of_expiery ?? product.date_of_expiery;
+  product.minimum_quantity_sale = minimum_quantity_sale ?? product.minimum_quantity_sale;
+  product.low_stock = low_stock ?? product.low_stock;
+  product.whole_price = whole_price ?? product.whole_price;
+  product.start_quantaty = start_quantaty ?? product.start_quantaty;
+  product.taxesId = taxesId ?? product.taxesId;
+  product.product_has_imei = product_has_imei ?? product.product_has_imei;
+  product.different_price = different_price ?? product.different_price;
+  product.show_quantity = show_quantity ?? product.show_quantity;
+  product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
+
+  await product.save();
+
+  // ✅ تحديث/اضافة/حذف الأسعار والخيارات
+  if (prices && Array.isArray(prices)) {
+    for (const p of prices) {
+      let productPrice;
+
+      // لو فيه _id → update
+      if (p._id) {
+        productPrice = await ProductPriceModel.findByIdAndUpdate(
+          p._id,
+          { price: p.price, code: p.code },
+          { new: true }
+        );
+      } else {
+        // create جديد
+        let galleryUrls: string[] = [];
+        if (p.gallery && Array.isArray(p.gallery)) {
+          for (const g of p.gallery) {
+            if (g.startsWith("data:")) {
+              const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
+              galleryUrls.push(gUrl);
+            } else {
+              galleryUrls.push(g);
+            }
+          }
+        }
+        productPrice = await ProductPriceModel.create({
+          productId: product._id,
+          price: p.price,
+          code: p.code,
+          gallery: galleryUrls,
+        });
+      }
+
+      // ✅ تحديث الـ options
+      if (productPrice && p.options && Array.isArray(p.options)) {
+        // نمسح القديم
+        await ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
+
+        // نضيف الجديد
+        for (const opt of p.options) {
+          await ProductPriceOptionModel.create({
+            product_price_id: productPrice._id,
+            option_id: opt,
+          });
+        }
+      }
+    }
+  }
+
+  SuccessResponse(res, { message: "Product updated successfully", product });
 };
 
-export const generateBarcodeImageController = async (req: Request, res: Response) => {
-  try {
-    const { product_id } = req.params;
-    if (!product_id) throw new BadRequest("Product ID is required");
 
-    const product = await ProductsModel.findById(product_id);
+
+export const deleteProduct = async (req: Request, res: Response)=>{
+    const { id } = req.params;
+
+    // 1️⃣ حذف المنتج
+    const product = await ProductModel.findByIdAndDelete(id);
     if (!product) throw new NotFound("Product not found");
 
+    // 2️⃣ جلب كل الأسعار المرتبطة بالمنتج
+    const prices = await ProductPriceModel.find({ productId: id });
 
-const productCode = product.code;
-const imageLink = await generateBarcodeImage(productCode, productCode);
+    const priceIds = prices.map((p) => p._id);
 
-    const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
+    // 3️⃣ حذف كل الـ options المرتبطة بالأسعار
+    await ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
 
-    res.status(200).json({ success: true, barcode: fullImageUrl });
-  } catch (error: any) {
-    res.status(error.status || 500).json({ success: false, message: error.message });
+    // 4️⃣ حذف كل الأسعار نفسها
+    await ProductPriceModel.deleteMany({ productId: id });
+
+    SuccessResponse(res, { message: "Product and all related prices/options deleted successfully" });
+  };
+
+export const getOneProduct = async (req: Request, res: Response)=> {
+  const { id } = req.params;
+
+  const product = await ProductModel.findById(id)
+    .populate("categoryId")
+    .populate("brandId")
+    .populate("taxesId")
+    .lean();
+
+  if (!product) throw new NotFound("Product not found");
+
+  // ✅ نجيب الأسعار + options
+  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+
+  for (const price of prices) {
+    const options = await ProductPriceOptionModel.find({
+      product_price_id: price._id,
+    })
+      .populate("option_id")
+      .lean();
+
+    (price as any).options = options.map((o) => o.option_id);
   }
+
+  (product as any).prices = prices;
+
+  SuccessResponse(res, product);
 };
 
+
+
+
+export const generateBarcodeImageController = async (req: Request, res: Response) => {
+     const { product_id } = req.params;
+    if (!product_id) throw new BadRequest("Product ID is required");
+
+    // find the product price (not product itself)
+    const productPrice = await ProductPriceModel.findById(product_id);
+    if (!productPrice) throw new NotFound("Product price not found");
+
+    // get code from product price
+    const productCode = productPrice.code;
+    if (!productCode) throw new BadRequest("Product price does not have a code yet");
+
+    // generate barcode image file
+    const imageLink = await generateBarcodeImage(productCode, productCode);
+
+    // build full url for client access
+    const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
+
+    SuccessResponse(res, { image: fullImageUrl })
+    };
 
 export const generateProductCode = async (req: Request, res: Response) => {
   let newCode = generateEAN13Barcode();
 
   // التأكد من عدم التكرار
-  while (await ProductsModel.findOne({ code: newCode })) {
+  while (await ProductPriceModel.findOne({ code: newCode })) {
     newCode = generateEAN13Barcode();
   }
 

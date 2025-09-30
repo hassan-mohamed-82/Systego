@@ -1,25 +1,26 @@
 import { Router } from "express";
 import {
   createProduct,
-  getProductById,
-  getProducts,
+  getProduct,
+getOneProduct,
   updateProduct,
   deleteProduct,
   generateBarcodeImageController,
   generateProductCode
 } from "../../controller/admin/products";
 import { validate } from "../../middlewares/validation";
-import { createproductSchema, updateproductSchema } from "../../validation/admin/products";
+import { createProductSchema,updateProductSchema} from "../../validation/admin/products";
 import { catchAsync } from "../../utils/catchAsync";
 import { authenticated } from "../../middlewares/authenticated";
 
 const route = Router();
 
 // إنشاء منتج
-route.post("/", validate(createproductSchema), catchAsync(createProduct));
+route.post("/", validate(createProductSchema), 
+catchAsync(createProduct));
 
 // جلب جميع المنتجات
-route.get("/", catchAsync(getProducts));
+route.get("/", catchAsync(getProduct));
 
 // توليد كود منتج فريد
 route.get("/generate-code", catchAsync(generateProductCode));
@@ -28,10 +29,11 @@ route.get("/generate-code", catchAsync(generateProductCode));
 route.get("/generate-barcode/:product_id", catchAsync(generateBarcodeImageController));
 
 // جلب منتج حسب الـ id
-route.get("/:id", catchAsync(getProductById));
+route.get("/:id", catchAsync(getOneProduct));
 
 // تحديث منتج
-route.put("/:id", validate(updateproductSchema), catchAsync(updateProduct));
+route.put("/:id", validate(updateProductSchema), 
+catchAsync(updateProduct));
 
 // حذف منتج
 route.delete("/:id", catchAsync(deleteProduct));
