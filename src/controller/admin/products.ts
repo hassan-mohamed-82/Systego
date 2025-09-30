@@ -93,6 +93,7 @@ export const createProduct = async (req: Request, res: Response) => {
           price: p.price,
           code: p.code,
           gallery: galleryUrls,
+          quantity: p.quantity || 0,
         });
 
         // 3️⃣ إضافة الـ Options في pivot (ProductPriceOption)
@@ -208,7 +209,7 @@ export const updateProduct = async (req: Request, res: Response)=> {
       if (p._id) {
         productPrice = await ProductPriceModel.findByIdAndUpdate(
           p._id,
-          { price: p.price, code: p.code },
+          { price: p.price, code: p.code ,quantity: p.quantity || 0},
           { new: true }
         );
       } else {
@@ -228,6 +229,7 @@ export const updateProduct = async (req: Request, res: Response)=> {
           productId: product._id,
           price: p.price,
           code: p.code,
+          quantity: p.quantity || 0,
           gallery: galleryUrls,
         });
       }

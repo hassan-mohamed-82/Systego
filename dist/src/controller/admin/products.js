@@ -71,6 +71,7 @@ const createProduct = async (req, res) => {
                 price: p.price,
                 code: p.code,
                 gallery: galleryUrls,
+                quantity: p.quantity || 0,
             });
             // 3️⃣ إضافة الـ Options في pivot (ProductPriceOption)
             if (p.options && Array.isArray(p.options)) {
@@ -150,7 +151,7 @@ const updateProduct = async (req, res) => {
             let productPrice;
             // لو فيه _id → update
             if (p._id) {
-                productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, { price: p.price, code: p.code }, { new: true });
+                productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, { price: p.price, code: p.code, quantity: p.quantity || 0 }, { new: true });
             }
             else {
                 // create جديد
@@ -170,6 +171,7 @@ const updateProduct = async (req, res) => {
                     productId: product._id,
                     price: p.price,
                     code: p.code,
+                    quantity: p.quantity || 0,
                     gallery: galleryUrls,
                 });
             }

@@ -5,7 +5,8 @@ const productPriceSchema = new mongoose.Schema(
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
     price: { type: Number, required: true },
     code: { type: String , required: true, unique: true },
-    gallery: [{ type: String }], // صور إضافية
+    gallery: [{ type: String }], // صور 
+    quantity: { type: Number, default: 0 }, // كمية المنتج في هذا السعر
   },
   { timestamps: true }
 );

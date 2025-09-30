@@ -9,11 +9,12 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { connectDB } from "./models/connection";
-
+import { startCron, NotificationService } from "./utils/expiry_lowstock";
 
 dotenv.config();
-
 const app = express();
+
+// Connect to DB
 connectDB();
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -26,18 +27,33 @@ app.use("/uploads", express.static("uploads"));
 // Routes
 app.use("/api", ApiRoute);
 
+// Not found middleware
 app.use((req, res, next) => {
   throw new NotFound("Route not found");
 });
+
+// Error handler
 app.use(errorHandler);
 
+// Create server & socket.io
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-// ربط Socket.IO
+// 🔌 Socket.IO connection
+io.on("connection", (socket) => {
+  console.log("✅ User connected:", socket.id);
 
-server.listen(3000, () => {
-  console.log("Server is running on http://localhost:3000");
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
+});
+
+// 🕒 Start cron jobs (expiry & low stock check)
+startCron(io);
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
