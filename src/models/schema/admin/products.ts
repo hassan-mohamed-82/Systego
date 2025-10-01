@@ -21,6 +21,8 @@ const productSchema = new mongoose.Schema(
     different_price: { type: Boolean, default: false }, // هل له أسعار مختلفة
     show_quantity: { type: Boolean, default: true },
     maximum_to_show: { type: Number },
+    gallery: [{ type: String }], // صور 
+
   },
   { timestamps: true }
 );
