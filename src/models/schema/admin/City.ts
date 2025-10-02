@@ -10,11 +10,7 @@ const citySchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'Country',
     required: true
-  },
-  shippingCost: {
-    type: Number,
-    default: 0
   }
 });
 
-export const City = model('City', citySchema);
+export const CityModels = model('City', citySchema);

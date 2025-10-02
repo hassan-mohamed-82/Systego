@@ -34,12 +34,10 @@ const login = async (req, res, next) => {
         }
         // ✅ نجيب الـ roles المرتبطة بالـ position
         const roles = await roles_1.RoleModel.find({ positionId: user.positionId?._id }).lean();
-        // ✅ نجيب الـ actions المرتبطة بالـ roles
         let actions = [];
         if (roles && roles.length > 0) {
             actions = await Action_1.ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
         }
-        // ✅ نولد التوكن
         const token = (0, auth_1.generateToken)({
             _id: user._id,
             username: user.username,

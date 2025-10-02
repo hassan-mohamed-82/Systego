@@ -11,7 +11,11 @@ export const createcategory = async (req: Request, res: Response) => {
   if (!name ) throw new BadRequest("Category name is required");
   const existingCategory = await CategoryModel.findOne({ name });
   if (existingCategory) throw new BadRequest("Category already exists");
-
+  
+  if(parentId){
+    const parentCategory = await CategoryModel.findById(parentId);
+    if (!parentCategory) throw new BadRequest("Parent category not found");
+  }
   let imageUrl = "";
   if (image) {
     imageUrl = await saveBase64Image(image, Date.now().toString(), req, "category");
@@ -23,17 +27,19 @@ export const createcategory = async (req: Request, res: Response) => {
 };
 
 export const getCategories = async (req: Request, res: Response) => {
-  const categories = await CategoryModel.find({}).populate("parentId");
+  const categories = await CategoryModel.find({}).populate("parentId", "name");
   if (!categories || categories.length === 0) throw new NotFound("No categories found");
-  SuccessResponse(res, { message: "get categories successfully", categories });
+  const ParentCategories = categories.filter(cat => !cat.parentId);
+  SuccessResponse(res, { message: "get categories successfully", categories,ParentCategories });
 };
 
 export const getCategoryById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Category id is required");
-  const category = await CategoryModel.findById(id);
+  const category = await CategoryModel.findById(id).populate("parentId", "name");
   if (!category) throw new NotFound("Category not found");
-  SuccessResponse(res, { message: "get category successfully", category });
+  const Parent= category.parentId;
+  SuccessResponse(res, { message: "get category successfully", category,Parent });
 };
 
 export const deleteCategory = async (req: Request, res: Response) => {

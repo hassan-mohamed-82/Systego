@@ -40,6 +40,7 @@ const WarehouseSchema = new mongoose_1.Schema({
     address: { type: String, required: true },
     phone: { type: String, maxlength: 20 },
     email: { type: String, maxlength: 150 },
-    status: { type: Boolean, default: true },
+    number_of_products: { type: Number, default: 0 },
+    stock_Quantity: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.WarehouseModel = mongoose_1.default.model("Warehouse", WarehouseSchema);

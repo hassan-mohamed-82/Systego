@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { BankAccountModel } from "../../models/schema/admin/bank_accounts";
+import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";

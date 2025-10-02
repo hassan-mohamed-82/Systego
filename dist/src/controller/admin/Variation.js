@@ -64,7 +64,6 @@ const updateVariationWithOptions = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Variation and options updated successfully" });
 };
 exports.updateVariationWithOptions = updateVariationWithOptions;
-// DELETE Variation مع كل Options
 const deleteVariationWithOptions = async (req, res) => {
     const { id } = req.params;
     const variation = await Variation_1.VariationModel.findByIdAndDelete(id);

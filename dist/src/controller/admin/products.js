@@ -11,6 +11,7 @@ const handleImages_1 = require("../../utils/handleImages");
 const barcode_1 = require("../../utils/barcode");
 const category_1 = require("../../models/schema/admin/category");
 const brand_1 = require("../../models/schema/admin/brand");
+const Variation_1 = require("../../models/schema/admin/Variation");
 const createProduct = async (req, res) => {
     const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery } = req.body;
     if (!name)
@@ -122,23 +123,14 @@ const getProduct = async (req, res) => {
         .populate("brandId")
         .populate("taxesId")
         .lean();
-    // ✅ نجيب الأسعار + options لكل منتج
-    for (const product of products) {
-        const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
-        for (const price of prices) {
-            const options = await product_price_2.ProductPriceOptionModel.find({
-                product_price_id: price._id,
-            })
-                .populate("option_id")
-                .lean();
-            price.options = options.map((o) => o.option_id);
-        }
-        product.prices = prices;
-    }
-    (0, response_1.SuccessResponse)(res, products);
+    const categories = await category_1.CategoryModel.find().lean();
+    const brands = await brand_1.BrandModel.find().lean();
+    const variations = await Variation_1.VariationModel.find()
+        .populate("options") // جاي من الـ virtual
+        .lean();
+    (0, response_1.SuccessResponse)(res, { products, categories, brands, variations });
 };
 exports.getProduct = getProduct;
-// ✅ UPDATE (حذف quantity من اليوزر وحسابه أوتوماتيك)
 const updateProduct = async (req, res) => {
     const { id } = req.params;
     const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, // Array of prices with optional _id and options
@@ -248,13 +240,17 @@ const deleteProduct = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Product and all related prices/options deleted successfully" });
 };
 exports.deleteProduct = deleteProduct;
-// ✅ GET ONE
 const getOneProduct = async (req, res) => {
     const { id } = req.params;
     const product = await products_1.ProductModel.findById(id)
         .populate("categoryId")
         .populate("brandId")
         .populate("taxesId")
+        .lean();
+    const categories = await category_1.CategoryModel.find().lean();
+    const brands = await brand_1.BrandModel.find().lean();
+    const variations = await Variation_1.VariationModel.find()
+        .populate("options") // جاي من الـ virtual
         .lean();
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
@@ -268,7 +264,7 @@ const getOneProduct = async (req, res) => {
         price.options = options.map((o) => o.option_id);
     }
     product.prices = prices;
-    (0, response_1.SuccessResponse)(res, product);
+    (0, response_1.SuccessResponse)(res, { product, categories, brands, variations });
 };
 exports.getOneProduct = getOneProduct;
 const generateBarcodeImageController = async (req, res) => {

@@ -61,5 +61,5 @@ export const deleteBrand = async (req: Request, res: Response) => {
   if (!id) throw new BadRequest("Brand id is required");
   const brand = await BrandModel.findByIdAndDelete(id);
   if (!brand) throw new NotFound("Brand not found");
-  SuccessResponse(res, { message: "delete brand successfully", brand });
+  SuccessResponse(res, { message: "delete brand successfully" });
 };

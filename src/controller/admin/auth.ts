@@ -40,7 +40,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     // ✅ نجيب الـ roles المرتبطة بالـ position
     const roles = await RoleModel.find({ positionId: user.positionId?._id }).lean();
 
-    // ✅ نجيب الـ actions المرتبطة بالـ roles
     let actions: any[] = [];
     if (roles && roles.length > 0) {
       actions = await ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
@@ -48,7 +47,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
    
 
-    // ✅ نولد التوكن
     const token = generateToken({
       _id: user._id,
       username: user.username,

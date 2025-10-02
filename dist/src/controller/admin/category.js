@@ -13,6 +13,11 @@ const createcategory = async (req, res) => {
     const existingCategory = await category_1.CategoryModel.findOne({ name });
     if (existingCategory)
         throw new BadRequest_1.BadRequest("Category already exists");
+    if (parentId) {
+        const parentCategory = await category_1.CategoryModel.findById(parentId);
+        if (!parentCategory)
+            throw new BadRequest_1.BadRequest("Parent category not found");
+    }
     let imageUrl = "";
     if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
@@ -22,20 +27,22 @@ const createcategory = async (req, res) => {
 };
 exports.createcategory = createcategory;
 const getCategories = async (req, res) => {
-    const categories = await category_1.CategoryModel.find({}).populate("parentId");
+    const categories = await category_1.CategoryModel.find({}).populate("parentId", "name");
     if (!categories || categories.length === 0)
         throw new Errors_1.NotFound("No categories found");
-    (0, response_1.SuccessResponse)(res, { message: "get categories successfully", categories });
+    const ParentCategories = categories.filter(cat => !cat.parentId);
+    (0, response_1.SuccessResponse)(res, { message: "get categories successfully", categories, ParentCategories });
 };
 exports.getCategories = getCategories;
 const getCategoryById = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Category id is required");
-    const category = await category_1.CategoryModel.findById(id);
+    const category = await category_1.CategoryModel.findById(id).populate("parentId", "name");
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    (0, response_1.SuccessResponse)(res, { message: "get category successfully", category });
+    const Parent = category.parentId;
+    (0, response_1.SuccessResponse)(res, { message: "get category successfully", category, Parent });
 };
 exports.getCategoryById = getCategoryById;
 const deleteCategory = async (req, res) => {

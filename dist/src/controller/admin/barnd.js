@@ -59,6 +59,6 @@ const deleteBrand = async (req, res) => {
     const brand = await brand_1.BrandModel.findByIdAndDelete(id);
     if (!brand)
         throw new Errors_1.NotFound("Brand not found");
-    (0, response_1.SuccessResponse)(res, { message: "delete brand successfully", brand });
+    (0, response_1.SuccessResponse)(res, { message: "delete brand successfully" });
 };
 exports.deleteBrand = deleteBrand;

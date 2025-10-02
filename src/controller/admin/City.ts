@@ -1,24 +1,23 @@
 import { UnauthorizedError } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import { Request, Response } from "express";
-import { City } from "../../models/schema/users/City";
+import { CityModels } from "../../models/schema/admin/City";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
-import { Country } from "../../models/schema/users/Country";
+import { CountryModel } from "../../models/schema/admin/Country";
 
-// Create City
 export const createCity = async (req: Request, res: Response) => {
   const { name, country, shippingCost } = req.body;
   if (!name || !country || shippingCost === undefined) {
     throw new BadRequest("City name, country and shippingCost are required");
   }
-  const existingCity = await City.findOne({ name, country });
+  const existingCity = await CityModels.findOne({ name, country });
   if (existingCity) throw new BadRequest("City already exists in this country");
 
-  const countryExists = await Country.findById(country);
+  const countryExists = await CountryModel.findById(country);
   if (!countryExists) throw new NotFound("Country not found");
 
-  const city = await City.create({ name, country, shippingCost });
+  const city = await CityModels.create({ name, country, shippingCost });
   await city.populate("country");
 
   SuccessResponse(res, { message: "create city successfully", city });
@@ -26,7 +25,7 @@ export const createCity = async (req: Request, res: Response) => {
 
 // Get All Cities
 export const getCities = async (req: Request, res: Response) => {
-  const cities = await City.find().populate("country");
+  const cities = await CityModels.find().populate("country");
   if (!cities || cities.length === 0) throw new NotFound("No cities found");
 
   SuccessResponse(res, { message: "get all cities successfully", cities });
@@ -37,7 +36,7 @@ export const getCityById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("City id is required");
 
-  const city = await City.findById(id).populate("country");
+  const city = await CityModels.findById(id).populate("country");
   if (!city) throw new NotFound("City not found");
 
   SuccessResponse(res, { message: "get city successfully", city });
@@ -51,11 +50,11 @@ export const updateCity = async (req: Request, res: Response) => {
   const updateData: any = { ...req.body };
 
   if (req.body.country) {
-    const countryExists = await Country.findById(req.body.country);
+    const countryExists = await CountryModel.findById(req.body.country);
     if (!countryExists) throw new NotFound("Country not found");
   }
 
-  const city = await City.findByIdAndUpdate(id, updateData, { new: true }).populate("country");
+  const city = await CityModels.findByIdAndUpdate(id, updateData, { new: true }).populate("country");
   if (!city) throw new NotFound("City not found");
 
   SuccessResponse(res, { message: "update city successfully", city });
@@ -66,7 +65,7 @@ export const deleteCity = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("City id is required");
 
-  const city = await City.findByIdAndDelete(id);
+  const city = await CityModels.findByIdAndDelete(id);
   if (!city) throw new NotFound("City not found");
 
   SuccessResponse(res, { message: "delete city successfully", city });

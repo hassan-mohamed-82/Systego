@@ -15,10 +15,8 @@ export const createPositionWithRolesAndActions = async (req: Request,res: Respon
     throw new BadRequest("Position name and roles are required");
   }
 
-  // 1️⃣ إنشاء Position
   const position = await PositionModel.create({ name });
 
-  // 2️⃣ إنشاء Roles + Actions
   const createdRoles = [];
 
   for (const role of roles) {

@@ -41,7 +41,7 @@ const deleteTaxes = async (req, res) => {
     const tax = await Taxes_1.TaxesModel.findByIdAndDelete(id);
     if (!tax)
         throw new Errors_1.NotFound("Tax not found");
-    (0, response_1.SuccessResponse)(res, { message: "Tax deleted successfully", tax });
+    (0, response_1.SuccessResponse)(res, { message: "Tax deleted successfully" });
 };
 exports.deleteTaxes = deleteTaxes;
 const updateTaxes = async (req, res) => {

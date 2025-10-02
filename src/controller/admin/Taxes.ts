@@ -34,7 +34,7 @@ export const deleteTaxes = async (req: Request, res: Response) => {
     if (!id) throw new BadRequest("Tax ID is required");
     const tax = await TaxesModel.findByIdAndDelete(id);
     if (!tax) throw new NotFound("Tax not found");
-    SuccessResponse(res, { message: "Tax deleted successfully", tax });
+    SuccessResponse(res, { message: "Tax deleted successfully" });
 }
 
 export const updateTaxes = async (req: Request, res: Response) => {

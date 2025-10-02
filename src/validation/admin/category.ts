@@ -10,7 +10,6 @@ export const createCategorySchema = Joi.object({
 export const updateCategorySchema = Joi.object({
   name: Joi.string().optional(),
   number_of_products: Joi.number().optional(),
-  value: Joi.number().optional(),
   image: Joi.string().optional(),
   parentId: Joi.string().optional(),
 });

@@ -16,10 +16,10 @@ const getNotificationById = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Notification ID is required");
-    const notification = await Notfication_1.NotificationModel.findById(id);
-    if (!notification)
+    const notifications = await Notfication_1.NotificationModel.findById(id);
+    if (!notifications)
         throw new Errors_1.NotFound("Notification not found");
-    notification.isRead = true;
-    (0, response_1.SuccessResponse)(res, { message: "Get notification successfully", notification });
+    notifications.isRead = true;
+    (0, response_1.SuccessResponse)(res, { message: "Get notification successfully", notifications });
 };
 exports.getNotificationById = getNotificationById;

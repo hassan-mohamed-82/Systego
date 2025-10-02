@@ -5,8 +5,11 @@ const countrySchema = new Schema({
     type: String,
     required: true,
     unique: true,
-    default: 'Egypt'
+  },
+  isDefault: {
+    type: Boolean,
+    default: false, 
   }
 });
 
-export const Country = model('Country', countrySchema);
+export const CountryModel = model('Country', countrySchema);

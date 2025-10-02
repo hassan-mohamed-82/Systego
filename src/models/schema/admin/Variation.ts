@@ -31,6 +31,16 @@ const OptionSchema: Schema<IOption> = new Schema(
   { timestamps: true }
 );
 
+// في VariationSchema
+VariationSchema.virtual("options", {
+  ref: "Option",
+  localField: "_id",
+  foreignField: "variationId",
+});
+
+VariationSchema.set("toObject", { virtuals: true });
+VariationSchema.set("toJSON", { virtuals: true });
+
 export const VariationModel: Model<IVariation> = mongoose.model<IVariation>("Variation", VariationSchema);
 
 export const OptionModel: Model<IOption> = mongoose.model<IOption>("Option", OptionSchema);

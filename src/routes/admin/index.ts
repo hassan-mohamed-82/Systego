@@ -15,10 +15,10 @@ import CouponsRouter from './coupons'
 import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
 import incomeCategoryRouter from "./income_categories";
-import BankAccountRouter from "./bank_accounts";
+import BankAccountRouter from "./Financial_Account";
 import CountryRouter from "./Country";
 import CityRouter from "./City";
-import ZoneRouter from "./Zone";
+// import ZoneRouter from "./Zone";
 import CurrencyRouter from "./Currency";
 import TaxesRouter from "./Taxes";
 import VariationRouter from "./Variation";
@@ -46,7 +46,7 @@ route.use("/income_category",incomeCategoryRouter)
 route.use("/bank_account",BankAccountRouter)
 route.use("/country",CountryRouter);
 route.use("/city",CityRouter);
-route.use("/zone",ZoneRouter);
+// route.use("/zone",ZoneRouter);
 route.use("/currency",CurrencyRouter);
 route.use("/taxes",TaxesRouter);
 route.use("/variation",VariationRouter);

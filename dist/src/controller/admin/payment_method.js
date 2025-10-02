@@ -55,7 +55,7 @@ const updatePaymentMethod = async (req, res) => {
     if (req.body.icon) {
         updateData.icon = await (0, handleImages_1.saveBase64Image)(req.body.icon, Date.now().toString(), req, "payment_methods");
     }
-    await updateData.save(); // حفظ التغييرات
+    await updateData.save();
     (0, response_1.SuccessResponse)(res, {
         message: "Payment method updated successfully",
         updateData

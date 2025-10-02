@@ -5,9 +5,9 @@ import {
   getBankAccountById,
   updateBankAccount,
   deleteBankAccount,
-} from "../../controller/admin/bank_accounts";
+} from "../../controller/admin/Financial_Account";
 import { validate } from "../../middlewares/validation";
-import { createBankAccountSchema, updateBankAccountSchema } from "../../validation/admin/bank_accounts";
+import { createBankAccountSchema, updateBankAccountSchema } from "../../validation/admin/Financial_Account";
 import { catchAsync } from "../../utils/catchAsync";
 
 const route = Router();

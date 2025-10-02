@@ -28,7 +28,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   const salt = await bcrypt.genSalt(10);
   const password_hash = await bcrypt.hash(password, salt);
 
-  // ✅ حفظ الصورة (اختياري)
   let image_url: string | undefined;
   if (image_base64) {
     image_url = await saveBase64Image(image_base64, username, req, "users");

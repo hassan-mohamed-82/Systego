@@ -1,29 +1,25 @@
 import { Request } from "express";
 import { Types } from "mongoose";
 
-// ========== Action ==========
 export interface Action {
   _id: Types.ObjectId;
-  name: "add" | "update" | "delete" | "get"; // الصلاحيات الأساسية
-  role: Types.ObjectId; // مرجعية إلى الـ Role
+  name: "add" | "update" | "delete" | "get"; 
+  role: Types.ObjectId; 
 }
 
-// ========== Role ==========
 export interface Role {
   _id: Types.ObjectId;
-  name: string; // زي "UserManagement" أو "Inventory"
-  possitionId: Types.ObjectId; // مرجعية إلى Position
+  name: string; 
+  possitionId: Types.ObjectId; 
   actions?: Action[];
 }
 
-// ========== Position ==========
 export interface Position {
   _id: Types.ObjectId;
   name: string;
   roles?: Role[];
 }
 
-// ========== User من الـ Database ==========
 export interface AppUser {
   password_hash: string;
   _id?: Types.ObjectId;
@@ -43,29 +39,26 @@ export interface AppUser {
   state?: string;
   postal_code?: string;
 
-  // العلاقات
-  positionId: Position | Types.ObjectId; // ممكن يبقى populate أو ObjectId
-  roles?: Role[];                        // populated roles
-  actions?: Action[];                    // populated actions
+  positionId: Position | Types.ObjectId; 
+  roles?: Role[];                      
+  actions?: Action[];
 }
 
-// ========== User من الـ JWT ==========
 export interface JwtUserPayload {
   id: string;
   name: string;
-  role:string;   // 👈 نفس الـ enum
+  role:string;  
   positionId: string;
   roles: string[];
   actions: string[];
 
 }
 
-// ========== Request مع User ==========
 export interface AuthenticatedRequest extends Request {
-  user?: JwtUserPayload; // هنا payload صغير مش الـ AppUser كامل
+  user?: JwtUserPayload; 
 }
 
-// ✅ Type Augmentation لـ Express Request
+
 declare global {
   namespace Express {
     interface Request {

@@ -11,9 +11,7 @@ const createPositionWithRolesAndActions = async (req, res) => {
     if (!name || !roles) {
         throw new BadRequest_1.BadRequest("Position name and roles are required");
     }
-    // 1️⃣ إنشاء Position
     const position = await position_1.PositionModel.create({ name });
-    // 2️⃣ إنشاء Roles + Actions
     const createdRoles = [];
     for (const role of roles) {
         const newRole = await roles_1.RoleModel.create({

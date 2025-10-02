@@ -57,6 +57,6 @@ const deleteWarehouse = async (req, res) => {
     const warehouse = await Warehouse_1.WarehouseModel.findByIdAndDelete(id);
     if (!warehouse)
         throw new Errors_1.NotFound("Warehouse not found");
-    (0, response_1.SuccessResponse)(res, { message: "Delete warehouse successfully", warehouse });
+    (0, response_1.SuccessResponse)(res, { message: "Delete warehouse successfully" });
 };
 exports.deleteWarehouse = deleteWarehouse;

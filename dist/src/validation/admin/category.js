@@ -14,7 +14,6 @@ exports.createCategorySchema = joi_1.default.object({
 exports.updateCategorySchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     number_of_products: joi_1.default.number().optional(),
-    value: joi_1.default.number().optional(),
     image: joi_1.default.string().optional(),
     parentId: joi_1.default.string().optional(),
 });

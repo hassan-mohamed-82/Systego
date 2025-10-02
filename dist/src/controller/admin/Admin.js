@@ -24,7 +24,6 @@ const createUser = async (req, res, next) => {
     // ✅ تشفير الباسورد
     const salt = await bcryptjs_1.default.genSalt(10);
     const password_hash = await bcryptjs_1.default.hash(password, salt);
-    // ✅ حفظ الصورة (اختياري)
     let image_url;
     if (image_base64) {
         image_url = await (0, handleImages_1.saveBase64Image)(image_base64, username, req, "users");

@@ -43,5 +43,13 @@ const OptionSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     status: { type: Boolean, default: true },
 }, { timestamps: true });
+// في VariationSchema
+VariationSchema.virtual("options", {
+    ref: "Option",
+    localField: "_id",
+    foreignField: "variationId",
+});
+VariationSchema.set("toObject", { virtuals: true });
+VariationSchema.set("toJSON", { virtuals: true });
 exports.VariationModel = mongoose_1.default.model("Variation", VariationSchema);
 exports.OptionModel = mongoose_1.default.model("Option", OptionSchema);

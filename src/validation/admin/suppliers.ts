@@ -5,11 +5,9 @@ export const createSupplierSchema = Joi.object({
   email: Joi.string().email().required(),
   phone_number: Joi.string().required(),
   address: Joi.string().required(),
-  vat_number: Joi.string().required(),
-  state: Joi.string().required(),
-  postal_code: Joi.string().required(),
-  total_due: Joi.number().required(),
-  image: Joi.string().optional(),
+  Image: Joi.string().optional(),
+  cityId: Joi.string().required(),
+  countryId: Joi.string().required(),
 
 });
 
@@ -18,9 +16,8 @@ export const updateSupplierSchema = Joi.object({
   email: Joi.string().email().optional(),
   phone_number: Joi.string().optional(),
   address: Joi.string().optional(),
-  vat_number: Joi.string().optional(),
-  state: Joi.string().optional(),
-  postal_code: Joi.string().optional(),
-  total_due: Joi.number().optional(),
-  image: Joi.string().optional(),
+  
+  Image: Joi.string().optional(),
+  cityId: Joi.string().optional(),
+  countryId: Joi.string().optional(),
 });

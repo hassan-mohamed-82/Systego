@@ -50,5 +50,5 @@ export const deleteWarehouse = async (req: Request, res: Response) => {
     if (!id) throw new BadRequest("Warehouse ID is required");
     const warehouse = await WarehouseModel.findByIdAndDelete(id);
     if (!warehouse) throw new NotFound("Warehouse not found");
-    SuccessResponse(res, { message: "Delete warehouse successfully", warehouse });
+    SuccessResponse(res, { message: "Delete warehouse successfully" });
 };

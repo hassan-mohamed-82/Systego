@@ -6,11 +6,13 @@ const handleImages_1 = require("../../utils/handleImages");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
+const City_1 = require("../../models/schema/admin/City");
+const Country_1 = require("../../models/schema/admin/Country");
 // 🟢 Create Supplier
 const createSupplier = async (req, res) => {
-    const { image, username, email, phone_number, vat_number, address, state, postal_code, total_due, } = req.body;
-    if (!username || !email || !phone_number) {
-        throw new BadRequest_1.BadRequest("Username, email, and phone number are required");
+    const { image, username, email, phone_number, address, cityId, countryId, company_name } = req.body;
+    if (!username || !email || !phone_number || !cityId || !countryId) {
+        throw new BadRequest_1.BadRequest("Username, email, city, country, and phone number are required");
     }
     const existingSupplier = await suppliers_1.SupplierModel.findOne({
         $or: [{ username }, { email }, { phone_number }],
@@ -26,11 +28,10 @@ const createSupplier = async (req, res) => {
         username,
         email,
         phone_number,
-        vat_number,
         address,
-        state,
-        postal_code,
-        total_due,
+        cityId,
+        countryId,
+        company_name
     });
     (0, response_1.SuccessResponse)(res, { message: "Supplier created successfully", supplier });
 };
@@ -41,7 +42,9 @@ const getSuppliers = async (req, res) => {
     if (!suppliers || suppliers.length === 0) {
         throw new Errors_1.NotFound("No suppliers found");
     }
-    (0, response_1.SuccessResponse)(res, { message: "Suppliers retrieved successfully", suppliers });
+    const city = await City_1.CityModels.find();
+    const country = await Country_1.CountryModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "Suppliers retrieved successfully", suppliers, city, country });
 };
 exports.getSuppliers = getSuppliers;
 // 🔵 Get Supplier By ID
@@ -52,7 +55,9 @@ const getSupplierById = async (req, res) => {
     const supplier = await suppliers_1.SupplierModel.findById(id);
     if (!supplier)
         throw new Errors_1.NotFound("Supplier not found");
-    (0, response_1.SuccessResponse)(res, { message: "Supplier retrieved successfully", supplier });
+    const city = await City_1.CityModels.find();
+    const country = await Country_1.CountryModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "Supplier retrieved successfully", supplier, city, country });
 };
 exports.getSupplierById = getSupplierById;
 // 🟠 Update Supplier

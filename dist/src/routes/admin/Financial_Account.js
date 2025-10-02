@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Financial_Account_1 = require("../../controller/admin/Financial_Account");
+const validation_1 = require("../../middlewares/validation");
+const Financial_Account_2 = require("../../validation/admin/Financial_Account");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Financial_Account_2.createBankAccountSchema), (0, catchAsync_1.catchAsync)(Financial_Account_1.createBankAccount));
+route.get("/", (0, catchAsync_1.catchAsync)(Financial_Account_1.getBankAccounts));
+route.get("/:id", (0, catchAsync_1.catchAsync)(Financial_Account_1.getBankAccountById));
+route.put("/:id", (0, validation_1.validate)(Financial_Account_2.updateBankAccountSchema), (0, catchAsync_1.catchAsync)(Financial_Account_1.updateBankAccount));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(Financial_Account_1.deleteBankAccount));
+exports.default = route;

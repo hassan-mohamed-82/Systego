@@ -9,6 +9,7 @@ import { saveBase64Image } from "../../utils/handleImages";
 import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
 import { CategoryModel } from "../../models/schema/admin/category";
 import { BrandModel } from "../../models/schema/admin/brand";
+import { VariationModel } from "../../models/schema/admin/Variation";
 
 
 export const createProduct = async (req: Request, res: Response) => {
@@ -157,27 +158,16 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
     .populate("taxesId")
     .lean();
 
-  // ✅ نجيب الأسعار + options لكل منتج
-  for (const product of products) {
-    const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
-    for (const price of prices) {
-      const options = await ProductPriceOptionModel.find({
-        product_price_id: price._id,
-      })
-        .populate("option_id")
-        .lean();
+    const categories = await CategoryModel.find().lean();
+    const brands = await BrandModel.find().lean();
+    const variations = await VariationModel.find()
+    .populate("options") // جاي من الـ virtual
+    .lean();
 
-      (price as any).options = options.map((o) => o.option_id);
-    }
-
-    (product as any).prices = prices;
-  }
-
-  SuccessResponse(res, products);
+  SuccessResponse(res, {products,  categories, brands ,variations  });
 };
 
-// ✅ UPDATE (حذف quantity من اليوزر وحسابه أوتوماتيك)
 export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
   const {
@@ -320,7 +310,6 @@ export const deleteProduct = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Product and all related prices/options deleted successfully" });
 };
 
-// ✅ GET ONE
 export const getOneProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -329,6 +318,12 @@ export const getOneProduct = async (req: Request, res: Response) => {
     .populate("brandId")
     .populate("taxesId")
     .lean();
+    const categories = await CategoryModel.find().lean();
+    const brands = await BrandModel.find().lean();
+ const variations = await VariationModel.find()
+    .populate("options") // جاي من الـ virtual
+    .lean();
+
 
   if (!product) throw new NotFound("Product not found");
 
@@ -346,7 +341,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   (product as any).prices = prices;
 
-  SuccessResponse(res, product);
+  SuccessResponse(res, {product,  categories, brands , variations  });
 };
 
 

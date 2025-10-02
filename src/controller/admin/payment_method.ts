@@ -67,7 +67,7 @@ export const updatePaymentMethod = async (req: Request, res: Response) => {
 
 
 
-  await updateData.save(); // حفظ التغييرات
+  await updateData.save(); 
 
   SuccessResponse(res, { 
     message: "Payment method updated successfully", 

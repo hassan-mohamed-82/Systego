@@ -33,16 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SupplierModel = void 0;
+exports.BankAccountModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const SupplierSchema = new mongoose_1.Schema({
-    image: { type: String },
-    username: { type: String, required: true, maxlength: 100 },
-    email: { type: String, required: true, unique: true, maxlength: 150 },
-    phone_number: { type: String, maxlength: 20, unique: true, required: true },
-    address: { type: String },
-    company_name: { type: String, maxlength: 150 },
-    cityId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "City" },
-    countryId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Country" },
-});
-exports.SupplierModel = mongoose_1.default.model("Supplier", SupplierSchema);
+const BankAccountSchema = new mongoose_1.Schema({
+    account_no: { type: String, required: true, maxlength: 100, unique: true, trim: true },
+    name: { type: String, required: true, maxlength: 100, trim: true },
+    initial_balance: { type: Number, required: true, min: 0 },
+    is_default: { type: Boolean, default: false },
+    note: { type: String, trim: true },
+}, { timestamps: true });
+exports.BankAccountModel = mongoose_1.default.model("BankAccount", BankAccountSchema);

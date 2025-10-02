@@ -4,7 +4,8 @@ import { saveBase64Image } from "../../utils/handleImages";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
-
+import { CityModels } from "../../models/schema/admin/City";
+import { CountryModel } from "../../models/schema/admin/Country";
 
 // 🟢 Create Supplier
 export const createSupplier = async (req: Request, res: Response) => {
@@ -13,15 +14,15 @@ export const createSupplier = async (req: Request, res: Response) => {
     username,
     email,
     phone_number,
-    vat_number,
     address,
-    state,
-    postal_code,
-    total_due,
+    cityId,
+    countryId,
+    company_name
+    
   } = req.body;
 
-  if (!username || !email || !phone_number) {
-    throw new BadRequest("Username, email, and phone number are required");
+  if (!username || !email || !phone_number|| !cityId || !countryId) {
+    throw new BadRequest("Username, email, city, country, and phone number are required");
   }
   const existingSupplier = await SupplierModel.findOne({
     $or: [{ username }, { email }, { phone_number }],
@@ -43,11 +44,10 @@ export const createSupplier = async (req: Request, res: Response) => {
     username,
     email,
     phone_number,
-    vat_number,
     address,
-    state,
-    postal_code,
-    total_due,
+    cityId,
+    countryId,
+    company_name
   });
 
   SuccessResponse(res, { message: "Supplier created successfully", supplier });
@@ -58,9 +58,10 @@ export const createSupplier = async (req: Request, res: Response) => {
 export const getSuppliers = async (req: Request, res: Response) => {
   const suppliers = await SupplierModel.find({});
   if (!suppliers || suppliers.length === 0) {
-    throw new NotFound("No suppliers found");
-  }
-  SuccessResponse(res, { message: "Suppliers retrieved successfully", suppliers });
+    throw new NotFound("No suppliers found");  }
+    const city= await CityModels.find();
+    const country= await CountryModel.find();
+  SuccessResponse(res, { message: "Suppliers retrieved successfully", suppliers, city, country });
 };
 
 
@@ -71,8 +72,11 @@ export const getSupplierById = async (req: Request, res: Response) => {
 
   const supplier = await SupplierModel.findById(id);
   if (!supplier) throw new NotFound("Supplier not found");
+  
+    const city= await CityModels.find();
+    const country= await CountryModel.find();
 
-  SuccessResponse(res, { message: "Supplier retrieved successfully", supplier });
+  SuccessResponse(res, { message: "Supplier retrieved successfully", supplier, city, country });
 };
 
 

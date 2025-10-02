@@ -10,12 +10,10 @@ exports.createWarehouseSchema = joi_1.default.object({
     address: joi_1.default.string().required(),
     phone: joi_1.default.string().max(20).required(),
     email: joi_1.default.string().email().max(150).required(),
-    status: joi_1.default.boolean().optional()
 });
 exports.updateWarehouseSchema = joi_1.default.object({
     name: joi_1.default.string().max(100).optional(),
     address: joi_1.default.string().optional(),
     phone: joi_1.default.string().max(20).optional(),
     email: joi_1.default.string().email().max(150).optional(),
-    status: joi_1.default.boolean().optional()
 });
