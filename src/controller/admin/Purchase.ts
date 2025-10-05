@@ -14,6 +14,7 @@ import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
 import { VariationModel } from "../../models/schema/admin/Variation";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
+import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
@@ -83,11 +84,21 @@ export const createPurchase = async (req: Request, res: Response) => {
   if (purchase_items && Array.isArray(purchase_items)) {
     for (const p of purchase_items) {
       // إنشاء PurchasePrice
+      let product_code = p.product_code;
+      let category_id = p.category_id;
+      let product_id = p.product_id;
+      if(product_code){
+        const product_price = await ProductPriceModel.findOne({code: product_code}).populate("productId");
+        if(product_price){
+          product_id = product_price.productId._id;
+          category_id = product_price.productId.categoryId;
+        }
+      }
       const PurchaseItems = await PurchaseItemModel.create({
         date: p.date,
         purchase_id: purchase._id,
-        category_id: p.category_id,
-        product_id: p.product_id,
+        category_id: category_id,
+        product_id: product_id,
         quantity: p.quantity,
         unit_cost: p.unit_cost,
         discount: p.discount,
@@ -283,10 +294,20 @@ export const updatePurchase = async (req: Request, res: Response) => {
           }
         }
         // __________________________
-        if (purchase_item) {
+        if (purchase_item) {  
+          let product_code = p.product_code;
+          let category_id = p.category_id;
+          let product_id = p.product_id;
+          if(product_code){
+            const product_price = await ProductPriceModel.findOne({code: product_code}).populate("productId");
+            if(product_price){
+              product_id = product_price.productId._id;
+              category_id = product_price.productId.categoryId;
+            }
+          }
           purchase_item.date = p.date ?? purchase_item.date;
-          purchase_item.category_id = p.category_id ?? purchase_item.category_id;
-          purchase_item.product_id = p.product_id ?? purchase_item.product_id;
+          purchase_item.category_id = category_id ?? purchase_item.category_id;
+          purchase_item.product_id = product_id ?? purchase_item.product_id;
           purchase_item.quantity = p.quantity ?? purchase_item.quantity;
           purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
           purchase_item.tax = p.tax ?? purchase_item.tax;
@@ -316,8 +337,8 @@ export const updatePurchase = async (req: Request, res: Response) => {
           const PurchaseItems = await PurchaseItemModel.create({
             date: p.date,
             purchase_id: purchase._id,
-            category_id: p.category_id,
-            product_id: p.product_id,
+            category_id: category_id,
+            product_id: product_id,
             quantity: p.quantity,
             unit_cost: p.unit_cost,
             discount: p.discount,

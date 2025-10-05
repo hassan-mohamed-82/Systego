@@ -8,8 +8,9 @@ export const createPurchaseItemOptionSchema = Joi.object({
 
 export const createPurchaseItemSchema = Joi.object({
   date: Joi.date().required(),
-  category_id: Joi.string().required(),
-  product_id: Joi.string().required(),
+  category_id: Joi.string().optional(),
+  product_id: Joi.string().optional(),
+  product_code: Joi.string().optional(),
   quantity: Joi.number().required(),
   unit_cost: Joi.number().required(),
   discount: Joi.number().required(),
