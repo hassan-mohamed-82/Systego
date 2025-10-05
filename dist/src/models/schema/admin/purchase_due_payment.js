@@ -33,23 +33,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PurchaseModel = void 0;
+exports.PurchaseDuePaymentModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const PurchaseSchema = new mongoose_1.Schema({
+const PurchaseDuePaymentSchema = new mongoose_1.Schema({
+    purchase_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Purchase" }],
+    amount: { type: Number, required: true },
     date: { type: Date, required: true, default: Date.now },
-    warehouse_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" }],
-    supplier_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Supplier" }],
-    currency_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Currency" }],
-    tax_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" }],
-    receipt_img: { type: String },
-    payment_status: {
-        type: String,
-        enum: ["pending", "partial", "paid"],
-        default: "pending",
-    },
-    exchange_rate: { type: Number, required: true, default: 1 },
-    subtotal: { type: Number, required: true },
-    shiping_cost: { type: Number, required: true },
-    discount: { type: Number, default: 0 },
 }, { timestamps: true });
-exports.PurchaseModel = mongoose_1.default.model("Purchase", PurchaseSchema);
+exports.PurchaseDuePaymentModel = mongoose_1.default.model("PurchaseDuePayment", PurchaseDuePaymentSchema);

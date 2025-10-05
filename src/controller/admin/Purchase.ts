@@ -230,21 +230,24 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
       if (p._id) {
         // update
-        const purchase_item = await PurchaseItemModel.findById(p._id);
-        purchase_item.date = p.date ?? purchase_item.date;
-        purchase_item.category_id = p.category_id ?? purchase_item.category_id;
-        purchase_item.product_id = p.product_id ?? purchase_item.product_id;
-        purchase_item.quantity = p.quantity ?? purchase_item.quantity;
-        purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
-        purchase_item.tax = p.tax ?? purchase_item.tax;
-        purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
-        purchase_item.save();
+         const purchase_item = await PurchaseItemModel.findById(p._id);
+     if (purchase_item) {
+     purchase_item.date = p.date ?? purchase_item.date;
+      purchase_item.category_id = p.category_id ?? purchase_item.category_id;
+      purchase_item.product_id = p.product_id ?? purchase_item.product_id;
+      purchase_item.quantity = p.quantity ?? purchase_item.quantity;
+      purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
+      purchase_item.tax = p.tax ?? purchase_item.tax;
+      purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
+    await purchase_item.save();
         if(p.options){ 
           if(p.options._id){
-            const option_item = PurchaseItemOptionModel.findById(p.options._id);
+            let option_item = PurchaseItemOptionModel.findById(p.options._id);
+            if(option_item) {
             option_item.date = p.options.date ?? option_item.date;
             option_item.option_id = p.options.option_id ?? option_item.option_id;
           }
+        }
           else{
             await PurchaseItemOptionModel.create({
               date: p.date,
