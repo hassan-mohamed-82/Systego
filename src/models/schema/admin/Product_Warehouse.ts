@@ -6,3 +6,4 @@ const Product_WarehouseSchema = new mongoose.Schema({
     quantity: { type: Number, required: true },
 });
 export const Product_WarehouseModel = mongoose.model("Product_transfer", Product_WarehouseSchema);
+

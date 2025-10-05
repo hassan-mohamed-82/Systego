@@ -13,6 +13,7 @@ import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
 import { VariationModel } from "../../models/schema/admin/Variation";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
@@ -102,6 +103,21 @@ export const createPurchase = async (req: Request, res: Response) => {
           category.product_quantity += p.quantity ?? 0;
           category.save();
         }
+      }
+      let product_warehouse = await Product_WarehouseModel.findOne({
+        productId : p.product_id,
+        WarehouseId : purchase.warehouse_id,
+      });
+      if(product_warehouse){
+        product_warehouse.quantity += p.quantity ?? 0;
+        product_warehouse.save();
+      }
+      else{
+        await Product_WarehouseModel.create({
+          productId: p.product_id,
+          WarehouseId: purchase.warehouse_id,
+          quantity: p.quantity ?? 0
+        });
       }
       // جمع الكمية النهائية
       totalQuantity += p.quantity || 0;
@@ -237,6 +253,36 @@ export const updatePurchase = async (req: Request, res: Response) => {
       if (p._id) {
         // update
         const purchase_item = await PurchaseItemModel.findById(p._id);
+         
+        if(purchase_item){
+        // new quantity of product
+          let product = await ProductModel.findById(purchase_item.product_id);
+          if(product && p.quantity){
+            product.quantity = product.quantity - purchase_item.quantity + p.quantity;
+            product.save();
+            let category = await CategoryModel.findById(product.categoryId);
+            if(category && p.quantity){
+              category.product_quantity = category.product_quantity - purchase_item.quantity + p.quantity;
+              category.save();
+            }
+          }
+          let product_warehouse = await Product_WarehouseModel.findOne({
+            productId : purchase_item.product_id,
+            WarehouseId : purchase.warehouse_id,
+          });
+          if(product_warehouse && p.quantity){
+            product_warehouse.quantity = product_warehouse.quantity - purchase_item.quantity + p.quantity;
+            product_warehouse.save();
+          }
+          else if(p.quantity){
+            await Product_WarehouseModel.create({
+              productId: purchase_item.product_id,
+              WarehouseId: purchase.warehouse_id,
+              quantity: p.quantity
+            });
+          }
+        }
+        // __________________________
         if (purchase_item) {
           purchase_item.date = p.date ?? purchase_item.date;
           purchase_item.category_id = p.category_id ?? purchase_item.category_id;
