@@ -167,54 +167,79 @@ const updatePurchase = async (req, res) => {
         for (const p of purchase_items) {
             if (p._id) {
                 // update
-                let purchase_item = await purchase_item_1.PurchaseItemModel.findById(p._id);
-                purchase_item.date = p.date ?? purchase_item.date;
-                purchase_item.category_id = p.category_id ?? purchase_item.category_id;
-                purchase_item.product_id = p.product_id ?? purchase_item.product_id;
-                purchase_item.quantity = p.quantity ?? purchase_item.quantity;
-                purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
-                purchase_item.tax = p.tax ?? purchase_item.tax;
-                purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
-                purchase_item.save();
-                if (p.options) {
-                    if (p.options._id) {
-                        let option_item = purchase_item_option_1.PurchaseItemOptionModel.findById(p.options._id);
-                        option_item.date = p.options.date ?? option_item.date;
-                        option_item.option_id = p.options.option_id ?? option_item.option_id;
+                const purchase_item = await purchase_item_1.PurchaseItemModel.findById(p._id);
+                if (purchase_item) {
+                    purchase_item.date = p.date ?? purchase_item.date;
+                    purchase_item.category_id = p.category_id ?? purchase_item.category_id;
+                    purchase_item.product_id = p.product_id ?? purchase_item.product_id;
+                    purchase_item.quantity = p.quantity ?? purchase_item.quantity;
+                    purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
+                    purchase_item.tax = p.tax ?? purchase_item.tax;
+                    purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
+                    await purchase_item.save();
+                    if (p.options) {
+                        // ____________________________
+                        for (const element of p.options) {
+                            if (element._id) {
+                                let option_item = await purchase_item_option_1.PurchaseItemOptionModel.findById(element._id);
+                                if (option_item) {
+                                    option_item.date = element.date ?? option_item.date;
+                                    option_item.option_id = element.option_id ?? option_item.option_id;
+                                    option_item.save();
+                                }
+                            }
+                            else {
+                                await purchase_item_option_1.PurchaseItemOptionModel.create({
+                                    date: element.date,
+                                    purchase_item_id: purchase_item._id,
+                                    option_id: element.id,
+                                });
+                            }
+                        }
+                        // ____________
                     }
-                    else {
-                        await purchase_item_option_1.PurchaseItemOptionModel.create({
-                            date: p.date,
-                            purchase_item_id: p._id,
-                            option_id: p.id,
-                        });
+                }
+                else {
+                    // إنشاء create
+                    const PurchaseItems = await purchase_item_1.PurchaseItemModel.create({
+                        date: p.date,
+                        purchase_id: purchase._id,
+                        category_id: p.category_id,
+                        product_id: p.product_id,
+                        quantity: p.quantity,
+                        unit_cost: p.unit_cost,
+                        discount: p.discount,
+                        tax: p.tax,
+                        subtotal: p.subtotal,
+                    });
+                    // 3️⃣ إضافة الـ Options
+                    if (p.options && Array.isArray(p.options)) {
+                        for (const opt of p.options) {
+                            await purchase_item_option_1.PurchaseItemOptionModel.create({
+                                date: opt.date,
+                                purchase_item_id: PurchaseItems._id,
+                                option_id: opt.id,
+                            });
+                        }
                     }
                 }
             }
-            else {
-                // إنشاء create
-                const PurchaseItems = await purchase_item_1.PurchaseItemModel.create({
-                    date: p.date,
-                    purchase_id: purchase._id,
-                    category_id: p.category_id,
-                    product_id: p.product_id,
-                    quantity: p.quantity,
-                    unit_cost: p.unit_cost,
-                    discount: p.discount,
-                    tax: p.tax,
-                    subtotal: p.subtotal,
-                });
-                // 3️⃣ إضافة الـ Options
-                if (p.options && Array.isArray(p.options)) {
-                    for (const opt of p.options) {
-                        await purchase_item_option_1.PurchaseItemOptionModel.create({
-                            date: opt.date,
-                            purchase_item_id: PurchaseItems._id,
-                            option_id: opt.id,
-                        });
-                    }
-                }
-            }
+        }
+    }
+    // عمل invoice بالمدفوع
+    await PurchaseInvoice_1.PurchaseInvoiceModel.create({
+        financial_id: financial_id,
+        amount: payment_amount,
+        purchase_id: purchase._id,
+    });
+    // 3️⃣ إضافة الـ invoices
+    if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
+        for (const due_payment of purchase_due_payment) {
+            await purchase_due_payment_1.PurchaseDuePaymentModel.create({
+                purchase_id: purchase._id,
+                amount: due_payment.amount,
+                date: due_payment.date,
+            });
         }
     }
     (0, response_1.SuccessResponse)(res, { message: "Purchase updated successfully", purchase });
