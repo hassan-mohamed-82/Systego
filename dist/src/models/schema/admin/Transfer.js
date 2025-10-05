@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TransferModel = void 0;
+exports.Product_transferModel = exports.TransferModel = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const TransferSchema = new mongoose_1.default.Schema({
     date: { type: Date, default: Date.now },
@@ -23,3 +23,9 @@ TransferSchema.pre("save", async function (next) {
     next();
 });
 exports.TransferModel = mongoose_1.default.model("Transfer", TransferSchema);
+const Product_transferSchema = new mongoose_1.default.Schema({
+    productId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Product", required: true },
+    WarehouseId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse", required: true },
+    quantity: { type: Number, required: true },
+});
+exports.Product_transferModel = mongoose_1.default.model("Product_transfer", Product_transferSchema);
