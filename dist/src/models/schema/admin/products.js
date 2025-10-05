@@ -14,7 +14,7 @@ const productSchema = new mongoose_1.default.Schema({
     price: { type: Number, required: true },
     quantity: { type: Number, required: true },
     description: { type: String },
-    exp_ability: { type: Boolean, default: false }, // هل له صلاحية
+    exp_ability: { type: Boolean, default: false },
     date_of_expiery: { type: Date },
     minimum_quantity_sale: { type: Number, default: 1 },
     low_stock: { type: Number },
@@ -22,9 +22,9 @@ const productSchema = new mongoose_1.default.Schema({
     start_quantaty: { type: Number },
     taxesId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" },
     product_has_imei: { type: Boolean, default: false },
-    different_price: { type: Boolean, default: false }, // هل له أسعار مختلفة
+    different_price: { type: Boolean, default: false },
     show_quantity: { type: Boolean, default: true },
     maximum_to_show: { type: Number },
-    gallery: [{ type: String }], // صور 
+    gallery: [{ type: String }],
 }, { timestamps: true });
 exports.ProductModel = mongoose_1.default.model("Product", productSchema);

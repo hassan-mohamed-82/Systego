@@ -61,3 +61,4 @@ export const deleteAdjustment = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Adjustment deleted successfully" });
 };
+

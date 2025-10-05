@@ -3,10 +3,10 @@ import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
-
+import{saveBase64Image}from "../../utils/handleImages"
 // ✅ Create
 export const createBankAccount = async (req: Request, res: Response) => {
-  const { account_no, name, initial_balance, is_default, note } = req.body;
+  const { account_no, name, initial_balance, is_default, note, icon } = req.body;
 
   if (!account_no || !name || initial_balance === undefined) {
     throw new BadRequest("Please provide all required fields");
@@ -15,9 +15,12 @@ export const createBankAccount = async (req: Request, res: Response) => {
   const exists = await BankAccountModel.findOne({ account_no });
   if (exists) throw new BadRequest("Account number already exists");
 
-  // ✅ لو الحساب دا هو الـ default، خلّي الباقي false
   if (is_default) {
     await BankAccountModel.updateMany({}, { is_default: false });
+  }
+  let iconUrl = "";
+  if (icon) {
+    iconUrl = await saveBase64Image(icon, Date.now().toString(), req, "bank_accounts");
   }
 
   const bankAccount = await BankAccountModel.create({
@@ -26,12 +29,12 @@ export const createBankAccount = async (req: Request, res: Response) => {
     initial_balance,
     is_default,
     note,
+    icon: iconUrl,
   });
 
   SuccessResponse(res, { message: "Bank account created successfully", bankAccount });
 };
 
-// ✅ Get all (with total)
 export const getBankAccounts = async (req: Request, res: Response) => {
   const accounts = await BankAccountModel.find();
   if (!accounts || accounts.length === 0) throw new NotFound("No bank accounts found");
@@ -42,7 +45,6 @@ export const getBankAccounts = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Get bank accounts successfully", accounts, total });
 };
 
-// ✅ Get by ID
 export const getBankAccountById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Bank account ID is required");
@@ -53,7 +55,6 @@ export const getBankAccountById = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Get bank account successfully", account });
 };
 
-// ✅ Update
 export const updateBankAccount = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Bank account ID is required");
@@ -71,7 +72,6 @@ export const updateBankAccount = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Bank account updated successfully", account });
 };
 
-// ✅ Delete
 export const deleteBankAccount = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Bank account ID is required");
