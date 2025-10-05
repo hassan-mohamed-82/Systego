@@ -93,7 +93,16 @@ export const createPurchase = async (req: Request, res: Response) => {
         tax: p.tax,
         subtotal: p.subtotal,
       });
-
+      let product = await ProductModel.findById(p.product_id);
+      if(product){
+        product.quantity += p.quantity ?? 0;
+        product.save();
+        let category = await CategoryModel.findById(product.categoryId);
+        if(category){
+          category.product_quantity += p.quantity ?? 0;
+          category.save();
+        }
+      }
       // جمع الكمية النهائية
       totalQuantity += p.quantity || 0;
 
@@ -195,10 +204,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     discount,
     tax_id, 
 
-    purchase_items, 
-    payment_amount,
-    financial_id,
-    purchase_due_payment,
+    purchase_items,  
   } = req.body;
 
   const purchase = await PurchaseModel.findById(id);
@@ -287,23 +293,6 @@ export const updatePurchase = async (req: Request, res: Response) => {
           }
         }
       } 
-    }
-  }
-
-  // عمل invoice بالمدفوع
-  await PurchaseInvoiceModel.create({
-    financial_id : financial_id,
-    amount : payment_amount,
-    purchase_id : purchase._id,
-  });
-  // 3️⃣ إضافة الـ invoices
-  if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
-    for (const due_payment of purchase_due_payment) {
-      await PurchaseDuePaymentModel.create({
-        purchase_id: purchase._id,
-        amount: due_payment.amount,
-        date: due_payment.date,
-      });
     }
   }
   SuccessResponse(res, { message: "Purchase updated successfully", purchase });
