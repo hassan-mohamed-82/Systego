@@ -240,21 +240,26 @@ export const updatePurchase = async (req: Request, res: Response) => {
       purchase_item.tax = p.tax ?? purchase_item.tax;
       purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
     await purchase_item.save();
-        if(p.options){ 
-          if(p.options._id){
-            let option_item = PurchaseItemOptionModel.findById(p.options._id);
-            if(option_item) {
-            option_item.date = p.options.date ?? option_item.date;
-            option_item.option_id = p.options.option_id ?? option_item.option_id;
+        if(p.options){
+          // ____________________________
+          for (const element of p.options) {
+            if(element._id){
+              let option_item =await PurchaseItemOptionModel.findById(element._id);
+              if(option_item) {
+                option_item.date = element.date ?? option_item.date;
+                option_item.option_id = element.option_id ?? option_item.option_id;
+                option_item.save();
+              }
+            }
+            else{
+              await PurchaseItemOptionModel.create({
+                date: element.date,
+                purchase_item_id: purchase_item._id,
+                option_id: element.id,
+              });
+            }
           }
-        }
-          else{
-            await PurchaseItemOptionModel.create({
-              date: p.date,
-              purchase_item_id: p._id,
-              option_id: p.id,
-            });
-          }
+          // ____________
         }
       } else {
       // إنشاء create
@@ -283,6 +288,6 @@ export const updatePurchase = async (req: Request, res: Response) => {
     }
   } 
 }
-
+}
   SuccessResponse(res, { message: "Purchase updated successfully", purchase });
 };
