@@ -34,11 +34,11 @@ export const createPurchase = async (req: Request, res: Response) => {
     subtotal,
     shiping_cost,
     discount,
+
     tax_id, 
 
     purchase_items, 
-    payment_amount,
-    financial_id,
+    financials,
     purchase_due_payment,
   } = req.body;
  
@@ -126,7 +126,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       if (p.options && Array.isArray(p.options)) {
         for (const opt of p.options) {
           await PurchaseItemOptionModel.create({
-            date: opt.date,
+            
             purchase_item_id: PurchaseItems._id,
             option_id: opt.id,
           });
@@ -136,11 +136,18 @@ export const createPurchase = async (req: Request, res: Response) => {
   }  
 
   // عمل invoice بالمدفوع
-  await PurchaseInvoiceModel.create({
-    financial_id : financial_id,
-    amount : payment_amount,
-    purchase_id : purchase._id,
-  });
+  for(const ele of financials){
+    await PurchaseInvoiceModel.create({
+      financial_id : ele.financial_id,
+      amount : ele.payment_amount,
+      purchase_id : purchase._id,
+    });
+    let financial = await BankAccountModel.findById(ele.financial_id);
+    if(financial){
+      financial.initial_balance -= ele.payment_amount;
+      financial.save();
+    }
+  }
   // 3️⃣ إضافة الـ invoices
   if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
     for (const due_payment of purchase_due_payment) {
@@ -212,14 +219,10 @@ export const updatePurchase = async (req: Request, res: Response) => {
     warehouse_id,
     supplier_id,
     receipt_img,
-    currency_id,
-    payment_status,
-    exchange_rate,
-    subtotal,
     shiping_cost,
     discount,
     tax_id, 
-
+    exchange_rate,
     purchase_items,  
   } = req.body;
 
@@ -238,10 +241,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
   purchase.date = date ?? purchase.date;
   purchase.warehouse_id = warehouse_id ?? purchase.warehouse_id;
   purchase.supplier_id = supplier_id ?? purchase.supplier_id;
-  purchase.currency_id = currency_id ?? purchase.currency_id;
-  purchase.payment_status = payment_status ?? purchase.payment_status;
   purchase.exchange_rate = exchange_rate ?? purchase.exchange_rate;
-  purchase.subtotal = subtotal ?? purchase.subtotal;
   purchase.shiping_cost = shiping_cost ?? purchase.shiping_cost;
   purchase.discount = discount ?? purchase.discount;
   purchase.tax_id = tax_id ?? purchase.tax_id;
@@ -298,14 +298,12 @@ export const updatePurchase = async (req: Request, res: Response) => {
                 if(element._id){
                   let option_item =await PurchaseItemOptionModel.findById(element._id);
                   if(option_item) {
-                    option_item.date = element.date ?? option_item.date;
                     option_item.option_id = element.option_id ?? option_item.option_id;
                     option_item.save();
                   }
                 }
                 else{
                   await PurchaseItemOptionModel.create({
-                    date: element.date,
                     purchase_item_id: purchase_item._id,
                     option_id: element.id,
                   });
@@ -331,7 +329,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
           if (p.options && Array.isArray(p.options)) {
             for (const opt of p.options) {
               await PurchaseItemOptionModel.create({
-                date: opt.date,
+                
                 purchase_item_id: PurchaseItems._id,
                 option_id: opt.id,
               });
