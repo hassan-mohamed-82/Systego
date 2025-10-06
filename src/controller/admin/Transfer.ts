@@ -5,6 +5,7 @@ import { BadRequest } from "../../Errors/BadRequest.js";
 import { NotFound } from "../../Errors/index.js";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse.js";
 import { SuccessResponse } from "../../utils/response.js";
+import { ProductModel } from "../../models/schema/admin/products.js";
 
 
 // 🟢 إنشاء تحويل جديد (يبدأ pending)
@@ -41,6 +42,13 @@ export const createTransfer = async (req: Request, res: Response) => {
       status: "pending",
     });
 
+    productInWarehouse.quantity -= quantity;
+    await productInWarehouse.save();
+    const product = await ProductModel.findById(productId) as any;
+    if(product){
+      product.quantity -= quantity;
+      await product.save();
+    }
     SuccessResponse(res, { message: "Transfer created successfully", transfer });  
 };
 

@@ -7,6 +7,7 @@ const BadRequest_js_1 = require("../../Errors/BadRequest.js");
 const index_js_1 = require("../../Errors/index.js");
 const Product_Warehouse_js_1 = require("../../models/schema/admin/Product_Warehouse.js");
 const response_js_1 = require("../../utils/response.js");
+const products_js_1 = require("../../models/schema/admin/products.js");
 // 🟢 إنشاء تحويل جديد (يبدأ pending)
 const createTransfer = async (req, res) => {
     const { fromWarehouseId, toWarehouseId, quantity, productId, categoryId, productCode } = req.body;
@@ -34,6 +35,13 @@ const createTransfer = async (req, res) => {
         quantity,
         status: "pending",
     });
+    productInWarehouse.quantity -= quantity;
+    await productInWarehouse.save();
+    const product = await products_js_1.ProductModel.findById(productId);
+    if (product) {
+        product.quantity -= quantity;
+        await product.save();
+    }
     (0, response_js_1.SuccessResponse)(res, { message: "Transfer created successfully", transfer });
 };
 exports.createTransfer = createTransfer;
