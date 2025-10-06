@@ -22,6 +22,7 @@ import CityRouter from "./City";
 import CurrencyRouter from "./Currency";
 import TaxesRouter from "./Taxes";
 import VariationRouter from "./Variation";
+import trnsferRouter from "./Transfer"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -50,4 +51,5 @@ route.use("/city",CityRouter);
 route.use("/currency",CurrencyRouter);
 route.use("/taxes",TaxesRouter);
 route.use("/variation",VariationRouter);
+route.use("/transfer",trnsferRouter)
 export default route;

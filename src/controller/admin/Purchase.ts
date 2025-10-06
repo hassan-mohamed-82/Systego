@@ -123,7 +123,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       let product_warehouse = await Product_WarehouseModel.findOne({
         productId: product_id,
         WarehouseId: purchase.warehouse_id,
-      });
+      }); 
 
       if (product_warehouse) {
         product_warehouse.quantity += p.quantity ?? 0;

@@ -1,1 +1,14 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const validation_1 = require("../../middlewares/validation");
+const catchAsync_1 = require("../../utils/catchAsync");
+const Transfer_1 = require("../../controller/admin/Transfer");
+const Transfer_2 = require("../../validation/admin/Transfer");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Transfer_2.createTransferSchema), (0, catchAsync_1.catchAsync)(Transfer_1.createTransfer));
+route.get("/getTransfersForWarehouse/:warehouseId", (0, catchAsync_1.catchAsync)(Transfer_1.getTransfersForWarehouse));
+route.get("/gettransferin/:warehouseId", (0, catchAsync_1.catchAsync)(Transfer_1.gettransferin));
+route.get("/gettransferout/:warehouseId", (0, catchAsync_1.catchAsync)(Transfer_1.gettransferout));
+route.post("/markTransferAsReceived", (0, validation_1.validate)(Transfer_2.markTransferAsReceivedSchema), (0, catchAsync_1.catchAsync)(Transfer_1.markTransferAsReceived));
+exports.default = route;
