@@ -79,6 +79,17 @@ export const getTransfersForWarehouse = async (req: Request, res: Response) => {
   
 };
 
+export const getTransferById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const transfer = await TransferModel.findById(id)
+    .populate("fromWarehouseId", "name")
+    .populate("toWarehouseId", "name")
+    .populate("productId", "name productCode");
+  if (!transfer) throw new NotFound("Transfer not found");
+  SuccessResponse(res, { message: "Transfer retrieved successfully", transfer });
+};
+
 
 // 🟢 تحديث التحويل إلى received (بس المستودع المستقبل يقدر)
 export const markTransferAsReceived = async (req: Request, res: Response) => {

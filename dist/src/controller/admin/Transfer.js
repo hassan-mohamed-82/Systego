@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.gettransferout = exports.gettransferin = exports.markTransferAsReceived = exports.getTransfersForWarehouse = exports.createTransfer = void 0;
+exports.gettransferout = exports.gettransferin = exports.markTransferAsReceived = exports.getTransferById = exports.getTransfersForWarehouse = exports.createTransfer = void 0;
 const Transfer_js_1 = require("../../models/schema/admin/Transfer.js");
 const Warehouse_js_1 = require("../../models/schema/admin/Warehouse.js");
 const BadRequest_js_1 = require("../../Errors/BadRequest.js");
@@ -66,6 +66,17 @@ const getTransfersForWarehouse = async (req, res) => {
     (0, response_js_1.SuccessResponse)(res, { message: "Transfers retrieved successfully", pending, received });
 };
 exports.getTransfersForWarehouse = getTransfersForWarehouse;
+const getTransferById = async (req, res) => {
+    const { id } = req.params;
+    const transfer = await Transfer_js_1.TransferModel.findById(id)
+        .populate("fromWarehouseId", "name")
+        .populate("toWarehouseId", "name")
+        .populate("productId", "name productCode");
+    if (!transfer)
+        throw new index_js_1.NotFound("Transfer not found");
+    (0, response_js_1.SuccessResponse)(res, { message: "Transfer retrieved successfully", transfer });
+};
+exports.getTransferById = getTransferById;
 // 🟢 تحديث التحويل إلى received (بس المستودع المستقبل يقدر)
 const markTransferAsReceived = async (req, res) => {
     const { id } = req.params;
