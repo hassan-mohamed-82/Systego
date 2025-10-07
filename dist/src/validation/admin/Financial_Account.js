@@ -11,6 +11,7 @@ exports.createBankAccountSchema = joi_1.default.object({
     initial_balance: joi_1.default.number().min(0).required(),
     is_default: joi_1.default.boolean().default(false),
     note: joi_1.default.string().allow("", null),
+    icon: joi_1.default.string().allow("", null),
 });
 exports.updateBankAccountSchema = joi_1.default.object({
     account_no: joi_1.default.string().max(100),
@@ -18,4 +19,5 @@ exports.updateBankAccountSchema = joi_1.default.object({
     initial_balance: joi_1.default.number().min(0),
     is_default: joi_1.default.boolean(),
     note: joi_1.default.string().allow("", null),
+    icon: joi_1.default.string().allow("", null),
 });

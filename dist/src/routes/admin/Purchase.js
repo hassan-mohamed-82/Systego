@@ -1,1 +1,13 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Purchase_1 = require("../../controller/admin/Purchase");
+const validation_1 = require("../../middlewares/validation");
+const Purchase_2 = require("../../validation/admin/Purchase");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Purchase_2.createPurchaseSchema), (0, catchAsync_1.catchAsync)(Purchase_1.createPurchase));
+route.get("/", (0, catchAsync_1.catchAsync)(Purchase_1.getPurchase));
+// route.get("/:id" ,catchAsync(getSupplierById));
+route.put("/:id", (0, validation_1.validate)(Purchase_2.updatePurchaseSchema), (0, catchAsync_1.catchAsync)(Purchase_1.updatePurchase));
+exports.default = route;

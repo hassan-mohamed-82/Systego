@@ -41,5 +41,6 @@ const BankAccountSchema = new mongoose_1.Schema({
     initial_balance: { type: Number, required: true, min: 0 },
     is_default: { type: Boolean, default: false },
     note: { type: String, trim: true },
+    icon: { type: String }
 }, { timestamps: true });
 exports.BankAccountModel = mongoose_1.default.model("BankAccount", BankAccountSchema);

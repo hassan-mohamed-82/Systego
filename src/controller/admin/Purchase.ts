@@ -13,12 +13,15 @@ import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
 import { VariationModel } from "../../models/schema/admin/Variation";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
+import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { saveBase64Image } from "../../utils/handleImages";
 import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
+import { any } from "joi";
 
 
 export const createPurchase = async (req: Request, res: Response) => {
@@ -33,14 +36,13 @@ export const createPurchase = async (req: Request, res: Response) => {
     subtotal,
     shiping_cost,
     discount,
-    tax_id, 
-
-    purchase_items, 
-    payment_amount,
-    financial_id,
+    tax_id,
+    purchase_items,
+    financials,
     purchase_due_payment,
   } = req.body;
- 
+
+  // ✅ التحقق من الوجود
   const existitWarehouse = await WarehouseModel.findById(warehouse_id);
   if (!existitWarehouse) throw new BadRequest("Warehouse not found");
 
@@ -53,40 +55,50 @@ export const createPurchase = async (req: Request, res: Response) => {
   const existitTax = await TaxesModel.findById(tax_id);
   if (!existitTax) throw new BadRequest("Tax not found");
 
-  // زيادة عدد الستوك في الكاتيجوري
-  // existitcategory.Purchase_quantity += 1;
-
-  // 🖼️ حفظ الصورة الأساسية
+  // 🖼️ حفظ الصورة
   let imageUrl = receipt_img;
   if (receipt_img && receipt_img.startsWith("data:")) {
     imageUrl = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
-  }   
+  }
 
-  // 1️⃣ إنشاء المنتج الأساسي (quantity تبدأ بـ 0)
+  // 1️⃣ إنشاء الـ Purchase
   const purchase = await PurchaseModel.create({
     date,
     warehouse_id,
     supplier_id,
-    receipt_img : imageUrl,
+    receipt_img: imageUrl,
     currency_id,
     payment_status,
     exchange_rate,
     subtotal,
     shiping_cost,
     discount,
-    tax_id,  
+    tax_id,
   });
 
-  // 2️⃣ إنشاء المنتجات (PurchaseItems) + الـ options
+  // 2️⃣ إنشاء الـ Purchase Items
   let totalQuantity = 0;
   if (purchase_items && Array.isArray(purchase_items)) {
     for (const p of purchase_items) {
-      // إنشاء PurchasePrice
+      let product_code = p.product_code;
+      let category_id = p.category_id;
+      let product_id = p.product_id;
+
+      if (product_code) {
+        const product_price = await ProductPriceModel.findOne({ code: product_code }).populate("productId");
+
+        if (product_price) {
+          const productDoc: any = product_price.productId; // 👈 حل الخطأ هنا
+          product_id = productDoc?._id;
+          category_id = productDoc?.categoryId;
+        }
+      }
+
       const PurchaseItems = await PurchaseItemModel.create({
         date: p.date,
         purchase_id: purchase._id,
-        category_id: p.category_id,
-        product_id: p.product_id,
+        category_id: category_id,
+        product_id: product_id,
         quantity: p.quantity,
         unit_cost: p.unit_cost,
         discount: p.discount,
@@ -94,29 +106,69 @@ export const createPurchase = async (req: Request, res: Response) => {
         subtotal: p.subtotal,
       });
 
-      // جمع الكمية النهائية
+      // ✅ تحديث كمية المنتج
+      const product = await ProductModel.findById(product_id);
+      if (product) {
+        product.quantity += p.quantity ?? 0;
+        await product.save();
+
+        const category = await CategoryModel.findById(product.categoryId);
+        if (category) {
+          category.product_quantity += p.quantity ?? 0;
+          await category.save();
+        }
+      }
+
+      // ✅ تحديث كمية المنتج في المستودع
+      let product_warehouse = await Product_WarehouseModel.findOne({
+        productId: product_id,
+        WarehouseId: purchase.warehouse_id,
+      }); 
+
+      if (product_warehouse) {
+        product_warehouse.quantity += p.quantity ?? 0;
+        await product_warehouse.save();
+      } else {
+        await Product_WarehouseModel.create({
+          productId: product_id,
+          WarehouseId: purchase.warehouse_id,
+          quantity: p.quantity ?? 0,
+        });
+      }
+
+      // جمع الكمية الكلية
       totalQuantity += p.quantity || 0;
 
-      // 3️⃣ إضافة الـ Options
+      // ✅ إنشاء الـ Options لو موجودة
       if (p.options && Array.isArray(p.options)) {
         for (const opt of p.options) {
           await PurchaseItemOptionModel.create({
-            date: opt.date,
             purchase_item_id: PurchaseItems._id,
             option_id: opt.id,
           });
         }
       }
     }
-  }  
+  }
 
-  // عمل invoice بالمدفوع
-  await PurchaseInvoiceModel.create({
-    financial_id : financial_id,
-    amount : payment_amount,
-    purchase_id : purchase._id,
-  });
-  // 3️⃣ إضافة الـ invoices
+  // 3️⃣ إنشاء الـ Invoices (Financials)
+  if (financials && Array.isArray(financials)) {
+    for (const ele of financials) {
+      await PurchaseInvoiceModel.create({
+        financial_id: ele.financial_id,
+        amount: ele.payment_amount,
+        purchase_id: purchase._id,
+      });
+
+      const financial = await BankAccountModel.findById(ele.financial_id);
+      if (financial) {
+        financial.initial_balance -= ele.payment_amount;
+        await financial.save();
+      }
+    }
+  }
+
+  // 4️⃣ إنشاء الـ Due Payments
   if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
     for (const due_payment of purchase_due_payment) {
       await PurchaseDuePaymentModel.create({
@@ -126,6 +178,8 @@ export const createPurchase = async (req: Request, res: Response) => {
       });
     }
   }
+
+  // ✅ الاستجابة النهائية
   SuccessResponse(res, { message: "Purchase created successfully", purchase });
 };
 
@@ -187,18 +241,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
     warehouse_id,
     supplier_id,
     receipt_img,
-    currency_id,
-    payment_status,
-    exchange_rate,
-    subtotal,
     shiping_cost,
     discount,
-    tax_id, 
-
-    purchase_items, 
-    payment_amount,
-    financial_id,
-    purchase_due_payment,
+    tax_id,
+    exchange_rate,
+    purchase_items,
   } = req.body;
 
   const purchase = await PurchaseModel.findById(id);
@@ -206,80 +253,153 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
   // ✅ تحديث الصورة
   if (receipt_img && receipt_img.startsWith("data:")) {
-    purchase.receipt_img = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
+    purchase.receipt_img = await saveBase64Image(
+      receipt_img,
+      Date.now().toString(),
+      req,
+      "Purchases"
+    );
   } else if (receipt_img) {
     purchase.receipt_img = receipt_img;
-  } 
+  }
 
-    
   // ✅ تحديث باقي الحقول (من غير quantity)
   purchase.date = date ?? purchase.date;
   purchase.warehouse_id = warehouse_id ?? purchase.warehouse_id;
   purchase.supplier_id = supplier_id ?? purchase.supplier_id;
-  purchase.currency_id = currency_id ?? purchase.currency_id;
-  purchase.payment_status = payment_status ?? purchase.payment_status;
   purchase.exchange_rate = exchange_rate ?? purchase.exchange_rate;
-  purchase.subtotal = subtotal ?? purchase.subtotal;
   purchase.shiping_cost = shiping_cost ?? purchase.shiping_cost;
   purchase.discount = discount ?? purchase.discount;
   purchase.tax_id = tax_id ?? purchase.tax_id;
   await purchase.save();
-  
-  if (purchase_items && Array.isArray(purchase_items)) {
-    for (const p of purchase_items) { 
 
+  // ✅ تحديث العناصر
+  if (purchase_items && Array.isArray(purchase_items)) {
+    for (const p of purchase_items) {
       if (p._id) {
-        // update
+        // ----------------- update -----------------
         const purchase_item = await PurchaseItemModel.findById(p._id);
-        purchase_item.date = p.date ?? purchase_item.date;
-        purchase_item.category_id = p.category_id ?? purchase_item.category_id;
-        purchase_item.product_id = p.product_id ?? purchase_item.product_id;
-        purchase_item.quantity = p.quantity ?? purchase_item.quantity;
-        purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
-        purchase_item.tax = p.tax ?? purchase_item.tax;
-        purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
-        purchase_item.save();
-        if(p.options){ 
-          if(p.options._id){
-            const option_item = PurchaseItemOptionModel.findById(p.options._id);
-            option_item.date = p.options.date ?? option_item.date;
-            option_item.option_id = p.options.option_id ?? option_item.option_id;
-          }
-          else{
-            await PurchaseItemOptionModel.create({
-              date: p.date,
-              purchase_item_id: p._id,
-              option_id: p.id,
+        if (purchase_item) {
+          // ✅ تعديل كمية المنتج في المخزون
+          const product = await ProductModel.findById(purchase_item.product_id) as any;
+
+          if (product && p.quantity) {
+            // تعديل الكمية في المنتج
+            product.quantity =
+              product.quantity - purchase_item.quantity + p.quantity;
+            await product.save();
+
+            // تعديل الكمية في التصنيف
+            const category = await CategoryModel.findById(product.categoryId);
+            if (category) {
+              category.product_quantity =
+                category.product_quantity - purchase_item.quantity + p.quantity;
+              await category.save();
+            }
+
+            // تعديل الكمية في المنتج داخل المخزن
+            let product_warehouse = await Product_WarehouseModel.findOne({
+              productId: purchase_item.product_id,
+              WarehouseId: purchase.warehouse_id,
             });
+
+            if (product_warehouse) {
+              product_warehouse.quantity =
+                product_warehouse.quantity - purchase_item.quantity + p.quantity;
+              await product_warehouse.save();
+            } else {
+              await Product_WarehouseModel.create({
+                productId: purchase_item.product_id,
+                WarehouseId: purchase.warehouse_id,
+                quantity: p.quantity,
+              });
+            }
+          }
+
+          // ✅ تحديث بيانات العنصر نفسه
+          let product_code = p.product_code;
+          let category_id = p.category_id;
+          let product_id = p.product_id;
+
+          if (product_code) {
+            const product_price = await ProductPriceModel.findOne({
+              code: product_code,
+            }).populate("productId");
+            if (product_price) {
+              product_id = (product_price.productId as any)._id;
+              category_id = (product_price.productId as any).categoryId;
+            }
+          }
+
+          purchase_item.date = p.date ?? purchase_item.date;
+          purchase_item.category_id = category_id ?? purchase_item.category_id;
+          purchase_item.product_id = product_id ?? purchase_item.product_id;
+          purchase_item.quantity = p.quantity ?? purchase_item.quantity;
+          purchase_item.unit_cost = p.unit_cost ?? purchase_item.unit_cost;
+          purchase_item.tax = p.tax ?? purchase_item.tax;
+          purchase_item.subtotal = p.subtotal ?? purchase_item.subtotal;
+          await purchase_item.save();
+
+          // ✅ تحديث الـ options
+          if (p.options) {
+            for (const element of p.options) {
+              if (element._id) {
+                const option_item = await PurchaseItemOptionModel.findById(
+                  element._id
+                );
+                if (option_item) {
+                  option_item.option_id =
+                    element.option_id ?? option_item.option_id;
+                  await option_item.save();
+                }
+              } else {
+                await PurchaseItemOptionModel.create({
+                  purchase_item_id: purchase_item._id,
+                  option_id: element.id,
+                });
+              }
+            }
           }
         }
       } else {
-      // إنشاء create
-      const PurchaseItems = await PurchaseItemModel.create({
-        date: p.date,
-        purchase_id: purchase._id,
-        category_id: p.category_id,
-        product_id: p.product_id,
-        quantity: p.quantity,
-        unit_cost: p.unit_cost,
-        discount: p.discount,
-        tax: p.tax,
-        subtotal: p.subtotal,
-      }); 
+        // ----------------- create -----------------
+        let product_id = p.product_id;
+        let category_id = p.category_id;
 
-      // 3️⃣ إضافة الـ Options
-      if (p.options && Array.isArray(p.options)) {
-        for (const opt of p.options) {
-          await PurchaseItemOptionModel.create({
-            date: opt.date,
-            purchase_item_id: PurchaseItems._id,
-            option_id: opt.id,
-          });
+        if (p.product_code) {
+          const product_price = await ProductPriceModel.findOne({
+            code: p.product_code,
+          }).populate("productId");
+
+          if (product_price) {
+            product_id = (product_price.productId as any)._id;
+            category_id = (product_price.productId as any).categoryId;
+          }
+        }
+
+        const newPurchaseItem = await PurchaseItemModel.create({
+          date: p.date,
+          purchase_id: purchase._id,
+          category_id,
+          product_id,
+          quantity: p.quantity,
+          unit_cost: p.unit_cost,
+          discount: p.discount,
+          tax: p.tax,
+          subtotal: p.subtotal,
+        });
+
+        if (p.options && Array.isArray(p.options)) {
+          for (const opt of p.options) {
+            await PurchaseItemOptionModel.create({
+              purchase_item_id: newPurchaseItem._id,
+              option_id: opt.id,
+            });
+          }
         }
       }
     }
-  } 
-}
+  }
 
   SuccessResponse(res, { message: "Purchase updated successfully", purchase });
 };

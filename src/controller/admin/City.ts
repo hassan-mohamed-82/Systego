@@ -7,9 +7,9 @@ import { NotFound } from "../../Errors/";
 import { CountryModel } from "../../models/schema/admin/Country";
 
 export const createCity = async (req: Request, res: Response) => {
-  const { name, country, shippingCost } = req.body;
-  if (!name || !country || shippingCost === undefined) {
-    throw new BadRequest("City name, country and shippingCost are required");
+  const { name, country  } = req.body;
+  if (!name || !country ) {
+    throw new BadRequest("City name and country  are required");
   }
   const existingCity = await CityModels.findOne({ name, country });
   if (existingCity) throw new BadRequest("City already exists in this country");
@@ -17,13 +17,11 @@ export const createCity = async (req: Request, res: Response) => {
   const countryExists = await CountryModel.findById(country);
   if (!countryExists) throw new NotFound("Country not found");
 
-  const city = await CityModels.create({ name, country, shippingCost });
+  const city = await CityModels.create({ name, country });
   await city.populate("country");
 
   SuccessResponse(res, { message: "create city successfully", city });
 };
-
-// Get All Cities
 export const getCities = async (req: Request, res: Response) => {
   const cities = await CityModels.find().populate("country");
   if (!cities || cities.length === 0) throw new NotFound("No cities found");
@@ -31,7 +29,6 @@ export const getCities = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "get all cities successfully", cities });
 };
 
-// Get City by Id
 export const getCityById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("City id is required");
@@ -42,7 +39,6 @@ export const getCityById = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "get city successfully", city });
 };
 
-// Update City
 export const updateCity = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("City id is required");
@@ -60,7 +56,9 @@ export const updateCity = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "update city successfully", city });
 };
 
-// Delete City
+
+
+
 export const deleteCity = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("City id is required");
@@ -68,5 +66,7 @@ export const deleteCity = async (req: Request, res: Response) => {
   const city = await CityModels.findByIdAndDelete(id);
   if (!city) throw new NotFound("City not found");
 
-  SuccessResponse(res, { message: "delete city successfully", city });
+  SuccessResponse(res, { message: "delete city successfully" });
 };
+
+
