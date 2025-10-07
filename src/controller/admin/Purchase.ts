@@ -283,3 +283,89 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Purchase updated successfully", purchase });
 };
+
+// ✅ DELETE
+export const deletePurchase = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const Purchase = await PurchaseModel.findByIdAndDelete(id);
+  if (!Purchase) throw new NotFound("Purchase not found");
+
+  const prices = await PurchasePriceModel.find({ PurchaseId: id });
+  const priceIds = prices.map((p) => p._id);
+
+  await PurchasePriceOptionModel.deleteMany({ Purchase_price_id: { $in: priceIds } });
+  await PurchasePriceModel.deleteMany({ PurchaseId: id });
+
+  SuccessResponse(res, { message: "Purchase and all related prices/options deleted successfully" });
+};
+
+export const getOnePurchase = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const Purchase = await PurchaseModel.findById(id)
+    .populate("categoryId")
+    .populate("brandId")
+    .populate("taxesId")
+    .lean();
+    const categories = await CategoryModel.find().lean();
+    const brands = await BrandModel.find().lean();
+ const variations = await VariationModel.find()
+    .populate("options") // جاي من الـ virtual
+    .lean();
+
+
+  if (!Purchase) throw new NotFound("Purchase not found");
+
+  const prices = await PurchasePriceModel.find({ PurchaseId: Purchase._id }).lean();
+
+  for (const price of prices) {
+    const options = await PurchasePriceOptionModel.find({
+      Purchase_price_id: price._id,
+    })
+      .populate("option_id")
+      .lean();
+
+    (price as any).options = options.map((o) => o.option_id);
+  }
+
+  (Purchase as any).prices = prices;
+
+  SuccessResponse(res, {Purchase,  categories, brands , variations  });
+};
+
+
+
+
+
+export const generateBarcodeImageController = async (req: Request, res: Response) => {
+     const { Purchase_id } = req.params;
+    if (!Purchase_id) throw new BadRequest("Purchase ID is required");
+
+    // find the Purchase price (not Purchase itself)
+    const PurchasePrice = await PurchasePriceModel.findById(Purchase_id);
+    if (!PurchasePrice) throw new NotFound("Purchase price not found");
+
+    // get code from Purchase price
+    const PurchaseCode = PurchasePrice.code;
+    if (!PurchaseCode) throw new BadRequest("Purchase price does not have a code yet");
+
+    // generate barcode image file
+    const imageLink = await generateBarcodeImage(PurchaseCode, PurchaseCode);
+
+    // build full url for client access
+    const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
+
+    SuccessResponse(res, { image: fullImageUrl })
+    };
+
+export const generatePurchaseCode = async (req: Request, res: Response) => {
+  let newCode = generateEAN13Barcode();
+
+  // التأكد من عدم التكرار
+  while (await PurchasePriceModel.findOne({ code: newCode })) {
+    newCode = generateEAN13Barcode();
+  }
+
+  SuccessResponse(res, { code: newCode });
+};
