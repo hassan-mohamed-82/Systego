@@ -426,39 +426,3 @@ export const getOnePurchase = async (req: Request, res: Response) => {
 
   SuccessResponse(res, {purchase });
 };
-
-
-
-
-
-export const generateBarcodeImageController = async (req: Request, res: Response) => {
-     const { Purchase_id } = req.params;
-    if (!Purchase_id) throw new BadRequest("Purchase ID is required");
-
-    // find the Purchase price (not Purchase itself)
-    const PurchasePrice = await PurchasePriceModel.findById(Purchase_id);
-    if (!PurchasePrice) throw new NotFound("Purchase price not found");
-
-    // get code from Purchase price
-    const PurchaseCode = PurchasePrice.code;
-    if (!PurchaseCode) throw new BadRequest("Purchase price does not have a code yet");
-
-    // generate barcode image file
-    const imageLink = await generateBarcodeImage(PurchaseCode, PurchaseCode);
-
-    // build full url for client access
-    const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
-
-    SuccessResponse(res, { image: fullImageUrl })
-    };
-
-export const generatePurchaseCode = async (req: Request, res: Response) => {
-  let newCode = generateEAN13Barcode();
-
-  // التأكد من عدم التكرار
-  while (await PurchasePriceModel.findOne({ code: newCode })) {
-    newCode = generateEAN13Barcode();
-  }
-
-  SuccessResponse(res, { code: newCode });
-};
