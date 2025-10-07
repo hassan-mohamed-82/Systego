@@ -14,5 +14,12 @@ const PurchaseItemSchema = new Schema(
   },
   { timestamps: true }
 );
+ 
+// في VariationSchema
+PurchaseItemSchema.virtual("options", {
+  ref: "PurchaseItemOption",
+  localField: "_id",
+  foreignField: "purchase_item_id",
+}); 
 
 export const PurchaseItemModel = mongoose.model("PurchaseItem", PurchaseItemSchema);

@@ -183,8 +183,7 @@ export const createPurchase = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Purchase created successfully", purchase });
 };
 
-
-
+ 
 // ✅ READ (with populate)
 export const getPurchase = async (req: Request, res: Response): Promise<void> => {
   const [
@@ -402,56 +401,29 @@ export const updatePurchase = async (req: Request, res: Response) => {
   }
 
   SuccessResponse(res, { message: "Purchase updated successfully", purchase });
-};
-
-// ✅ DELETE
-export const deletePurchase = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const Purchase = await PurchaseModel.findByIdAndDelete(id);
-  if (!Purchase) throw new NotFound("Purchase not found");
-
-  const prices = await PurchasePriceModel.find({ PurchaseId: id });
-  const priceIds = prices.map((p) => p._id);
-
-  await PurchasePriceOptionModel.deleteMany({ Purchase_price_id: { $in: priceIds } });
-  await PurchasePriceModel.deleteMany({ PurchaseId: id });
-
-  SuccessResponse(res, { message: "Purchase and all related prices/options deleted successfully" });
-};
+}; 
 
 export const getOnePurchase = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const baseUrl = req.protocol + "://" + req.get("host");
+  const purchase = PurchaseModel.findById(id)// 
+    .select('_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img')
+    .populate({ path: "warehouse_id", select: "_id name" })
+    .populate({ path: "supplier_id", select: "_id username phone_number" })
+    .populate({ path: "currency_id", select: "_id name" })
+    .populate({ path: "tax_id", select: "_id name" })
+    .populate({path :"items", populate: "options"}) // جاي من الـ virtual
+    .populate({path :"invoices", select: "_id amount date", populate: {path: "financial_id", select: "_id name"}}) // جاي من الـ virtual
+    .populate({path :"duePayments", select: "_id amount date"}) // جاي من الـ virtual 
+    .lean({ virtuals: true });
 
-  const Purchase = await PurchaseModel.findById(id)
-    .populate("categoryId")
-    .populate("brandId")
-    .populate("taxesId")
-    .lean();
-    const categories = await CategoryModel.find().lean();
-    const brands = await BrandModel.find().lean();
- const variations = await VariationModel.find()
-    .populate("options") // جاي من الـ virtual
-    .lean();
 
-
-  if (!Purchase) throw new NotFound("Purchase not found");
-
-  const prices = await PurchasePriceModel.find({ PurchaseId: Purchase._id }).lean();
-
-  for (const price of prices) {
-    const options = await PurchasePriceOptionModel.find({
-      Purchase_price_id: price._id,
-    })
-      .populate("option_id")
-      .lean();
-
-    (price as any).options = options.map((o) => o.option_id);
+  if (!purchase) throw new NotFound("Purchase not found");   
+  if (purchase?.receipt_img) {
+    purchase.receipt_img = `${baseUrl}/${purchase.receipt_img}`;
   }
 
-  (Purchase as any).prices = prices;
-
-  SuccessResponse(res, {Purchase,  categories, brands , variations  });
+  SuccessResponse(res, {purchase });
 };
 
 
