@@ -406,7 +406,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
 export const getOnePurchase = async (req: Request, res: Response) => {
   const { id } = req.params;
   const baseUrl = req.protocol + "://" + req.get("host");
-  const purchase = PurchaseModel.findById(id)// 
+  const purchase = await PurchaseModel.findById(id)// 
     .select('_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img')
     .populate({ path: "warehouse_id", select: "_id name" })
     .populate({ path: "supplier_id", select: "_id username phone_number" })
@@ -418,7 +418,8 @@ export const getOnePurchase = async (req: Request, res: Response) => {
     .lean({ virtuals: true });
 
 
-  if (!purchase) throw new NotFound("Purchase not found");   
+  if (!purchase) throw new NotFound("Purchase not found");
+   
   if (purchase?.receipt_img) {
     purchase.receipt_img = `${baseUrl}/${purchase.receipt_img}`;
   }
