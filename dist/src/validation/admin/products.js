@@ -11,16 +11,16 @@ exports.priceSchema = joi_1.default.object({
     price: joi_1.default.number().required(),
     code: joi_1.default.string().optional(),
     gallery: joi_1.default.array().items(joi_1.default.string().base64()).optional(),
+    quantity: joi_1.default.number().optional(), // ✅ مضافة
     options: joi_1.default.array().items(exports.optionSchema).optional(),
 });
 exports.createProductSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
     image: joi_1.default.string().optional(),
-    categoryId: joi_1.default.array().items(joi_1.default.string()).required(),
+    categoryId: joi_1.default.string().required(), // ✅ كانت array وأصبحت string
     brandId: joi_1.default.string().required(),
     unit: joi_1.default.string().required(),
     price: joi_1.default.number().required(),
-    quantity: joi_1.default.number().required(),
     description: joi_1.default.string().optional(),
     exp_ability: joi_1.default.boolean().optional(),
     date_of_expiery: joi_1.default.date().optional(),
@@ -33,16 +33,16 @@ exports.createProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
-    prices: joi_1.default.array().items(exports.priceSchema).required(), // prices array
+    gallery: joi_1.default.array().items(joi_1.default.string().base64()).optional(), // ✅ مضافة
+    prices: joi_1.default.array().items(exports.priceSchema).required(),
 });
 exports.updateProductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     image: joi_1.default.string().optional(),
-    categoryId: joi_1.default.array().items(joi_1.default.string()).optional(),
+    categoryId: joi_1.default.string().optional(), // ✅ نفس التعديل
     brandId: joi_1.default.string().optional(),
     unit: joi_1.default.string().optional(),
     price: joi_1.default.number().optional(),
-    quantity: joi_1.default.number().optional(),
     description: joi_1.default.string().optional(),
     exp_ability: joi_1.default.boolean().optional(),
     date_of_expiery: joi_1.default.date().optional(),
@@ -55,5 +55,6 @@ exports.updateProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
+    gallery: joi_1.default.array().items(joi_1.default.string().base64()).optional(), // ✅ مضافة هنا أيضًا
     prices: joi_1.default.array().items(exports.priceSchema).optional(),
 });

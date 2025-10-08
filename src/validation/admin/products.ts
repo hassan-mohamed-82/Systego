@@ -2,24 +2,22 @@ import Joi from "joi";
 
 export const optionSchema = Joi.string(); // مجرد ObjectId
 
-
 export const priceSchema = Joi.object({
   _id: Joi.string().optional(), // لو موجود نعمل update
   price: Joi.number().required(),
   code: Joi.string().optional(),
   gallery: Joi.array().items(Joi.string().base64()).optional(),
+  quantity: Joi.number().optional(), // ✅ مضافة
   options: Joi.array().items(optionSchema).optional(),
 });
-
 
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
   image: Joi.string().optional(),
-  categoryId: Joi.array().items(Joi.string()).required(),
+  categoryId: Joi.string().required(), // ✅ كانت array وأصبحت string
   brandId: Joi.string().required(),
   unit: Joi.string().required(),
   price: Joi.number().required(),
-  quantity: Joi.number().required(),
   description: Joi.string().optional(),
   exp_ability: Joi.boolean().optional(),
   date_of_expiery: Joi.date().optional(),
@@ -32,20 +30,17 @@ export const createProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  prices: Joi.array().items(priceSchema).required(), // prices array
+  gallery: Joi.array().items(Joi.string().base64()).optional(), // ✅ مضافة
+  prices: Joi.array().items(priceSchema).required(),
 });
-
-
-
 
 export const updateProductSchema = Joi.object({
   name: Joi.string().optional(),
   image: Joi.string().optional(),
-  categoryId: Joi.array().items(Joi.string()).optional(),
+  categoryId: Joi.string().optional(), // ✅ نفس التعديل
   brandId: Joi.string().optional(),
   unit: Joi.string().optional(),
   price: Joi.number().optional(),
-  quantity: Joi.number().optional(),
   description: Joi.string().optional(),
   exp_ability: Joi.boolean().optional(),
   date_of_expiery: Joi.date().optional(),
@@ -58,5 +53,6 @@ export const updateProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
+  gallery: Joi.array().items(Joi.string().base64()).optional(), // ✅ مضافة هنا أيضًا
   prices: Joi.array().items(priceSchema).optional(),
 });
