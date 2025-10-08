@@ -13,7 +13,7 @@ const category_1 = require("../../models/schema/admin/category");
 const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
 const createProduct = async (req, res) => {
-    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery } = req.body;
+    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
     // ✅ تحقق من أن categoryId مصفوفة
@@ -41,8 +41,8 @@ const createProduct = async (req, res) => {
     }
     // 🖼️ حفظ صور الجاليري
     let galleryUrls = [];
-    if (gallery && Array.isArray(gallery)) {
-        for (const g of gallery) {
+    if (gallery_product && Array.isArray(gallery_product)) {
+        for (const g of gallery_product) {
             if (g.startsWith("data:")) {
                 const imgUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "products");
                 galleryUrls.push(imgUrl);
@@ -80,7 +80,7 @@ const createProduct = async (req, res) => {
         different_price,
         show_quantity,
         maximum_to_show,
-        gallery: galleryUrls,
+        gallery_product: galleryUrls,
     });
     // ✅ إنشاء الأسعار (ProductPrice)
     let totalQuantity = 0;
@@ -168,7 +168,7 @@ const updateProduct = async (req, res) => {
                 galleryUrles.push(g);
             }
         }
-        product.gallery = galleryUrles;
+        product.gallery_product = galleryUrles;
     }
     // ✅ تحديث باقي الحقول (من غير quantity)
     product.name = name ?? product.name;

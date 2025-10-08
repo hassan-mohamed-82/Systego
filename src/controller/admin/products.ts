@@ -33,7 +33,7 @@ export const createProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     prices,
-    gallery
+    gallery_product
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -67,8 +67,8 @@ export const createProduct = async (req: Request, res: Response) => {
 
   // 🖼️ حفظ صور الجاليري
   let galleryUrls: string[] = [];
-  if (gallery && Array.isArray(gallery)) {
-    for (const g of gallery) {
+  if (gallery_product && Array.isArray(gallery_product)) {
+    for (const g of gallery_product) {
       if (g.startsWith("data:")) {
         const imgUrl = await saveBase64Image(g, Date.now().toString(), req, "products");
         galleryUrls.push(imgUrl);
@@ -108,7 +108,7 @@ export const createProduct = async (req: Request, res: Response) => {
     different_price,
     show_quantity,
     maximum_to_show,
-    gallery: galleryUrls,
+    gallery_product: galleryUrls,
   });
 
   // ✅ إنشاء الأسعار (ProductPrice)
@@ -226,7 +226,7 @@ export const updateProduct = async (req: Request, res: Response) => {
         galleryUrles.push(g);
       }
     }
-    product.gallery = galleryUrles;
+    product.gallery_product = galleryUrles;
   }
 
   // ✅ تحديث باقي الحقول (من غير quantity)
