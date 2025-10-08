@@ -55,6 +55,7 @@ export const updatePurchaseItemOptionSchema = Joi.object({
 
 export const updatePurchaseItemSchema = Joi.object({
   date: Joi.date().optional(),
+  _id: Joi.number().optional(),
   category_id: Joi.string().optional(),
   product_id: Joi.string().optional(),
   quantity: Joi.number().optional(),
