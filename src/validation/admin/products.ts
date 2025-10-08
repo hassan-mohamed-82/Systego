@@ -6,7 +6,7 @@ export const priceSchema = Joi.object({
   _id: Joi.string().optional(), // لو موجود نعمل update
   price: Joi.number().required(),
   code: Joi.string().optional(),
-  gallery: Joi.array().items(Joi.string().base64()).optional(),
+  gallery: Joi.array().optional(),
   quantity: Joi.number().optional(), // ✅ مضافة
   options: Joi.array().items(optionSchema).optional(),
 });

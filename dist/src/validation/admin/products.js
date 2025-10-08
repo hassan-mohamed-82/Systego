@@ -10,7 +10,7 @@ exports.priceSchema = joi_1.default.object({
     _id: joi_1.default.string().optional(), // لو موجود نعمل update
     price: joi_1.default.number().required(),
     code: joi_1.default.string().optional(),
-    gallery: joi_1.default.array().items(joi_1.default.string().base64()).optional(),
+    gallery: joi_1.default.array().optional(),
     quantity: joi_1.default.number().optional(), // ✅ مضافة
     options: joi_1.default.array().items(exports.optionSchema).optional(),
 });

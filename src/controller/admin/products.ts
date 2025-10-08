@@ -16,7 +16,7 @@ export const createProduct = async (req: Request, res: Response) => {
   const {
     name,
     image,
-    categoryId,
+    categoryIds, // 👈 خليها array من IDs
     brandId,
     unit,
     price,
@@ -38,14 +38,25 @@ export const createProduct = async (req: Request, res: Response) => {
 
   if (!name) throw new BadRequest("Product name is required");
 
-  const existitcategory = await CategoryModel.findById(categoryId);
-  if (!existitcategory) throw new BadRequest("Category not found");
+  // ✅ تحقق من الكاتيجوريز
+  if (!Array.isArray(categoryIds) || categoryIds.length === 0) {
+    throw new BadRequest("At least one categoryId is required");
+  }
 
+  const existitcategories = await CategoryModel.find({ _id: { $in: categoryIds } });
+  if (existitcategories.length !== categoryIds.length) {
+    throw new BadRequest("One or more categories not found");
+  }
+
+  // ✅ تحقق من البراند
   const existitbrand = await BrandModel.findById(brandId);
   if (!existitbrand) throw new BadRequest("Brand not found");
 
-  // زيادة عدد المنتجات في الكاتيجوري
-  existitcategory.product_quantity += 1;
+  // زيادة عدد المنتجات في كل كاتيجوري
+  for (const cat of existitcategories) {
+    cat.product_quantity += 1;
+    await cat.save();
+  }
 
   // 🖼️ حفظ الصورة الأساسية
   let imageUrl = image;
@@ -53,7 +64,7 @@ export const createProduct = async (req: Request, res: Response) => {
     imageUrl = await saveBase64Image(image, Date.now().toString(), req, "products");
   }
 
-  // 🖼️ حفظ صور الجاليري للـ Product
+  // 🖼️ حفظ صور الجاليري
   let galleryUrles: string[] = [];
   if (gallery && Array.isArray(gallery)) {
     for (const g of gallery) {
@@ -65,24 +76,23 @@ export const createProduct = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ تحقق من الحقول الإلزامية لو boolean true
+  // ✅ تحقق من الحقول الشرطية
   if (exp_ability === true && !date_of_expiery) {
     throw new BadRequest("Expiry date is required when exp_ability is true");
   }
-
   if (show_quantity === true && !maximum_to_show) {
     throw new BadRequest("Maximum to show is required when show_quantity is true");
   }
 
-  // 1️⃣ إنشاء المنتج الأساسي (quantity تبدأ بـ 0)
+  // 1️⃣ إنشاء المنتج الأساسي
   const product = await ProductModel.create({
     name,
     image: imageUrl,
-    categoryId,
+    categoryId: categoryIds, // 👈 تخزين الـ array كلها
     brandId,
     unit,
     price,
-    quantity: 0, // دايمًا صفر، هيتحسب بعدين
+    quantity: 0,
     description,
     exp_ability,
     date_of_expiery,
@@ -95,15 +105,15 @@ export const createProduct = async (req: Request, res: Response) => {
     different_price,
     show_quantity,
     maximum_to_show,
-    gallery: galleryUrles
+    gallery: galleryUrles,
   });
 
-  // 2️⃣ إنشاء الأسعار (ProductPrice) + الصور + الـ options
+  // 2️⃣ إنشاء الأسعار
   let totalQuantity = 0;
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
-      // ✅ حفظ صور الـ gallery الخاصة بالـ ProductPrice
       let galleryUrls: string[] = [];
+
       if (p.gallery && Array.isArray(p.gallery)) {
         for (const g of p.gallery) {
           if (g.startsWith("data:")) {
@@ -115,7 +125,6 @@ export const createProduct = async (req: Request, res: Response) => {
         }
       }
 
-      // إنشاء ProductPrice
       const productPrice = await ProductPriceModel.create({
         productId: product._id,
         price: p.price,
@@ -124,10 +133,8 @@ export const createProduct = async (req: Request, res: Response) => {
         quantity: p.quantity || 0,
       });
 
-      // جمع الكمية النهائية
       totalQuantity += p.quantity || 0;
 
-      // 3️⃣ إضافة الـ Options
       if (p.options && Array.isArray(p.options)) {
         for (const opt of p.options) {
           await ProductPriceOptionModel.create({
@@ -139,15 +146,12 @@ export const createProduct = async (req: Request, res: Response) => {
     }
   }
 
-  // 3️⃣ تحديث كمية المنتج النهائية
+  // 3️⃣ تحديث الكمية النهائية
   product.quantity = totalQuantity;
   await product.save();
 
-  await existitcategory.save();
-
   SuccessResponse(res, { message: "Product created successfully", product });
 };
-
 
 
 // ✅ READ (with populate)
