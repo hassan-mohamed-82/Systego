@@ -52,4 +52,16 @@ const PurchaseSchema = new mongoose_1.Schema({
     shiping_cost: { type: Number, required: true },
     discount: { type: Number, default: 0 },
 }, { timestamps: true });
+// في VariationSchema
+PurchaseSchema.virtual("items", {
+    ref: "PurchaseItem",
+    localField: "_id",
+    foreignField: "purchase_id",
+});
+// في VariationSchema
+PurchaseSchema.virtual("duePayments", {
+    ref: "PurchaseDuePayment",
+    localField: "_id",
+    foreignField: "purchase_id",
+});
 exports.PurchaseModel = mongoose_1.default.model("Purchase", PurchaseSchema);

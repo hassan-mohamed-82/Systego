@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePurchase = exports.getPurchase = exports.createPurchase = void 0;
+exports.getOnePurchase = exports.updatePurchase = exports.getPurchase = exports.createPurchase = void 0;
 const Purchase_1 = require("../../models/schema/admin/Purchase");
 const purchase_item_1 = require("../../models/schema/admin/purchase_item");
 const purchase_due_payment_1 = require("../../models/schema/admin/purchase_due_payment");
@@ -327,3 +327,24 @@ const updatePurchase = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Purchase updated successfully", purchase });
 };
 exports.updatePurchase = updatePurchase;
+const getOnePurchase = async (req, res) => {
+    const { id } = req.params;
+    const baseUrl = req.protocol + "://" + req.get("host");
+    const purchase = await Purchase_1.PurchaseModel.findById(id) // 
+        .select('_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img')
+        .populate({ path: "warehouse_id", select: "_id name" })
+        .populate({ path: "supplier_id", select: "_id username phone_number" })
+        .populate({ path: "currency_id", select: "_id name" })
+        .populate({ path: "tax_id", select: "_id name" })
+        .populate({ path: "items", populate: "options" }) // جاي من الـ virtual
+        .populate({ path: "invoices", select: "_id amount date", populate: { path: "financial_id", select: "_id name" } }) // جاي من الـ virtual
+        .populate({ path: "duePayments", select: "_id amount date" }) // جاي من الـ virtual 
+        .lean({ virtuals: true });
+    if (!purchase)
+        throw new NotFound_1.NotFound("Purchase not found");
+    if (purchase?.receipt_img) {
+        purchase.receipt_img = `${baseUrl}/${purchase.receipt_img}`;
+    }
+    (0, response_1.SuccessResponse)(res, { purchase });
+};
+exports.getOnePurchase = getOnePurchase;

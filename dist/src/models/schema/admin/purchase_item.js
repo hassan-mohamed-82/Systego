@@ -46,4 +46,10 @@ const PurchaseItemSchema = new mongoose_1.Schema({
     tax: { type: Number, required: true },
     subtotal: { type: Number, required: true },
 }, { timestamps: true });
+// في VariationSchema
+PurchaseItemSchema.virtual("options", {
+    ref: "PurchaseItemOption",
+    localField: "_id",
+    foreignField: "purchase_item_id",
+});
 exports.PurchaseItemModel = mongoose_1.default.model("PurchaseItem", PurchaseItemSchema);
