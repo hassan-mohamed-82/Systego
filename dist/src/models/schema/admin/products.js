@@ -25,6 +25,6 @@ const productSchema = new mongoose_1.default.Schema({
     different_price: { type: Boolean, default: false },
     show_quantity: { type: Boolean, default: true },
     maximum_to_show: { type: Number },
-    gallery: [{ type: String }],
+    gallery_product: [{ type: String }],
 }, { timestamps: true });
 exports.ProductModel = mongoose_1.default.model("Product", productSchema);

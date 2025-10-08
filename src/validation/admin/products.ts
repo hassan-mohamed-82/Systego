@@ -1,23 +1,30 @@
 import Joi from "joi";
 
-export const optionSchema = Joi.string(); // مجرد ObjectId
+// ✅ ObjectId
+export const objectId = Joi.string().hex().length(24);
 
+// ✅ Option Schema (مجرد ID)
+export const optionSchema = objectId;
+
+// ✅ Price Schema (يتبع ProductPriceModel)
 export const priceSchema = Joi.object({
-  _id: Joi.string().optional(), // لو موجود نعمل update
+  _id: objectId.optional(), // في حالة التعديل
   price: Joi.number().required(),
-  code: Joi.string().optional(),
-  gallery: Joi.array().items(Joi.string().base64()).optional(),
-  quantity: Joi.number().optional(), // ✅ مضافة
+  code: Joi.string().required(), // ✅ في الموديل required
+  quantity: Joi.number().default(0), // ✅ موجود في الموديل
+  gallery: Joi.array().items(Joi.string()).optional(), // ✅ صور URLs
   options: Joi.array().items(optionSchema).optional(),
 });
 
+// ✅ Create Product Schema
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
-  image: Joi.string().optional(),
-  categoryId: Joi.string().required(), // ✅ كانت array وأصبحت string
-  brandId: Joi.string().required(),
+  image: Joi.string().optional(), // base64 أو URL
+  categoryId: Joi.array().items(objectId).min(1).required(), // ✅ لازم مصفوفة IDs
+  brandId: objectId.required(),
   unit: Joi.string().required(),
-  price: Joi.number().required(),
+  price: Joi.number().required(), // السعر الأساسي
+  quantity: Joi.number().optional(), // بيتم حسابه تلقائي بعد حفظ الأسعار
   description: Joi.string().optional(),
   exp_ability: Joi.boolean().optional(),
   date_of_expiery: Joi.date().optional(),
@@ -25,22 +32,24 @@ export const createProductSchema = Joi.object({
   low_stock: Joi.number().optional(),
   whole_price: Joi.number().optional(),
   start_quantaty: Joi.number().optional(),
-  taxesId: Joi.string().optional(),
+  taxesId: objectId.optional(),
   product_has_imei: Joi.boolean().optional(),
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  gallery: Joi.array().items(Joi.string().base64()).optional(), // ✅ مضافة
-  prices: Joi.array().items(priceSchema).required(),
+  gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ اسم الحقل الصحيح
+  prices: Joi.array().items(priceSchema).required(), // ✅ الأسعار مطلوبة
 });
 
+// ✅ Update Product Schema
 export const updateProductSchema = Joi.object({
   name: Joi.string().optional(),
   image: Joi.string().optional(),
-  categoryId: Joi.string().optional(), // ✅ نفس التعديل
-  brandId: Joi.string().optional(),
+  categoryId: Joi.array().items(objectId).optional(),
+  brandId: objectId.optional(),
   unit: Joi.string().optional(),
   price: Joi.number().optional(),
+  quantity: Joi.number().optional(),
   description: Joi.string().optional(),
   exp_ability: Joi.boolean().optional(),
   date_of_expiery: Joi.date().optional(),
@@ -48,11 +57,11 @@ export const updateProductSchema = Joi.object({
   low_stock: Joi.number().optional(),
   whole_price: Joi.number().optional(),
   start_quantaty: Joi.number().optional(),
-  taxesId: Joi.string().optional(),
+  taxesId: objectId.optional(),
   product_has_imei: Joi.boolean().optional(),
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  gallery: Joi.array().items(Joi.string().base64()).optional(), // ✅ مضافة هنا أيضًا
+  gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ نفس الاسم
   prices: Joi.array().items(priceSchema).optional(),
 });
