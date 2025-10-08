@@ -16,8 +16,8 @@ exports.priceSchema = joi_1.default.object({
 exports.createProductSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
     image: joi_1.default.string().optional(),
-    categoryId: joi_1.default.array().items(joi_1.default.string()).required(), // ✅ هنا التعديل
-    brandId: joi_1.default.string().required(),
+    categoryId: joi_1.default.array().items(joi_1.default.string().hex().length(24)).required(),
+    brandId: joi_1.default.string().hex().length(24).required(),
     unit: joi_1.default.string().required(),
     price: joi_1.default.number().required(),
     quantity: joi_1.default.number().required(),
@@ -28,7 +28,7 @@ exports.createProductSchema = joi_1.default.object({
     low_stock: joi_1.default.number().optional(),
     whole_price: joi_1.default.number().optional(),
     start_quantaty: joi_1.default.number().optional(),
-    taxesId: joi_1.default.string().optional(),
+    taxesId: joi_1.default.string().hex().length(24).optional(),
     product_has_imei: joi_1.default.boolean().optional(),
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
@@ -38,8 +38,8 @@ exports.createProductSchema = joi_1.default.object({
 exports.updateProductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     image: joi_1.default.string().optional(),
-    categoryId: joi_1.default.array().items(joi_1.default.string()).optional(), // ✅ وهنا كمان
-    brandId: joi_1.default.string().optional(),
+    categoryId: joi_1.default.array().items(joi_1.default.string().hex().length(24)).optional(),
+    brandId: joi_1.default.string().hex().length(24).optional(),
     unit: joi_1.default.string().optional(),
     price: joi_1.default.number().optional(),
     quantity: joi_1.default.number().optional(),
@@ -50,7 +50,7 @@ exports.updateProductSchema = joi_1.default.object({
     low_stock: joi_1.default.number().optional(),
     whole_price: joi_1.default.number().optional(),
     start_quantaty: joi_1.default.number().optional(),
-    taxesId: joi_1.default.string().optional(),
+    taxesId: joi_1.default.string().hex().length(24).optional(),
     product_has_imei: joi_1.default.boolean().optional(),
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
