@@ -254,29 +254,56 @@ const deleteProduct = async (req, res) => {
 exports.deleteProduct = deleteProduct;
 const getOneProduct = async (req, res) => {
     const { id } = req.params;
+    // 1️⃣ جلب المنتج
     const product = await products_1.ProductModel.findById(id)
         .populate("categoryId")
         .populate("brandId")
         .populate("taxesId")
         .lean();
+    if (!product)
+        throw new NotFound_1.NotFound("Product not found");
+    // 2️⃣ جلب الكاتيجوريز و البراندز كلها (اختياري للفلترة أو العرض)
     const categories = await category_1.CategoryModel.find().lean();
     const brands = await brand_1.BrandModel.find().lean();
+    // 3️⃣ جلب الـ variations كاملة
     const variations = await Variation_1.VariationModel.find()
         .populate("options") // جاي من الـ virtual
         .lean();
-    if (!product)
-        throw new NotFound_1.NotFound("Product not found");
+    // 4️⃣ جلب الأسعار الخاصة بالمنتج
     const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
     for (const price of prices) {
+        // جلب الـ options لكل سعر
         const options = await product_price_2.ProductPriceOptionModel.find({
             product_price_id: price._id,
         })
             .populate("option_id")
             .lean();
-        price.options = options.map((o) => o.option_id);
+        // 4.1️⃣ تجميع الخيارات حسب الـ variation
+        const groupedOptions = {};
+        options.forEach((po) => {
+            const option = po.option_id;
+            // البحث عن الـ variation اللي تحتوي هذا الخيار
+            const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
+            if (variation) {
+                if (!groupedOptions[variation.name])
+                    groupedOptions[variation.name] = [];
+                groupedOptions[variation.name].push(option);
+            }
+        });
+        // 4.2️⃣ تحويل الـ groupedOptions لمصفوفة
+        price.variations = Object.keys(groupedOptions).map((varName) => ({
+            name: varName,
+            options: groupedOptions[varName],
+        }));
     }
+    // 5️⃣ إضافة الأسعار للمنتج
     product.prices = prices;
-    (0, response_1.SuccessResponse)(res, { product, categories, brands, variations });
+    (0, response_1.SuccessResponse)(res, {
+        product,
+        categories,
+        brands,
+        variations, // ممكن تستخدم للفلترة أو العرض إذا احتجت
+    });
 };
 exports.getOneProduct = getOneProduct;
 const generateBarcodeImageController = async (req, res) => {

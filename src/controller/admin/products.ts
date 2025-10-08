@@ -326,35 +326,68 @@ export const deleteProduct = async (req: Request, res: Response) => {
 export const getOneProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
 
+  // 1️⃣ جلب المنتج
   const product = await ProductModel.findById(id)
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
-    const categories = await CategoryModel.find().lean();
-    const brands = await BrandModel.find().lean();
- const variations = await VariationModel.find()
-    .populate("options") // جاي من الـ virtual
-    .lean();
-
 
   if (!product) throw new NotFound("Product not found");
 
+  // 2️⃣ جلب الكاتيجوريز و البراندز كلها (اختياري للفلترة أو العرض)
+  const categories = await CategoryModel.find().lean();
+  const brands = await BrandModel.find().lean();
+
+  // 3️⃣ جلب الـ variations كاملة
+  const variations = await VariationModel.find()
+    .populate("options") // جاي من الـ virtual
+    .lean();
+
+  // 4️⃣ جلب الأسعار الخاصة بالمنتج
   const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
   for (const price of prices) {
+    // جلب الـ options لكل سعر
     const options = await ProductPriceOptionModel.find({
       product_price_id: price._id,
     })
       .populate("option_id")
       .lean();
 
-    (price as any).options = options.map((o) => o.option_id);
+    // 4.1️⃣ تجميع الخيارات حسب الـ variation
+    const groupedOptions: Record<string, any[]> = {};
+
+    options.forEach((po: any) => {
+      const option = po.option_id;
+
+      // البحث عن الـ variation اللي تحتوي هذا الخيار
+      const variation = variations.find((v: any) =>
+        v.options.some((opt: any) => opt._id.toString() === option._id.toString())
+      );
+
+      if (variation) {
+        if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+        groupedOptions[variation.name].push(option);
+      }
+    });
+
+    // 4.2️⃣ تحويل الـ groupedOptions لمصفوفة
+    (price as any).variations = Object.keys(groupedOptions).map((varName) => ({
+      name: varName,
+      options: groupedOptions[varName],
+    }));
   }
 
+  // 5️⃣ إضافة الأسعار للمنتج
   (product as any).prices = prices;
 
-  SuccessResponse(res, {product,  categories, brands , variations  });
+  SuccessResponse(res, {
+    product,
+    categories,
+    brands,
+    variations, // ممكن تستخدم للفلترة أو العرض إذا احتجت
+  });
 };
 
 
