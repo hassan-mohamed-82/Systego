@@ -304,6 +304,7 @@ const getOneProduct = async (req, res) => {
         product,
         categories,
         brands,
+        variations,
     });
 };
 exports.getOneProduct = getOneProduct;

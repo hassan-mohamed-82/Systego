@@ -7,6 +7,9 @@ import { SuccessResponse } from "../../utils/response";
 export const createSelectReason =async (req: Request, res: Response) => {
         const { reason } = req.body;
         if (!reason) throw new BadRequest("Reason is required");
+if(reason.length < 3) throw new BadRequest("Reason must be at least 3 characters");
+const exist = await SelectReasonModel.findOne({ reason });
+     if(exist) throw new BadRequest("Reason already exists");
     
         const createReason = await SelectReasonModel.create({ reason });
         if (!createReason) throw new NotFound("Reason not found");

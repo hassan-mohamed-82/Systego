@@ -7,6 +7,8 @@ import { SuccessResponse } from "../../utils/response";
 import { ProductModel } from "../../models/schema/admin/products";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import{saveBase64Image} from "../../utils/handleImages"
+import { ProductPriceModel } from "../../models/schema/admin/product_price";
+import { CategoryModel } from "../../models/schema/admin/category";
 
 export const createAdjustment = async (req: Request, res: Response) => {
   const {  warehouse_id, note,productId,quantity,select_reasonId,image } = req.body;
@@ -22,6 +24,10 @@ export const createAdjustment = async (req: Request, res: Response) => {
   if (!product) throw new BadRequest("Invalid product ID");
   const products= await ProductModel.findById(productId);
   if (!products) throw new BadRequest("Invalid product ID");
+  // const productPrice = await ProductPriceModel.findById(productId);
+  // if (!productPrice) throw new BadRequest("Invalid product price ID");
+  // const category = await CategoryModel.findById(products.categoryId);
+  // if(!category) throw new BadRequest("Invalid category ID");
   let image_url =" ";
   if(image){
     image_url = await saveBase64Image(image, Date.now().toString(), req, "adjustments");

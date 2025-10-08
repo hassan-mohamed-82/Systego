@@ -388,6 +388,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
     product,
     categories,
     brands,
+    variations,
   });
 };
 

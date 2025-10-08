@@ -9,6 +9,11 @@ const createSelectReason = async (req, res) => {
     const { reason } = req.body;
     if (!reason)
         throw new BadRequest_1.BadRequest("Reason is required");
+    if (reason.length < 3)
+        throw new BadRequest_1.BadRequest("Reason must be at least 3 characters");
+    const exist = await selectReason_1.SelectReasonModel.findOne({ reason });
+    if (exist)
+        throw new BadRequest_1.BadRequest("Reason already exists");
     const createReason = await selectReason_1.SelectReasonModel.create({ reason });
     if (!createReason)
         throw new Errors_1.NotFound("Reason not found");
