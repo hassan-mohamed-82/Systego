@@ -15,7 +15,7 @@ export const priceSchema = Joi.object({
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
   image: Joi.string().optional(),
-  categoryId: Joi.array().items(Joi.string()).required(),
+  categoryId: Joi.array().required(),
   brandId: Joi.string().required(),
   unit: Joi.string().required(),
   price: Joi.number().required(),
@@ -41,7 +41,7 @@ export const createProductSchema = Joi.object({
 export const updateProductSchema = Joi.object({
   name: Joi.string().optional(),
   image: Joi.string().optional(),
-  categoryId: Joi.array().items(Joi.string()).optional(),
+  categoryId: Joi.array().optional(),
   brandId: Joi.string().optional(),
   unit: Joi.string().optional(),
   price: Joi.number().optional(),
