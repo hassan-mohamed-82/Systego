@@ -335,27 +335,22 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   if (!product) throw new NotFound("Product not found");
 
-  // 2️⃣ جلب الكاتيجوريز و البراندز كلها (اختياري للفلترة أو العرض)
+  // 2️⃣ جلب الكاتيجوريز و البراندز
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
 
-  // 3️⃣ جلب الـ variations كاملة
+  // 3️⃣ جلب كل الـ variations مع options
   const variations = await VariationModel.find()
-    .populate("options") // جاي من الـ virtual
+    .populate("options")
     .lean();
 
   // 4️⃣ جلب الأسعار الخاصة بالمنتج
-  const pricesFromDB = await ProductPriceModel.find({ productId: product._id }).lean();
+  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
-  const prices: any[] = [];
-
-  for (let i = 0; i < pricesFromDB.length; i++) {
-    let price: any = pricesFromDB[i]; // تحويل للكائن لأي لتجنب TS errors
-
-    // جلب الـ options لكل سعر
-    const options = await ProductPriceOptionModel.find({
-      product_price_id: price._id,
-    })
+  const formattedPrices = [];
+  for (const price of prices) {
+    // جلب الخيارات المرتبطة بكل سعر
+    const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
       .populate("option_id")
       .lean();
 
@@ -363,25 +358,24 @@ export const getOneProduct = async (req: Request, res: Response) => {
     const groupedOptions: Record<string, any[]> = {};
     options.forEach((po: any) => {
       const option = po.option_id;
-
       const variation = variations.find((v: any) =>
         v.options.some((opt: any) => opt._id.toString() === option._id.toString())
       );
-
       if (variation) {
         if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
         groupedOptions[variation.name].push(option);
       }
     });
 
-    const priceVariations = Object.keys(groupedOptions).map((varName) => ({
+    // تحويلها لمصفوفة
+    const variationsArray = Object.keys(groupedOptions).map((varName) => ({
       name: varName,
       options: groupedOptions[varName],
     }));
 
-    // إعادة ترتيب الحقول بحيث variations تيجي أولاً
-    prices.push({
-      variations: priceVariations,
+    // شكل الـ JSON النهائي لكل سعر
+    formattedPrices.push({
+      variations: variationsArray,   // أول حاجة variations
       _id: price._id,
       productId: price.productId,
       price: price.price,
@@ -394,17 +388,15 @@ export const getOneProduct = async (req: Request, res: Response) => {
     });
   }
 
-  // 5️⃣ إضافة الأسعار للمنتج
-  (product as any).prices = prices;
+  // 5️⃣ إضافة الأسعار والـ variations للمنتج
+  (product as any).prices = formattedPrices;
 
   SuccessResponse(res, {
     product,
     categories,
     brands,
-    variations, // للفلترة أو العرض لو احتجت
   });
 };
-
 
 
 
