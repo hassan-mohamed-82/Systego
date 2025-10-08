@@ -332,9 +332,10 @@ export const getOneProduct = async (req: Request, res: Response) => {
   // 2️⃣ جلب الكاتيجوريز و البراندز
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
+  const virattions = await VariationModel.find().populate("options").lean();
 
   // 3️⃣ جلب كل الـ variations مع options
-  const variations = await VariationModel.find()
+  const variationes = await VariationModel.find()
     .populate("options")
     .lean();
 
@@ -352,7 +353,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
     const groupedOptions: Record<string, any[]> = {};
     options.forEach((po: any) => {
       const option = po.option_id;
-      const variation = variations.find((v: any) =>
+      const variation = variationes.find((v: any) =>
         v.options.some((opt: any) => opt._id.toString() === option._id.toString())
       );
       if (variation) {
@@ -388,7 +389,8 @@ export const getOneProduct = async (req: Request, res: Response) => {
     product,
     categories,
     brands,
-    variations,
+    variationes,
+    virattions
   });
 };
 
