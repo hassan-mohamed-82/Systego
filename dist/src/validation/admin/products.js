@@ -30,7 +30,7 @@ exports.createProductSchema = joi_1.default.object({
     brandId: exports.objectId.required(),
     unit: joi_1.default.string().required(),
     price: joi_1.default.number().required(),
-    quantity: joi_1.default.number().optional(), // ممكن يتحسب بعدين من الأسعار
+    quantity: joi_1.default.number().optional(),
     description: joi_1.default.string().optional(),
     exp_ability: joi_1.default.boolean().optional(),
     date_of_expiery: joi_1.default.date().optional(),
