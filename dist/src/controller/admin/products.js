@@ -257,9 +257,8 @@ const getOneProduct = async (req, res) => {
     // 2️⃣ جلب الكاتيجوريز و البراندز
     const categories = await category_1.CategoryModel.find().lean();
     const brands = await brand_1.BrandModel.find().lean();
-    const virattions = await Variation_1.VariationModel.find().populate("options").lean();
     // 3️⃣ جلب كل الـ variations مع options
-    const variationes = await Variation_1.VariationModel.find()
+    const variations = await Variation_1.VariationModel.find()
         .populate("options")
         .lean();
     // 4️⃣ جلب الأسعار الخاصة بالمنتج
@@ -274,7 +273,7 @@ const getOneProduct = async (req, res) => {
         const groupedOptions = {};
         options.forEach((po) => {
             const option = po.option_id;
-            const variation = variationes.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
+            const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
             if (variation) {
                 if (!groupedOptions[variation.name])
                     groupedOptions[variation.name] = [];
@@ -305,8 +304,7 @@ const getOneProduct = async (req, res) => {
         product,
         categories,
         brands,
-        variationes,
-        virattions
+        variations,
     });
 };
 exports.getOneProduct = getOneProduct;
