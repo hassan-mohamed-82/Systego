@@ -6,38 +6,33 @@ export async function saveBase64Image(
   base64: string,
   userId: string,
   req: Request,
-  folder: string // new param
+  folder: string
 ): Promise<string> {
-  const matches = base64.match(/^data:(.+);base64,(.+)$/);
-  if (!matches || matches.length !== 3) {
-    throw new Error("Invalid base64 format");
+  let matches = base64.match(/^data:(.+);base64,(.+)$/);
+
+  let ext: string;
+  let data: string;
+
+  if (matches && matches.length === 3) {
+    ext = matches[1].split("/")[1];
+    data = matches[2]; // الجزء اللي بعد data:image/...;base64,
+  } else {
+    // لو الـ base64 جاي بدون data:image/...;base64,
+    const tempMatches = base64.match(/^([A-Za-z0-9+/=]+)$/);
+    if (!tempMatches) throw new Error("Invalid base64 format");
+    ext = "png"; // ممكن تختار default extension
+    data = tempMatches[1];
   }
 
-  const ext = matches[1].split("/")[1];
-  const buffer = Buffer.from(matches[2], "base64");
-
+  const buffer = Buffer.from(data, "base64");
   const fileName = `${userId}.${ext}`;
   const uploadsDir = path.join(__dirname, "../..", "uploads", folder);
-  // Create folder if it doesn't exist
-  try {
-    await fs.mkdir(uploadsDir, { recursive: true });
-  } catch (err) {
-    console.error("Failed to create directory:", err);
-    throw err;
-  }
+
+  await fs.mkdir(uploadsDir, { recursive: true });
 
   const filePath = path.join(uploadsDir, fileName);
+  await fs.writeFile(filePath, buffer);
 
-  try {
-    await fs.writeFile(filePath, buffer);
-  } catch (err) {
-    console.error("Failed to write image file:", err);
-    throw err;
-  }
-
-  // Return full URL
-  const imageUrl = `${req.protocol}://${req.get(
-    "host"
-  )}/uploads/${folder}/${fileName}`;
+  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
   return imageUrl;
 }

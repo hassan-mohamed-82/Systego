@@ -16,50 +16,47 @@ const createProduct = async (req, res) => {
     const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
-    // ✅ تحقق من أن categoryId مصفوفة
+    // تحقق من أن categoryId مصفوفة
     if (!Array.isArray(categoryId) || categoryId.length === 0) {
         throw new BadRequest_1.BadRequest("At least one categoryId is required");
     }
-    // ✅ التحقق من وجود الكاتيجوريات
+    // التحقق من وجود الكاتيجوريات
     const existitcategories = await category_1.CategoryModel.find({ _id: { $in: categoryId } });
     if (existitcategories.length !== categoryId.length) {
         throw new BadRequest_1.BadRequest("One or more categories not found");
     }
-    // ✅ التحقق من وجود البراند
+    // التحقق من وجود البراند
     const existitbrand = await brand_1.BrandModel.findById(brandId);
     if (!existitbrand)
         throw new BadRequest_1.BadRequest("Brand not found");
-    // ✅ زيادة عدد المنتجات داخل كل كاتيجوري
+    // زيادة عدد المنتجات داخل كل كاتيجوري
     for (const cat of existitcategories) {
         cat.product_quantity += 1;
         await cat.save();
     }
     // 🖼️ حفظ الصورة الرئيسية
-    let imageUrl = image;
-    if (image && image.startsWith("data:")) {
+    let imageUrl;
+    if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "products");
     }
     // 🖼️ حفظ صور الجاليري
     let galleryUrls = [];
     if (gallery_product && Array.isArray(gallery_product)) {
         for (const g of gallery_product) {
-            if (g.startsWith("data:")) {
+            if (typeof g === "string") {
                 const imgUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "products");
                 galleryUrls.push(imgUrl);
             }
-            else {
-                galleryUrls.push(g);
-            }
         }
     }
-    // ✅ تحقق من العلاقات الشرطية
+    // تحقق من العلاقات الشرطية
     if (exp_ability && !date_of_expiery) {
         throw new BadRequest_1.BadRequest("Expiry date is required when exp_ability is true");
     }
     if (show_quantity && !maximum_to_show) {
         throw new BadRequest_1.BadRequest("Maximum to show is required when show_quantity is true");
     }
-    // ✅ إنشاء المنتج الأساسي
+    // إنشاء المنتج الأساسي
     const product = await products_1.ProductModel.create({
         name,
         image: imageUrl,
@@ -82,24 +79,19 @@ const createProduct = async (req, res) => {
         maximum_to_show,
         gallery_product: galleryUrls,
     });
-    // ✅ إنشاء الأسعار (ProductPrice)
+    // إنشاء الأسعار (ProductPrice)
     let totalQuantity = 0;
     if (Array.isArray(prices)) {
         for (const p of prices) {
-            // 🖼️ حفظ صور الجاليري الخاصة بالسعر
             let priceGalleryUrls = [];
             if (p.gallery && Array.isArray(p.gallery)) {
                 for (const g of p.gallery) {
-                    if (g.startsWith("data:")) {
+                    if (typeof g === "string") {
                         const gUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "product_gallery");
                         priceGalleryUrls.push(gUrl);
                     }
-                    else {
-                        priceGalleryUrls.push(g);
-                    }
                 }
             }
-            // إنشاء سجل السعر
             const productPrice = await product_price_1.ProductPriceModel.create({
                 productId: product._id,
                 price: p.price,
@@ -108,7 +100,7 @@ const createProduct = async (req, res) => {
                 quantity: p.quantity || 0,
             });
             totalQuantity += p.quantity || 0;
-            // ✅ إضافة الـ Options
+            // إضافة الـ Options
             if (p.options && Array.isArray(p.options)) {
                 for (const opt of p.options) {
                     await product_price_2.ProductPriceOptionModel.create({
@@ -119,7 +111,7 @@ const createProduct = async (req, res) => {
             }
         }
     }
-    // ✅ تحديث كمية المنتج النهائية
+    // تحديث كمية المنتج النهائية
     product.quantity = totalQuantity;
     await product.save();
     (0, response_1.SuccessResponse)(res, {

@@ -6,33 +6,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveBase64Image = saveBase64Image;
 const path_1 = __importDefault(require("path"));
 const promises_1 = __importDefault(require("fs/promises"));
-async function saveBase64Image(base64, userId, req, folder // new param
-) {
-    const matches = base64.match(/^data:(.+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-        throw new Error("Invalid base64 format");
+async function saveBase64Image(base64, userId, req, folder) {
+    let matches = base64.match(/^data:(.+);base64,(.+)$/);
+    let ext;
+    let data;
+    if (matches && matches.length === 3) {
+        ext = matches[1].split("/")[1];
+        data = matches[2]; // الجزء اللي بعد data:image/...;base64,
     }
-    const ext = matches[1].split("/")[1];
-    const buffer = Buffer.from(matches[2], "base64");
+    else {
+        // لو الـ base64 جاي بدون data:image/...;base64,
+        const tempMatches = base64.match(/^([A-Za-z0-9+/=]+)$/);
+        if (!tempMatches)
+            throw new Error("Invalid base64 format");
+        ext = "png"; // ممكن تختار default extension
+        data = tempMatches[1];
+    }
+    const buffer = Buffer.from(data, "base64");
     const fileName = `${userId}.${ext}`;
     const uploadsDir = path_1.default.join(__dirname, "../..", "uploads", folder);
-    // Create folder if it doesn't exist
-    try {
-        await promises_1.default.mkdir(uploadsDir, { recursive: true });
-    }
-    catch (err) {
-        console.error("Failed to create directory:", err);
-        throw err;
-    }
+    await promises_1.default.mkdir(uploadsDir, { recursive: true });
     const filePath = path_1.default.join(uploadsDir, fileName);
-    try {
-        await promises_1.default.writeFile(filePath, buffer);
-    }
-    catch (err) {
-        console.error("Failed to write image file:", err);
-        throw err;
-    }
-    // Return full URL
+    await promises_1.default.writeFile(filePath, buffer);
     const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
     return imageUrl;
 }
