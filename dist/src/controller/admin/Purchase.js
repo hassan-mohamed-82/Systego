@@ -337,7 +337,6 @@ const getOnePurchase = async (req, res) => {
         .populate({ path: "currency_id", select: "_id name" })
         .populate({ path: "tax_id", select: "_id name" })
         .populate({ path: "items", populate: "options" }) // جاي من الـ virtual
-        .populate({ path: "invoices", select: "_id amount date", populate: { path: "financial_id", select: "_id name" } }) // جاي من الـ virtual
         .populate({ path: "duePayments", select: "_id amount date" }) // جاي من الـ virtual 
         .lean({ virtuals: true });
     if (!purchase)

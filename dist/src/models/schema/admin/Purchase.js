@@ -59,6 +59,12 @@ PurchaseSchema.virtual("items", {
     foreignField: "purchase_id",
 });
 // في VariationSchema
+PurchaseSchema.virtual("invoices", {
+    ref: "PurchaseInvoice",
+    localField: "_id",
+    foreignField: "purchase_id",
+});
+// في VariationSchema
 PurchaseSchema.virtual("duePayments", {
     ref: "PurchaseDuePayment",
     localField: "_id",
