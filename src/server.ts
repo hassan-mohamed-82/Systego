@@ -53,8 +53,11 @@ io.on("connection", (socket) => {
 // 🕒 Start cron jobs (expiry & low stock check)
 startCron(io);
 
-const PORT = Number(process.env.PORT) || 4000;
+const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
+// Create server
+
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
