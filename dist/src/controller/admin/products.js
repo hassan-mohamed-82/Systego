@@ -293,9 +293,9 @@ const getOneProduct = async (req, res) => {
             name: varName,
             options: groupedOptions[varName],
         }));
-        // شكل الـ JSON النهائي لكل سعر
+        // **هنا الترتيب: أولاً variations، ثم باقي التفاصيل**
         formattedPrices.push({
-            variations: variationsArray, // أول حاجة variations
+            variations: variationsArray, // أول حاجة
             _id: price._id,
             productId: price.productId,
             price: price.price,
@@ -307,7 +307,6 @@ const getOneProduct = async (req, res) => {
             __v: price.__v,
         });
     }
-    // 5️⃣ إضافة الأسعار والـ variations للمنتج
     product.prices = formattedPrices;
     (0, response_1.SuccessResponse)(res, {
         product,
