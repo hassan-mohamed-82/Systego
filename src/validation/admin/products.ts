@@ -1,30 +1,35 @@
 import Joi from "joi";
 
-// ✅ ObjectId
+// ✅ تعريف ObjectId
 export const objectId = Joi.string().hex().length(24);
 
 // ✅ Option Schema (مجرد ID)
 export const optionSchema = objectId;
 
+// ✅ نمط الصور base64
+const base64ImagePattern = /^data:image\/(png|jpeg|jpg);base64,[A-Za-z0-9+/=]+$/;
+
 // ✅ Price Schema (يتبع ProductPriceModel)
 export const priceSchema = Joi.object({
-  _id: objectId.optional(), // في حالة التعديل
+  _id: objectId.optional(),
   price: Joi.number().required(),
-  code: Joi.string().required(), // ✅ في الموديل required
-  quantity: Joi.number().default(0), // ✅ موجود في الموديل
-  gallery: Joi.array().items(Joi.string()).optional(), // ✅ صور URLs
+  code: Joi.string().required(),
+  quantity: Joi.number().optional(),
+  gallery: Joi.array()
+    .items(Joi.string().pattern(base64ImagePattern))
+    .optional(),
   options: Joi.array().items(optionSchema).optional(),
 });
 
 // ✅ Create Product Schema
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
-  image: Joi.string().optional(), // base64 أو URL
-  categoryId: Joi.array().items(objectId).min(1).required(), // ✅ لازم مصفوفة IDs
+  image: Joi.string().pattern(base64ImagePattern).optional(),
+  categoryId: Joi.array().items(objectId).min(1).required(),
   brandId: objectId.required(),
   unit: Joi.string().required(),
-  price: Joi.number().required(), // السعر الأساسي
-  quantity: Joi.number().optional(), // بيتم حسابه تلقائي بعد حفظ الأسعار
+  price: Joi.number().required(),
+  quantity: Joi.number().optional(), // ممكن يتحسب بعدين من الأسعار
   description: Joi.string().optional(),
   exp_ability: Joi.boolean().optional(),
   date_of_expiery: Joi.date().optional(),
@@ -37,14 +42,16 @@ export const createProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ اسم الحقل الصحيح
-  prices: Joi.array().items(priceSchema).required(), // ✅ الأسعار مطلوبة
+  gallery_product: Joi.array()
+    .items(Joi.string().pattern(base64ImagePattern))
+    .optional(),
+  prices: Joi.array().items(priceSchema).required(),
 });
 
 // ✅ Update Product Schema
 export const updateProductSchema = Joi.object({
   name: Joi.string().optional(),
-  image: Joi.string().optional(),
+  image: Joi.string().pattern(base64ImagePattern).optional(),
   categoryId: Joi.array().items(objectId).optional(),
   brandId: objectId.optional(),
   unit: Joi.string().optional(),
@@ -62,6 +69,8 @@ export const updateProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ نفس الاسم
+  gallery_product: Joi.array()
+    .items(Joi.string().pattern(base64ImagePattern))
+    .optional(),
   prices: Joi.array().items(priceSchema).optional(),
 });
