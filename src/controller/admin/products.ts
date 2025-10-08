@@ -335,7 +335,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   if (!product) throw new NotFound("Product not found");
 
-  // 2️⃣ جلب الكاتيجوريز و البراندز كلها
+  // 2️⃣ جلب الكاتيجوريز و البراندز كلها (اختياري للفلترة أو العرض)
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
 
@@ -345,9 +345,13 @@ export const getOneProduct = async (req: Request, res: Response) => {
     .lean();
 
   // 4️⃣ جلب الأسعار الخاصة بالمنتج
-  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+  const pricesFromDB = await ProductPriceModel.find({ productId: product._id }).lean();
 
-  for (const price of prices) {
+  const prices: any[] = [];
+
+  for (let i = 0; i < pricesFromDB.length; i++) {
+    let price: any = pricesFromDB[i]; // تحويل للكائن لأي لتجنب TS errors
+
     // جلب الـ options لكل سعر
     const options = await ProductPriceOptionModel.find({
       product_price_id: price._id,
@@ -355,13 +359,11 @@ export const getOneProduct = async (req: Request, res: Response) => {
       .populate("option_id")
       .lean();
 
-    // 4.1️⃣ تجميع الخيارات حسب الـ variation
+    // تجميع الخيارات حسب الـ variation
     const groupedOptions: Record<string, any[]> = {};
-
     options.forEach((po: any) => {
       const option = po.option_id;
 
-      // البحث عن الـ variation اللي تحتوي هذا الخيار
       const variation = variations.find((v: any) =>
         v.options.some((opt: any) => opt._id.toString() === option._id.toString())
       );
@@ -372,39 +374,37 @@ export const getOneProduct = async (req: Request, res: Response) => {
       }
     });
 
-    // 4.2️⃣ تحويل الـ groupedOptions لمصفوفة
-    (price as any).variations = Object.keys(groupedOptions).map((varName) => ({
+    const priceVariations = Object.keys(groupedOptions).map((varName) => ({
       name: varName,
       options: groupedOptions[varName],
     }));
+
+    // إعادة ترتيب الحقول بحيث variations تيجي أولاً
+    prices.push({
+      variations: priceVariations,
+      _id: price._id,
+      productId: price.productId,
+      price: price.price,
+      code: price.code,
+      gallery: price.gallery,
+      quantity: price.quantity,
+      createdAt: price.createdAt,
+      updatedAt: price.updatedAt,
+      __v: price.__v,
+    });
   }
 
-  // 5️⃣ ترتيب الحقول داخل كل سعر بحيث تظهر الـ variations في الآخر
-  const sortedPrices = prices.map((price: any) => {
-    const { _id, productId, price: p, code, gallery, quantity, createdAt, updatedAt, __v, variations } = price;
-    return {
-      _id,
-      productId,
-      price: p,
-      code,
-      gallery,
-      quantity,
-      createdAt,
-      updatedAt,
-      __v,
-      variations, // variations last
-    };
-  });
-
-  (product as any).prices = sortedPrices;
+  // 5️⃣ إضافة الأسعار للمنتج
+  (product as any).prices = prices;
 
   SuccessResponse(res, {
     product,
     categories,
     brands,
-    variations,
+    variations, // للفلترة أو العرض لو احتجت
   });
 };
+
 
 
 
