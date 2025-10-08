@@ -41,5 +41,5 @@ PurchaseSchema.virtual("duePayments", {
   localField: "_id",
   foreignField: "purchase_id",
 });
-
+ 
 export const PurchaseModel = mongoose.model("Purchase", PurchaseSchema);
