@@ -262,7 +262,7 @@ const getOneProduct = async (req, res) => {
         .lean();
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
-    // 2️⃣ جلب الكاتيجوريز و البراندز كلها (اختياري للفلترة أو العرض)
+    // 2️⃣ جلب الكاتيجوريز و البراندز كلها
     const categories = await category_1.CategoryModel.find().lean();
     const brands = await brand_1.BrandModel.find().lean();
     // 3️⃣ جلب الـ variations كاملة
@@ -296,13 +296,28 @@ const getOneProduct = async (req, res) => {
             options: groupedOptions[varName],
         }));
     }
-    // 5️⃣ إضافة الأسعار للمنتج
-    product.prices = prices;
+    // 5️⃣ ترتيب الحقول داخل كل سعر بحيث تظهر الـ variations في الآخر
+    const sortedPrices = prices.map((price) => {
+        const { _id, productId, price: p, code, gallery, quantity, createdAt, updatedAt, __v, variations } = price;
+        return {
+            _id,
+            productId,
+            price: p,
+            code,
+            gallery,
+            quantity,
+            createdAt,
+            updatedAt,
+            __v,
+            variations, // variations last
+        };
+    });
+    product.prices = sortedPrices;
     (0, response_1.SuccessResponse)(res, {
         product,
         categories,
         brands,
-        variations, // ممكن تستخدم للفلترة أو العرض إذا احتجت
+        variations,
     });
 };
 exports.getOneProduct = getOneProduct;
