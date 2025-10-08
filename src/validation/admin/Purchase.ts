@@ -57,6 +57,7 @@ export const updatePurchaseItemSchema = Joi.object({
   date: Joi.date().optional(),
   _id: Joi.number().optional(),
   category_id: Joi.string().optional(),
+  product_code: Joi.string().optional(),
   product_id: Joi.string().optional(),
   quantity: Joi.number().optional(),
   unit_cost: Joi.number().optional(),
@@ -76,5 +77,5 @@ export const updatePurchaseSchema = Joi.object({
     exchange_rate: Joi.number().optional(),
     shiping_cost: Joi.number().optional(),
     discount: Joi.number().optional(),
-    purchase_items: Joi.array().items(updatePurchaseItemSchema).optional(), 
+    purchase_items: Joi.array().items(updatePurchaseItemSchema).optional(),
 });
