@@ -11,11 +11,10 @@ export const priceSchema = Joi.object({
   options: Joi.array().items(optionSchema).optional(),
 });
 
-
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
   image: Joi.string().optional(),
-  categoryId: Joi.array().required(),
+  categoryId: Joi.array().items(Joi.string()).required(), // ✅ هنا التعديل
   brandId: Joi.string().required(),
   unit: Joi.string().required(),
   price: Joi.number().required(),
@@ -32,16 +31,15 @@ export const createProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  prices: Joi.array().items(priceSchema).required(), // prices array
+  prices: Joi.array().items(priceSchema).required(),
 });
-
 
 
 
 export const updateProductSchema = Joi.object({
   name: Joi.string().optional(),
   image: Joi.string().optional(),
-  categoryId: Joi.array().optional(),
+  categoryId: Joi.array().items(Joi.string()).optional(), // ✅ وهنا كمان
   brandId: Joi.string().optional(),
   unit: Joi.string().optional(),
   price: Joi.number().optional(),
