@@ -6,8 +6,8 @@ export const objectId = Joi.string().hex().length(24);
 // ✅ Option Schema (مجرد ID)
 export const optionSchema = objectId;
 
-// ✅ نمط الصور base64
-const base64ImagePattern = /^data:image\/(png|jpeg|jpg);base64,[A-Za-z0-9+/=]+$/;
+// ✅ نمط الصور base64 (مع أو بدون البريفكس)
+const base64ImagePattern = /^(data:image\/(png|jpeg|jpg);base64,)?[A-Za-z0-9+/=]+$/;
 
 // ✅ Price Schema (يتبع ProductPriceModel)
 export const priceSchema = Joi.object({
