@@ -33,7 +33,7 @@ exports.createProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
-    gallery: joi_1.default.array().items(joi_1.default.string().base64()).optional(), // ✅ مضافة
+    gallery: joi_1.default.array().optional(), // ✅ مضافة
     prices: joi_1.default.array().items(exports.priceSchema).required(),
 });
 exports.updateProductSchema = joi_1.default.object({
@@ -55,6 +55,6 @@ exports.updateProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
-    gallery: joi_1.default.array().items(joi_1.default.string().base64()).optional(), // ✅ مضافة هنا أيضًا
+    gallery: joi_1.default.array().optional(), // ✅ مضافة هنا أيضًا
     prices: joi_1.default.array().items(exports.priceSchema).optional(),
 });
