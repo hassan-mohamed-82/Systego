@@ -10,7 +10,7 @@ exports.objectId = joi_1.default.string().hex().length(24);
 // ✅ Option Schema (مجرد ID)
 exports.optionSchema = exports.objectId;
 // ✅ نمط الصور base64 (مع أو بدون البريفكس)
-const base64ImagePattern = /^(data:image\/(png|jpeg|jpg);base64,)?[A-Za-z0-9+/=]+$/;
+const base64ImagePattern = /^(?:data:image\/(?:png|jpeg|jpg);base64,)?[A-Za-z0-9+/=]+$/;
 // ✅ Price Schema (يتبع ProductPriceModel)
 exports.priceSchema = joi_1.default.object({
     _id: exports.objectId.optional(),
