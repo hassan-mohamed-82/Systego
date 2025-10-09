@@ -393,26 +393,33 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
 
 
-export const generateBarcodeImageController = async (req: Request, res: Response) => {
-     const { product_id } = req.params;
-    if (!product_id) throw new BadRequest("Product ID is required");
 
-    // find the product price (not product itself)
-    const productPrice = await ProductPriceModel.findById(product_id);
+export const generateBarcodeImageController = async (req: Request, res: Response) => {
+  
+    const { product_price_id } = req.params; // 👈 غيرنا الاسم ليكون واضح أكثر
+    if (!product_price_id) throw new BadRequest("Product price ID is required");
+
+    // 🟢 نجيب السعر بناءً على الـ id
+    const productPrice = await ProductPriceModel.findById(product_price_id);
     if (!productPrice) throw new NotFound("Product price not found");
 
-    // get code from product price
+    // 🟢 ناخد الكود الخاص بالسعر
     const productCode = productPrice.code;
     if (!productCode) throw new BadRequest("Product price does not have a code yet");
 
-    // generate barcode image file
+    // 🟢 نولّد صورة الباركود
     const imageLink = await generateBarcodeImage(productCode, productCode);
 
-    // build full url for client access
+    // 🟢 نكوّن لينك كامل يوصل للعميل
     const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
 
-    SuccessResponse(res, { image: fullImageUrl })
-    };
+    SuccessResponse(res, {
+      image: fullImageUrl,
+      code: productCode,
+    });
+  
+};
+
 
 export const generateProductCode = async (req: Request, res: Response) => {
   let newCode = generateEAN13Barcode();

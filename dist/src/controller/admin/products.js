@@ -302,22 +302,25 @@ const getOneProduct = async (req, res) => {
 };
 exports.getOneProduct = getOneProduct;
 const generateBarcodeImageController = async (req, res) => {
-    const { product_id } = req.params;
-    if (!product_id)
-        throw new BadRequest_1.BadRequest("Product ID is required");
-    // find the product price (not product itself)
-    const productPrice = await product_price_1.ProductPriceModel.findById(product_id);
+    const { product_price_id } = req.params; // 👈 غيرنا الاسم ليكون واضح أكثر
+    if (!product_price_id)
+        throw new BadRequest_1.BadRequest("Product price ID is required");
+    // 🟢 نجيب السعر بناءً على الـ id
+    const productPrice = await product_price_1.ProductPriceModel.findById(product_price_id);
     if (!productPrice)
         throw new NotFound_1.NotFound("Product price not found");
-    // get code from product price
+    // 🟢 ناخد الكود الخاص بالسعر
     const productCode = productPrice.code;
     if (!productCode)
         throw new BadRequest_1.BadRequest("Product price does not have a code yet");
-    // generate barcode image file
+    // 🟢 نولّد صورة الباركود
     const imageLink = await (0, barcode_1.generateBarcodeImage)(productCode, productCode);
-    // build full url for client access
+    // 🟢 نكوّن لينك كامل يوصل للعميل
     const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
-    (0, response_1.SuccessResponse)(res, { image: fullImageUrl });
+    (0, response_1.SuccessResponse)(res, {
+        image: fullImageUrl,
+        code: productCode,
+    });
 };
 exports.generateBarcodeImageController = generateBarcodeImageController;
 const generateProductCode = async (req, res) => {
