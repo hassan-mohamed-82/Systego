@@ -196,34 +196,31 @@ export const updateProduct = async (req: Request, res: Response) => {
     different_price,
     show_quantity,
     maximum_to_show,
-    prices, // Array of prices with optional _id and options
+    prices,
     gallery
   } = req.body;
 
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
-  // ✅ تحديث الصورة
-  if (image && image.startsWith("data:")) {
+  // ✅ تحديث الصورة (يدعم base64 مع أو بدون prefix)
+  if (image) {
     product.image = await saveBase64Image(image, Date.now().toString(), req, "products");
-  } else if (image) {
-    product.image = image;
   }
 
+  // ✅ تحديث الجاليري (يدعم base64 مع أو بدون prefix)
   if (gallery && Array.isArray(gallery)) {
     let galleryUrles: string[] = [];
     for (const g of gallery) {
-      if (g.startsWith("data:")) {
+      if (typeof g === "string") {
         const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
         galleryUrles.push(gUrl);
-      } else {
-        galleryUrles.push(g);
       }
     }
     product.gallery_product = galleryUrles;
   }
 
-  // ✅ تحديث باقي الحقول (من غير quantity)
+  // ✅ تحديث باقي الحقول
   product.name = name ?? product.name;
   product.categoryId = categoryId ?? product.categoryId;
   product.brandId = brandId ?? product.brandId;
@@ -244,29 +241,27 @@ export const updateProduct = async (req: Request, res: Response) => {
 
   await product.save();
 
-  // ✅ تحديث/اضافة/حذف الأسعار والخيارات
+  // ✅ تحديث / إنشاء / حذف الأسعار والخيارات
   let totalQuantity = 0;
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
       let productPrice;
 
       if (p._id) {
-        // update
+        // تحديث سعر موجود
         productPrice = await ProductPriceModel.findByIdAndUpdate(
           p._id,
           { price: p.price, code: p.code, quantity: p.quantity || 0 },
           { new: true }
         );
       } else {
-        // create جديد
+        // إنشاء سعر جديد
         let galleryUrls: string[] = [];
         if (p.gallery && Array.isArray(p.gallery)) {
           for (const g of p.gallery) {
-            if (g.startsWith("data:")) {
+            if (typeof g === "string") {
               const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
               galleryUrls.push(gUrl);
-            } else {
-              galleryUrls.push(g);
             }
           }
         }
@@ -281,7 +276,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
       totalQuantity += p.quantity || 0;
 
-      // ✅ تحديث الـ options
+      // ✅ تحديث الخيارات
       if (productPrice && p.options && Array.isArray(p.options)) {
         await ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
         for (const opt of p.options) {
@@ -294,13 +289,12 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ تحديث الكمية النهائية
+  // ✅ تحديث كمية المنتج النهائية
   product.quantity = totalQuantity;
   await product.save();
 
   SuccessResponse(res, { message: "Product updated successfully", product });
 };
-
 // ✅ DELETE
 export const deleteProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
