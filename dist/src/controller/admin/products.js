@@ -256,14 +256,16 @@ const getOneProduct = async (req, res) => {
     const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
     const formattedPrices = [];
     for (const price of prices) {
-        // جلب الخيارات المرتبطة بكل سعر
+        // 🔹 جلب الخيارات المرتبطة بكل سعر
         const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: price._id })
             .populate("option_id")
             .lean();
-        // تجميع الخيارات حسب الـ variation
+        // 🔹 تجميع الخيارات حسب الـ variation
         const groupedOptions = {};
         options.forEach((po) => {
             const option = po.option_id;
+            if (!option || !option._id)
+                return; // ✅ حماية من null أو undefined
             const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
             if (variation) {
                 if (!groupedOptions[variation.name])
@@ -271,14 +273,14 @@ const getOneProduct = async (req, res) => {
                 groupedOptions[variation.name].push(option);
             }
         });
-        // تحويلها لمصفوفة
+        // 🔹 تحويلها لمصفوفة بشكل منظم
         const variationsArray = Object.keys(groupedOptions).map((varName) => ({
             name: varName,
             options: groupedOptions[varName],
         }));
-        // **هنا الترتيب: أولاً variations، ثم باقي التفاصيل**
+        // ✅ الترتيب: أولًا الـ variations، ثم باقي التفاصيل
         formattedPrices.push({
-            variations: variationsArray, // أول حاجة
+            variations: variationsArray,
             _id: price._id,
             productId: price.productId,
             price: price.price,
