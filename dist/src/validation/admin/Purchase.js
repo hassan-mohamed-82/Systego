@@ -51,7 +51,9 @@ exports.updatePurchaseItemOptionSchema = joi_1.default.object({
 });
 exports.updatePurchaseItemSchema = joi_1.default.object({
     date: joi_1.default.date().optional(),
+    _id: joi_1.default.string().optional(),
     category_id: joi_1.default.string().optional(),
+    product_code: joi_1.default.string().optional(),
     product_id: joi_1.default.string().optional(),
     quantity: joi_1.default.number().optional(),
     unit_cost: joi_1.default.number().optional(),

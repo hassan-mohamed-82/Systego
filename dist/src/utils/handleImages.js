@@ -6,33 +6,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveBase64Image = saveBase64Image;
 const path_1 = __importDefault(require("path"));
 const promises_1 = __importDefault(require("fs/promises"));
-async function saveBase64Image(base64, userId, req, folder // new param
-) {
+async function saveBase64Image(base64, userId, req, folder) {
+    // ✅ شيل البريفكس لو موجود
     const matches = base64.match(/^data:(.+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) {
-        throw new Error("Invalid base64 format");
+    let ext = "png";
+    let data = base64;
+    if (matches && matches.length === 3) {
+        ext = matches[1].split("/")[1];
+        data = matches[2];
     }
-    const ext = matches[1].split("/")[1];
-    const buffer = Buffer.from(matches[2], "base64");
+    const buffer = Buffer.from(data, "base64");
     const fileName = `${userId}.${ext}`;
     const uploadsDir = path_1.default.join(__dirname, "../..", "uploads", folder);
-    // Create folder if it doesn't exist
     try {
         await promises_1.default.mkdir(uploadsDir, { recursive: true });
+        await promises_1.default.writeFile(path_1.default.join(uploadsDir, fileName), buffer);
     }
     catch (err) {
-        console.error("Failed to create directory:", err);
+        console.error("Failed to save image:", err);
         throw err;
     }
-    const filePath = path_1.default.join(uploadsDir, fileName);
-    try {
-        await promises_1.default.writeFile(filePath, buffer);
-    }
-    catch (err) {
-        console.error("Failed to write image file:", err);
-        throw err;
-    }
-    // Return full URL
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
-    return imageUrl;
+    return `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
 }

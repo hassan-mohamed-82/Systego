@@ -26,7 +26,7 @@ route.get("/", catchAsync(getProduct));
 route.get("/generate-code", catchAsync(generateProductCode));
 
 // توليد صورة الباركود لمنتج موجود
-route.get("/generate-barcode/:product_id", catchAsync(generateBarcodeImageController));
+route.get("/generate-barcode/:product_price_id", catchAsync(generateBarcodeImageController));
 
 // جلب منتج حسب الـ id
 route.get("/:id", catchAsync(getOneProduct));

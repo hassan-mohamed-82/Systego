@@ -16,50 +16,47 @@ const createProduct = async (req, res) => {
     const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
-    // ✅ تحقق من أن categoryId مصفوفة
+    // تحقق من أن categoryId مصفوفة
     if (!Array.isArray(categoryId) || categoryId.length === 0) {
         throw new BadRequest_1.BadRequest("At least one categoryId is required");
     }
-    // ✅ التحقق من وجود الكاتيجوريات
+    // التحقق من وجود الكاتيجوريات
     const existitcategories = await category_1.CategoryModel.find({ _id: { $in: categoryId } });
     if (existitcategories.length !== categoryId.length) {
         throw new BadRequest_1.BadRequest("One or more categories not found");
     }
-    // ✅ التحقق من وجود البراند
+    // التحقق من وجود البراند
     const existitbrand = await brand_1.BrandModel.findById(brandId);
     if (!existitbrand)
         throw new BadRequest_1.BadRequest("Brand not found");
-    // ✅ زيادة عدد المنتجات داخل كل كاتيجوري
+    // زيادة عدد المنتجات داخل كل كاتيجوري
     for (const cat of existitcategories) {
         cat.product_quantity += 1;
         await cat.save();
     }
     // 🖼️ حفظ الصورة الرئيسية
-    let imageUrl = image;
-    if (image && image.startsWith("data:")) {
+    let imageUrl;
+    if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "products");
     }
     // 🖼️ حفظ صور الجاليري
     let galleryUrls = [];
     if (gallery_product && Array.isArray(gallery_product)) {
         for (const g of gallery_product) {
-            if (g.startsWith("data:")) {
+            if (typeof g === "string") {
                 const imgUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "products");
                 galleryUrls.push(imgUrl);
             }
-            else {
-                galleryUrls.push(g);
-            }
         }
     }
-    // ✅ تحقق من العلاقات الشرطية
+    // تحقق من العلاقات الشرطية
     if (exp_ability && !date_of_expiery) {
         throw new BadRequest_1.BadRequest("Expiry date is required when exp_ability is true");
     }
     if (show_quantity && !maximum_to_show) {
         throw new BadRequest_1.BadRequest("Maximum to show is required when show_quantity is true");
     }
-    // ✅ إنشاء المنتج الأساسي
+    // إنشاء المنتج الأساسي
     const product = await products_1.ProductModel.create({
         name,
         image: imageUrl,
@@ -82,24 +79,19 @@ const createProduct = async (req, res) => {
         maximum_to_show,
         gallery_product: galleryUrls,
     });
-    // ✅ إنشاء الأسعار (ProductPrice)
+    // إنشاء الأسعار (ProductPrice)
     let totalQuantity = 0;
     if (Array.isArray(prices)) {
         for (const p of prices) {
-            // 🖼️ حفظ صور الجاليري الخاصة بالسعر
             let priceGalleryUrls = [];
             if (p.gallery && Array.isArray(p.gallery)) {
                 for (const g of p.gallery) {
-                    if (g.startsWith("data:")) {
+                    if (typeof g === "string") {
                         const gUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "product_gallery");
                         priceGalleryUrls.push(gUrl);
                     }
-                    else {
-                        priceGalleryUrls.push(g);
-                    }
                 }
             }
-            // إنشاء سجل السعر
             const productPrice = await product_price_1.ProductPriceModel.create({
                 productId: product._id,
                 price: p.price,
@@ -108,7 +100,7 @@ const createProduct = async (req, res) => {
                 quantity: p.quantity || 0,
             });
             totalQuantity += p.quantity || 0;
-            // ✅ إضافة الـ Options
+            // إضافة الـ Options
             if (p.options && Array.isArray(p.options)) {
                 for (const opt of p.options) {
                     await product_price_2.ProductPriceOptionModel.create({
@@ -119,7 +111,7 @@ const createProduct = async (req, res) => {
             }
         }
     }
-    // ✅ تحديث كمية المنتج النهائية
+    // تحديث كمية المنتج النهائية
     product.quantity = totalQuantity;
     await product.save();
     (0, response_1.SuccessResponse)(res, {
@@ -145,32 +137,26 @@ const getProduct = async (req, res) => {
 exports.getProduct = getProduct;
 const updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, // Array of prices with optional _id and options
-    gallery } = req.body;
+    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery } = req.body;
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
-    // ✅ تحديث الصورة
-    if (image && image.startsWith("data:")) {
+    // ✅ تحديث الصورة (يدعم base64 مع أو بدون prefix)
+    if (image) {
         product.image = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "products");
     }
-    else if (image) {
-        product.image = image;
-    }
+    // ✅ تحديث الجاليري (يدعم base64 مع أو بدون prefix)
     if (gallery && Array.isArray(gallery)) {
         let galleryUrles = [];
         for (const g of gallery) {
-            if (g.startsWith("data:")) {
+            if (typeof g === "string") {
                 const gUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "product_gallery");
                 galleryUrles.push(gUrl);
-            }
-            else {
-                galleryUrles.push(g);
             }
         }
         product.gallery_product = galleryUrles;
     }
-    // ✅ تحديث باقي الحقول (من غير quantity)
+    // ✅ تحديث باقي الحقول
     product.name = name ?? product.name;
     product.categoryId = categoryId ?? product.categoryId;
     product.brandId = brandId ?? product.brandId;
@@ -189,26 +175,23 @@ const updateProduct = async (req, res) => {
     product.show_quantity = show_quantity ?? product.show_quantity;
     product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
     await product.save();
-    // ✅ تحديث/اضافة/حذف الأسعار والخيارات
+    // ✅ تحديث / إنشاء / حذف الأسعار والخيارات
     let totalQuantity = 0;
     if (prices && Array.isArray(prices)) {
         for (const p of prices) {
             let productPrice;
             if (p._id) {
-                // update
+                // تحديث سعر موجود
                 productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, { price: p.price, code: p.code, quantity: p.quantity || 0 }, { new: true });
             }
             else {
-                // create جديد
+                // إنشاء سعر جديد
                 let galleryUrls = [];
                 if (p.gallery && Array.isArray(p.gallery)) {
                     for (const g of p.gallery) {
-                        if (g.startsWith("data:")) {
+                        if (typeof g === "string") {
                             const gUrl = await (0, handleImages_1.saveBase64Image)(g, Date.now().toString(), req, "product_gallery");
                             galleryUrls.push(gUrl);
-                        }
-                        else {
-                            galleryUrls.push(g);
                         }
                     }
                 }
@@ -221,7 +204,7 @@ const updateProduct = async (req, res) => {
                 });
             }
             totalQuantity += p.quantity || 0;
-            // ✅ تحديث الـ options
+            // ✅ تحديث الخيارات
             if (productPrice && p.options && Array.isArray(p.options)) {
                 await product_price_2.ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
                 for (const opt of p.options) {
@@ -233,7 +216,7 @@ const updateProduct = async (req, res) => {
             }
         }
     }
-    // ✅ تحديث الكمية النهائية
+    // ✅ تحديث كمية المنتج النهائية
     product.quantity = totalQuantity;
     await product.save();
     (0, response_1.SuccessResponse)(res, { message: "Product updated successfully", product });
@@ -254,48 +237,90 @@ const deleteProduct = async (req, res) => {
 exports.deleteProduct = deleteProduct;
 const getOneProduct = async (req, res) => {
     const { id } = req.params;
+    // 1️⃣ جلب المنتج
     const product = await products_1.ProductModel.findById(id)
         .populate("categoryId")
         .populate("brandId")
         .populate("taxesId")
         .lean();
-    const categories = await category_1.CategoryModel.find().lean();
-    const brands = await brand_1.BrandModel.find().lean();
-    const variations = await Variation_1.VariationModel.find()
-        .populate("options") // جاي من الـ virtual
-        .lean();
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
+    // 2️⃣ جلب الكاتيجوريز و البراندز
+    const categories = await category_1.CategoryModel.find().lean();
+    const brands = await brand_1.BrandModel.find().lean();
+    // 3️⃣ جلب كل الـ variations مع options
+    const variations = await Variation_1.VariationModel.find()
+        .populate("options")
+        .lean();
+    // 4️⃣ جلب الأسعار الخاصة بالمنتج
     const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
+    const formattedPrices = [];
     for (const price of prices) {
-        const options = await product_price_2.ProductPriceOptionModel.find({
-            product_price_id: price._id,
-        })
+        // 🔹 جلب الخيارات المرتبطة بكل سعر
+        const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: price._id })
             .populate("option_id")
             .lean();
-        price.options = options.map((o) => o.option_id);
+        // 🔹 تجميع الخيارات حسب الـ variation
+        const groupedOptions = {};
+        options.forEach((po) => {
+            const option = po.option_id;
+            if (!option || !option._id)
+                return; // ✅ حماية من null أو undefined
+            const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
+            if (variation) {
+                if (!groupedOptions[variation.name])
+                    groupedOptions[variation.name] = [];
+                groupedOptions[variation.name].push(option);
+            }
+        });
+        // 🔹 تحويلها لمصفوفة بشكل منظم
+        const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+            name: varName,
+            options: groupedOptions[varName],
+        }));
+        // ✅ الترتيب: أولًا الـ variations، ثم باقي التفاصيل
+        formattedPrices.push({
+            variations: variationsArray,
+            _id: price._id,
+            productId: price.productId,
+            price: price.price,
+            code: price.code,
+            gallery: price.gallery,
+            quantity: price.quantity,
+            createdAt: price.createdAt,
+            updatedAt: price.updatedAt,
+            __v: price.__v,
+        });
     }
-    product.prices = prices;
-    (0, response_1.SuccessResponse)(res, { product, categories, brands, variations });
+    product.prices = formattedPrices;
+    (0, response_1.SuccessResponse)(res, {
+        product,
+        categories,
+        brands,
+        variations,
+    });
 };
 exports.getOneProduct = getOneProduct;
 const generateBarcodeImageController = async (req, res) => {
-    const { product_id } = req.params;
-    if (!product_id)
-        throw new BadRequest_1.BadRequest("Product ID is required");
-    // find the product price (not product itself)
-    const productPrice = await product_price_1.ProductPriceModel.findById(product_id);
+    const { product_price_id } = req.params; // 👈 غيرنا الاسم ليكون واضح أكثر
+    if (!product_price_id)
+        throw new BadRequest_1.BadRequest("Product price ID is required");
+    // 🟢 نجيب السعر بناءً على الـ id
+    const productPrice = await product_price_1.ProductPriceModel.findById(product_price_id);
     if (!productPrice)
         throw new NotFound_1.NotFound("Product price not found");
-    // get code from product price
+    // 🟢 ناخد الكود الخاص بالسعر
     const productCode = productPrice.code;
     if (!productCode)
         throw new BadRequest_1.BadRequest("Product price does not have a code yet");
-    // generate barcode image file
+    // 🟢 نولّد صورة الباركود
     const imageLink = await (0, barcode_1.generateBarcodeImage)(productCode, productCode);
-    // build full url for client access
+    // 🟢 نكوّن لينك كامل يوصل للعميل
     const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
-    (0, response_1.SuccessResponse)(res, { image: fullImageUrl });
+    (0, response_1.SuccessResponse)(res, {
+        image: fullImageUrl,
+        code: productCode,
+    });
 };
 exports.generateBarcodeImageController = generateBarcodeImageController;
 const generateProductCode = async (req, res) => {

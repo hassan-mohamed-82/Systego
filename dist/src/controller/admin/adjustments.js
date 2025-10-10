@@ -24,6 +24,10 @@ const createAdjustment = async (req, res) => {
     const products = await products_1.ProductModel.findById(productId);
     if (!products)
         throw new BadRequest_1.BadRequest("Invalid product ID");
+    // const productPrice = await ProductPriceModel.findById(productId);
+    // if (!productPrice) throw new BadRequest("Invalid product price ID");
+    // const category = await CategoryModel.findById(products.categoryId);
+    // if(!category) throw new BadRequest("Invalid category ID");
     let image_url = " ";
     if (image) {
         image_url = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "adjustments");
