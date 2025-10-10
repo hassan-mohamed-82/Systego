@@ -118,13 +118,14 @@ const product_arr = Object.values(products);
       { id: "counted", title: "Counted" },
     ],
   });
-  
-    const records = product_arr.map((item) => (
+      const records = product_arr.map((item) => (
       return {
-      name: item?.name || "",
-      expected: item?.expected?.toString() || "",
-      counted: "0",
-    }));
+        name: item?.name || "",
+        expected: item?.expected?.toString() || "",
+        counted: "0",
+      }
+    ));
+
     await csvWriter.writeRecords(records); 
     stock_data.initial_file = filePath;
     await stock_data?.save();
