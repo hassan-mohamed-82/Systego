@@ -8,4 +8,10 @@ const brandSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+brandSchema.virtual("products", {
+  ref: "Product",
+  localField: "_id",
+  foreignField: "brandId",
+});
+
 export const BrandModel = mongoose.model("Brand", brandSchema);
