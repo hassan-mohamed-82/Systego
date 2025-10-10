@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createStock = exports.getStockById = exports.getStock = void 0;
+exports.uploadFinalFile = exports.createStock = exports.getStockById = exports.getStock = void 0;
 const Stock_1 = require("../../models/schema/admin/Stock");
 const brand_1 = require("../../models/schema/admin/brand");
 const category_1 = require("../../models/schema/admin/category");
@@ -13,12 +13,20 @@ const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const csv_writer_1 = require("csv-writer");
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const getStock = async (req, res) => {
+    const baseUrl = req.protocol + "://" + req.get("host") + "/";
     const stocks = await Stock_1.StockModel.find()
         .populate({ path: "category_id", select: "name" })
         .populate("brand_id", "name")
-        .populate("warehouseId", "name");
-    (0, response_1.SuccessResponse)(res, { message: "Get stocks successfully", stocks });
+        .populate("warehouseId", "name")
+        .lean();
+    const updatedStocks = stocks.map((item) => ({
+        ...item,
+        initial_file: item.initial_file ? baseUrl + item.initial_file : null,
+        final_file: item.final_file ? baseUrl + item.final_file : null,
+    }));
+    (0, response_1.SuccessResponse)(res, { message: "Get stocks successfully", stocks: updatedStocks });
 };
 exports.getStock = getStock;
 const getStockById = async (req, res) => {
@@ -107,8 +115,13 @@ const createStock = async (req, res) => {
     }
     // ✅ حول الـ object إلى array
     const product_arr = Object.values(products);
+    const dirPath = path_1.default.join("uploads", "stocks");
+    // 🧠 تأكد إن المجلد موجود
+    if (!fs_1.default.existsSync(dirPath)) {
+        fs_1.default.mkdirSync(dirPath, { recursive: true });
+    }
     // ✅ تجهيز ملف CSV
-    const filePath = path_1.default.join("uploads", `stocks_${Date.now()}.csv`);
+    const filePath = path_1.default.join("uploads/stocks", `stocks_${Date.now()}.csv`);
     const csvWriter = (0, csv_writer_1.createObjectCsvWriter)({
         path: filePath,
         header: [
@@ -125,6 +138,27 @@ const createStock = async (req, res) => {
     await csvWriter.writeRecords(records);
     stock_data.initial_file = filePath;
     await stock_data?.save();
-    (0, response_1.SuccessResponse)(res, { filePath });
+    const baseUrl = req.protocol + "://" + req.get("host") + "/";
+    (0, response_1.SuccessResponse)(res, { filePath: baseUrl + filePath });
 };
 exports.createStock = createStock;
+const uploadFinalFile = async (req, res) => {
+    const stock_id = req.params.id;
+    // تحقق من وجود الستوك
+    const stock_data = await Stock_1.StockModel.findById(stock_id);
+    if (!stock_data)
+        throw new Errors_1.NotFound("Stock not found");
+    // تحقق من وجود الملف المرفوع
+    if (!req.file)
+        throw new BadRequest_1.BadRequest("final_file is required");
+    // خزن المسار
+    const baseUrl = req.protocol + "://" + req.get("host") + "/";
+    const filePath = req.file.path.replace(/\\/g, "/"); // لو ويندوز
+    stock_data.final_file = filePath;
+    await stock_data.save();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Final file uploaded successfully",
+        filePath: baseUrl + filePath,
+    });
+};
+exports.uploadFinalFile = uploadFinalFile;

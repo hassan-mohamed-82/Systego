@@ -6,3 +6,6 @@ export const createStockSchema = Joi.object({
   category_id: Joi.array().optional(),
   brand_id: Joi.array().optional(), 
 }); 
+
+export const finalStockSchema = Joi.object({
+});

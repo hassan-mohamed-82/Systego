@@ -8,17 +8,28 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import { ProductModel } from "../../models/schema/admin/products";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
-import { saveBase64Image } from "../../utils/handleImages";
+import { uploadFile } from "../../utils/uploadFile";
 import { createObjectCsvWriter } from "csv-writer";
 import path from "path";
+import fs from "fs"; 
 
 export const getStock = async (req: Request, res: Response) => {
-  const stocks = await StockModel.find()
-    .populate({ path: "category_id", select: "name" })
-    .populate("brand_id", "name")
-    .populate("warehouseId", "name");
+const baseUrl = req.protocol + "://" + req.get("host") + "/";
 
-  SuccessResponse(res, { message: "Get stocks successfully", stocks });
+const stocks = await StockModel.find()
+  .populate({ path: "category_id", select: "name" })
+  .populate("brand_id", "name")
+  .populate("warehouseId", "name")
+  .lean(); 
+
+  const updatedStocks = stocks.map((item) => ({
+    ...item,
+    initial_file: item.initial_file ? baseUrl + item.initial_file : null,
+    final_file: item.final_file ? baseUrl + item.final_file : null,
+  }));
+
+  SuccessResponse(res, { message: "Get stocks successfully", stocks: updatedStocks });
+
 };
 
 export const getStockById = async (req: Request, res: Response) => {
@@ -119,8 +130,14 @@ export const createStock = async (req: Request, res: Response) => {
   // ✅ حول الـ object إلى array
   const product_arr = Object.values(products);
 
+  const dirPath = path.join("uploads", "stocks");
+
+  // 🧠 تأكد إن المجلد موجود
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
   // ✅ تجهيز ملف CSV
-  const filePath = path.join("uploads", `stocks_${Date.now()}.csv`);
+  const filePath = path.join("uploads/stocks", `stocks_${Date.now()}.csv`);
 
   const csvWriter = createObjectCsvWriter({
     path: filePath,
@@ -141,6 +158,30 @@ export const createStock = async (req: Request, res: Response) => {
 
   stock_data.initial_file = filePath;
   await stock_data?.save();
+  const baseUrl = req.protocol + "://" + req.get("host") + "/";
 
-  SuccessResponse(res, { filePath });
+  SuccessResponse(res, { filePath : baseUrl + filePath});
+};
+
+export const uploadFinalFile = async (req: Request, res: Response) => {
+
+  const stock_id = req.params.id;
+
+  // تحقق من وجود الستوك
+  const stock_data = await StockModel.findById(stock_id);
+  if (!stock_data) throw new NotFound("Stock not found");
+
+  // تحقق من وجود الملف المرفوع
+  if (!req.file) throw new BadRequest("final_file is required");
+
+  // خزن المسار
+  const baseUrl = req.protocol + "://" + req.get("host") + "/";
+  const filePath = req.file.path.replace(/\\/g, "/"); // لو ويندوز
+  stock_data.final_file = filePath;
+  await stock_data.save();
+
+  SuccessResponse(res, {
+    message: "Final file uploaded successfully",
+    filePath: baseUrl + filePath,
+  });
 };

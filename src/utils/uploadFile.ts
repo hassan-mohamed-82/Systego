@@ -4,15 +4,14 @@ import path from "path";
 import fs from "fs";
 
 // 🧠 دالة بتجهز multer upload object
-export function uploadFile(folderName = "uploads") {
-  // لو المجلد مش موجود، نعمله
-  if (!fs.existsSync(folderName)) {
-    fs.mkdirSync(folderName, { recursive: true });
-  }
-
-  // إعداد مكان التخزين
+export async function uploadFile(folderName = "uploads") {
   const storage = multer.diskStorage({
     destination: function (req, file, cb) {
+      // 🧠 تأكد إن الفولدر موجود، لو مش موجود اعمله
+      if (!fs.existsSync(folderName)) {
+        fs.mkdirSync(folderName, { recursive: true });
+      }
+
       cb(null, folderName);
     },
     filename: function (req, file, cb) {

@@ -6,6 +6,7 @@ const validation_1 = require("../../middlewares/validation");
 const stock_2 = require("../../validation/admin/stock");
 const catchAsync_1 = require("../../utils/catchAsync");
 const route = (0, express_1.Router)();
+route.post("/finalFile", (0, validation_1.validate)(stock_2.finalStockSchema), (0, catchAsync_1.catchAsync)(stock_1.uploadFinalFile));
 route.post("/", (0, validation_1.validate)(stock_2.createStockSchema), (0, catchAsync_1.catchAsync)(stock_1.createStock));
 route.get("/", (0, catchAsync_1.catchAsync)(stock_1.getStock));
 route.get("/:id", (0, catchAsync_1.catchAsync)(stock_1.getStockById));

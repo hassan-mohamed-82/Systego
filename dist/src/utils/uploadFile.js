@@ -9,14 +9,13 @@ const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 // 🧠 دالة بتجهز multer upload object
-function uploadFile(folderName = "uploads") {
-    // لو المجلد مش موجود، نعمله
-    if (!fs_1.default.existsSync(folderName)) {
-        fs_1.default.mkdirSync(folderName, { recursive: true });
-    }
-    // إعداد مكان التخزين
+async function uploadFile(folderName = "uploads") {
     const storage = multer_1.default.diskStorage({
         destination: function (req, file, cb) {
+            // 🧠 تأكد إن الفولدر موجود، لو مش موجود اعمله
+            if (!fs_1.default.existsSync(folderName)) {
+                fs_1.default.mkdirSync(folderName, { recursive: true });
+            }
             cb(null, folderName);
         },
         filename: function (req, file, cb) {
