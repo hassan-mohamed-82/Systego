@@ -1,0 +1,130 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createStock = exports.getStockById = exports.getStock = void 0;
+const Stock_1 = require("../../models/schema/admin/Stock");
+const brand_1 = require("../../models/schema/admin/brand");
+const category_1 = require("../../models/schema/admin/category");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
+const BadRequest_1 = require("../../Errors/BadRequest");
+const Errors_1 = require("../../Errors");
+const response_1 = require("../../utils/response");
+const csv_writer_1 = require("csv-writer");
+const path_1 = __importDefault(require("path"));
+const getStock = async (req, res) => {
+    const stocks = await Stock_1.StockModel.find()
+        .populate({ path: "category_id", select: "name" })
+        .populate("brand_id", "name")
+        .populate("warehouseId", "name");
+    (0, response_1.SuccessResponse)(res, { message: "Get stocks successfully", stocks });
+};
+exports.getStock = getStock;
+const getStockById = async (req, res) => {
+    const { id } = req.params;
+    if (!id)
+        throw new BadRequest_1.BadRequest("Adjustment ID is required");
+    const stock = await Stock_1.StockModel.findById(id)
+        .populate({ path: "category_id", select: "_id name" })
+        .populate("brand_id", "_id name")
+        .populate("warehouseId", "_id name");
+    if (!stock)
+        throw new Errors_1.NotFound("Stock not found");
+    (0, response_1.SuccessResponse)(res, { message: "Get Stock successfully", stock });
+};
+exports.getStockById = getStockById;
+const createStock = async (req, res) => {
+    const { warehouseId, type, category_id, brand_id, final_file } = req.body;
+    // ✅ تأكد إن المخزن موجود
+    const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
+    if (!warehouse)
+        throw new BadRequest_1.BadRequest("Invalid warehouse ID");
+    // ✅ تأكد من الكاتيجوريز
+    const categoriesCount = await category_1.CategoryModel.countDocuments({
+        _id: { $in: category_id },
+    });
+    if (categoriesCount !== category_id.length) {
+        throw new BadRequest_1.BadRequest("Invalid category ID");
+    }
+    // ✅ تأكد من البراندز
+    const brandCount = await brand_1.BrandModel.countDocuments({
+        _id: { $in: brand_id },
+    });
+    if (brandCount !== brand_id.length) {
+        throw new BadRequest_1.BadRequest("Invalid Brand ID");
+    }
+    // ✅ إنشاء المخزون
+    const stock = await Stock_1.StockModel.create({
+        warehouseId,
+        type,
+        category_id,
+        brand_id,
+    });
+    // ✅ اجلب الداتا كاملة مع populate متعدد المستويات
+    let stock_data = await Stock_1.StockModel.findById(stock._id)
+        .populate({
+        path: "category_id",
+        select: "name products",
+        populate: { path: "products", select: "name quantity" },
+    })
+        .populate({
+        path: "brand_id",
+        select: "name products",
+        populate: { path: "products", select: "name quantity" },
+    })
+        .populate({ path: "warehouseId", select: "name" });
+    if (!stock_data) {
+        throw new BadRequest_1.BadRequest("Invalid stock ID");
+    }
+    // ✅ تجميع المنتجات بدون تكرار
+    let products = {};
+    const categories = stock_data.category_id;
+    const brands = stock_data.brand_id;
+    if (stock_data) {
+        // 🟢 loop على الكاتيجوري
+        for (const cat of categories) {
+            if (Array.isArray(cat.products)) {
+                for (const product of cat.products) {
+                    products[product._id] = {
+                        name: product.name,
+                        expected: product.quantity,
+                    };
+                }
+            }
+        }
+        // 🟢 loop على البراند
+        for (const brand of brands) {
+            if (Array.isArray(brand.products)) {
+                for (const product of brand.products) {
+                    products[product._id] = {
+                        name: product.name,
+                        expected: product.quantity,
+                    };
+                }
+            }
+        }
+    }
+    // ✅ حول الـ object إلى array
+    const product_arr = Object.values(products);
+    // ✅ تجهيز ملف CSV
+    const filePath = path_1.default.join("uploads", `stocks_${Date.now()}.csv`);
+    const csvWriter = (0, csv_writer_1.createObjectCsvWriter)({
+        path: filePath,
+        header: [
+            { id: "name", title: "Product Name" },
+            { id: "expected", title: "Expected" },
+            { id: "counted", title: "Counted" },
+        ],
+    });
+    const records = product_arr.map((item) => ({
+        name: item?.name || "",
+        expected: item?.expected?.toString() || "",
+        counted: "0",
+    }));
+    await csvWriter.writeRecords(records);
+    stock_data.initial_file = filePath;
+    await stock_data?.save();
+    (0, response_1.SuccessResponse)(res, { filePath });
+};
+exports.createStock = createStock;
