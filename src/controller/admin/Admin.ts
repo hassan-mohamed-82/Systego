@@ -8,6 +8,7 @@ import { saveBase64Image } from "../../utils/handleImages";
 import { NotFound } from "../../Errors";
 import { PositionModel } from "../../models/schema/admin/position";
 import { RoleModel } from "../../models/schema/admin/roles";
+import { ActionModel } from "../../models/schema/admin/Action";
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const currentUser = req.user;
@@ -61,18 +62,46 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
 
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
-
+  // 1️⃣ هات كل المستخدمين
   const users = await UserModel.find();
-
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
   }
-  const positio = await PositionModel.find();
-  const positions = positio.map((position) => position.name);
-const roles= await RoleModel.find();
-const rolesId=roles.map((role) => role.name);
-  SuccessResponse(res, { message: "get all users successfully", users,positions,rolesId });
-}
+
+  // 2️⃣ هات كل الـ Positions
+  const positions = await PositionModel.find();
+
+  // 3️⃣ لكل Position هات الـ Roles الخاصة بيها ومع كل Role هات الـ Actions الخاصة بيه
+  const positionsWithRolesAndActions = [];
+
+  for (const position of positions) {
+    const roles = await RoleModel.find({ positionId: position._id });
+
+    const rolesWithActions = [];
+    for (const role of roles) {
+      const actions = await ActionModel.find({ roleId: role._id });
+
+      rolesWithActions.push({
+        _id: role._id,
+        name: role.name,
+        actions: actions.map((action) => action.name), // فقط أسماء الـ actions
+      });
+    }
+
+    positionsWithRolesAndActions.push({
+      _id: position._id,
+      name: position.name,
+      roles: rolesWithActions,
+    });
+  }
+
+  // 4️⃣ رجّع النتيجة النهائية
+  SuccessResponse(res, {
+    message: "get all users successfully",
+    users,
+    positions: positionsWithRolesAndActions,
+  });
+};
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
  

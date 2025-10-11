@@ -12,6 +12,7 @@ const handleImages_1 = require("../../utils/handleImages");
 const Errors_1 = require("../../Errors");
 const position_1 = require("../../models/schema/admin/position");
 const roles_1 = require("../../models/schema/admin/roles");
+const Action_1 = require("../../models/schema/admin/Action");
 const createUser = async (req, res, next) => {
     const currentUser = req.user;
     const { username, email, password, positionId, company_name, phone, image_base64 } = req.body;
@@ -54,15 +55,38 @@ const createUser = async (req, res, next) => {
 };
 exports.createUser = createUser;
 const getAllUsers = async (req, res, next) => {
+    // 1️⃣ هات كل المستخدمين
     const users = await User_1.UserModel.find();
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
     }
-    const positio = await position_1.PositionModel.find();
-    const positions = positio.map((position) => position.name);
-    const roles = await roles_1.RoleModel.find();
-    const rolesId = roles.map((role) => role.name);
-    (0, response_1.SuccessResponse)(res, { message: "get all users successfully", users, positions, rolesId });
+    // 2️⃣ هات كل الـ Positions
+    const positions = await position_1.PositionModel.find();
+    // 3️⃣ لكل Position هات الـ Roles الخاصة بيها ومع كل Role هات الـ Actions الخاصة بيه
+    const positionsWithRolesAndActions = [];
+    for (const position of positions) {
+        const roles = await roles_1.RoleModel.find({ positionId: position._id });
+        const rolesWithActions = [];
+        for (const role of roles) {
+            const actions = await Action_1.ActionModel.find({ roleId: role._id });
+            rolesWithActions.push({
+                _id: role._id,
+                name: role.name,
+                actions: actions.map((action) => action.name), // فقط أسماء الـ actions
+            });
+        }
+        positionsWithRolesAndActions.push({
+            _id: position._id,
+            name: position.name,
+            roles: rolesWithActions,
+        });
+    }
+    // 4️⃣ رجّع النتيجة النهائية
+    (0, response_1.SuccessResponse)(res, {
+        message: "get all users successfully",
+        users,
+        positions: positionsWithRolesAndActions,
+    });
 };
 exports.getAllUsers = getAllUsers;
 const getUserById = async (req, res, next) => {
