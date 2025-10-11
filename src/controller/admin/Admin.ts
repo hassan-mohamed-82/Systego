@@ -6,6 +6,8 @@ import { UnauthorizedError } from "../../Errors/unauthorizedError";
 import { SuccessResponse } from "../../utils/response";
 import { saveBase64Image } from "../../utils/handleImages";
 import { NotFound } from "../../Errors";
+import { PositionModel } from "../../models/schema/admin/position";
+import { RoleModel } from "../../models/schema/admin/roles";
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const currentUser = req.user;
@@ -65,8 +67,11 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
   }
-
-  SuccessResponse(res, { message: "get all users successfully", users });
+  const positio = await PositionModel.find();
+  const positions = positio.map((position) => position._id);
+const roles= await RoleModel.find();
+const rolesId=roles.map((role) => role._id);
+  SuccessResponse(res, { message: "get all users successfully", users,positions,rolesId });
 }
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
