@@ -19,6 +19,7 @@ import BankAccountRouter from "./Financial_Account";
 import CountryRouter from "./Country";
 import CityRouter from "./City";
 import PurchaseRouter from "./Purchase";
+import StockRouter from "./stocks";
 // import ZoneRouter from "./Zone";
 import CurrencyRouter from "./Currency";
 import TaxesRouter from "./Taxes";
@@ -51,6 +52,7 @@ route.use("/bank_account",BankAccountRouter)
 route.use("/country",CountryRouter);
 route.use("/city",CityRouter);
 route.use("/purchase",PurchaseRouter);
+route.use("/stock",StockRouter);
 // route.use("/zone",ZoneRouter);
 route.use("/currency",CurrencyRouter);
 route.use("/taxes",TaxesRouter);

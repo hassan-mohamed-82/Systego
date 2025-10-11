@@ -33,17 +33,23 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CategoryModel = void 0;
+exports.StockModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const categorySchema = new mongoose_1.Schema({
-    name: { type: String, required: true, unique: true },
-    image: { type: String },
-    parentId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category" },
-    product_quantity: { type: Number, default: 0 },
+const StockSchema = new mongoose_1.Schema({
+    warehouseId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Warehouse", required: true },
+    reference: { type: String, unique: true },
+    type: { type: String, enum: ["full", "partial"], required: true },
+    category_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "Category" }],
+    brand_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "Brand" }],
+    initial_file: { type: String, required: false },
+    final_file: { type: String, required: false },
 }, { timestamps: true });
-categorySchema.virtual("products", {
-    ref: "Product",
-    localField: "_id",
-    foreignField: "categoryId",
+StockSchema.pre("save", async function (next) {
+    if (!this.reference) {
+        const count = await mongoose_1.default.model("Stock").countDocuments();
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // مثال: 20251004
+        this.reference = `TRF-${date}-${count + 1}`;
+    }
+    next();
 });
-exports.CategoryModel = mongoose_1.default.model("Category", categorySchema);
+exports.StockModel = mongoose_1.default.model("Stock", StockSchema);

@@ -9,4 +9,9 @@ const brandSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true, unique: true },
     logo: { type: String },
 }, { timestamps: true });
+brandSchema.virtual("products", {
+    ref: "Product",
+    localField: "_id",
+    foreignField: "brandId",
+});
 exports.BrandModel = mongoose_1.default.model("Brand", brandSchema);
