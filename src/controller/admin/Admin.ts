@@ -62,44 +62,42 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
 
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
-  // 1️⃣ هات كل المستخدمين
+  // 🧍‍♂️ 1️⃣ هات المستخدمين
   const users = await UserModel.find();
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
   }
 
-  // 2️⃣ هات كل الـ Positions
+  // 🧩 2️⃣ هات كل الـ Positions
   const positions = await PositionModel.find();
 
-  // 3️⃣ لكل Position هات الـ Roles الخاصة بيها ومع كل Role هات الـ Actions الخاصة بيه
-  const positionsWithRolesAndActions = [];
+  // 🧠 3️⃣ جهز شكل البيانات المطلوب
+  const formattedPositions = [];
 
   for (const position of positions) {
     const roles = await RoleModel.find({ positionId: position._id });
 
-    const rolesWithActions = [];
+    const formattedRoles = [];
     for (const role of roles) {
       const actions = await ActionModel.find({ roleId: role._id });
 
-      rolesWithActions.push({
-        _id: role._id,
+      formattedRoles.push({
         name: role.name,
-        actions: actions.map((action) => action.name), // فقط أسماء الـ actions
+        actions: actions.map((action) => action.name),
       });
     }
 
-    positionsWithRolesAndActions.push({
-      _id: position._id,
+    formattedPositions.push({
       name: position.name,
-      roles: rolesWithActions,
+      roles: formattedRoles,
     });
   }
 
-  // 4️⃣ رجّع النتيجة النهائية
+  // ✅ 4️⃣ رجّع الرد بالشكل اللي إنت عايزه
   SuccessResponse(res, {
     message: "get all users successfully",
     users,
-    positions: positionsWithRolesAndActions,
+    positions: formattedPositions,
   });
 };
 
