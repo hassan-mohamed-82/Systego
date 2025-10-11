@@ -59,9 +59,9 @@ const getAllUsers = async (req, res, next) => {
         throw new Errors_1.NotFound("No users found");
     }
     const positio = await position_1.PositionModel.find();
-    const positions = positio.map((position) => position._id);
+    const positions = positio.map((position) => position.name);
     const roles = await roles_1.RoleModel.find();
-    const rolesId = roles.map((role) => role._id);
+    const rolesId = roles.map((role) => role.name);
     (0, response_1.SuccessResponse)(res, { message: "get all users successfully", users, positions, rolesId });
 };
 exports.getAllUsers = getAllUsers;
