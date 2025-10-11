@@ -15,7 +15,7 @@ const createPositionWithRolesAndActions = async (req, res) => {
     const createdRoles = [];
     for (const role of roles) {
         const newRole = await roles_1.RoleModel.create({
-            possitionId: position._id,
+            positionId: position._id, // ✅ الاسم الصحيح
             name: role.name,
         });
         const createdActions = [];
