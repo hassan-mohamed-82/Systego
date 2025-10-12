@@ -26,5 +26,8 @@ async function saveBase64Image(base64, userId, req, folder) {
         console.error("Failed to save image:", err);
         throw err;
     }
-    return `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
+    // ✅ استخدم البروتوكول الصحيح (https) أو الهيدر الحقيقي لو السيرفر خلف Proxy
+    const protocol = req.get("x-forwarded-proto") || "https";
+    // ✅ ارجع رابط الصورة النهائي
+    return `${protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
 }

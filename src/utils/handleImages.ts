@@ -30,5 +30,9 @@ export async function saveBase64Image(
     throw err;
   }
 
-  return `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
+  // ✅ استخدم البروتوكول الصحيح (https) أو الهيدر الحقيقي لو السيرفر خلف Proxy
+  const protocol = req.get("x-forwarded-proto") || "https";
+
+  // ✅ ارجع رابط الصورة النهائي
+  return `${protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
 }
