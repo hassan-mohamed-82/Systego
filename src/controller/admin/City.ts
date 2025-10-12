@@ -19,8 +19,10 @@ export const createCity = async (req: Request, res: Response) => {
 
   const city = await CityModels.create({ name, country });
   await city.populate("country");
+  const countries = await CountryModel.find();
 
-  SuccessResponse(res, { message: "create city successfully", city });
+
+  SuccessResponse(res, { message: "create city successfully", city, countries });
 };
 export const getCities = async (req: Request, res: Response) => {
   const cities = await CityModels.find().populate("country");

@@ -19,7 +19,8 @@ const createCity = async (req, res) => {
         throw new Errors_1.NotFound("Country not found");
     const city = await City_1.CityModels.create({ name, country });
     await city.populate("country");
-    (0, response_1.SuccessResponse)(res, { message: "create city successfully", city });
+    const countries = await Country_1.CountryModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "create city successfully", city, countries });
 };
 exports.createCity = createCity;
 const getCities = async (req, res) => {
