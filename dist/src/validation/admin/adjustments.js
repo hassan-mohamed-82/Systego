@@ -17,6 +17,7 @@ exports.createAdjustmentSchema = joi_1.default.object({
         "number.positive": "Quantity must be a positive number",
     }),
     select_reasonId: joi_1.default.string().optional(),
+    image: joi_1.default.string().optional(),
 });
 exports.updateAdjustmentSchema = joi_1.default.object({
     product_id: joi_1.default.string().optional(),
@@ -24,4 +25,5 @@ exports.updateAdjustmentSchema = joi_1.default.object({
     select_reasonId: joi_1.default.string().optional(),
     warehouse_id: joi_1.default.string().optional(),
     note: joi_1.default.string().allow("", null).optional(),
+    image: joi_1.default.string().optional(),
 });

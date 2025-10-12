@@ -13,6 +13,7 @@ export const createAdjustmentSchema = Joi.object({
     "number.positive": "Quantity must be a positive number",
   }),
   select_reasonId: Joi.string().optional(),
+  image: Joi.string().optional(),
 
 });
 
@@ -22,4 +23,5 @@ export const updateAdjustmentSchema = Joi.object({
   select_reasonId: Joi.string().optional(),
   warehouse_id: Joi.string().optional(),
   note: Joi.string().allow("", null).optional(),
+  image: Joi.string().optional(),
 });
