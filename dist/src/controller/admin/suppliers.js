@@ -38,7 +38,7 @@ const createSupplier = async (req, res) => {
 exports.createSupplier = createSupplier;
 // 🟡 Get All Suppliers
 const getSuppliers = async (req, res) => {
-    const suppliers = await suppliers_1.SupplierModel.find({});
+    const suppliers = await suppliers_1.SupplierModel.find().populate("cityId").populate("countryId");
     if (!suppliers || suppliers.length === 0) {
         throw new Errors_1.NotFound("No suppliers found");
     }
@@ -52,7 +52,7 @@ const getSupplierById = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Supplier ID is required");
-    const supplier = await suppliers_1.SupplierModel.findById(id);
+    const supplier = await suppliers_1.SupplierModel.findById(id).populate("cityId").populate("countryId");
     if (!supplier)
         throw new Errors_1.NotFound("Supplier not found");
     const city = await City_1.CityModels.find();
