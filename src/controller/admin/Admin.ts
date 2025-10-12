@@ -82,6 +82,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
       const actions = await ActionModel.find({ roleId: role._id });
 
       formattedRoles.push({
+        _id: role._id,
         name: role.name,
         actions: actions.map((action) => action.name),
       });
