@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import { CustomerModel, CustomerGroupModel } from '../../../models/schema/admin/POS/customer';
+import { BadRequest } from '../../../Errors/BadRequest';
+import { NotFound } from '../../../Errors';
+import { SuccessResponse } from '../../../utils/response';
 
 // Create Customer
 export const createCustomer = async (req: Request, res: Response): Promise<void> => {
-    try {
         const {
             name,
             email,
@@ -16,32 +18,20 @@ export const createCustomer = async (req: Request, res: Response): Promise<void>
 
         // Validate required fields
         if (!name || !phone_number) {
-            res.status(400).json({
-                success: false,
-                message: "Name and phone number are required fields"
-            });
-            return;
+           throw new BadRequest("Name and phone number are required");
         }
 
         // Check if phone number already exists
         const existingCustomer = await CustomerModel.findOne({ phone_number });
         if (existingCustomer) {
-            res.status(409).json({
-                success: false,
-                message: "Customer with this phone number already exists"
-            });
-            return;
+            throw new BadRequest("Customer with this phone number already exists");
         }
 
         // Check if email already exists (if provided)
         if (email) {
             const existingEmail = await CustomerModel.findOne({ email });
             if (existingEmail) {
-                res.status(409).json({
-                    success: false,
-                    message: "Customer with this email already exists"
-                });
-                return;
+                throw new BadRequest("Customer with this email already exists");
             }
         }
 
@@ -49,18 +39,10 @@ export const createCustomer = async (req: Request, res: Response): Promise<void>
         if (customer_group_id) {
             const customerGroup = await CustomerGroupModel.findById(customer_group_id);
             if (!customerGroup) {
-                res.status(404).json({
-                    success: false,
-                    message: "Customer group not found"
-                });
-                return;
+                throw new NotFound("Customer group not found");
             }
             if (!customerGroup.status) {
-                res.status(400).json({
-                    success: false,
-                    message: "Customer group is inactive"
-                });
-                return;
+                throw new BadRequest("Customer group is inactive");
             }
         }
 
@@ -84,19 +66,11 @@ export const createCustomer = async (req: Request, res: Response): Promise<void>
             { path: 'customer_group_id', select: 'name status' }
         ]);
 
-        res.status(201).json({
-            success: true,
+        SuccessResponse(res,{
             message: "Customer created successfully",
-            data: savedCustomer
+            customer: savedCustomer
         });
 
-    } catch (error: any) {
-        console.error("Error creating customer:", error);
-        res.status(500).json({
-            success: false,
-            message: "Internal server error",
-            error: error.message
-        });
-    }
+    
 };
 
