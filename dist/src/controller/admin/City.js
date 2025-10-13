@@ -19,14 +19,16 @@ const createCity = async (req, res) => {
         throw new Errors_1.NotFound("Country not found");
     const city = await City_1.CityModels.create({ name, country });
     await city.populate("country");
-    (0, response_1.SuccessResponse)(res, { message: "create city successfully", city });
+    const countries = await Country_1.CountryModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "create city successfully", city, countries });
 };
 exports.createCity = createCity;
 const getCities = async (req, res) => {
     const cities = await City_1.CityModels.find().populate("country");
     if (!cities || cities.length === 0)
         throw new Errors_1.NotFound("No cities found");
-    (0, response_1.SuccessResponse)(res, { message: "get all cities successfully", cities });
+    const countries = await Country_1.CountryModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "get all cities successfully", cities, countries });
 };
 exports.getCities = getCities;
 const getCityById = async (req, res) => {
@@ -36,7 +38,8 @@ const getCityById = async (req, res) => {
     const city = await City_1.CityModels.findById(id).populate("country");
     if (!city)
         throw new Errors_1.NotFound("City not found");
-    (0, response_1.SuccessResponse)(res, { message: "get city successfully", city });
+    const countries = await Country_1.CountryModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "get city successfully", city, countries });
 };
 exports.getCityById = getCityById;
 const updateCity = async (req, res) => {

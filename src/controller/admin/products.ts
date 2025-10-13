@@ -33,7 +33,8 @@ export const createProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     prices,
-    gallery_product
+    gallery_product,
+    is_featured
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -107,6 +108,7 @@ export const createProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     gallery_product: galleryUrls,
+    is_featured
   });
 
   // إنشاء الأسعار (ProductPrice)
@@ -159,20 +161,86 @@ export const createProduct = async (req: Request, res: Response) => {
 
 // ✅ READ (with populate)
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
+  // 1️⃣ جلب كل المنتجات مع العلاقات الأساسية
   const products = await ProductModel.find()
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
 
-
-    const categories = await CategoryModel.find().lean();
-    const brands = await BrandModel.find().lean();
-    const variations = await VariationModel.find()
-    .populate("options") // جاي من الـ virtual
+  // 2️⃣ جلب الكاتيجوريز، البراندز، الفاريشنز
+  const categories = await CategoryModel.find().lean();
+  const brands = await BrandModel.find().lean();
+  const variations = await VariationModel.find()
+    .populate("options")
     .lean();
 
-  SuccessResponse(res, {products,  categories, brands ,variations  });
+  // 3️⃣ تجهيز مصفوفة المنتجات بعد التنسيق الكامل
+  const formattedProducts = [];
+
+  for (const product of products) {
+    // 🟦 جلب الأسعار الخاصة بكل منتج
+    const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+
+    const formattedPrices = [];
+
+    for (const price of prices) {
+      // 🟩 جلب الـ options الخاصة بكل سعر
+      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+        .populate("option_id")
+        .lean();
+
+      // 🟨 تجميع الخيارات حسب الـ variation
+      const groupedOptions: Record<string, any[]> = {};
+
+      options.forEach((po: any) => {
+        const option = po.option_id;
+        if (!option || !option._id) return;
+
+        const variation = variations.find((v: any) =>
+          v.options.some((opt: any) => opt._id.toString() === option._id.toString())
+        );
+
+        if (variation) {
+          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          groupedOptions[variation.name].push(option);
+        }
+      });
+
+      // 🟧 تحويلها لمصفوفة منظمة
+      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+        name: varName,
+        options: groupedOptions[varName],
+      }));
+
+      // 🟥 إضافة السعر بالهيكل الكامل
+      formattedPrices.push({
+        variations: variationsArray,
+        _id: price._id,
+        productId: price.productId,
+        price: price.price,
+        code: price.code,
+        gallery: price.gallery,
+        quantity: price.quantity,
+        createdAt: price.createdAt,
+        updatedAt: price.updatedAt,
+        __v: price.__v,
+      });
+    }
+
+    // ✅ دمج الأسعار بالمنتج
+    (product as any).prices = formattedPrices;
+
+    formattedProducts.push(product);
+  }
+
+  // 4️⃣ إرسال الريسبونس النهائي
+  SuccessResponse(res, {
+    products: formattedProducts,
+    categories,
+    brands,
+    variations,
+  });
 };
 
 export const updateProduct = async (req: Request, res: Response) => {
@@ -197,7 +265,8 @@ export const updateProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     prices,
-    gallery
+    gallery,
+    is_featured
   } = req.body;
 
   const product = await ProductModel.findById(id);
@@ -238,6 +307,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.different_price = different_price ?? product.different_price;
   product.show_quantity = show_quantity ?? product.show_quantity;
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
+  product.is_featured = is_featured ?? product.is_featured;
 
   await product.save();
 

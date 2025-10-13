@@ -6,23 +6,23 @@ import { UnauthorizedError } from '../../Errors/unauthorizedError';
 import { SuccessResponse } from '../../utils/response';
 import { saveBase64Image } from '../../utils/handleImages';
 export const createPaymentMethod = async (req: Request, res: Response) => {
+  const { name, discription, icon } = req.body;
 
-  const { name, discription } = req.body;
-  if (!name || !discription) {
-    throw new BadRequest("Please provide all the required fields");
+  if (!name || !discription || !icon) {
+    throw new BadRequest("Please provide all the required fields including icon");
   }
+
   const existingPaymentMethod = await PaymentMethodModel.findOne({ name });
   if (existingPaymentMethod) throw new BadRequest("Payment method already exists");
-let icon = "";
-  if (icon) {
-    icon = await saveBase64Image(icon, Date.now().toString(), req, "payment_methods");
-  }
 
+  // 🖼️ حفظ الصورة
+  const iconUrl = await saveBase64Image(icon, Date.now().toString(), req, "payment_methods");
 
+  // 🧾 إنشاء طريقة الدفع
   const paymentMethod = await PaymentMethodModel.create({
     name,
     discription,
-    icon,
+    icon: iconUrl,
     isActive: true,
   });
 

@@ -7,7 +7,7 @@ exports.saveBase64Image = saveBase64Image;
 const path_1 = __importDefault(require("path"));
 const promises_1 = __importDefault(require("fs/promises"));
 async function saveBase64Image(base64, userId, req, folder) {
-    // ✅ شيل البريفكس لو موجود
+    // ✅ إزالة البريفكس من base64
     const matches = base64.match(/^data:(.+);base64,(.+)$/);
     let ext = "png";
     let data = base64;
@@ -17,14 +17,19 @@ async function saveBase64Image(base64, userId, req, folder) {
     }
     const buffer = Buffer.from(data, "base64");
     const fileName = `${userId}.${ext}`;
-    const uploadsDir = path_1.default.join(__dirname, "../..", "uploads", folder);
+    // ✅ نخلي مجلد uploads في ROOT project (مش جوا src أو dist)
+    const rootDir = path_1.default.resolve(__dirname, "../../"); // يطلع لمجلد المشروع الأساسي
+    const uploadsDir = path_1.default.join(rootDir, "uploads", folder);
     try {
         await promises_1.default.mkdir(uploadsDir, { recursive: true });
         await promises_1.default.writeFile(path_1.default.join(uploadsDir, fileName), buffer);
     }
     catch (err) {
-        console.error("Failed to save image:", err);
+        console.error("❌ Failed to save image:", err);
         throw err;
     }
-    return `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
+    // ✅ البروتوكول الصحيح (https أو http)
+    const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
+    // ✅ ارجع رابط الصورة النهائي
+    return `${protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
 }

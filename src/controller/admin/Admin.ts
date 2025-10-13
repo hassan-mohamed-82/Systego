@@ -6,6 +6,9 @@ import { UnauthorizedError } from "../../Errors/unauthorizedError";
 import { SuccessResponse } from "../../utils/response";
 import { saveBase64Image } from "../../utils/handleImages";
 import { NotFound } from "../../Errors";
+import { PositionModel } from "../../models/schema/admin/position";
+import { RoleModel } from "../../models/schema/admin/roles";
+import { ActionModel } from "../../models/schema/admin/Action";
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const currentUser = req.user;
@@ -59,15 +62,45 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
 
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
-
+  // 🧍‍♂️ 1️⃣ هات المستخدمين
   const users = await UserModel.find();
-
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
   }
 
-  SuccessResponse(res, { message: "get all users successfully", users });
-}
+  // 🧩 2️⃣ هات كل الـ Positions
+  const positions = await PositionModel.find();
+
+  // 🧠 3️⃣ جهز شكل البيانات المطلوب
+  const formattedPositions = [];
+
+  for (const position of positions) {
+    const roles = await RoleModel.find({ positionId: position._id });
+
+    const formattedRoles = [];
+    for (const role of roles) {
+      const actions = await ActionModel.find({ roleId: role._id });
+
+      formattedRoles.push({
+        _id: role._id,
+        name: role.name,
+        actions: actions.map((action) => action.name),
+      });
+    }
+
+    formattedPositions.push({
+      name: position.name,
+      roles: formattedRoles,
+    });
+  }
+
+  // ✅ 4️⃣ رجّع الرد بالشكل اللي إنت عايزه
+  SuccessResponse(res, {
+    message: "get all users successfully",
+    users,
+    positions: formattedPositions,
+  });
+};
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
  

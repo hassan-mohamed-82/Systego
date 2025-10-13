@@ -8,7 +8,7 @@ export async function saveBase64Image(
   req: Request,
   folder: string
 ): Promise<string> {
-  // ✅ شيل البريفكس لو موجود
+  // ✅ إزالة البريفكس من base64
   const matches = base64.match(/^data:(.+);base64,(.+)$/);
   let ext = "png";
   let data = base64;
@@ -20,15 +20,22 @@ export async function saveBase64Image(
 
   const buffer = Buffer.from(data, "base64");
   const fileName = `${userId}.${ext}`;
-  const uploadsDir = path.join(__dirname, "../..", "uploads", folder);
+
+  // ✅ نخلي مجلد uploads في ROOT project (مش جوا src أو dist)
+  const rootDir = path.resolve(__dirname, "../../"); // يطلع لمجلد المشروع الأساسي
+  const uploadsDir = path.join(rootDir, "uploads", folder);
 
   try {
     await fs.mkdir(uploadsDir, { recursive: true });
     await fs.writeFile(path.join(uploadsDir, fileName), buffer);
   } catch (err) {
-    console.error("Failed to save image:", err);
+    console.error("❌ Failed to save image:", err);
     throw err;
   }
 
-  return `${req.protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
+  // ✅ البروتوكول الصحيح (https أو http)
+  const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
+
+  // ✅ ارجع رابط الصورة النهائي
+  return `${protocol}://${req.get("host")}/uploads/${folder}/${fileName}`;
 }

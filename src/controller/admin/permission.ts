@@ -21,9 +21,10 @@ export const createPositionWithRolesAndActions = async (req: Request,res: Respon
 
   for (const role of roles) {
     const newRole = await RoleModel.create({
-      possitionId: position._id,
-      name: role.name,
-    });
+  positionId: position._id, // ✅ الاسم الصحيح
+  name: role.name,
+});
+
 
     const createdActions = [];
     if (role.actions && role.actions.length > 0) {
