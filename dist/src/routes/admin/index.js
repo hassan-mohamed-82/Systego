@@ -38,6 +38,7 @@ const customerGroupRoutes_1 = __importDefault(require("./POS/customerGroupRoutes
 const customerRoutes_1 = __importDefault(require("./POS/customerRoutes"));
 const giftCardRoutes_1 = __importDefault(require("./POS/giftCardRoutes"));
 const POSHomeRoutes_1 = __importDefault(require("./POS/POSHomeRoutes"));
+const CashierShiftRoutes_1 = __importDefault(require("./POS/CashierShiftRoutes"));
 const authenticated_1 = require("../../middlewares/authenticated");
 const authorized_1 = require("../../middlewares/authorized");
 exports.route = (0, express_1.Router)();
@@ -75,4 +76,5 @@ exports.route.use("/customer-group", customerGroupRoutes_1.default);
 exports.route.use("/customer", customerRoutes_1.default);
 exports.route.use("/gift-card", giftCardRoutes_1.default);
 exports.route.use("/pos-home", POSHomeRoutes_1.default);
+exports.route.use("/cashier-shift", CashierShiftRoutes_1.default);
 exports.default = exports.route;
