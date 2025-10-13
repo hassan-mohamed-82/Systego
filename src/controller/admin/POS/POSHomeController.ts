@@ -55,3 +55,10 @@ export const getAllSelections = async (req: Request, res: Response) => {
     const customerGroups = await CustomerGroupModel.find().select('name');
     SuccessResponse(res, {message: "Selections list", warehouses, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
+
+
+// get featured product
+export const getFeaturedProducts = async (req: Request, res: Response) => {
+    const products = await ProductModel.find({ is_featured: true }).select('name price image');
+    SuccessResponse(res, {message: "Featured products", products});
+}
