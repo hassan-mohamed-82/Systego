@@ -13,7 +13,7 @@ const category_1 = require("../../models/schema/admin/category");
 const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
 const createProduct = async (req, res) => {
-    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product } = req.body;
+    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
     // تحقق من أن categoryId مصفوفة
@@ -78,6 +78,7 @@ const createProduct = async (req, res) => {
         show_quantity,
         maximum_to_show,
         gallery_product: galleryUrls,
+        is_featured
     });
     // إنشاء الأسعار (ProductPrice)
     let totalQuantity = 0;
@@ -192,7 +193,7 @@ const getProduct = async (req, res) => {
 exports.getProduct = getProduct;
 const updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery } = req.body;
+    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, is_featured } = req.body;
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
@@ -229,6 +230,7 @@ const updateProduct = async (req, res) => {
     product.different_price = different_price ?? product.different_price;
     product.show_quantity = show_quantity ?? product.show_quantity;
     product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
+    product.is_featured = is_featured ?? product.is_featured;
     await product.save();
     // ✅ تحديث / إنشاء / حذف الأسعار والخيارات
     let totalQuantity = 0;

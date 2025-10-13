@@ -33,7 +33,8 @@ export const createProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     prices,
-    gallery_product
+    gallery_product,
+    is_featured
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -107,6 +108,7 @@ export const createProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     gallery_product: galleryUrls,
+    is_featured
   });
 
   // إنشاء الأسعار (ProductPrice)
@@ -263,7 +265,8 @@ export const updateProduct = async (req: Request, res: Response) => {
     show_quantity,
     maximum_to_show,
     prices,
-    gallery
+    gallery,
+    is_featured
   } = req.body;
 
   const product = await ProductModel.findById(id);
@@ -304,6 +307,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.different_price = different_price ?? product.different_price;
   product.show_quantity = show_quantity ?? product.show_quantity;
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
+  product.is_featured = is_featured ?? product.is_featured;
 
   await product.save();
 

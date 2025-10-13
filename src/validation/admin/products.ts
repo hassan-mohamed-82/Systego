@@ -39,6 +39,7 @@ export const createProductSchema = Joi.object({
   maximum_to_show: Joi.number().optional(),
   gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ أزلنا pattern
   prices: Joi.array().items(priceSchema).required(),
+  is_featured: Joi.boolean().optional()
 });
 
 // ✅ Update Product Schema
@@ -64,4 +65,5 @@ export const updateProductSchema = Joi.object({
   maximum_to_show: Joi.number().optional(),
   gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ أزلنا pattern
   prices: Joi.array().items(priceSchema).optional(),
+  is_featured: Joi.boolean().optional()
 });
