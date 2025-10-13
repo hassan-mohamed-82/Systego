@@ -5,23 +5,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateProductSchema = exports.createProductSchema = exports.priceSchema = exports.optionSchema = exports.objectId = void 0;
 const joi_1 = __importDefault(require("joi"));
-// ✅ تعريف ObjectId
 exports.objectId = joi_1.default.string().hex().length(24);
-// ✅ Option Schema (مجرد ID)
 exports.optionSchema = exports.objectId;
-// ✅ Price Schema (يتبع ProductPriceModel)
 exports.priceSchema = joi_1.default.object({
     _id: exports.objectId.optional(),
     price: joi_1.default.number().required(),
     code: joi_1.default.string().required(),
     quantity: joi_1.default.number().optional(),
-    gallery: joi_1.default.array().items(joi_1.default.string()).optional(), // ✅ أزلنا pattern
+    gallery: joi_1.default.array().items(joi_1.default.string()).optional(),
     options: joi_1.default.array().items(exports.optionSchema).optional(),
 });
-// ✅ Create Product Schema
 exports.createProductSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
-    image: joi_1.default.string().optional(), // ✅ أزلنا pattern
+    image: joi_1.default.string().optional(),
     categoryId: joi_1.default.array().items(exports.objectId).min(1).required(),
     brandId: exports.objectId.required(),
     unit: joi_1.default.string().required(),
@@ -39,14 +35,13 @@ exports.createProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
-    gallery_product: joi_1.default.array().items(joi_1.default.string()).optional(), // ✅ أزلنا pattern
+    gallery_product: joi_1.default.array().items(joi_1.default.string()).optional(),
     prices: joi_1.default.array().items(exports.priceSchema).required(),
     is_featured: joi_1.default.boolean().optional()
 });
-// ✅ Update Product Schema
 exports.updateProductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
-    image: joi_1.default.string().optional(), // ✅ أزلنا pattern
+    image: joi_1.default.string().optional(),
     categoryId: joi_1.default.array().items(exports.objectId).optional(),
     brandId: exports.objectId.optional(),
     unit: joi_1.default.string().optional(),
@@ -64,7 +59,7 @@ exports.updateProductSchema = joi_1.default.object({
     different_price: joi_1.default.boolean().optional(),
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
-    gallery_product: joi_1.default.array().items(joi_1.default.string()).optional(), // ✅ أزلنا pattern
+    gallery_product: joi_1.default.array().items(joi_1.default.string()).optional(),
     prices: joi_1.default.array().items(exports.priceSchema).optional(),
     is_featured: joi_1.default.boolean().optional()
 });
