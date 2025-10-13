@@ -7,7 +7,6 @@ import { SuccessResponse } from "../../utils/response";
 import { CityModels } from "../../models/schema/admin/City";
 import { CountryModel } from "../../models/schema/admin/Country";
 
-// 🟢 Create Supplier
 export const createSupplier = async (req: Request, res: Response) => {
   const {
     image,
@@ -54,7 +53,6 @@ export const createSupplier = async (req: Request, res: Response) => {
 };
 
 
-// 🟡 Get All Suppliers
 export const getSuppliers = async (req: Request, res: Response) => {
   const suppliers = await SupplierModel.find().populate("cityId").populate("countryId");
   if (!suppliers || suppliers.length === 0) {
@@ -65,7 +63,6 @@ export const getSuppliers = async (req: Request, res: Response) => {
 };
 
 
-// 🔵 Get Supplier By ID
 export const getSupplierById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Supplier ID is required");
@@ -80,7 +77,6 @@ export const getSupplierById = async (req: Request, res: Response) => {
 };
 
 
-// 🟠 Update Supplier
 export const updateSupplier = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Supplier ID is required");
@@ -103,7 +99,6 @@ export const updateSupplier = async (req: Request, res: Response) => {
 };
 
 
-// 🔴 Delete Supplier
 export const deleteSupplier = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Supplier ID is required");

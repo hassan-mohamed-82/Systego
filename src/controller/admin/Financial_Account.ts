@@ -4,7 +4,6 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import{saveBase64Image}from "../../utils/handleImages"
-// ✅ Create
 export const createBankAccount = async (req: Request, res: Response) => {
   const { account_no, name, initial_balance, is_default, note, icon } = req.body;
 

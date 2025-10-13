@@ -44,32 +44,27 @@ const getStockById = async (req, res) => {
 exports.getStockById = getStockById;
 const createStock = async (req, res) => {
     const { warehouseId, type, category_id, brand_id, final_file } = req.body;
-    // ✅ تأكد إن المخزن موجود
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse)
         throw new BadRequest_1.BadRequest("Invalid warehouse ID");
-    // ✅ تأكد من الكاتيجوريز
     const categoriesCount = await category_1.CategoryModel.countDocuments({
         _id: { $in: category_id },
     });
     if (categoriesCount !== category_id.length) {
         throw new BadRequest_1.BadRequest("Invalid category ID");
     }
-    // ✅ تأكد من البراندز
     const brandCount = await brand_1.BrandModel.countDocuments({
         _id: { $in: brand_id },
     });
     if (brandCount !== brand_id.length) {
         throw new BadRequest_1.BadRequest("Invalid Brand ID");
     }
-    // ✅ إنشاء المخزون
     const stock = await Stock_1.StockModel.create({
         warehouseId,
         type,
         category_id,
         brand_id,
     });
-    // ✅ اجلب الداتا كاملة مع populate متعدد المستويات
     let stock_data = await Stock_1.StockModel.findById(stock._id)
         .populate({
         path: "category_id",
@@ -85,12 +80,10 @@ const createStock = async (req, res) => {
     if (!stock_data) {
         throw new BadRequest_1.BadRequest("Invalid stock ID");
     }
-    // ✅ تجميع المنتجات بدون تكرار
     let products = {};
     const categories = stock_data.category_id;
     const brands = stock_data.brand_id;
     if (stock_data) {
-        // 🟢 loop على الكاتيجوري
         for (const cat of categories) {
             if (Array.isArray(cat.products)) {
                 for (const product of cat.products) {
@@ -101,7 +94,6 @@ const createStock = async (req, res) => {
                 }
             }
         }
-        // 🟢 loop على البراند
         for (const brand of brands) {
             if (Array.isArray(brand.products)) {
                 for (const product of brand.products) {
@@ -113,14 +105,11 @@ const createStock = async (req, res) => {
             }
         }
     }
-    // ✅ حول الـ object إلى array
     const product_arr = Object.values(products);
     const dirPath = path_1.default.join("uploads", "stocks");
-    // 🧠 تأكد إن المجلد موجود
     if (!fs_1.default.existsSync(dirPath)) {
         fs_1.default.mkdirSync(dirPath, { recursive: true });
     }
-    // ✅ تجهيز ملف CSV
     const filePath = path_1.default.join("uploads/stocks", `stocks_${Date.now()}.csv`);
     const csvWriter = (0, csv_writer_1.createObjectCsvWriter)({
         path: filePath,

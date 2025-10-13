@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-
 import { PurchaseModel } from "../../models/schema/admin/Purchase";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import { PurchaseDuePaymentModel } from "../../models/schema/admin/purchase_due_payment";
@@ -184,7 +183,6 @@ export const createPurchase = async (req: Request, res: Response) => {
 };
 
  
-// ✅ READ (with populate)
 export const getPurchase = async (req: Request, res: Response): Promise<void> => {
   const [
     purchases,

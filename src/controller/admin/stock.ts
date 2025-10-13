@@ -49,11 +49,9 @@ export const getStockById = async (req: Request, res: Response) => {
 export const createStock = async (req: Request, res: Response) => {
   const { warehouseId, type, category_id, brand_id, final_file } = req.body;
 
-  // ✅ تأكد إن المخزن موجود
   const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) throw new BadRequest("Invalid warehouse ID");
 
-  // ✅ تأكد من الكاتيجوريز
   const categoriesCount = await CategoryModel.countDocuments({
     _id: { $in: category_id },
   });
@@ -61,7 +59,6 @@ export const createStock = async (req: Request, res: Response) => {
     throw new BadRequest("Invalid category ID");
   }
 
-  // ✅ تأكد من البراندز
   const brandCount = await BrandModel.countDocuments({
     _id: { $in: brand_id },
   });
@@ -69,7 +66,6 @@ export const createStock = async (req: Request, res: Response) => {
     throw new BadRequest("Invalid Brand ID");
   }
 
-  // ✅ إنشاء المخزون
   const stock = await StockModel.create({
     warehouseId,
     type,
@@ -77,7 +73,6 @@ export const createStock = async (req: Request, res: Response) => {
     brand_id,
   });
 
-  // ✅ اجلب الداتا كاملة مع populate متعدد المستويات
   let stock_data = await StockModel.findById(stock._id)
     .populate({
       path: "category_id",
@@ -95,14 +90,12 @@ export const createStock = async (req: Request, res: Response) => {
     throw new BadRequest("Invalid stock ID");
   }
 
-  // ✅ تجميع المنتجات بدون تكرار
   let products: Record<string, { name: string; expected: number }> = {};
 
   const categories = stock_data.category_id as any[];
   const brands = stock_data.brand_id as any[];
 
   if (stock_data) {
-    // 🟢 loop على الكاتيجوري
     for (const cat of categories) {
       if (Array.isArray(cat.products)) {
         for (const product of cat.products as any[]) {
@@ -114,7 +107,6 @@ export const createStock = async (req: Request, res: Response) => {
       }
     }
 
-    // 🟢 loop على البراند
     for (const brand of brands) {
       if (Array.isArray(brand.products)) {
         for (const product of brand.products as any[]) {
@@ -127,16 +119,13 @@ export const createStock = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ حول الـ object إلى array
   const product_arr = Object.values(products);
 
   const dirPath = path.join("uploads", "stocks");
 
-  // 🧠 تأكد إن المجلد موجود
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
-  // ✅ تجهيز ملف CSV
   const filePath = path.join("uploads/stocks", `stocks_${Date.now()}.csv`);
 
   const csvWriter = createObjectCsvWriter({

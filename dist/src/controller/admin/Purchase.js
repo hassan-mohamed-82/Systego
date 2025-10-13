@@ -149,7 +149,6 @@ const createPurchase = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Purchase created successfully", purchase });
 };
 exports.createPurchase = createPurchase;
-// ✅ READ (with populate)
 const getPurchase = async (req, res) => {
     const [purchases, warehouses, currencies, suppliers, taxes, financial_account, products, variations] = await Promise.all([
         Purchase_1.PurchaseModel.find()

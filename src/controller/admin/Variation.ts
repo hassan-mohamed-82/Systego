@@ -4,8 +4,6 @@ import { OptionModel } from "../../models/schema/admin/Variation";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
-import {  Types } from "mongoose";
-import { IOption } from "../../models/schema/admin/Variation";
 
 export const createVariationWithOptions = async (req: Request, res: Response) => {
 

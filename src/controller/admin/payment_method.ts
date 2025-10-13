@@ -15,10 +15,8 @@ export const createPaymentMethod = async (req: Request, res: Response) => {
   const existingPaymentMethod = await PaymentMethodModel.findOne({ name });
   if (existingPaymentMethod) throw new BadRequest("Payment method already exists");
 
-  // 🖼️ حفظ الصورة
   const iconUrl = await saveBase64Image(icon, Date.now().toString(), req, "payment_methods");
 
-  // 🧾 إنشاء طريقة الدفع
   const paymentMethod = await PaymentMethodModel.create({
     name,
     discription,
