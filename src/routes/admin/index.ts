@@ -27,6 +27,11 @@ import VariationRouter from "./Variation";
 import trnsferRouter from "./Transfer"
 import Product_warehouseRouter from "./product_warehouse"
 import  SelectReasonRouter  from "./adjustmentsreason";
+import SaleRouter from "./POS/POSRoutes"
+import CustomerGroupRouter from "./POS/customerGroupRoutes"
+import CustomerRouter from "./POS/customerRoutes"
+import GiftCardRouter from "./POS/giftCardRoutes"
+import PosHomeRouter from "./POS/POSHomeRoutes"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -60,5 +65,10 @@ route.use("/variation",VariationRouter);
 route.use("/transfer",trnsferRouter)
 route.use("/product_warehouse",Product_warehouseRouter)
 route.use("/selectreason",SelectReasonRouter)
+route.use("/pos",SaleRouter)
+route.use("/customer-group",CustomerGroupRouter)
+route.use("/customer",CustomerRouter)
+route.use("/gift-card",GiftCardRouter)
+route.use("/pos-home",PosHomeRouter)    
 
 export default route;
