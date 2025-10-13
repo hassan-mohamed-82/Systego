@@ -216,8 +216,56 @@ export const getSales = async (req: Request, res: Response): Promise<void> => {
         .populate('order_tax', 'name rate')
         .populate('order_discount', 'name rate')
         .populate('coupon_id', 'code discount_amount')
+        .populate('gift_card_id', 'code amount')
+        .populate('payment_method', 'name')
         .lean();
     SuccessResponse(res, { sales });
 }
 
+// update status sale
+export const updateSaleStatus = async (req: Request, res: Response): Promise<void> => {
+    const { saleId } = req.params;
+    const { sale_status } = req.body;
+    const sale = await SaleModel.findById(saleId);
+    if (!sale) throw new NotFound("Sale not found");
+    sale.sale_status = sale_status || sale.sale_status;
+    await sale.save();
+    SuccessResponse(res, { message: "Sale status updated successfully"});
+}
 
+export const getSaleById = async (req: Request, res: Response): Promise<void> => {
+    const { saleId } = req.params;
+    const sale = await SaleModel.findById(saleId)
+        .populate('customer_id', 'name email phone_number')
+        .populate('warehouse_id', 'name location')
+        .populate('currency_id', 'code symbol')
+        .populate('order_tax', 'name rate')
+        .populate('order_discount', 'name rate')
+        .populate('coupon_id', 'code discount_amount')
+        .populate('gift_card_id', 'code amount')
+        .lean();
+
+    if (!sale) throw new NotFound("Sale not found");
+    
+    const products = await ProductSalesModel.find({ sale_id: saleId })
+        .select('product_id quantity price subtotal')
+        .populate('product_id', 'name')
+        .lean();
+    SuccessResponse(res, {sale, products });
+}
+
+export const getAllSales = async (req: Request, res: Response): Promise<void> => {
+    const sales = await SaleModel.find()
+    .select('grand_total')
+    .populate('customer_id', 'name')
+    SuccessResponse(res, { sales });
+}
+
+// get sales by status 
+export const getSalesByStatus = async (req: Request, res: Response): Promise<void> => {
+    const { status } = req.params;
+    const sales = await SaleModel.find({ sale_status: status })
+    .select('grand_total')
+    .populate('customer_id', 'name')
+    SuccessResponse(res, { sales });
+}
