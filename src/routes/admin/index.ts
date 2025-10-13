@@ -32,11 +32,12 @@ import CustomerGroupRouter from "./POS/customerGroupRoutes"
 import CustomerRouter from "./POS/customerRoutes"
 import GiftCardRouter from "./POS/giftCardRoutes"
 import PosHomeRouter from "./POS/POSHomeRoutes"
+import CashierShiftRouter from "./POS/CashierShiftRoutes"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
 
-route.use("/auth", authRouter);
+route.use("/auth", authRouter); 
 route.use(authenticated,authorize("admin","superadmin"));
 route.use("/brand", brandRouter);
 route.use("/admin", AdminRouter);
@@ -69,6 +70,8 @@ route.use("/pos",SaleRouter)
 route.use("/customer-group",CustomerGroupRouter)
 route.use("/customer",CustomerRouter)
 route.use("/gift-card",GiftCardRouter)
-route.use("/pos-home",PosHomeRouter)    
+route.use("/pos-home",PosHomeRouter)
+route.use("/cashier-shift",CashierShiftRouter) 
+  
 
 export default route;
