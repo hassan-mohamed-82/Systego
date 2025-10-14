@@ -3,6 +3,16 @@ import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
   {
+      reference: {
+      type: String,
+      maxlength: 100,
+      trim: true,
+      default: function () {
+        const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
+        const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        return `SALE-${datePart}-${randomPart}`;
+      },
+    },
     customer_id: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
     warehouse_id: { type: Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
