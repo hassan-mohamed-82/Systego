@@ -31,12 +31,12 @@ export const createBookingSchema = Joi.object({
       "any.required": "Warehouse ID is required",
     }),
 
-  ProductId: Joi.array()
+  ProductId: Joi.string()
     .required()
     .messages({
       "array.base": "Product list must be an array",}),
 
-  CategoryId: Joi.array()
+  CategoryId: Joi.string()
     .required()
     .messages({
       "array.base": "Category list must be an array",

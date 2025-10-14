@@ -32,12 +32,12 @@ exports.createBookingSchema = joi_1.default.object({
         .messages({
         "any.required": "Warehouse ID is required",
     }),
-    ProductId: joi_1.default.array()
+    ProductId: joi_1.default.string()
         .required()
         .messages({
         "array.base": "Product list must be an array",
     }),
-    CategoryId: joi_1.default.array()
+    CategoryId: joi_1.default.string()
         .required()
         .messages({
         "array.base": "Category list must be an array",
