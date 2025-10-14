@@ -41,6 +41,7 @@ export const createBookingSchema = Joi.object({
     .messages({
       "array.base": "Category list must be an array",
     }),
+    option_id: Joi.string().required(),
 
   status: Joi.string()
     .valid("pending", "pay", "failer")
@@ -77,6 +78,9 @@ export const updateBookingSchema = Joi.object({
 
   ProductId: Joi.string().messages({
     "any.required": "Product ID is required",
+  }),
+  option_id: Joi.string().messages({
+    "any.required": "Option ID is required",
   }),
 
   CategoryId: Joi.string().messages({

@@ -63,7 +63,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
   // 🧍‍♂️ 1️⃣ هات المستخدمين
-  const users = await UserModel.find();
+  const users = await UserModel.find().select("-password_hash");
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
   }
