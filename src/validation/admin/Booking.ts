@@ -19,30 +19,24 @@ export const createBookingSchema = Joi.object({
       "any.required": "Deposit is required",
     }),
 
-  CustmerId: Joi.array()
-    .items(Joi.string().hex().length(24))
+  CustmerId: Joi.string()
     .required()
     .messages({
-      "array.base": "Customer list must be an array",
-      "string.hex": "Each Customer ID must be a valid ObjectId",
+      "any.required": "Customer ID is required",
     }),
 
-  WarehouseId: Joi.array()
-    .items(Joi.string().hex().length(24))
+  WarehouseId: Joi.string()
     .required()
     .messages({
-      "array.base": "Warehouse list must be an array",
+      "any.required": "Warehouse ID is required",
     }),
 
   ProductId: Joi.array()
-    .items(Joi.string().hex().length(24))
     .required()
     .messages({
-      "array.base": "Product list must be an array",
-    }),
+      "array.base": "Product list must be an array",}),
 
   CategoryId: Joi.array()
-    .items(Joi.string().hex().length(24))
     .required()
     .messages({
       "array.base": "Category list must be an array",
@@ -71,30 +65,23 @@ export const updateBookingSchema = Joi.object({
       "number.base": "Deposit must be a number",
     }),
 
-  CustmerId: Joi.array()
-    .items(Joi.string().hex().length(24))
+  CustmerId: Joi.string()
     .messages({
-      "array.base": "Customer list must be an array",
+      "any.required": "Customer is required",
     }),
 
-  WarehouseId: Joi.array()
-    .items(Joi.string().hex().length(24))
-    .messages({
-      "array.base": "Warehouse list must be an array",
-    }),
+  WarehouseId: Joi.string().messages({
+    
+    "any.required": "Warehouse ID is required",  
+  }),
 
-  ProductId: Joi.array()
-    .items(Joi.string().hex().length(24))
-    .messages({
-      "array.base": "Product list must be an array",
-    }),
+  ProductId: Joi.string().messages({
+    "any.required": "Product ID is required",
+  }),
 
-  CategoryId: Joi.array()
-    .items(Joi.string().hex().length(24))
-    .messages({
-      "array.base": "Category list must be an array",
-    }),
-
+  CategoryId: Joi.string().messages({
+    "any.required": "Category ID is required",
+  }),
   status: Joi.string()
     .valid("pending", "pay", "failer")
     .messages({
