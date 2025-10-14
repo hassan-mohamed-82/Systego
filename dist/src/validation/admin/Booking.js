@@ -22,27 +22,22 @@ exports.createBookingSchema = joi_1.default.object({
         "number.base": "Deposit must be a number",
         "any.required": "Deposit is required",
     }),
-    CustmerId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
+    CustmerId: joi_1.default.string()
         .required()
         .messages({
-        "array.base": "Customer list must be an array",
-        "string.hex": "Each Customer ID must be a valid ObjectId",
+        "any.required": "Customer ID is required",
     }),
-    WarehouseId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
+    WarehouseId: joi_1.default.string()
         .required()
         .messages({
-        "array.base": "Warehouse list must be an array",
+        "any.required": "Warehouse ID is required",
     }),
-    ProductId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
+    ProductId: joi_1.default.string()
         .required()
         .messages({
         "array.base": "Product list must be an array",
     }),
-    CategoryId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
+    CategoryId: joi_1.default.string()
         .required()
         .messages({
         "array.base": "Category list must be an array",
@@ -67,25 +62,18 @@ exports.updateBookingSchema = joi_1.default.object({
         .messages({
         "number.base": "Deposit must be a number",
     }),
-    CustmerId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
+    CustmerId: joi_1.default.string()
         .messages({
-        "array.base": "Customer list must be an array",
+        "any.required": "Customer is required",
     }),
-    WarehouseId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
-        .messages({
-        "array.base": "Warehouse list must be an array",
+    WarehouseId: joi_1.default.string().messages({
+        "any.required": "Warehouse ID is required",
     }),
-    ProductId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
-        .messages({
-        "array.base": "Product list must be an array",
+    ProductId: joi_1.default.string().messages({
+        "any.required": "Product ID is required",
     }),
-    CategoryId: joi_1.default.array()
-        .items(joi_1.default.string().hex().length(24))
-        .messages({
-        "array.base": "Category list must be an array",
+    CategoryId: joi_1.default.string().messages({
+        "any.required": "Category ID is required",
     }),
     status: joi_1.default.string()
         .valid("pending", "pay", "failer")

@@ -1,7 +1,7 @@
 import cron from "node-cron";
-import { BookingModel } from "../models/schema/admin/Booking";
-import { ProductModel } from "../models/schema/admin/products";
-import { ProductPriceModel, ProductPriceOptionModel } from "../models/schema/admin/product_price";
+import { BookingModel } from "../models/schema/admin/Booking.js";
+import { ProductModel } from "../models/schema/admin/products.js";
+import { ProductPriceModel, ProductPriceOptionModel } from "../models/schema/admin/product_price.js";
 
 cron.schedule("0 * * * *", async () => {
   try {
@@ -18,14 +18,14 @@ cron.schedule("0 * * * *", async () => {
         (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)
       );
 
+      // ✅ Check if booking exceeded its allowed days
       if (diffDays >= booking.number_of_days) {
-        // ✅ Update booking status to failer
         booking.status = "failer";
         await booking.save();
 
-        // ✅ Return product quantity
-        if (booking.ProductId && booking.ProductId.length > 0) {
-          const product = await ProductModel.findById(booking.ProductId[0]);
+        // ✅ Restore product quantity (if exists)
+        if (booking.ProductId) {
+          const product = await ProductModel.findById(booking.ProductId);
           if (product) {
             product.quantity += 1;
             await product.save();
@@ -33,9 +33,9 @@ cron.schedule("0 * * * *", async () => {
           }
         }
 
-        // ✅ Return product price quantity if exists
-        if ((booking as any).option_id) {
-          const option = await ProductPriceOptionModel.findById((booking as any).option_id);
+        // ✅ Restore product price quantity (if exists)
+        if (booking.option_id) {
+          const option = await ProductPriceOptionModel.findById(booking.option_id);
           if (option) {
             const price = await ProductPriceModel.findById(option.product_price_id);
             if (price) {

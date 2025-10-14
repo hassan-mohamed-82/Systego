@@ -17,6 +17,7 @@ exports.createUserSchema = joi_1.default.object({
     vat_number: joi_1.default.string().optional(),
     state: joi_1.default.string().optional(),
     postal_code: joi_1.default.string().optional(),
+    role: joi_1.default.string().valid("superadmin", "admin").optional(),
 });
 exports.updateUserSchema = joi_1.default.object({
     username: joi_1.default.string().optional(),
@@ -30,4 +31,5 @@ exports.updateUserSchema = joi_1.default.object({
     vat_number: joi_1.default.string().optional(),
     state: joi_1.default.string().optional(),
     postal_code: joi_1.default.string().optional(),
+    role: joi_1.default.string().valid("superadmin", "admin").optional(),
 });

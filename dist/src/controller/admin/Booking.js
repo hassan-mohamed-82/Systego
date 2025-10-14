@@ -130,32 +130,34 @@ const updateBooking = async (req, res) => {
 exports.updateBooking = updateBooking;
 const deleteBooking = async (req, res) => {
     const { id } = req.params;
+    // ✅ ابحث عن الحجز أولاً
     const booking = await Booking_1.BookingModel.findById(id);
     if (!booking)
         throw new Errors_1.NotFound("Booking not found");
-    // ❌ allow delete only if pending
+    // ❌ لا يمكن حذف إلا الحجوزات التي حالتها pending
     if (booking.status !== "pending") {
         throw new BadRequest_1.BadRequest("Only pending bookings can be deleted");
     }
-    // ✅ Return product quantity
-    if (booking.ProductId && booking.ProductId.length > 0) {
-        const product = await products_1.ProductModel.findById(booking.ProductId[0]);
+    // ✅ استرجاع كمية المنتج
+    if (booking.ProductId) {
+        const product = await products_1.ProductModel.findById(booking.ProductId);
         if (product) {
-            product.quantity = product.quantity + 1;
+            product.quantity += 1;
             await product.save();
         }
     }
-    // ✅ Return option quantity (product_price)
+    // ✅ استرجاع كمية الـ product_price (إن وجدت)
     if (booking.option_id) {
         const option = await product_price_1.ProductPriceOptionModel.findById(booking.option_id);
         if (option) {
             const price = await product_price_1.ProductPriceModel.findById(option.product_price_id);
             if (price) {
-                price.quantity = price.quantity + 1;
+                price.quantity += 1;
                 await price.save();
             }
         }
     }
+    // ✅ حذف الحجز نفسه
     await booking.deleteOne();
     (0, response_1.SuccessResponse)(res, {
         message: "Booking deleted successfully and quantities restored",

@@ -48,12 +48,12 @@ export const getPaymentMethodById = async (req: Request, res: Response) => {
 
 
 export const updatePaymentMethod = async (req: Request, res: Response) => {
-
   const { id } = req.params;
-  if (!id) throw new BadRequest("payment method id is required");
+  if (!id) throw new BadRequest("Payment method id is required");
 
   const updateData: any = { ...req.body };
 
+  // لو فيه أيقونة جديدة
   if (req.body.icon) {
     updateData.icon = await saveBase64Image(
       req.body.icon,
@@ -63,13 +63,16 @@ export const updatePaymentMethod = async (req: Request, res: Response) => {
     );
   }
 
+  // تحديث البيانات
+  const paymentMethod = await PaymentMethodModel.findByIdAndUpdate(id, updateData, {
+    new: true, // بيرجع النسخة بعد التحديث
+  });
 
+  if (!paymentMethod) throw new BadRequest("Payment method not found");
 
-  await updateData.save(); 
-
-  SuccessResponse(res, { 
-    message: "Payment method updated successfully", 
-    updateData 
+  SuccessResponse(res, {
+    message: "Payment method updated successfully",
+    paymentMethod,
   });
 };
 export const deletePaymentMethod = async (req: Request, res: Response) => {
