@@ -89,6 +89,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
     }
 
     formattedPositions.push({
+      _id: position._id,
       name: position.name,
       roles: formattedRoles,
     });

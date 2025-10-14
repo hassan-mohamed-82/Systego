@@ -76,6 +76,7 @@ const getAllUsers = async (req, res, next) => {
             });
         }
         formattedPositions.push({
+            _id: position._id,
             name: position.name,
             roles: formattedRoles,
         });
