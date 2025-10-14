@@ -13,6 +13,7 @@ const Errors_1 = require("../../Errors");
 const position_1 = require("../../models/schema/admin/position");
 const roles_1 = require("../../models/schema/admin/roles");
 const Action_1 = require("../../models/schema/admin/Action");
+const mongoose_1 = __importDefault(require("mongoose"));
 const createUser = async (req, res, next) => {
     const currentUser = req.user;
     const { username, email, password, positionId, company_name, phone, image_base64 } = req.body;
@@ -91,14 +92,43 @@ const getAllUsers = async (req, res, next) => {
 exports.getAllUsers = getAllUsers;
 const getUserById = async (req, res, next) => {
     const { id } = req.params;
-    if (!id) {
-        throw new BadRequest_1.BadRequest("User id is required");
+    // ✅ 1️⃣ تحقق من صحة الـ id
+    if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("Invalid or missing user ID");
     }
-    const user = await User_1.UserModel.findById(id);
-    if (!user) {
+    // 🧍‍♂️ 2️⃣ هات المستخدم بدون كلمة السر
+    const user = await User_1.UserModel.findById(id).select("-password_hash -__v");
+    if (!user)
         throw new Errors_1.NotFound("User not found");
+    // 🧩 3️⃣ هات الـ position الخاص بالمستخدم (لو عنده)
+    let positionData = null;
+    if (user.positionId) {
+        const position = await position_1.PositionModel.findById(user.positionId);
+        if (position) {
+            // 🧠 4️⃣ هات الـ roles الخاصة بالـ position
+            const roles = await roles_1.RoleModel.find({ positionId: position._id });
+            const formattedRoles = [];
+            for (const role of roles) {
+                const actions = await Action_1.ActionModel.find({ roleId: role._id });
+                formattedRoles.push({
+                    _id: role._id,
+                    name: role.name,
+                    actions: actions.map((a) => a.name),
+                });
+            }
+            positionData = {
+                _id: position._id,
+                name: position.name,
+                roles: formattedRoles,
+            };
+        }
     }
-    (0, response_1.SuccessResponse)(res, { message: "get user successfully", user });
+    // ✅ 5️⃣ رجّع الرد النهائي
+    (0, response_1.SuccessResponse)(res, {
+        message: "User retrieved successfully",
+        user,
+        position: positionData,
+    });
 };
 exports.getUserById = getUserById;
 const updateUser = async (req, res, next) => {

@@ -9,6 +9,7 @@ import { NotFound } from "../../Errors";
 import { PositionModel } from "../../models/schema/admin/position";
 import { RoleModel } from "../../models/schema/admin/roles";
 import { ActionModel } from "../../models/schema/admin/Action";
+import mongoose from "mongoose";
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const currentUser = req.user;
@@ -104,22 +105,50 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 };
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
- 
   const { id } = req.params;
 
-  if (!id) {
-    throw new BadRequest("User id is required");
+  // ✅ 1️⃣ تحقق من صحة الـ id
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("Invalid or missing user ID");
   }
 
-  const user = await UserModel.findById(id);
+  // 🧍‍♂️ 2️⃣ هات المستخدم بدون كلمة السر
+  const user = await UserModel.findById(id).select("-password_hash -__v");
+  if (!user) throw new NotFound("User not found");
 
-  if (!user) {
-    throw new NotFound("User not found");
+  // 🧩 3️⃣ هات الـ position الخاص بالمستخدم (لو عنده)
+  let positionData = null;
+  if (user.positionId) {
+    const position = await PositionModel.findById(user.positionId);
+    if (position) {
+      // 🧠 4️⃣ هات الـ roles الخاصة بالـ position
+      const roles = await RoleModel.find({ positionId: position._id });
+
+      const formattedRoles = [];
+      for (const role of roles) {
+        const actions = await ActionModel.find({ roleId: role._id });
+        formattedRoles.push({
+          _id: role._id,
+          name: role.name,
+          actions: actions.map((a) => a.name),
+        });
+      }
+
+      positionData = {
+        _id: position._id,
+        name: position.name,
+        roles: formattedRoles,
+      };
+    }
   }
 
-  SuccessResponse(res, { message: "get user successfully", user });
-}
-
+  // ✅ 5️⃣ رجّع الرد النهائي
+  SuccessResponse(res, {
+    message: "User retrieved successfully",
+    user,
+    position: positionData,
+  });
+};
 
 
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
