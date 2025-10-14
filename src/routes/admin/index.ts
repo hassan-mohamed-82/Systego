@@ -75,7 +75,7 @@ route.use("/gift-card",GiftCardRouter)
 route.use("/pos-home",PosHomeRouter)
 route.use("/cashier-shift",CashierShiftRouter) 
 route.use("/booking",BookingRouter)
-route.use("/returnsale",ReturnRouter)
+route.use("/return-sale",ReturnRouter)
 
   
 

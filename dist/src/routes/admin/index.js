@@ -80,5 +80,5 @@ exports.route.use("/gift-card", giftCardRoutes_1.default);
 exports.route.use("/pos-home", POSHomeRoutes_1.default);
 exports.route.use("/cashier-shift", CashierShiftRoutes_1.default);
 exports.route.use("/booking", Booking_1.default);
-exports.route.use("/returnsale", ReturnSaleRoutes_1.default);
+exports.route.use("/return-sale", ReturnSaleRoutes_1.default);
 exports.default = exports.route;
