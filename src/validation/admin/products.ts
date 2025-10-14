@@ -1,25 +1,21 @@
 import Joi from "joi";
 
-// ✅ تعريف ObjectId
 export const objectId = Joi.string().hex().length(24);
 
-// ✅ Option Schema (مجرد ID)
 export const optionSchema = objectId;
 
-// ✅ Price Schema (يتبع ProductPriceModel)
 export const priceSchema = Joi.object({
   _id: objectId.optional(),
   price: Joi.number().required(),
   code: Joi.string().required(),
   quantity: Joi.number().optional(),
-  gallery: Joi.array().items(Joi.string()).optional(), // ✅ أزلنا pattern
+  gallery: Joi.array().items(Joi.string()).optional(), 
   options: Joi.array().items(optionSchema).optional(),
 });
 
-// ✅ Create Product Schema
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
-  image: Joi.string().optional(), // ✅ أزلنا pattern
+  image: Joi.string().optional(), 
   categoryId: Joi.array().items(objectId).min(1).required(),
   brandId: objectId.required(),
   unit: Joi.string().required(),
@@ -37,15 +33,14 @@ export const createProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ أزلنا pattern
+  gallery_product: Joi.array().items(Joi.string()).optional(), 
   prices: Joi.array().items(priceSchema).required(),
   is_featured: Joi.boolean().optional()
 });
 
-// ✅ Update Product Schema
 export const updateProductSchema = Joi.object({
   name: Joi.string().optional(),
-  image: Joi.string().optional(), // ✅ أزلنا pattern
+  image: Joi.string().optional(), 
   categoryId: Joi.array().items(objectId).optional(),
   brandId: objectId.optional(),
   unit: Joi.string().optional(),
@@ -63,7 +58,7 @@ export const updateProductSchema = Joi.object({
   different_price: Joi.boolean().optional(),
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
-  gallery_product: Joi.array().items(Joi.string()).optional(), // ✅ أزلنا pattern
+  gallery_product: Joi.array().items(Joi.string()).optional(), 
   prices: Joi.array().items(priceSchema).optional(),
   is_featured: Joi.boolean().optional()
 });

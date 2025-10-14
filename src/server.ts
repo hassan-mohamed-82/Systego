@@ -11,6 +11,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { connectDB } from "./models/connection";
 import { startCron } from "./utils/expiry_lowstock";
+import "./utils/bookingcheck"
 
 dotenv.config();
 const app = express();

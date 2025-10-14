@@ -6,7 +6,6 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
-// ✅ Create
 const createBankAccount = async (req, res) => {
     const { account_no, name, initial_balance, is_default, note, icon } = req.body;
     if (!account_no || !name || initial_balance === undefined) {

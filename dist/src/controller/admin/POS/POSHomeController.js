@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
+exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
 const products_1 = require("../../../models/schema/admin/products");
 const category_1 = require("../../../models/schema/admin/category");
 const brand_1 = require("../../../models/schema/admin/brand");
@@ -58,3 +58,9 @@ const getAllSelections = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Selections list", warehouses, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
+// get featured product
+const getFeaturedProducts = async (req, res) => {
+    const products = await products_1.ProductModel.find({ is_featured: true }).select('name price image');
+    (0, response_1.SuccessResponse)(res, { message: "Featured products", products });
+};
+exports.getFeaturedProducts = getFeaturedProducts;

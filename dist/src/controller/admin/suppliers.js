@@ -8,7 +8,6 @@ const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const City_1 = require("../../models/schema/admin/City");
 const Country_1 = require("../../models/schema/admin/Country");
-// 🟢 Create Supplier
 const createSupplier = async (req, res) => {
     const { image, username, email, phone_number, address, cityId, countryId, company_name } = req.body;
     if (!username || !email || !phone_number || !cityId || !countryId) {
@@ -36,7 +35,6 @@ const createSupplier = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Supplier created successfully", supplier });
 };
 exports.createSupplier = createSupplier;
-// 🟡 Get All Suppliers
 const getSuppliers = async (req, res) => {
     const suppliers = await suppliers_1.SupplierModel.find().populate("cityId").populate("countryId");
     if (!suppliers || suppliers.length === 0) {
@@ -47,7 +45,6 @@ const getSuppliers = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Suppliers retrieved successfully", suppliers, city, country });
 };
 exports.getSuppliers = getSuppliers;
-// 🔵 Get Supplier By ID
 const getSupplierById = async (req, res) => {
     const { id } = req.params;
     if (!id)
@@ -60,7 +57,6 @@ const getSupplierById = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Supplier retrieved successfully", supplier, city, country });
 };
 exports.getSupplierById = getSupplierById;
-// 🟠 Update Supplier
 const updateSupplier = async (req, res) => {
     const { id } = req.params;
     if (!id)
@@ -75,7 +71,6 @@ const updateSupplier = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Supplier updated successfully", supplier });
 };
 exports.updateSupplier = updateSupplier;
-// 🔴 Delete Supplier
 const deleteSupplier = async (req, res) => {
     const { id } = req.params;
     if (!id)

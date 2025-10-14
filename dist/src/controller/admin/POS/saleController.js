@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSales = exports.createSale = void 0;
+exports.getSalesByStatus = exports.getAllSales = exports.getSaleById = exports.updateSaleStatus = exports.getSales = exports.createSale = void 0;
 const Sale_1 = require("../../../models/schema/admin/POS/Sale");
 const Warehouse_1 = require("../../../models/schema/admin/Warehouse");
 const Errors_1 = require("../../../Errors");
@@ -171,7 +171,57 @@ const getSales = async (req, res) => {
         .populate('order_tax', 'name rate')
         .populate('order_discount', 'name rate')
         .populate('coupon_id', 'code discount_amount')
+        .populate('gift_card_id', 'code amount')
+        .populate('payment_method', 'name')
         .lean();
     (0, response_1.SuccessResponse)(res, { sales });
 };
 exports.getSales = getSales;
+// update status sale
+const updateSaleStatus = async (req, res) => {
+    const { saleId } = req.params;
+    const { sale_status } = req.body;
+    const sale = await Sale_1.SaleModel.findById(saleId);
+    if (!sale)
+        throw new Errors_1.NotFound("Sale not found");
+    sale.sale_status = sale_status || sale.sale_status;
+    await sale.save();
+    (0, response_1.SuccessResponse)(res, { message: "Sale status updated successfully" });
+};
+exports.updateSaleStatus = updateSaleStatus;
+const getSaleById = async (req, res) => {
+    const { saleId } = req.params;
+    const sale = await Sale_1.SaleModel.findById(saleId)
+        .populate('customer_id', 'name email phone_number')
+        .populate('warehouse_id', 'name location')
+        .populate('currency_id', 'code symbol')
+        .populate('order_tax', 'name rate')
+        .populate('order_discount', 'name rate')
+        .populate('coupon_id', 'code discount_amount')
+        .populate('gift_card_id', 'code amount')
+        .lean();
+    if (!sale)
+        throw new Errors_1.NotFound("Sale not found");
+    const products = await Sale_1.ProductSalesModel.find({ sale_id: saleId })
+        .select('product_id quantity price subtotal')
+        .populate('product_id', 'name')
+        .lean();
+    (0, response_1.SuccessResponse)(res, { sale, products });
+};
+exports.getSaleById = getSaleById;
+const getAllSales = async (req, res) => {
+    const sales = await Sale_1.SaleModel.find()
+        .select('grand_total')
+        .populate('customer_id', 'name');
+    (0, response_1.SuccessResponse)(res, { sales });
+};
+exports.getAllSales = getAllSales;
+// get sales by status 
+const getSalesByStatus = async (req, res) => {
+    const { status } = req.params;
+    const sales = await Sale_1.SaleModel.find({ sale_status: status })
+        .select('grand_total')
+        .populate('customer_id', 'name');
+    (0, response_1.SuccessResponse)(res, { sales });
+};
+exports.getSalesByStatus = getSalesByStatus;

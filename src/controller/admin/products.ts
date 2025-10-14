@@ -469,7 +469,6 @@ export const generateBarcodeImageController = async (req: Request, res: Response
     const { product_price_id } = req.params; // 👈 غيرنا الاسم ليكون واضح أكثر
     if (!product_price_id) throw new BadRequest("Product price ID is required");
 
-    // 🟢 نجيب السعر بناءً على الـ id
     const productPrice = await ProductPriceModel.findById(product_price_id);
     if (!productPrice) throw new NotFound("Product price not found");
 
