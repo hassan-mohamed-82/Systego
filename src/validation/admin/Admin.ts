@@ -12,6 +12,7 @@ export const createUserSchema = Joi.object({
     vat_number: Joi.string().optional(),
     state: Joi.string().optional(),
     postal_code: Joi.string().optional(),
+    role: Joi.string().valid("superadmin", "admin").optional(),
 });
 
 export const updateUserSchema = Joi.object({
@@ -26,4 +27,5 @@ export const updateUserSchema = Joi.object({
     vat_number: Joi.string().optional(),
     state: Joi.string().optional(),
     postal_code: Joi.string().optional(),
+    role: Joi.string().valid("superadmin", "admin").optional(),
 });
