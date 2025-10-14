@@ -33,6 +33,7 @@ import CustomerRouter from "./POS/customerRoutes"
 import GiftCardRouter from "./POS/giftCardRoutes"
 import PosHomeRouter from "./POS/POSHomeRoutes"
 import CashierShiftRouter from "./POS/CashierShiftRoutes"
+import bookingRouter from "./Booking"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -72,6 +73,6 @@ route.use("/customer",CustomerRouter)
 route.use("/gift-card",GiftCardRouter)
 route.use("/pos-home",PosHomeRouter)
 route.use("/cashier-shift",CashierShiftRouter) 
-  
+route.use("/booking",bookingRouter)
 
 export default route;

@@ -16,6 +16,7 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const helmet_1 = __importDefault(require("helmet"));
 const connection_1 = require("./models/connection");
 const expiry_lowstock_1 = require("./utils/expiry_lowstock");
+require("./utils/bookingcheck");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 // 🧩 Connect to DB
