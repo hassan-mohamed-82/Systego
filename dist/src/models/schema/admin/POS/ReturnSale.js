@@ -33,9 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ProductSalesModel = exports.SaleModel = void 0;
+exports.ReturnSaleModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const SaleSchema = new mongoose_1.Schema({
+const ReturnSaleSchema = new mongoose_1.Schema({
     reference: {
         type: String,
         maxlength: 100,
@@ -43,29 +43,11 @@ const SaleSchema = new mongoose_1.Schema({
         default: function () {
             const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
             const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-            return `SALE-${datePart}-${randomPart}`;
+            return `RETURNS-${datePart}-${randomPart}`;
         },
     },
-    customer_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Customer', required: true },
-    warehouse_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
-    currency_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Currency' },
-    sale_status: { type: String, required: true, default: 'pending', enum: ['completed', 'pending', 'returned', 'draft', 'processing'] },
-    order_tax: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Taxes' },
-    order_discount: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Discount' },
-    shipping_cost: { type: Number, default: 0 },
-    grand_total: { type: Number, required: true },
-    coupon_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Coupon' },
-    gift_card_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'GiftCard' }
-}, {
-    timestamps: true,
-});
-const productSalesSchema = new mongoose_1.Schema({
     sale_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Sale', required: true },
-    product_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Product', required: true },
-    quantity: { type: Number, required: true, min: 0 },
-    price: { type: Number, required: true, min: 0 },
-    subtotal: { type: Number, required: true, min: 0 },
-    options_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'ProductOption' }
-}, { timestamps: true });
-exports.SaleModel = mongoose_1.default.model("Sale", SaleSchema);
-exports.ProductSalesModel = mongoose_1.default.model("ProductSale", productSalesSchema);
+    return_date: { type: Date, default: Date.now },
+    return_reason: { type: String, trim: true },
+});
+exports.ReturnSaleModel = mongoose_1.default.model("ReturnSale", ReturnSaleSchema);
