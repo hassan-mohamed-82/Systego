@@ -30,7 +30,6 @@ route.get("/generate-barcode/:product_price_id", catchAsync(generateBarcodeImage
 
 // جلب منتج حسب الـ id
 route.get("/:id", catchAsync(getOneProduct));
-route.post("/:id", catchAsync(getOneProduct));
 
 // تحديث منتج
 route.put("/:id", validate(updateProductSchema), 
