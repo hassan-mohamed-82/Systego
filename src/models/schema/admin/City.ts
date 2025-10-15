@@ -10,6 +10,10 @@ const citySchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'Country',
     required: true
+  },
+  shipingCost: {
+    type: Number,
+    default: 0
   }
 });
 

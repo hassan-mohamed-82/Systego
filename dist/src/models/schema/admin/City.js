@@ -12,6 +12,10 @@ const citySchema = new mongoose_1.Schema({
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Country',
         required: true
+    },
+    shipingCost: {
+        type: Number,
+        default: 0
     }
 });
 exports.CityModels = (0, mongoose_1.model)('City', citySchema);

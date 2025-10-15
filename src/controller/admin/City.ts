@@ -7,8 +7,8 @@ import { NotFound } from "../../Errors/";
 import { CountryModel } from "../../models/schema/admin/Country";
 
 export const createCity = async (req: Request, res: Response) => {
-  const { name, country  } = req.body;
-  if (!name || !country ) {
+  const { name, country , shipingCost } = req.body;
+  if (!name || !country || !shipingCost) {
     throw new BadRequest("City name and country  are required");
   }
   const existingCity = await CityModels.findOne({ name, country });
@@ -17,7 +17,7 @@ export const createCity = async (req: Request, res: Response) => {
   const countryExists = await CountryModel.findById(country);
   if (!countryExists) throw new NotFound("Country not found");
 
-  const city = await CityModels.create({ name, country });
+  const city = await CityModels.create({ name, country ,shipingCost });
   await city.populate("country");
   const countries = await CountryModel.find();
 
