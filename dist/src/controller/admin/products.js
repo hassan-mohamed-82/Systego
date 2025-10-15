@@ -375,7 +375,9 @@ const getProductByCode = async (req, res) => {
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
     // 3️⃣ جيب كل الـ variations مع options
-    const variations = await Variation_1.VariationModel.find().populate("options").lean();
+    const variations = await Variation_1.VariationModel.find()
+        .populate("options")
+        .lean();
     // 4️⃣ جيب الكاتيجوريز و البراندز
     const categories = await category_1.CategoryModel.find().lean();
     const brands = await brand_1.BrandModel.find().lean();
