@@ -8,9 +8,9 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const BookingSchema = new mongoose_1.default.Schema({
     number_of_days: { type: Number, required: true },
     deposit: { type: Number, required: true },
-    CustmerId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Custmer" },
+    CustmerId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Customer" },
     WarehouseId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" },
-    ProductId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "product" },
+    ProductId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Product" },
     CategoryId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Category" },
     option_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "ProductPriceOption" },
     status: { type: String, enum: ["pending", "pay", "failer"], default: "pending" },
