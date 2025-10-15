@@ -480,9 +480,7 @@ export const getProductByCode = async (req: Request, res: Response) => {
   if (!product) throw new NotFound("Product not found");
 
   // 3️⃣ جيب كل الـ variations مع options
-  const variations = await VariationModel.find()
-    .populate("options")
-    .lean();
+  const variations = await VariationModel.find().populate("options").lean();
 
   // 4️⃣ جيب الكاتيجوريز و البراندز
   const categories = await CategoryModel.find().lean();
@@ -529,6 +527,8 @@ export const getProductByCode = async (req: Request, res: Response) => {
     variations,
   });
 };
+
+
 
 
 export const generateBarcodeImageController = async (req: Request, res: Response) => {
