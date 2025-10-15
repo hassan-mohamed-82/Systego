@@ -11,6 +11,7 @@ import { CategoryModel } from "../../models/schema/admin/category";
 import { BrandModel } from "../../models/schema/admin/brand";
 import { VariationModel } from "../../models/schema/admin/Variation";
 
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -169,11 +170,7 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
     .lean();
 
   // 2️⃣ جلب الكاتيجوريز، البراندز، الفاريشنز
-  const categories = await CategoryModel.find().lean();
-  const brands = await BrandModel.find().lean();
-  const variations = await VariationModel.find()
-    .populate("options")
-    .lean();
+
 
   // 3️⃣ تجهيز مصفوفة المنتجات بعد التنسيق الكامل
   const formattedProducts = [];
@@ -193,19 +190,17 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
       // 🟨 تجميع الخيارات حسب الـ variation
       const groupedOptions: Record<string, any[]> = {};
 
-      options.forEach((po: any) => {
+      options.forEach(async (po: any) => {
         const option = po.option_id;
         if (!option || !option._id) return;
 
-        const variation = variations.find((v: any) =>
-          v.options.some((opt: any) => opt._id.toString() === option._id.toString())
-        );
+        const variation = await VariationModel.find({}).exec();
 
-        if (variation) {
-          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
-          groupedOptions[variation.name].push(option);
-        }
-      });
+   if (variation.length > 0) {
+     if (!groupedOptions[variation[0].name]) groupedOptions[variation[0].name] = [];
+  groupedOptions[variation[0].name].push(option);
+    } 
+    });
 
       // 🟧 تحويلها لمصفوفة منظمة
       const variationsArray = Object.keys(groupedOptions).map((varName) => ({
@@ -237,9 +232,6 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
   // 4️⃣ إرسال الريسبونس النهائي
   SuccessResponse(res, {
     products: formattedProducts,
-    categories,
-    brands,
-    variations,
   });
 };
 
@@ -393,14 +385,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   if (!product) throw new NotFound("Product not found");
 
-  // 2️⃣ جلب الكاتيجوريز و البراندز
-  const categories = await CategoryModel.find().lean();
-  const brands = await BrandModel.find().lean();
 
-  // 3️⃣ جلب كل الـ variations مع options
-  const variations = await VariationModel.find()
-    .populate("options")
-    .lean();
 
   // 4️⃣ جلب الأسعار الخاصة بالمنتج
   const prices = await ProductPriceModel.find({ productId: product._id }).lean();
@@ -416,18 +401,16 @@ export const getOneProduct = async (req: Request, res: Response) => {
     // 🔹 تجميع الخيارات حسب الـ variation
     const groupedOptions: Record<string, any[]> = {};
 
-    options.forEach((po: any) => {
+    options.forEach(async (po: any) => {
       const option = po.option_id;
       if (!option || !option._id) return; // ✅ حماية من null أو undefined
 
-      const variation = variations.find((v: any) =>
-        v.options.some((opt: any) => opt._id.toString() === option._id.toString())
-      );
+     const variation = await VariationModel.find({}).exec();
 
-      if (variation) {
-        if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
-        groupedOptions[variation.name].push(option);
-      }
+   if (variation.length > 0) {
+     if (!groupedOptions[variation[0].name]) groupedOptions[variation[0].name] = [];
+  groupedOptions[variation[0].name].push(option);
+    } 
     });
 
     // 🔹 تحويلها لمصفوفة بشكل منظم
@@ -455,9 +438,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   SuccessResponse(res, {
     product,
-    categories,
-    brands,
-    variations,
+    message: "Product fetched successfully",
   });
 };
 
@@ -566,4 +547,18 @@ export const generateProductCode = async (req: Request, res: Response) => {
   }
 
   SuccessResponse(res, { code: newCode });
+};
+
+
+
+export const modelsforselect = async (req: Request, res: Response) => {
+
+  const categories = await CategoryModel.find().lean();
+  const brands = await BrandModel.find().lean();
+  const variations = await VariationModel.find().lean().populate("options");
+  const warehouses = await WarehouseModel.find().lean();
+  
+  SuccessResponse(res, { categories, brands, variations, warehouses });
+
+
 };

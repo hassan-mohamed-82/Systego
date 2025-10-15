@@ -10,15 +10,13 @@ const route = (0, express_1.Router)();
 route.post("/", (0, validation_1.validate)(products_2.createProductSchema), (0, catchAsync_1.catchAsync)(products_1.createProduct));
 // جلب جميع المنتجات
 route.get("/", (0, catchAsync_1.catchAsync)(products_1.getProduct));
-// توليد كود منتج فريد
+// ✅ ضع المسارات الثابتة أولًا
 route.get("/generate-code", (0, catchAsync_1.catchAsync)(products_1.generateProductCode));
-// توليد صورة الباركود لمنتج موجود
 route.get("/generate-barcode/:product_price_id", (0, catchAsync_1.catchAsync)(products_1.generateBarcodeImageController));
-// جلب منتج حسب الـ id
-route.get("/:id", (0, catchAsync_1.catchAsync)(products_1.getOneProduct));
+route.get("/select", (0, catchAsync_1.catchAsync)(products_1.modelsforselect));
 route.post("/code", (0, catchAsync_1.catchAsync)(products_1.getProductByCode));
-// تحديث منتج
+// بعد كده المسارات اللي فيها :id
+route.get("/:id", (0, catchAsync_1.catchAsync)(products_1.getOneProduct));
 route.put("/:id", (0, validation_1.validate)(products_2.updateProductSchema), (0, catchAsync_1.catchAsync)(products_1.updateProduct));
-// حذف منتج
 route.delete("/:id", (0, catchAsync_1.catchAsync)(products_1.deleteProduct));
 exports.default = route;

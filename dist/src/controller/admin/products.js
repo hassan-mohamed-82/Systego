@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
+exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -12,6 +12,7 @@ const barcode_1 = require("../../utils/barcode");
 const category_1 = require("../../models/schema/admin/category");
 const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createProduct = async (req, res) => {
     const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured } = req.body;
     if (!name)
@@ -130,11 +131,6 @@ const getProduct = async (req, res) => {
         .populate("taxesId")
         .lean();
     // 2️⃣ جلب الكاتيجوريز، البراندز، الفاريشنز
-    const categories = await category_1.CategoryModel.find().lean();
-    const brands = await brand_1.BrandModel.find().lean();
-    const variations = await Variation_1.VariationModel.find()
-        .populate("options")
-        .lean();
     // 3️⃣ تجهيز مصفوفة المنتجات بعد التنسيق الكامل
     const formattedProducts = [];
     for (const product of products) {
@@ -148,15 +144,15 @@ const getProduct = async (req, res) => {
                 .lean();
             // 🟨 تجميع الخيارات حسب الـ variation
             const groupedOptions = {};
-            options.forEach((po) => {
+            options.forEach(async (po) => {
                 const option = po.option_id;
                 if (!option || !option._id)
                     return;
-                const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
-                if (variation) {
-                    if (!groupedOptions[variation.name])
-                        groupedOptions[variation.name] = [];
-                    groupedOptions[variation.name].push(option);
+                const variation = await Variation_1.VariationModel.find({}).exec();
+                if (variation.length > 0) {
+                    if (!groupedOptions[variation[0].name])
+                        groupedOptions[variation[0].name] = [];
+                    groupedOptions[variation[0].name].push(option);
                 }
             });
             // 🟧 تحويلها لمصفوفة منظمة
@@ -185,9 +181,6 @@ const getProduct = async (req, res) => {
     // 4️⃣ إرسال الريسبونس النهائي
     (0, response_1.SuccessResponse)(res, {
         products: formattedProducts,
-        categories,
-        brands,
-        variations,
     });
 };
 exports.getProduct = getProduct;
@@ -302,13 +295,6 @@ const getOneProduct = async (req, res) => {
         .lean();
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
-    // 2️⃣ جلب الكاتيجوريز و البراندز
-    const categories = await category_1.CategoryModel.find().lean();
-    const brands = await brand_1.BrandModel.find().lean();
-    // 3️⃣ جلب كل الـ variations مع options
-    const variations = await Variation_1.VariationModel.find()
-        .populate("options")
-        .lean();
     // 4️⃣ جلب الأسعار الخاصة بالمنتج
     const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
     const formattedPrices = [];
@@ -319,15 +305,15 @@ const getOneProduct = async (req, res) => {
             .lean();
         // 🔹 تجميع الخيارات حسب الـ variation
         const groupedOptions = {};
-        options.forEach((po) => {
+        options.forEach(async (po) => {
             const option = po.option_id;
             if (!option || !option._id)
                 return; // ✅ حماية من null أو undefined
-            const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
-            if (variation) {
-                if (!groupedOptions[variation.name])
-                    groupedOptions[variation.name] = [];
-                groupedOptions[variation.name].push(option);
+            const variation = await Variation_1.VariationModel.find({}).exec();
+            if (variation.length > 0) {
+                if (!groupedOptions[variation[0].name])
+                    groupedOptions[variation[0].name] = [];
+                groupedOptions[variation[0].name].push(option);
             }
         });
         // 🔹 تحويلها لمصفوفة بشكل منظم
@@ -352,9 +338,7 @@ const getOneProduct = async (req, res) => {
     product.prices = formattedPrices;
     (0, response_1.SuccessResponse)(res, {
         product,
-        categories,
-        brands,
-        variations,
+        message: "Product fetched successfully",
     });
 };
 exports.getOneProduct = getOneProduct;
@@ -444,3 +428,11 @@ const generateProductCode = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { code: newCode });
 };
 exports.generateProductCode = generateProductCode;
+const modelsforselect = async (req, res) => {
+    const categories = await category_1.CategoryModel.find().lean();
+    const brands = await brand_1.BrandModel.find().lean();
+    const variations = await Variation_1.VariationModel.find().lean().populate("options");
+    const warehouses = await Warehouse_1.WarehouseModel.find().lean();
+    (0, response_1.SuccessResponse)(res, { categories, brands, variations, warehouses });
+};
+exports.modelsforselect = modelsforselect;
