@@ -10,5 +10,6 @@ const paymetnMethodSchema = new mongoose_1.default.Schema({
     isActive: { type: Boolean, default: true },
     discription: { type: String, required: true },
     icon: { type: String, required: true },
+    type: { type: String, required: true, enum: ["manual", "automatic"] },
 }, { timestamps: true });
 exports.PaymentMethodModel = mongoose_1.default.model('PaymentMethod', paymetnMethodSchema);

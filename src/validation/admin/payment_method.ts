@@ -5,6 +5,7 @@ export const CreatePaymentMethodSchema = Joi.object({
   discription: Joi.string().required(),
   isActive: Joi.boolean().default(true),
   icon: Joi.string().required(),
+  type:Joi.string().required().valid("manual","automatic")
  });
 
 export const UpdatePaymentMethodSchema = Joi.object({
@@ -12,4 +13,5 @@ export const UpdatePaymentMethodSchema = Joi.object({
         discription: Joi.string().optional(),
         isActive: Joi.boolean().optional(),
         icon: Joi.string().optional(),
+        type:Joi.string().optional().valid("manual","automatic")
     });

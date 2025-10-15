@@ -6,9 +6,9 @@ import { UnauthorizedError } from '../../Errors/unauthorizedError';
 import { SuccessResponse } from '../../utils/response';
 import { saveBase64Image } from '../../utils/handleImages';
 export const createPaymentMethod = async (req: Request, res: Response) => {
-  const { name, discription, icon } = req.body;
+  const { name, discription, icon,type} = req.body;
 
-  if (!name || !discription || !icon) {
+  if (!name || !discription || !icon || !type) {
     throw new BadRequest("Please provide all the required fields including icon");
   }
 
@@ -22,6 +22,7 @@ export const createPaymentMethod = async (req: Request, res: Response) => {
     discription,
     icon: iconUrl,
     isActive: true,
+    type
   });
 
   SuccessResponse(res, {

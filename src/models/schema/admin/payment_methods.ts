@@ -6,6 +6,7 @@ const paymetnMethodSchema = new mongoose.Schema({
     isActive:{ type: Boolean, default: true},
     discription:{ type: String, required: true},
     icon:{ type: String, required: true},
+    type:{type: String, required: true,enum:["manual","automatic"]},
 
 
 
