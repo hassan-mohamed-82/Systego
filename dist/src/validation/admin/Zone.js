@@ -7,13 +7,13 @@ exports.updateZoneSchema = exports.createZoneSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.createZoneSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
-    city: joi_1.default.string().required(),
-    shippingCost: joi_1.default.number().min(0).default(0),
-    Warehouse: joi_1.default.string().required()
+    cityId: joi_1.default.string().required(),
+    countryId: joi_1.default.string().required(),
+    cost: joi_1.default.number().min(0).default(0)
 });
 exports.updateZoneSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
-    city: joi_1.default.string().optional(),
-    shippingCost: joi_1.default.number().min(0).optional(),
-    Warehouse: joi_1.default.string().optional()
+    cityId: joi_1.default.string().optional(),
+    countryId: joi_1.default.string().optional(),
+    cost: joi_1.default.number().min(0).optional()
 });

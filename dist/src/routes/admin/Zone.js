@@ -1,15 +1,14 @@
 "use strict";
-// import { Router } from "express";
-// import {
-// } from "../../controller/admin/Zone"
-// import {validate} from"../../middlewares/validation";
-// import {createZoneSchema,updateZoneSchema} from "../../validation/admin/Zone"
-// import { catchAsync } from "../../utils/catchAsync";
-// import { authenticated } from "../../middlewares/authenticated";
-// const route = Router();
-// route.post("/" ,validate(createZoneSchema) ,catchAsync(createZone));
-// route.get("/",catchAsync(getZones));
-// route.get("/:id" ,catchAsync(getZoneById));
-// route.put("/:id" ,validate(updateZoneSchema), catchAsync(updateZone));
-// route.delete("/:id",catchAsync(deleteZone));
-// export default route;
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Zone_1 = require("../../controller/admin/Zone");
+const validation_1 = require("../../middlewares/validation");
+const Zone_2 = require("../../validation/admin/Zone");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, validation_1.validate)(Zone_2.createZoneSchema), (0, catchAsync_1.catchAsync)(Zone_1.createzone));
+route.get("/", (0, catchAsync_1.catchAsync)(Zone_1.getZones));
+route.get("/:id", (0, catchAsync_1.catchAsync)(Zone_1.getZoneById));
+route.put("/:id", (0, validation_1.validate)(Zone_2.updateZoneSchema), (0, catchAsync_1.catchAsync)(Zone_1.updateZone));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(Zone_1.deleteZone));
+exports.default = route;
