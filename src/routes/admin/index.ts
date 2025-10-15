@@ -25,6 +25,8 @@ import CurrencyRouter from "./Currency";
 import TaxesRouter from "./Taxes";
 import VariationRouter from "./Variation";
 import trnsferRouter from "./Transfer"
+import PointRouter from "./points"
+import redeem_PointsRouter from "./redeem_Points"
 import Product_warehouseRouter from "./product_warehouse"
 import  SelectReasonRouter  from "./adjustmentsreason";
 import SaleRouter from "./POS/POSRoutes"
@@ -74,6 +76,8 @@ route.use("/customer",CustomerRouter)
 route.use("/gift-card",GiftCardRouter)
 route.use("/pos-home",PosHomeRouter)
 route.use("/cashier-shift",CashierShiftRouter) 
+route.use("/point",PointRouter)
+route.use("/redeem-points",redeem_PointsRouter)
 
 
 

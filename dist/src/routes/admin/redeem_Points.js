@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const catchAsync_1 = require("../../utils/catchAsync");
+const redeem_Points_1 = require("../../controller/admin/redeem_Points");
+const validation_1 = require("../../middlewares/validation");
+const redeem_Points_2 = require("../../validation/admin/redeem_Points");
+const router = (0, express_1.Router)();
+router.post("/", (0, validation_1.validate)(redeem_Points_2.createRedeemPointSchema), (0, catchAsync_1.catchAsync)(redeem_Points_1.createpoint));
+router.get("/", (0, catchAsync_1.catchAsync)(redeem_Points_1.getpoints));
+router.get("/:id", (0, catchAsync_1.catchAsync)(redeem_Points_1.getpoint));
+router.put("/:id", (0, validation_1.validate)(redeem_Points_2.updateRedeemPointSchema), (0, catchAsync_1.catchAsync)(redeem_Points_1.updatepoint));
+router.delete("/:id", (0, catchAsync_1.catchAsync)(redeem_Points_1.deletepoint));
+exports.default = router;
