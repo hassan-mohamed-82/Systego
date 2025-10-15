@@ -5,4 +5,4 @@ const redeem_PointsShcema =new mongoose.Schema({
     points:{type:Number,required:true,min:0},
 })
 
-export const redeem_PointsModel = mongoose.model("Point", redeem_PointsShcema);
+export const redeem_PointsModel = mongoose.model("redeem_Points", redeem_PointsShcema);
