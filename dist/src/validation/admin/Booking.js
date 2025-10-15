@@ -42,6 +42,7 @@ exports.createBookingSchema = joi_1.default.object({
         .messages({
         "array.base": "Category list must be an array",
     }),
+    option_id: joi_1.default.string().required(),
     status: joi_1.default.string()
         .valid("pending", "pay", "failer")
         .default("pending")
@@ -71,6 +72,9 @@ exports.updateBookingSchema = joi_1.default.object({
     }),
     ProductId: joi_1.default.string().messages({
         "any.required": "Product ID is required",
+    }),
+    option_id: joi_1.default.string().messages({
+        "any.required": "Option ID is required",
     }),
     CategoryId: joi_1.default.string().messages({
         "any.required": "Category ID is required",
