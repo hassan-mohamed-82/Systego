@@ -461,6 +461,72 @@ export const getOneProduct = async (req: Request, res: Response) => {
   });
 };
 
+export const getProductByCode = async (req: Request, res: Response) => {
+  const { code } = req.body;
+
+  if (!code) throw new BadRequest("Code is required");
+
+  // 1️⃣ ابحث عن السعر اللي بالكود ده
+  const productPrice = await ProductPriceModel.findOne({ code }).lean();
+  if (!productPrice) throw new NotFound("No product found for this code");
+
+  // 2️⃣ ابحث عن المنتج المرتبط بالسعر ده
+  const product = await ProductModel.findById(productPrice.productId)
+    .populate("categoryId")
+    .populate("brandId")
+    .populate("taxesId")
+    .lean();
+
+  if (!product) throw new NotFound("Product not found");
+
+  // 3️⃣ جيب كل الـ variations مع options
+  const variations = await VariationModel.find().populate("options").lean();
+
+  // 4️⃣ جيب الكاتيجوريز و البراندز
+  const categories = await CategoryModel.find().lean();
+  const brands = await BrandModel.find().lean();
+
+  // 5️⃣ جيب الخيارات المرتبطة بالسعر ده
+  const options = await ProductPriceOptionModel.find({ product_price_id: productPrice._id })
+    .populate("option_id")
+    .lean();
+
+  // 6️⃣ جمّع الخيارات حسب الـ variation
+  const groupedOptions: Record<string, any[]> = {};
+
+  options.forEach((po: any) => {
+    const option = po.option_id;
+    if (!option || !option._id) return;
+
+    const variation = variations.find((v: any) =>
+      v.options.some((opt: any) => opt._id.toString() === option._id.toString())
+    );
+
+    if (variation) {
+      if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+      groupedOptions[variation.name].push(option);
+    }
+  });
+
+  const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+    name: varName,
+    options: groupedOptions[varName],
+  }));
+
+  // 7️⃣ أضف السعر داخل المنتج
+  (product as any).price = {
+    ...productPrice,
+    variations: variationsArray,
+  };
+
+  // 8️⃣ رجّع كل البيانات
+  SuccessResponse(res, {
+    product,
+    categories,
+    brands,
+    variations,
+  });
+};
 
 
 

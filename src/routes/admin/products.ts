@@ -6,7 +6,8 @@ getOneProduct,
   updateProduct,
   deleteProduct,
   generateBarcodeImageController,
-  generateProductCode
+  generateProductCode,
+  getProductByCode
 } from "../../controller/admin/products";
 import { validate } from "../../middlewares/validation";
 import { createProductSchema,updateProductSchema} from "../../validation/admin/products";
@@ -30,6 +31,9 @@ route.get("/generate-barcode/:product_price_id", catchAsync(generateBarcodeImage
 
 // جلب منتج حسب الـ id
 route.get("/:id", catchAsync(getOneProduct));
+
+
+route.post("/code", catchAsync(getProductByCode));
 
 // تحديث منتج
 route.put("/:id", validate(updateProductSchema), 

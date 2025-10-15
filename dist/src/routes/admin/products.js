@@ -16,6 +16,7 @@ route.get("/generate-code", (0, catchAsync_1.catchAsync)(products_1.generateProd
 route.get("/generate-barcode/:product_price_id", (0, catchAsync_1.catchAsync)(products_1.generateBarcodeImageController));
 // جلب منتج حسب الـ id
 route.get("/:id", (0, catchAsync_1.catchAsync)(products_1.getOneProduct));
+route.post("/code", (0, catchAsync_1.catchAsync)(products_1.getProductByCode));
 // تحديث منتج
 route.put("/:id", (0, validation_1.validate)(products_2.updateProductSchema), (0, catchAsync_1.catchAsync)(products_1.updateProduct));
 // حذف منتج

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateProductCode = exports.generateBarcodeImageController = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
+exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -358,6 +358,62 @@ const getOneProduct = async (req, res) => {
     });
 };
 exports.getOneProduct = getOneProduct;
+const getProductByCode = async (req, res) => {
+    const { code } = req.body;
+    if (!code)
+        throw new BadRequest_1.BadRequest("Code is required");
+    // 1️⃣ ابحث عن السعر اللي بالكود ده
+    const productPrice = await product_price_1.ProductPriceModel.findOne({ code }).lean();
+    if (!productPrice)
+        throw new NotFound_1.NotFound("No product found for this code");
+    // 2️⃣ ابحث عن المنتج المرتبط بالسعر ده
+    const product = await products_1.ProductModel.findById(productPrice.productId)
+        .populate("categoryId")
+        .populate("brandId")
+        .populate("taxesId")
+        .lean();
+    if (!product)
+        throw new NotFound_1.NotFound("Product not found");
+    // 3️⃣ جيب كل الـ variations مع options
+    const variations = await Variation_1.VariationModel.find().populate("options").lean();
+    // 4️⃣ جيب الكاتيجوريز و البراندز
+    const categories = await category_1.CategoryModel.find().lean();
+    const brands = await brand_1.BrandModel.find().lean();
+    // 5️⃣ جيب الخيارات المرتبطة بالسعر ده
+    const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: productPrice._id })
+        .populate("option_id")
+        .lean();
+    // 6️⃣ جمّع الخيارات حسب الـ variation
+    const groupedOptions = {};
+    options.forEach((po) => {
+        const option = po.option_id;
+        if (!option || !option._id)
+            return;
+        const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
+        if (variation) {
+            if (!groupedOptions[variation.name])
+                groupedOptions[variation.name] = [];
+            groupedOptions[variation.name].push(option);
+        }
+    });
+    const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+        name: varName,
+        options: groupedOptions[varName],
+    }));
+    // 7️⃣ أضف السعر داخل المنتج
+    product.price = {
+        ...productPrice,
+        variations: variationsArray,
+    };
+    // 8️⃣ رجّع كل البيانات
+    (0, response_1.SuccessResponse)(res, {
+        product,
+        categories,
+        brands,
+        variations,
+    });
+};
+exports.getProductByCode = getProductByCode;
 const generateBarcodeImageController = async (req, res) => {
     const { product_price_id } = req.params; // 👈 غيرنا الاسم ليكون واضح أكثر
     if (!product_price_id)
