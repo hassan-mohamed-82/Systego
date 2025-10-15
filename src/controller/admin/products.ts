@@ -383,8 +383,8 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
 export const getOneProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const {code} = req.body
 
-  // 1️⃣ جلب المنتج
   const product = await ProductModel.findById(id)
     .populate("categoryId")
     .populate("brandId")
@@ -403,7 +403,7 @@ export const getOneProduct = async (req: Request, res: Response) => {
     .lean();
 
   // 4️⃣ جلب الأسعار الخاصة بالمنتج
-  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+  const prices = await ProductPriceModel.find({ productId: product._id , code }).lean();
 
   const formattedPrices = [];
 

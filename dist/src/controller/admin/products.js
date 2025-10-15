@@ -294,7 +294,7 @@ const deleteProduct = async (req, res) => {
 exports.deleteProduct = deleteProduct;
 const getOneProduct = async (req, res) => {
     const { id } = req.params;
-    // 1️⃣ جلب المنتج
+    const { code } = req.body;
     const product = await products_1.ProductModel.findById(id)
         .populate("categoryId")
         .populate("brandId")
@@ -310,7 +310,7 @@ const getOneProduct = async (req, res) => {
         .populate("options")
         .lean();
     // 4️⃣ جلب الأسعار الخاصة بالمنتج
-    const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
+    const prices = await product_price_1.ProductPriceModel.find({ productId: product._id, code }).lean();
     const formattedPrices = [];
     for (const price of prices) {
         // 🔹 جلب الخيارات المرتبطة بكل سعر
