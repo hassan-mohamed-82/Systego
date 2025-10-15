@@ -8,6 +8,7 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { ProductModel } from "../../models/schema/admin/products";
 import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import { ProductSalesModel, SaleModel } from "../../models/schema/admin/POS/Sale";
 
 export const getAllBookings = async(req:Request,res:Response)=>{
 const pendingBookings = await BookingModel.find({status:"pending"})
@@ -164,3 +165,69 @@ export const deleteBooking = async (req: Request, res: Response) => {
     message: "Booking deleted successfully and quantities restored",
   });
 };
+
+
+export const convertToSale = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    
+    const booking = await BookingModel.findById(id)
+        .populate('CustmerId')
+        .populate('WarehouseId')
+        .populate('ProductId')
+        .populate('option_id'); 
+    
+    if (!booking) throw new NotFound("Booking not found");
+    
+    if (booking.status === "pay") {
+        throw new BadRequest("Booking is already converted to sale");
+    }
+    
+      console.log("Booking WarehouseId:", booking.WarehouseId);
+    console.log("Booking populated:", booking);
+
+    const option = await ProductPriceOptionModel.findById((booking as any).option_id);
+    if (!option) throw new BadRequest("Product option not found");
+    console.log(option)
+
+    const productPrice = await ProductPriceModel.findById(option.product_price_id);
+    if (!productPrice) throw new BadRequest("Product price not found");
+
+    const quantity = 1; 
+    const price = productPrice.price;
+    const subtotal = price * quantity;
+    
+    const saleReference = `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const saleData = {
+        reference: saleReference,
+        customer_id: booking.CustmerId, 
+        warehouse_id: booking.WarehouseId, 
+        grand_total: subtotal,
+        sale_status: 'completed',
+        currency_id: null, 
+        order_tax: null,
+        order_discount: null,
+        coupon_id: null,
+        gift_card_id: null,
+    };
+
+    const sale = await SaleModel.create(saleData);
+
+    const productSaleData = {
+        sale_id: sale._id,
+        product_id: booking.ProductId, 
+        options_id: (booking as any).option_id, 
+        quantity: quantity,
+        price: price,
+        subtotal: subtotal
+    };
+
+    const productSale = await ProductSalesModel.create(productSaleData);
+
+    booking.status = "pay";
+    await booking.save();
+
+    SuccessResponse(res, {
+        message: "Booking successfully converted to sale"
+    });
+}

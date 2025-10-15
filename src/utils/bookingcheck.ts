@@ -1,7 +1,7 @@
 import cron from "node-cron";
-import { BookingModel } from "../models/schema/admin/Booking.js";
-import { ProductModel } from "../models/schema/admin/products.js";
-import { ProductPriceModel, ProductPriceOptionModel } from "../models/schema/admin/product_price.js";
+import { BookingModel } from "../models/schema/admin/Booking";
+import { ProductModel } from "../models/schema/admin/products";
+import { ProductPriceModel, ProductPriceOptionModel } from "../models/schema/admin/product_price";
 
 cron.schedule("0 * * * *", async () => {
   try {
