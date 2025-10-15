@@ -21,18 +21,33 @@ export const createzone=async(req:Request,res:Response)=>{
     SuccessResponse(res,{message:"Zone created successfully",zone});
 }
 
-export const getZones=async(req:Request,res:Response)=>{
-    const zones=await ZoneModel.find().populate("cityId ","name shipingCost").populate("countryId" ,"name");
-    SuccessResponse(res,{message:"Zones fetched successfully",zones});
-}
+export const getZones = async (req: Request, res: Response) => {
+  const zones = await ZoneModel.find()
+    .populate("cityId", "name shipingCost")
+    .populate("countryId", "name");
 
-export const getZoneById=async(req:Request,res:Response)=>{
-    const {id}=req.params;
-    if(!id) throw new BadRequest("Zone id is required");
-    const zone=await ZoneModel.findById(id).populate("cityId","name shipingCost").populate("countryId","name");
-    if(!zone) throw new NotFound("Zone not found");
-    SuccessResponse(res,{message:"Zone fetched successfully",zone});
-}
+  SuccessResponse(res, {
+    message: "Zones fetched successfully",
+    zones,
+  });
+};
+
+export const getZoneById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) throw new BadRequest("Zone id is required");
+
+  const zone = await ZoneModel.findById(id)
+    .populate("cityId", "name shipingCost")
+    .populate("countryId", "name");
+
+  if (!zone) throw new NotFound("Zone not found");
+
+  SuccessResponse(res, {
+    message: "Zone fetched successfully",
+    zone,
+  });
+};
+
 
 export const deleteZone=async(req:Request,res:Response)=>{
     const {id}=req.params;
