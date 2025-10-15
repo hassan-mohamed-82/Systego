@@ -22,14 +22,14 @@ export const createzone=async(req:Request,res:Response)=>{
 }
 
 export const getZones=async(req:Request,res:Response)=>{
-    const zones=await ZoneModel.find().populate("cityId name shipingCost").populate("countryId name");
+    const zones=await ZoneModel.find().populate("cityId ","name shipingCost").populate("countryId" ,"name");
     SuccessResponse(res,{message:"Zones fetched successfully",zones});
 }
 
 export const getZoneById=async(req:Request,res:Response)=>{
     const {id}=req.params;
     if(!id) throw new BadRequest("Zone id is required");
-    const zone=await ZoneModel.findById(id).populate("cityId name shipingCost").populate("countryId name");
+    const zone=await ZoneModel.findById(id).populate("cityId","name shipingCost").populate("countryId","name");
     if(!zone) throw new NotFound("Zone not found");
     SuccessResponse(res,{message:"Zone fetched successfully",zone});
 }
