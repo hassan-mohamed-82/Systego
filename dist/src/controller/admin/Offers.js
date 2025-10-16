@@ -26,14 +26,27 @@ const createoffers = async (req, res) => {
     const { productId, categoryId, discountId } = req.body;
     if (!productId || !categoryId || !discountId)
         throw new BadRequest_1.BadRequest("All fields are required");
-    const existproduct = await products_1.ProductModel.findById(productId);
-    if (!existproduct)
-        throw new BadRequest_1.BadRequest("Product not found");
-    const existcategory = await category_1.CategoryModel.findById(categoryId);
-    if (!existcategory)
-        throw new BadRequest_1.BadRequest("Category not found");
-    const offer = await Offers_1.OffersModel.create({ productId, categoryId, discountId });
-    return (0, response_1.SuccessResponse)(res, { message: "Create offer successfully", offer });
+    // تأكد إنهم Arrays حتى لو المستخدم بعت ID واحد
+    const productIds = Array.isArray(productId) ? productId : [productId];
+    const categoryIds = Array.isArray(categoryId) ? categoryId : [categoryId];
+    // تحقق من وجود المنتجات
+    const products = await products_1.ProductModel.find({ _id: { $in: productIds } });
+    if (products.length !== productIds.length)
+        throw new BadRequest_1.BadRequest("Some products not found");
+    // تحقق من وجود الفئات
+    const categories = await category_1.CategoryModel.find({ _id: { $in: categoryIds } });
+    if (categories.length !== categoryIds.length)
+        throw new BadRequest_1.BadRequest("Some categories not found");
+    // إنشاء العرض
+    const offer = await Offers_1.OffersModel.create({
+        productId: productIds,
+        categoryId: categoryIds,
+        discountId,
+    });
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Create offer successfully",
+        offer,
+    });
 };
 exports.createoffers = createoffers;
 const updateoffer = async (req, res) => {
@@ -43,18 +56,23 @@ const updateoffer = async (req, res) => {
         throw new BadRequest_1.BadRequest("All fields are required");
     const offer = await Offers_1.OffersModel.findById(id);
     if (!offer)
-        throw new Errors_1.NotFound();
-    const existproduct = await products_1.ProductModel.findById(productId);
-    if (!existproduct)
-        throw new BadRequest_1.BadRequest("Product not found");
-    const existcategory = await category_1.CategoryModel.findById(categoryId);
-    if (!existcategory)
-        throw new BadRequest_1.BadRequest("Category not found");
-    offer.productId = productId;
-    offer.categoryId = categoryId;
+        throw new Errors_1.NotFound("Offer not found");
+    const productIds = Array.isArray(productId) ? productId : [productId];
+    const categoryIds = Array.isArray(categoryId) ? categoryId : [categoryId];
+    const products = await products_1.ProductModel.find({ _id: { $in: productIds } });
+    if (products.length !== productIds.length)
+        throw new BadRequest_1.BadRequest("Some products not found");
+    const categories = await category_1.CategoryModel.find({ _id: { $in: categoryIds } });
+    if (categories.length !== categoryIds.length)
+        throw new BadRequest_1.BadRequest("Some categories not found");
+    offer.productId = productIds;
+    offer.categoryId = categoryIds;
     offer.discountId = discountId;
     await offer.save();
-    return (0, response_1.SuccessResponse)(res, { message: "Update offer successfully", offer });
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Update offer successfully",
+        offer,
+    });
 };
 exports.updateoffer = updateoffer;
 const deleteoffer = async (req, res) => {
