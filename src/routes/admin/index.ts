@@ -38,6 +38,7 @@ import CashierShiftRouter from "./POS/CashierShiftRoutes"
 import BookingRouter from "./Booking"
 import PopupRouter from "./Popup"
 import ReturnRouter from "./POS/ReturnSaleRoutes"
+import OffersRouter from "./Offers"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -80,6 +81,7 @@ route.use("/cashier-shift",CashierShiftRouter)
 route.use("/point",PointRouter)
 route.use("/redeem-points",redeem_PointsRouter)
 route.use("/popup",PopupRouter)
+route.use("/offer",OffersRouter)
 
 
 

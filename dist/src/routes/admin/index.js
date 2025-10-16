@@ -44,6 +44,7 @@ const CashierShiftRoutes_1 = __importDefault(require("./POS/CashierShiftRoutes")
 const Booking_1 = __importDefault(require("./Booking"));
 const Popup_1 = __importDefault(require("./Popup"));
 const ReturnSaleRoutes_1 = __importDefault(require("./POS/ReturnSaleRoutes"));
+const Offers_1 = __importDefault(require("./Offers"));
 const authenticated_1 = require("../../middlewares/authenticated");
 const authorized_1 = require("../../middlewares/authorized");
 exports.route = (0, express_1.Router)();
@@ -85,6 +86,7 @@ exports.route.use("/cashier-shift", CashierShiftRoutes_1.default);
 exports.route.use("/point", points_1.default);
 exports.route.use("/redeem-points", redeem_Points_1.default);
 exports.route.use("/popup", Popup_1.default);
+exports.route.use("/offer", Offers_1.default);
 exports.route.use("/booking", Booking_1.default);
 exports.route.use("/return-sale", ReturnSaleRoutes_1.default);
 exports.default = exports.route;
