@@ -5,42 +5,37 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updatePopupSchema = exports.createPopupSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
-// Regular expressions
-const arabicRegex = /^[\u0600-\u06FF\s]+$/; // Arabic letters + spaces
-const englishRegex = /^[A-Za-z\s]+$/; // English letters + spaces
-// ✅ Create Validation
+// ✅ Arabic & English regex (more flexible)
+const arabicRegex = /^[\u0600-\u06FF0-9\s.,،!؟()٪\/:-]+$/;
+const englishRegex = /^[A-Za-z0-9\s.,!()/%:-]+$/;
 exports.createPopupSchema = joi_1.default.object({
     title_ar: joi_1.default.string()
-        .pattern(arabicRegex)
+        .pattern(/^[\u0600-\u06FF\s]+$/)
         .required()
         .messages({
         "string.empty": "Arabic title is required",
         "string.pattern.base": "Arabic title must contain only Arabic letters",
-        "any.required": "Arabic title is required",
     }),
     title_En: joi_1.default.string()
-        .pattern(englishRegex)
+        .pattern(/^[A-Za-z\s]+$/)
         .required()
         .messages({
         "string.empty": "English title is required",
         "string.pattern.base": "English title must contain only English letters",
-        "any.required": "English title is required",
     }),
     description_ar: joi_1.default.string()
         .pattern(arabicRegex)
         .required()
         .messages({
         "string.empty": "Arabic description is required",
-        "string.pattern.base": "Arabic description must contain only Arabic letters",
-        "any.required": "Arabic description is required",
+        "string.pattern.base": "Arabic description must contain only Arabic letters, numbers or symbols",
     }),
     description_En: joi_1.default.string()
         .pattern(englishRegex)
         .required()
         .messages({
         "string.empty": "English description is required",
-        "string.pattern.base": "English description must contain only English letters",
-        "any.required": "English description is required",
+        "string.pattern.base": "English description must contain only English letters, numbers or symbols",
     }),
     image_ar: joi_1.default.string().allow("", null),
     image_En: joi_1.default.string().allow("", null),
@@ -50,7 +45,6 @@ exports.createPopupSchema = joi_1.default.object({
         .messages({
         "string.empty": "Link is required",
         "string.uri": "Link must be a valid URL",
-        "any.required": "Link is required",
     }),
 });
 // ✅ Update Validation
