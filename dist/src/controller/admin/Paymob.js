@@ -1,14 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePaymob = exports.createpaymob = exports.getPaymob = void 0;
+exports.updatePaymob = exports.createpaymob = exports.getPaymob = exports.getPaymobId = void 0;
 const Paymob_1 = require("../../models/schema/admin/Paymob");
 const payment_methods_1 = require("../../models/schema/admin/payment_methods");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const BadRequest_1 = require("../../Errors/BadRequest");
-const getPaymob = async (req, res) => {
+const getPaymobId = async (req, res) => {
     const { id } = req.params;
     const paymob = await Paymob_1.PaymobModel.findById(id);
+    if (!paymob)
+        throw new Errors_1.NotFound("Paymob not found");
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Get Paymob successfully",
+        paymob,
+    });
+};
+exports.getPaymobId = getPaymobId;
+const getPaymob = async (req, res) => {
+    const paymob = await Paymob_1.PaymobModel.find();
     if (!paymob)
         throw new Errors_1.NotFound("Paymob not found");
     return (0, response_1.SuccessResponse)(res, {

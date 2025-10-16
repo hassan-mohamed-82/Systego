@@ -5,11 +5,20 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
 
-export const getPaymob = async (req: Request, res: Response) => {
+export const getPaymobId = async (req: Request, res: Response) => {
   const { id } = req.params;
   const paymob = await PaymobModel.findById(id);
   if (!paymob) throw new NotFound("Paymob not found");
 
+  return SuccessResponse(res, {
+    message: "Get Paymob successfully",
+    paymob,
+  });
+};
+
+export const getPaymob = async (req: Request, res: Response) => {
+  const paymob = await PaymobModel.find();
+  if (!paymob) throw new NotFound("Paymob not found");
   return SuccessResponse(res, {
     message: "Get Paymob successfully",
     paymob,
