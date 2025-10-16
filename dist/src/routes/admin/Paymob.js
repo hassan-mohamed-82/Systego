@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const catchAsync_1 = require("../../utils/catchAsync");
+const Paymob_1 = require("../../controller/admin/Paymob");
+const Paymob_2 = require("../../validation/admin/Paymob");
+const validation_1 = require("../../middlewares/validation");
+const router = (0, express_1.Router)();
+router.get("/", (0, catchAsync_1.catchAsync)(Paymob_1.getPaymob));
+router.post("/", (0, validation_1.validate)(Paymob_2.createPaymobSchema), (0, catchAsync_1.catchAsync)(Paymob_1.createpaymob));
+router.put("/:id", (0, validation_1.validate)(Paymob_2.updatePaymobSchema), (0, catchAsync_1.catchAsync)(Paymob_1.updatePaymob));
+exports.default = router;
