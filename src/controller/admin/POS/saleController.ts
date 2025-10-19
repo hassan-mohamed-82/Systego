@@ -20,6 +20,7 @@ import { PointModel } from '../../../models/schema/admin/points';
 import { BankAccountModel } from '../../../models/schema/admin/Financial_Account';
 
 
+
 export const createSale = async (req: Request, res: Response): Promise<void> => {
     const {
         customer_id,
@@ -37,25 +38,28 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
         gift_card_id
     } = req.body;
 
+    // Validate required entities
     const warehouse = await WarehouseModel.findById(warehouse_id);
     if (!warehouse) throw new NotFound("Warehouse not found");
 
     const customer = await CustomerModel.findById(customer_id);
     if (!customer) throw new NotFound("Customer not found");
-  
+
     const paymentMethod = await PaymentMethodModel.findById(payment_method);
     if (!paymentMethod) throw new NotFound("Payment method not found");
     if (!paymentMethod.isActive) throw new BadRequest("Payment method is not active");
 
-    if(account_id){
+    if (account_id) {
         const bankAccount = await BankAccountModel.findById(account_id);
         if (!bankAccount) throw new NotFound("Bank Account not found");
         if (!bankAccount.is_default) throw new BadRequest("Bank Account is not default");
     }
 
+    // Check if points payment
     const isPointsPayment = paymentMethod.name?.toLowerCase() === 'points' || 
                            paymentMethod.type?.toLowerCase() === 'points';
 
+    // Handle points payment
     if (isPointsPayment) {
         const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
         
@@ -69,7 +73,6 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
             throw new BadRequest('Points Not enough');
         }
 
-
         await CustomerModel.findByIdAndUpdate(
             customer_id,
             { 
@@ -80,85 +83,68 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
         );
     }
 
-    // Validate coupon if provided
+    // Validate coupon
     if (coupon_id) {
         const coupon = await CouponModel.findById(coupon_id);
-        if (!coupon) {
-            throw new NotFound("Coupon not found");
-        }
-        if (coupon.available <= 0) {
-            throw new NotFound("Coupon is no longer available");
-        }
-        if (new Date() > coupon.expired_date) {
-            throw new NotFound("Coupon has expired");
-        }
+        if (!coupon) throw new NotFound("Coupon not found");
+        if (coupon.available <= 0) throw new NotFound("Coupon is no longer available");
+        if (new Date() > coupon.expired_date) throw new NotFound("Coupon has expired");
     }
 
-    // Validate tax if provided
+    // Validate tax
     if (order_tax) {
         const tax = await TaxesModel.findById(order_tax);
         if (!tax) throw new NotFound("Tax not found");
         if (!tax.status) throw new BadRequest("Tax is inactive");
     }
 
-    // Validate discount if provided
+    // Validate discount
     if (order_discount) {
         const discount = await DiscountModel.findById(order_discount);
         if (!discount) throw new NotFound("Discount not found");
         if (!discount.status) throw new BadRequest("Discount is inactive");
     }
 
-    for (const item of products) {
-        if (item.options_id) {
-            const productProductPriceOption = await ProductPriceOptionModel.find({
-                option_id: item.options_id
-            })
-
-            if (!productProductPriceOption) {
-                throw new NotFound(`Product price option with ID ${item.options_id} not found for product ${item.product_id}`);
-            }
-
-            const productPrice = await ProductPriceModel.findOne({ 
-                productId: item.product_id 
-            });
-            if (!productPrice) throw new NotFound(`Product price option with ID ${item.options_id} not found for product ${item.product_id}`);
-            
-            if (productPrice.quantity < item.quantity) {
-                throw new NotFound(`Insufficient stock for product option ${item.options_id}. Available: ${productPrice.quantity}, Requested: ${item.quantity}`);
-            }
-        } else {
-            const productPrice = await ProductPriceModel.findOne({ 
-                productId: item.product_id 
-            });
-            if (!productPrice) throw new NotFound(`Product price not found for product ID ${item.product_id}`);
-            
-            if (productPrice.quantity < item.quantity) {
-                throw new NotFound(`Insufficient stock for product ID ${item.product_id}. Available: ${productPrice.quantity}, Requested: ${item.quantity}`);
-            }
-        }
-
-        if (item.quantity <= 0) throw new NotFound(`Invalid quantity for product ID ${item.product_id}`);
-        if (item.price < 0) throw new NotFound(`Invalid price for product ID ${item.product_id}`);
-    }
-           
+    // Validate gift card
     if (gift_card_id) {
         const giftCard = await GiftCardModel.findById(gift_card_id);
-        if (!giftCard) {
-            throw new NotFound("Gift card not found");
-        }
-        if (!giftCard.isActive) {
-            throw new BadRequest("Gift card is inactive");
-        }
-
+        if (!giftCard) throw new NotFound("Gift card not found");
+        if (!giftCard.isActive) throw new BadRequest("Gift card is inactive");
         if (giftCard.expiration_date && new Date() > giftCard.expiration_date) {
             throw new BadRequest("Gift card has expired");
         }
-        
         if (giftCard.amount < grand_total) {
             throw new BadRequest("Gift card balance is insufficient for this sale");
         }
     }
 
+    // Validate products and inventory
+    for (const item of products) {
+        let productPrice;
+        
+        if (item.product_id) {
+            productPrice = await ProductPriceModel.findOne({ 
+                productId: item.product_id 
+            });
+        } else if (item.product_code) {
+            productPrice = await ProductPriceModel.findOne({ 
+                code: item.product_code 
+            });
+        }
+
+        if (!productPrice) {
+            throw new NotFound(`Product not found for ID: ${item.product_id} or code: ${item.product_code}`);
+        }
+
+        if (productPrice.quantity < item.quantity) {
+            throw new NotFound(`Insufficient stock for product. Available: ${productPrice.quantity}, Requested: ${item.quantity}`);
+        }
+
+        if (item.quantity <= 0) throw new BadRequest(`Invalid quantity for product`);
+        if (item.price < 0) throw new BadRequest(`Invalid price for product`);
+    }
+
+    // Create sale
     const newSale = new SaleModel({
         customer_id,
         warehouse_id,
@@ -170,12 +156,14 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
         shipping_cost,
         grand_total,
         coupon_id,
-        gift_card_id
+        gift_card_id,
+        payment_method
     });
 
     const savedSale = await newSale.save();
     const saleId = savedSale._id;
 
+    // Create payment record if not points payment
     if (payment_method && !isPointsPayment) {
         await PaymentModel.create([{
             sale_id: saleId,
@@ -186,38 +174,47 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
         }]);
     }
 
+    // Process products
     for (const item of products) {
+        let productPrice;
+        
+        if (item.product_id) {
+            productPrice = await ProductPriceModel.findOne({ 
+                productId: item.product_id 
+            });
+        } else if (item.product_code) {
+            productPrice = await ProductPriceModel.findOne({ 
+                code: item.product_code 
+            });
+        }
+
         const productSale = new ProductSalesModel({
             sale_id: saleId,
-            product_id: item.product_id,
+            product_id: productPrice.productId,
             quantity: item.quantity,
             price: item.price,
             subtotal: item.subtotal,
-            options_id: item.options_id
+            options_id: item.options_id || [], 
+            isGift: item.isGift || false
         });
 
         await productSale.save();
         
-        if (item.options_id) {
-            await ProductPriceModel.findOneAndUpdate(
-                { 
-                    productId: item.product_id,
-                    _id: item.options_id 
-                },
-                { 
-                    $inc: { quantity: -item.quantity } 
-                },
-            );
-        } else {
+        // Update inventory
+        if (item.product_id) {
             await ProductPriceModel.findOneAndUpdate(
                 { productId: item.product_id },
-                { 
-                    $inc: { quantity: -item.quantity } 
-                },
+                { $inc: { quantity: -item.quantity } }
+            );
+        } else if (item.product_code) {
+            await ProductPriceModel.findOneAndUpdate(
+                { code: item.product_code },
+                { $inc: { quantity: -item.quantity } }
             );
         }
     }
 
+    // Update coupon availability
     if (coupon_id) {
         await CouponModel.findByIdAndUpdate(
             coupon_id,
@@ -225,34 +222,42 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
         );
     }
 
+    // Update gift card balance
+    if (gift_card_id) {
+        await GiftCardModel.findByIdAndUpdate(
+            gift_card_id,
+            { $inc: { amount: -grand_total } }
+        );
+    }
+
+    // Add points earned if not using points payment
     let pointsEarned = 0;
     if (!isPointsPayment) {
-            const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
+        const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
+        
+        if (pointsConfig && pointsConfig.amount > 0 && pointsConfig.points > 0) {
+            pointsEarned = Math.floor(grand_total / pointsConfig.amount) * pointsConfig.points;
             
-            if (pointsConfig && pointsConfig.amount > 0 && pointsConfig.points > 0) {
-
-                pointsEarned = Math.floor(grand_total / pointsConfig.amount) * pointsConfig.points;
-                
-                if (pointsEarned > 0) {
-
-                    await CustomerModel.findByIdAndUpdate(
-                        customer_id,
-                        { 
-                            $inc: { 
-                                total_points_earned: pointsEarned 
-                            } 
-                        }
-                    );
-                }
+            if (pointsEarned > 0) {
+                await CustomerModel.findByIdAndUpdate(
+                    customer_id,
+                    { 
+                        $inc: { 
+                            total_points_earned: pointsEarned 
+                        } 
+                    }
+                );
             }
+        }
     }
 
     SuccessResponse(res, { 
         message: "Sale created successfully", 
-        savedSale,
+        sale: savedSale,
         pointsEarned
     });
-}
+};
+
 
 export const getSales = async (req: Request, res: Response): Promise<void> => {
     const sales = await SaleModel.find()
@@ -263,7 +268,7 @@ export const getSales = async (req: Request, res: Response): Promise<void> => {
         .populate('order_discount', 'name rate')
         .populate('coupon_id', 'code discount_amount')
         .populate('gift_card_id', 'code amount')
-        .populate('payment_method', 'name')
+        //.populate('payment_method', 'name')
         .lean();
     SuccessResponse(res, { sales });
 }

@@ -3,7 +3,7 @@ import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
   {
-      reference: {
+    reference: {
       type: String,
       maxlength: 100,
       trim: true,
@@ -17,6 +17,7 @@ const SaleSchema = new Schema(
     warehouse_id: { type: Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
     account_id: { type: Schema.Types.ObjectId, ref: 'BankAccount' },
+    payment_method: { type: Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
     sale_status: { type: String, required: true, default: 'pending', enum: ['completed', 'pending', 'returned', 'draft', 'processing'] },
     order_tax: { type: Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: Schema.Types.ObjectId, ref: 'Discount' },
@@ -37,9 +38,11 @@ const productSalesSchema = new Schema({
     quantity: { type: Number, required: true, min: 0 },
     price: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
-    options_id: { type: Schema.Types.ObjectId, ref: 'ProductOption' }
+    options_id: [{ type: Schema.Types.ObjectId, ref: 'Option' }], 
+    isGift: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
+
 export const SaleModel = mongoose.model("Sale", SaleSchema);
 export const ProductSalesModel = mongoose.model("ProductSale", productSalesSchema);
