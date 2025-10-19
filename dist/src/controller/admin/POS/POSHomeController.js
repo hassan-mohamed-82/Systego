@@ -13,6 +13,7 @@ const payment_methods_1 = require("../../../models/schema/admin/payment_methods"
 const customer_1 = require("../../../models/schema/admin/POS/customer");
 const Errors_1 = require("../../../Errors");
 const response_1 = require("../../../utils/response");
+const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const category = await category_1.CategoryModel.find();
@@ -48,6 +49,7 @@ exports.getProductsByBrand = getProductsByBrand;
 // get all selections
 const getAllSelections = async (req, res) => {
     const warehouses = await Warehouse_1.WarehouseModel.find().select('name');
+    const accounts = await Financial_Account_1.BankAccountModel.find({ is_default: true }).select('name');
     const taxes = await Taxes_1.TaxesModel.find().select('name');
     const discounts = await Discount_1.DiscountModel.find().select('name');
     const coupons = await coupons_1.CouponModel.find().select('coupon_code');
@@ -55,7 +57,7 @@ const getAllSelections = async (req, res) => {
     const paymentMethods = await payment_methods_1.PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await customer_1.CustomerModel.find().select('name');
     const customerGroups = await customer_1.CustomerGroupModel.find().select('name');
-    (0, response_1.SuccessResponse)(res, { message: "Selections list", warehouses, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
+    (0, response_1.SuccessResponse)(res, { message: "Selections list", warehouses, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
 // get featured product

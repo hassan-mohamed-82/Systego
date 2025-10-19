@@ -42,7 +42,8 @@ const CustomerSchema = new mongoose_1.Schema({
     address: { type: String },
     country: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Country' },
     city: { type: mongoose_1.Schema.Types.ObjectId, ref: 'City' },
-    customer_group_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'CustomerGroup' }
+    customer_group_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'CustomerGroup' },
+    total_points_earned: { type: Number, default: 0, min: 0 }
 }, { timestamps: true });
 const CustomerGroupSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },

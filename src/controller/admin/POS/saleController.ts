@@ -38,6 +38,18 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
         gift_card_id
     } = req.body;
 
+    // Helper function to find product price safely
+    const findProductPrice = async (item: any) => {
+        const query = item.product_id
+            ? { productId: item.product_id }
+            : { code: item.product_code };
+        const productPrice = await ProductPriceModel.findOne(query);
+        if (!productPrice) {
+            throw new NotFound(`Product not found for ID: ${item.product_id} or code: ${item.product_code}`);
+        }
+        return productPrice;
+    };
+
     // Validate required entities
     const warehouse = await WarehouseModel.findById(warehouse_id);
     if (!warehouse) throw new NotFound("Warehouse not found");
@@ -56,29 +68,29 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
     }
 
     // Check if points payment
-    const isPointsPayment = paymentMethod.name?.toLowerCase() === 'points' || 
-                           paymentMethod.type?.toLowerCase() === 'points';
+    const isPointsPayment = paymentMethod.name?.toLowerCase() === 'points' ||
+                            paymentMethod.type?.toLowerCase() === 'points';
 
     // Handle points payment
     if (isPointsPayment) {
         const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
-        
+
         if (!pointsConfig) {
             throw new BadRequest("Points system is not configured");
         }
 
         const pointsRequired = Math.ceil(grand_total / pointsConfig.amount) * pointsConfig.points;
-        
+
         if (!customer.total_points_earned || customer.total_points_earned < pointsRequired) {
             throw new BadRequest('Points Not enough');
         }
 
         await CustomerModel.findByIdAndUpdate(
             customer_id,
-            { 
-                $inc: { 
+            {
+                $inc: {
                     total_points_earned: -pointsRequired
-                } 
+                }
             }
         );
     }
@@ -120,21 +132,7 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
 
     // Validate products and inventory
     for (const item of products) {
-        let productPrice;
-        
-        if (item.product_id) {
-            productPrice = await ProductPriceModel.findOne({ 
-                productId: item.product_id 
-            });
-        } else if (item.product_code) {
-            productPrice = await ProductPriceModel.findOne({ 
-                code: item.product_code 
-            });
-        }
-
-        if (!productPrice) {
-            throw new NotFound(`Product not found for ID: ${item.product_id} or code: ${item.product_code}`);
-        }
+        const productPrice = await findProductPrice(item);
 
         if (productPrice.quantity < item.quantity) {
             throw new NotFound(`Insufficient stock for product. Available: ${productPrice.quantity}, Requested: ${item.quantity}`);
@@ -176,17 +174,7 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
 
     // Process products
     for (const item of products) {
-        let productPrice;
-        
-        if (item.product_id) {
-            productPrice = await ProductPriceModel.findOne({ 
-                productId: item.product_id 
-            });
-        } else if (item.product_code) {
-            productPrice = await ProductPriceModel.findOne({ 
-                code: item.product_code 
-            });
-        }
+        const productPrice = await findProductPrice(item);
 
         const productSale = new ProductSalesModel({
             sale_id: saleId,
@@ -194,24 +182,17 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
             quantity: item.quantity,
             price: item.price,
             subtotal: item.subtotal,
-            options_id: item.options_id || [], 
+            options_id: item.options_id || [],
             isGift: item.isGift || false
         });
 
         await productSale.save();
-        
+
         // Update inventory
-        if (item.product_id) {
-            await ProductPriceModel.findOneAndUpdate(
-                { productId: item.product_id },
-                { $inc: { quantity: -item.quantity } }
-            );
-        } else if (item.product_code) {
-            await ProductPriceModel.findOneAndUpdate(
-                { code: item.product_code },
-                { $inc: { quantity: -item.quantity } }
-            );
-        }
+        await ProductPriceModel.findOneAndUpdate(
+            { productId: productPrice.productId },
+            { $inc: { quantity: -item.quantity } }
+        );
     }
 
     // Update coupon availability
@@ -234,25 +215,25 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
     let pointsEarned = 0;
     if (!isPointsPayment) {
         const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
-        
+
         if (pointsConfig && pointsConfig.amount > 0 && pointsConfig.points > 0) {
             pointsEarned = Math.floor(grand_total / pointsConfig.amount) * pointsConfig.points;
-            
+
             if (pointsEarned > 0) {
                 await CustomerModel.findByIdAndUpdate(
                     customer_id,
-                    { 
-                        $inc: { 
-                            total_points_earned: pointsEarned 
-                        } 
+                    {
+                        $inc: {
+                            total_points_earned: pointsEarned
+                        }
                     }
                 );
             }
         }
     }
 
-    SuccessResponse(res, { 
-        message: "Sale created successfully", 
+    SuccessResponse(res, {
+        message: "Sale created successfully",
         sale: savedSale,
         pointsEarned
     });

@@ -49,6 +49,8 @@ const SaleSchema = new mongoose_1.Schema({
     customer_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Customer', required: true },
     warehouse_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     currency_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Currency' },
+    account_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'BankAccount' },
+    payment_method: { type: mongoose_1.Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
     sale_status: { type: String, required: true, default: 'pending', enum: ['completed', 'pending', 'returned', 'draft', 'processing'] },
     order_tax: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Discount' },
@@ -65,7 +67,8 @@ const productSalesSchema = new mongoose_1.Schema({
     quantity: { type: Number, required: true, min: 0 },
     price: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
-    options_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'ProductOption' }
+    options_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'Option' }],
+    isGift: { type: Boolean, default: false }
 }, { timestamps: true });
 exports.SaleModel = mongoose_1.default.model("Sale", SaleSchema);
 exports.ProductSalesModel = mongoose_1.default.model("ProductSale", productSalesSchema);
