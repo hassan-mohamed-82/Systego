@@ -8,7 +8,8 @@ const CustomerSchema = new Schema(
     address: { type: String },
     country: { type: Schema.Types.ObjectId, ref: 'Country' },
     city: { type: Schema.Types.ObjectId, ref: 'City' },
-    customer_group_id: { type: Schema.Types.ObjectId, ref: 'CustomerGroup' }
+    customer_group_id: { type: Schema.Types.ObjectId, ref: 'CustomerGroup' },
+    total_points_earned: { type: Number, default: 0, min: 0 }
   },
   { timestamps: true }
 );

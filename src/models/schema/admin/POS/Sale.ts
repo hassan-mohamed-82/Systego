@@ -16,6 +16,7 @@ const SaleSchema = new Schema(
     customer_id: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
     warehouse_id: { type: Schema.Types.ObjectId, ref: 'Warehouse', required: true },
     currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
+    account_id: { type: Schema.Types.ObjectId, ref: 'BankAccount' },
     sale_status: { type: String, required: true, default: 'pending', enum: ['completed', 'pending', 'returned', 'draft', 'processing'] },
     order_tax: { type: Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: Schema.Types.ObjectId, ref: 'Discount' },

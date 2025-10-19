@@ -12,6 +12,7 @@ import { CustomerModel, CustomerGroupModel } from '../../../models/schema/admin/
 import { NotFound } from "../../../Errors";
 import { SuccessResponse } from "../../../utils/response";
 import { Request, Response } from "express";
+import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
 
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
@@ -46,6 +47,7 @@ export const getProductsByBrand = async (req: Request, res: Response) => {
 // get all selections
 export const getAllSelections = async (req: Request, res: Response) => {
     const warehouses = await WarehouseModel.find().select('name');
+    const accounts = await BankAccountModel.find({ is_default: true}).select('name');
     const taxes = await TaxesModel.find().select('name');
     const discounts = await DiscountModel.find().select('name');
     const coupons = await CouponModel.find().select('coupon_code');
@@ -53,7 +55,7 @@ export const getAllSelections = async (req: Request, res: Response) => {
     const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await CustomerModel.find().select('name');
     const customerGroups = await CustomerGroupModel.find().select('name');
-    SuccessResponse(res, {message: "Selections list", warehouses, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
+    SuccessResponse(res, {message: "Selections list", warehouses, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
 
