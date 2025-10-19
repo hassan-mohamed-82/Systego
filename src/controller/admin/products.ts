@@ -162,78 +162,70 @@ export const createProduct = async (req: Request, res: Response) => {
 
 // ✅ READ (with populate)
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
-  // 1️⃣ جلب كل المنتجات مع العلاقات الأساسية
+  // 🟢 1️⃣ جلب كل المنتجات
   const products = await ProductModel.find()
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
 
-  // 2️⃣ جلب الكاتيجوريز، البراندز، الفاريشنز
+  // 🟢 2️⃣ جلب كل الـ variations مرة واحدة فقط
+  const variations = await VariationModel.find().lean();
 
+  // 🟢 3️⃣ تجهيز الاستعلامات بشكل متوازي لكل منتج
+  const formattedProducts = await Promise.all(
+    products.map(async (product) => {
+      // 🔹 جلب الأسعار الخاصة بالمنتج
+      const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
-  // 3️⃣ تجهيز مصفوفة المنتجات بعد التنسيق الكامل
-  const formattedProducts = [];
+      // 🔹 تجهيز الأسعار + options في توازي
+      const formattedPrices = await Promise.all(
+        prices.map(async (price) => {
+          const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+            .populate({
+              path: "option_id",
+              select: "_id name variationId", // ✅ عشان نتأكد إن variationId متجاب
+            })
+            .lean();
 
-  for (const product of products) {
-    // 🟦 جلب الأسعار الخاصة بكل منتج
-    const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+          // 🔹 تجميع الخيارات حسب الـ variation
+          const groupedOptions: Record<string, any[]> = {};
 
-    const formattedPrices = [];
+          for (const po of options) {
+            // ✅ تعريف option بشكل صريح بعد الـ populate
+            const option = po.option_id as any;
+            if (!option?._id) continue;
 
-    for (const price of prices) {
-      // 🟩 جلب الـ options الخاصة بكل سعر
-      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
-        .populate("option_id")
-        .lean();
+            const variation = variations.find(
+              (v) => v._id.toString() === option.variationId?.toString()
+            );
 
-      // 🟨 تجميع الخيارات حسب الـ variation
-      const groupedOptions: Record<string, any[]> = {};
+            if (variation) {
+              if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+              groupedOptions[variation.name].push(option);
+            }
+          }
 
-      options.forEach(async (po: any) => {
-        const option = po.option_id;
-        if (!option || !option._id) return;
+          const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+            name: varName,
+            options: groupedOptions[varName],
+          }));
 
-        const variation = await VariationModel.find({}).exec();
+          return {
+            ...price,
+            variations: variationsArray,
+          };
+        })
+      );
 
-   if (variation.length > 0) {
-     if (!groupedOptions[variation[0].name]) groupedOptions[variation[0].name] = [];
-  groupedOptions[variation[0].name].push(option);
-    } 
-    });
+      return { ...product, prices: formattedPrices };
+    })
+  );
 
-      // 🟧 تحويلها لمصفوفة منظمة
-      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-        name: varName,
-        options: groupedOptions[varName],
-      }));
-
-      // 🟥 إضافة السعر بالهيكل الكامل
-      formattedPrices.push({
-        variations: variationsArray,
-        _id: price._id,
-        productId: price.productId,
-        price: price.price,
-        code: price.code,
-        gallery: price.gallery,
-        quantity: price.quantity,
-        createdAt: price.createdAt,
-        updatedAt: price.updatedAt,
-        __v: price.__v,
-      });
-    }
-
-    // ✅ دمج الأسعار بالمنتج
-    (product as any).prices = formattedPrices;
-
-    formattedProducts.push(product);
-  }
-
-  // 4️⃣ إرسال الريسبونس النهائي
-  SuccessResponse(res, {
-    products: formattedProducts,
-  });
+  // 🟢 4️⃣ إرسال الريسبونس النهائي
+  SuccessResponse(res, { products: formattedProducts });
 };
+
 
 export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
