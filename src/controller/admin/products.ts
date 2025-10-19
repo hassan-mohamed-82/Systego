@@ -365,10 +365,10 @@ export const deleteProduct = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Product and all related prices/options deleted successfully" });
 };
 
-export const getOneProduct = async (req: Request, res: Response) => {
+export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
-  // ✅ 1️⃣ جلب المنتج
+  // 🟢 1️⃣ جلب المنتج الأساسي
   const product = await ProductModel.findById(id)
     .populate("categoryId")
     .populate("brandId")
@@ -377,81 +377,75 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   if (!product) throw new NotFound("Product not found");
 
-  // ✅ 2️⃣ جلب الأسعار الخاصة بالمنتج
+  // 🟢 2️⃣ جلب كل الـ variations مرة واحدة فقط
+  const variations = await VariationModel.find().lean();
+
+  // 🟢 3️⃣ جلب الأسعار الخاصة بالمنتج
   const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
-  const formattedPrices = [];
+  // 🟢 4️⃣ تجهيز الأسعار + الخيارات المرتبطة بها
+  const formattedPrices = await Promise.all(
+    prices.map(async (price) => {
+      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+        .populate({
+          path: "option_id",
+          select: "_id name variationId", // ✅ لازم يكون الحقل في الـ Option schema
+        })
+        .lean();
 
-  for (const price of prices) {
-    // ✅ 3️⃣ جلب الخيارات الخاصة بكل سعر مع populate متداخل لجلب الـ variation
-    const options = await ProductPriceOptionModel.find({
-      product_price_id: price._id,
-    })
-      .populate({
-        path: "option_id",
-        populate: {
-          path: "variation_id",
-          select: "name", // هنجيب اسم الـ variation فقط
-        },
-      })
-      .lean();
+      // 🔹 تجميع الخيارات حسب الـ variation
+      const groupedOptions: Record<string, any[]> = {};
 
-    // ✅ 4️⃣ تجميع الخيارات حسب الـ variation
-    const groupedOptions: Record<
-      string,
-      { variation_id: string; variation_name: string; options: any[] }
-    > = {};
+      for (const po of options) {
+        const option = po.option_id as any;
+        if (!option?._id) continue;
 
-    for (const po of options) {
-      const option: any = po.option_id;
-      if (!option || !option._id || !option.variation_id) continue;
+        // 🔹 ربط الخيار بالـ variation
+        const variation = variations.find(
+          (v) => v._id.toString() === option.variationId?.toString()
+        );
 
-      const variation = option.variation_id;
-      const variationName = variation.name || "Unknown";
-      const variationId = variation._id.toString();
-
-      // لو أول مرة يظهر الـ variation، نعمل له entry
-      if (!groupedOptions[variationId]) {
-        groupedOptions[variationId] = {
-          variation_id: variationId,
-          variation_name: variationName,
-          options: [],
-        };
+        if (variation) {
+          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          groupedOptions[variation.name].push({
+            _id: option._id,
+            name: option.name,
+          });
+        }
       }
 
-      // نضيف الـ option للمجموعة المناسبة
-      groupedOptions[variationId].options.push({
-        _id: option._id,
-        name: option.name,
-      });
-    }
+      // 🔹 تحويلها إلى مصفوفة نهائية
+      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+        name: varName,
+        options: groupedOptions[varName],
+      }));
 
-    // ✅ 5️⃣ تحويل الـ object لمصفوفة
-    const variationsArray = Object.values(groupedOptions);
+      // ✅ ترتيب النتيجة النهائية
+      return {
+        _id: price._id,
+        productId: price.productId,
+        price: price.price,
+        code: price.code,
+        gallery: price.gallery,
+        quantity: price.quantity,
+        createdAt: price.createdAt,
+        updatedAt: price.updatedAt,
+        __v: price.__v,
+        variations: variationsArray,
+      };
+    })
+  );
 
-    // ✅ 6️⃣ تجهيز الـ response النهائي لكل price
-    formattedPrices.push({
-      _id: price._id,
-      productId: price.productId,
-      price: price.price,
-      code: price.code,
-      gallery: price.gallery,
-      quantity: price.quantity,
-      variations: variationsArray,
-      createdAt: price.createdAt,
-      updatedAt: price.updatedAt,
-    });
-  }
-
-  // ✅ 7️⃣ إضافة الأسعار إلى المنتج
+  // 🟢 5️⃣ دمج الأسعار داخل المنتج
   (product as any).prices = formattedPrices;
 
-  // ✅ 8️⃣ إرسال الرد النهائي
+  // 🟢 6️⃣ إرسال الريسبونس النهائي
   SuccessResponse(res, {
     product,
     message: "Product fetched successfully",
   });
 };
+
 export const getProductByCode = async (req: Request, res: Response) => {
   const { code } = req.body;
 

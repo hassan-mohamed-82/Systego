@@ -276,7 +276,7 @@ const deleteProduct = async (req, res) => {
 exports.deleteProduct = deleteProduct;
 const getOneProduct = async (req, res) => {
     const { id } = req.params;
-    // ✅ 1️⃣ جلب المنتج
+    // 🟢 1️⃣ جلب المنتج الأساسي
     const product = await products_1.ProductModel.findById(id)
         .populate("categoryId")
         .populate("brandId")
@@ -284,63 +284,57 @@ const getOneProduct = async (req, res) => {
         .lean();
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
-    // ✅ 2️⃣ جلب الأسعار الخاصة بالمنتج
+    // 🟢 2️⃣ جلب كل الـ variations مرة واحدة فقط
+    const variations = await Variation_1.VariationModel.find().lean();
+    // 🟢 3️⃣ جلب الأسعار الخاصة بالمنتج
     const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
-    const formattedPrices = [];
-    for (const price of prices) {
-        // ✅ 3️⃣ جلب الخيارات الخاصة بكل سعر مع populate متداخل لجلب الـ variation
-        const options = await product_price_2.ProductPriceOptionModel.find({
-            product_price_id: price._id,
-        })
+    // 🟢 4️⃣ تجهيز الأسعار + الخيارات المرتبطة بها
+    const formattedPrices = await Promise.all(prices.map(async (price) => {
+        const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: price._id })
             .populate({
             path: "option_id",
-            populate: {
-                path: "variation_id",
-                select: "name", // هنجيب اسم الـ variation فقط
-            },
+            select: "_id name variationId", // ✅ لازم يكون الحقل في الـ Option schema
         })
             .lean();
-        // ✅ 4️⃣ تجميع الخيارات حسب الـ variation
+        // 🔹 تجميع الخيارات حسب الـ variation
         const groupedOptions = {};
         for (const po of options) {
             const option = po.option_id;
-            if (!option || !option._id || !option.variation_id)
+            if (!option?._id)
                 continue;
-            const variation = option.variation_id;
-            const variationName = variation.name || "Unknown";
-            const variationId = variation._id.toString();
-            // لو أول مرة يظهر الـ variation، نعمل له entry
-            if (!groupedOptions[variationId]) {
-                groupedOptions[variationId] = {
-                    variation_id: variationId,
-                    variation_name: variationName,
-                    options: [],
-                };
+            // 🔹 ربط الخيار بالـ variation
+            const variation = variations.find((v) => v._id.toString() === option.variationId?.toString());
+            if (variation) {
+                if (!groupedOptions[variation.name])
+                    groupedOptions[variation.name] = [];
+                groupedOptions[variation.name].push({
+                    _id: option._id,
+                    name: option.name,
+                });
             }
-            // نضيف الـ option للمجموعة المناسبة
-            groupedOptions[variationId].options.push({
-                _id: option._id,
-                name: option.name,
-            });
         }
-        // ✅ 5️⃣ تحويل الـ object لمصفوفة
-        const variationsArray = Object.values(groupedOptions);
-        // ✅ 6️⃣ تجهيز الـ response النهائي لكل price
-        formattedPrices.push({
+        // 🔹 تحويلها إلى مصفوفة نهائية
+        const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+            name: varName,
+            options: groupedOptions[varName],
+        }));
+        // ✅ ترتيب النتيجة النهائية
+        return {
             _id: price._id,
             productId: price.productId,
             price: price.price,
             code: price.code,
             gallery: price.gallery,
             quantity: price.quantity,
-            variations: variationsArray,
             createdAt: price.createdAt,
             updatedAt: price.updatedAt,
-        });
-    }
-    // ✅ 7️⃣ إضافة الأسعار إلى المنتج
+            __v: price.__v,
+            variations: variationsArray,
+        };
+    }));
+    // 🟢 5️⃣ دمج الأسعار داخل المنتج
     product.prices = formattedPrices;
-    // ✅ 8️⃣ إرسال الرد النهائي
+    // 🟢 6️⃣ إرسال الريسبونس النهائي
     (0, response_1.SuccessResponse)(res, {
         product,
         message: "Product fetched successfully",
