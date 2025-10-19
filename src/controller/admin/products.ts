@@ -368,7 +368,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
 export const getOneProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  // 1️⃣ جلب المنتج
+  // ✅ 1️⃣ جلب المنتج
   const product = await ProductModel.findById(id)
     .populate("categoryId")
     .populate("brandId")
@@ -377,63 +377,81 @@ export const getOneProduct = async (req: Request, res: Response) => {
 
   if (!product) throw new NotFound("Product not found");
 
-
-
-  // 4️⃣ جلب الأسعار الخاصة بالمنتج
+  // ✅ 2️⃣ جلب الأسعار الخاصة بالمنتج
   const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
   const formattedPrices = [];
 
   for (const price of prices) {
-    // 🔹 جلب الخيارات المرتبطة بكل سعر
-    const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
-      .populate("option_id")
+    // ✅ 3️⃣ جلب الخيارات الخاصة بكل سعر مع populate متداخل لجلب الـ variation
+    const options = await ProductPriceOptionModel.find({
+      product_price_id: price._id,
+    })
+      .populate({
+        path: "option_id",
+        populate: {
+          path: "variation_id",
+          select: "name", // هنجيب اسم الـ variation فقط
+        },
+      })
       .lean();
 
-    // 🔹 تجميع الخيارات حسب الـ variation
-    const groupedOptions: Record<string, any[]> = {};
+    // ✅ 4️⃣ تجميع الخيارات حسب الـ variation
+    const groupedOptions: Record<
+      string,
+      { variation_id: string; variation_name: string; options: any[] }
+    > = {};
 
-    options.forEach(async (po: any) => {
-      const option = po.option_id;
-      if (!option || !option._id) return; // ✅ حماية من null أو undefined
+    for (const po of options) {
+      const option: any = po.option_id;
+      if (!option || !option._id || !option.variation_id) continue;
 
-     const variation = await VariationModel.find({}).exec();
+      const variation = option.variation_id;
+      const variationName = variation.name || "Unknown";
+      const variationId = variation._id.toString();
 
-   if (variation.length > 0) {
-     if (!groupedOptions[variation[0].name]) groupedOptions[variation[0].name] = [];
-  groupedOptions[variation[0].name].push(option);
-    } 
-    });
+      // لو أول مرة يظهر الـ variation، نعمل له entry
+      if (!groupedOptions[variationId]) {
+        groupedOptions[variationId] = {
+          variation_id: variationId,
+          variation_name: variationName,
+          options: [],
+        };
+      }
 
-    // 🔹 تحويلها لمصفوفة بشكل منظم
-    const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-      name: varName,
-      options: groupedOptions[varName],
-    }));
+      // نضيف الـ option للمجموعة المناسبة
+      groupedOptions[variationId].options.push({
+        _id: option._id,
+        name: option.name,
+      });
+    }
 
-    // ✅ الترتيب: أولًا الـ variations، ثم باقي التفاصيل
+    // ✅ 5️⃣ تحويل الـ object لمصفوفة
+    const variationsArray = Object.values(groupedOptions);
+
+    // ✅ 6️⃣ تجهيز الـ response النهائي لكل price
     formattedPrices.push({
-      variations: variationsArray,
       _id: price._id,
       productId: price.productId,
       price: price.price,
       code: price.code,
       gallery: price.gallery,
       quantity: price.quantity,
+      variations: variationsArray,
       createdAt: price.createdAt,
       updatedAt: price.updatedAt,
-      __v: price.__v,
     });
   }
 
+  // ✅ 7️⃣ إضافة الأسعار إلى المنتج
   (product as any).prices = formattedPrices;
 
+  // ✅ 8️⃣ إرسال الرد النهائي
   SuccessResponse(res, {
     product,
     message: "Product fetched successfully",
   });
 };
-
 export const getProductByCode = async (req: Request, res: Response) => {
   const { code } = req.body;
 
