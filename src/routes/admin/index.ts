@@ -38,6 +38,7 @@ import CashierShiftRouter from "./POS/CashierShiftRoutes"
 import BookingRouter from "./Booking"
 import PopupRouter from "./Popup"
 import ReturnRouter from "./POS/ReturnSaleRoutes"
+import paymentRouter from "./payments"
 import OffersRouter from "./Offers"
 import PaymobRouter from "./Paymob"
 import { authenticated } from "../../middlewares/authenticated";
@@ -84,6 +85,7 @@ route.use("/redeem-points",redeem_PointsRouter)
 route.use("/popup",PopupRouter)
 route.use("/offer",OffersRouter)
 route.use("/paymob",PaymobRouter)
+route.use("/payment",paymentRouter)
 
 
 
