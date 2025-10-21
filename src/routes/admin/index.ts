@@ -41,6 +41,7 @@ import ReturnRouter from "./POS/ReturnSaleRoutes"
 import paymentRouter from "./payments"
 import OffersRouter from "./Offers"
 import PaymobRouter from "./Paymob"
+import notificationRoutrt from "./notifications"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorize } from "../../middlewares/authorized";
 export const route = Router();
@@ -86,7 +87,7 @@ route.use("/popup",PopupRouter)
 route.use("/offer",OffersRouter)
 route.use("/paymob",PaymobRouter)
 route.use("/payment",paymentRouter)
-
+route.use("/notification",notificationRoutrt)
 
 
 route.use("/booking",BookingRouter)
