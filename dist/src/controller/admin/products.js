@@ -54,6 +54,16 @@ const createProduct = async (req, res) => {
     if (exp_ability && !date_of_expiery) {
         throw new BadRequest_1.BadRequest("Expiry date is required when exp_ability is true");
     }
+    // ✅ التحقق من أن تاريخ الانتهاء يكون اليوم أو بعد اليوم
+    if (date_of_expiery) {
+        const expiryDate = new Date(date_of_expiery);
+        const today = new Date();
+        expiryDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        if (expiryDate < today) {
+            throw new BadRequest_1.BadRequest("Expiry date cannot be before today");
+        }
+    }
     if (show_quantity && !maximum_to_show) {
         throw new BadRequest_1.BadRequest("Maximum to show is required when show_quantity is true");
     }
@@ -179,6 +189,16 @@ const updateProduct = async (req, res) => {
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
+    // ✅ تحقق من أن تاريخ الانتهاء اليوم أو بعد اليوم
+    if (date_of_expiery) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expiry = new Date(date_of_expiery);
+        expiry.setHours(0, 0, 0, 0);
+        if (expiry < today) {
+            return res.status(400).json({ message: "Expiry date cannot be in the past" });
+        }
+    }
     // ✅ تحديث الصورة (يدعم base64 مع أو بدون prefix)
     if (image) {
         product.image = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "products");
