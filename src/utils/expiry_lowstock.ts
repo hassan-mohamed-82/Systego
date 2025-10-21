@@ -49,7 +49,8 @@ export function startCron(io: Server) {
   const service = new NotificationService(io);
 
   // يتشيك كل يوم الساعة 12 بليل
-  cron.schedule("0 0 * * *", async () => {
-    await service.checkExpiry();
-  });
+cron.schedule("0 15 * * *", async () => {
+  await service.checkExpiry();
+});
+
 }
