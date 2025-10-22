@@ -59,7 +59,6 @@ export const createPurchase = async (req: Request, res: Response) => {
   if (receipt_img && receipt_img.startsWith("data:")) {
     imageUrl = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
   }
-
   // 1️⃣ إنشاء الـ Purchase
   const purchase = await PurchaseModel.create({
     date,
@@ -75,6 +74,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     tax_id,
   });
 
+  let ware_house = await WarehouseModel.findById(warehouse_id);
   // 2️⃣ إنشاء الـ Purchase Items
   let totalQuantity = 0;
   if (purchase_items && Array.isArray(purchase_items)) {
@@ -91,8 +91,17 @@ export const createPurchase = async (req: Request, res: Response) => {
           product_id = productDoc?._id;
           category_id = productDoc?.categoryId;
         }
-      }
+      } 
 
+        const purchase_product_item = await PurchaseItemModel
+        .find({warehouse_id, product_id});
+        if(!purchase_product_item){
+          if (ware_house) {
+            ware_house.number_of_products += 1;
+            await ware_house.save();
+          }
+        }
+     
       const PurchaseItems = await PurchaseItemModel.create({
         date: p.date,
         purchase_id: purchase._id,
@@ -117,6 +126,11 @@ export const createPurchase = async (req: Request, res: Response) => {
           await category.save();
         }
       }
+      if (ware_house) {
+        ware_house.stock_Quantity += p.quantity ?? 0;
+        await ware_house.save();
+      }
+
 
       // ✅ تحديث كمية المنتج في المستودع
       let product_warehouse = await Product_WarehouseModel.findOne({

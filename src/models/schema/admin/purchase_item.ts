@@ -6,6 +6,7 @@ const PurchaseItemSchema = new Schema(
     product_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     category_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     purchase_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Purchase" }],
+    warehouse_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Warehouse" }],
     quantity: { type: Number, required: true },
     unit_cost: { type: Number, required: true },
     discount: { type: Number, required: true },

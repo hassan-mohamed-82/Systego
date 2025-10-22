@@ -54,6 +54,7 @@ const createPurchase = async (req, res) => {
         discount,
         tax_id,
     });
+    let ware_house = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     // 2️⃣ إنشاء الـ Purchase Items
     let totalQuantity = 0;
     if (purchase_items && Array.isArray(purchase_items)) {
@@ -67,6 +68,14 @@ const createPurchase = async (req, res) => {
                     const productDoc = product_price.productId; // 👈 حل الخطأ هنا
                     product_id = productDoc?._id;
                     category_id = productDoc?.categoryId;
+                }
+            }
+            const purchase_product_item = await purchase_item_1.PurchaseItemModel
+                .find({ warehouse_id, product_id });
+            if (!purchase_product_item) {
+                if (ware_house) {
+                    ware_house.number_of_products += 1;
+                    await ware_house.save();
                 }
             }
             const PurchaseItems = await purchase_item_1.PurchaseItemModel.create({
@@ -90,6 +99,10 @@ const createPurchase = async (req, res) => {
                     category.product_quantity += p.quantity ?? 0;
                     await category.save();
                 }
+            }
+            if (ware_house) {
+                ware_house.stock_Quantity += p.quantity ?? 0;
+                await ware_house.save();
             }
             // ✅ تحديث كمية المنتج في المستودع
             let product_warehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
