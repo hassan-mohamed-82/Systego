@@ -231,3 +231,4 @@ export const convertToSale = async (req: Request, res: Response) => {
         message: "Booking successfully converted to sale"
     });
 }
+
