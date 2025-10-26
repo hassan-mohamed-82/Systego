@@ -150,3 +150,12 @@ export const gettransferout = async (req: Request, res: Response) => {
   const received = transfers.filter(t => t.status === "received");
   SuccessResponse(res, { message: "Transfers retrieved successfully", pending, received });
 };
+
+
+export const getalltransfers = async (req: Request, res: Response) => {
+  const transfers = await TransferModel.find()
+    .populate("fromWarehouseId", "name")
+    .populate("toWarehouseId", "name")
+    .populate("productId", "name productCode");
+  SuccessResponse(res, { message: "Transfers retrieved successfully", transfers });
+};

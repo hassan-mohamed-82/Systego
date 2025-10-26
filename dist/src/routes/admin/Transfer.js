@@ -12,4 +12,5 @@ route.get("/gettransferin/:warehouseId", (0, catchAsync_1.catchAsync)(Transfer_1
 route.get("/gettransferout/:warehouseId", (0, catchAsync_1.catchAsync)(Transfer_1.gettransferout));
 route.put("/markTransferAsReceived", (0, validation_1.validate)(Transfer_2.markTransferAsReceivedSchema), (0, catchAsync_1.catchAsync)(Transfer_1.markTransferAsReceived));
 route.get("/:id", (0, catchAsync_1.catchAsync)(Transfer_1.getTransferById));
+route.get("/", (0, catchAsync_1.catchAsync)(Transfer_1.getalltransfers));
 exports.default = route;

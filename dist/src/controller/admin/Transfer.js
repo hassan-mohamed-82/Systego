@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.gettransferout = exports.gettransferin = exports.markTransferAsReceived = exports.getTransferById = exports.getTransfersForWarehouse = exports.createTransfer = void 0;
+exports.getalltransfers = exports.gettransferout = exports.gettransferin = exports.markTransferAsReceived = exports.getTransferById = exports.getTransfersForWarehouse = exports.createTransfer = void 0;
 const Transfer_1 = require("../../models/schema/admin/Transfer");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -134,3 +134,11 @@ const gettransferout = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Transfers retrieved successfully", pending, received });
 };
 exports.gettransferout = gettransferout;
+const getalltransfers = async (req, res) => {
+    const transfers = await Transfer_1.TransferModel.find()
+        .populate("fromWarehouseId", "name")
+        .populate("toWarehouseId", "name")
+        .populate("productId", "name productCode");
+    (0, response_1.SuccessResponse)(res, { message: "Transfers retrieved successfully", transfers });
+};
+exports.getalltransfers = getalltransfers;
