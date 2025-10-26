@@ -20,6 +20,7 @@ const getNotificationById = async (req, res) => {
     if (!notifications)
         throw new Errors_1.NotFound("Notification not found");
     notifications.isRead = true;
+    await notifications.save();
     (0, response_1.SuccessResponse)(res, { message: "Get notification successfully", notifications });
 };
 exports.getNotificationById = getNotificationById;
