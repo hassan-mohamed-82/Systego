@@ -5,6 +5,5 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const Notfication_1 = require("../../controller/admin/Notfication");
 const router = (0, express_1.Router)();
 router.get("/", (0, catchAsync_1.catchAsync)(Notfication_1.getAllNotifications));
-router.get("/unread", (0, catchAsync_1.catchAsync)(Notfication_1.getallnotficationsunread));
 router.get("/:id", (0, catchAsync_1.catchAsync)(Notfication_1.getNotificationById));
 exports.default = router;

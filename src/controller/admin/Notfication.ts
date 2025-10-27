@@ -7,7 +7,9 @@ import { SuccessResponse } from "../../utils/response";
 export const getAllNotifications = async (req: Request, res: Response) => {
     const notifications = await NotificationModel.find().sort({ createdAt: -1 });
     if (!notifications || notifications.length === 0) throw new NotFound("No notifications found");
-    SuccessResponse(res, { message: "Get notifications successfully", notifications });
+    const unreadCount = await NotificationModel.countDocuments({ isRead: false });
+
+    SuccessResponse(res, { message: "Get notifications successfully", notifications ,unreadCount });
   };
 
   export const getNotificationById = async (req: Request, res: Response) => {
@@ -22,8 +24,3 @@ await notifications.save();
   
 
 
-export const getallnotficationsunread = async (req: Request, res: Response) => {
-    const notifications = await NotificationModel.find({ isRead: false }).sort({ createdAt: -1 });
-    if (!notifications || notifications.length === 0) throw new NotFound("No notifications found");
-    SuccessResponse(res, { message: "Get notifications successfully", notifications });
-}
