@@ -20,3 +20,10 @@ await notifications.save();
     SuccessResponse(res, { message: "Get notification successfully", notifications });
   };
   
+
+
+export const getallnotficationsunread = async (req: Request, res: Response) => {
+    const notifications = await NotificationModel.find({ isRead: false }).sort({ createdAt: -1 });
+    if (!notifications || notifications.length === 0) throw new NotFound("No notifications found");
+    SuccessResponse(res, { message: "Get notifications successfully", notifications });
+}

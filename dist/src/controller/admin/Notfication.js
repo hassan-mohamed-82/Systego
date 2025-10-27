@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getNotificationById = exports.getAllNotifications = void 0;
+exports.getallnotficationsunread = exports.getNotificationById = exports.getAllNotifications = void 0;
 const Notfication_1 = require("../../models/schema/admin/Notfication");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -24,3 +24,10 @@ const getNotificationById = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Get notification successfully", notifications });
 };
 exports.getNotificationById = getNotificationById;
+const getallnotficationsunread = async (req, res) => {
+    const notifications = await Notfication_1.NotificationModel.find({ isRead: false }).sort({ createdAt: -1 });
+    if (!notifications || notifications.length === 0)
+        throw new Errors_1.NotFound("No notifications found");
+    (0, response_1.SuccessResponse)(res, { message: "Get notifications successfully", notifications });
+};
+exports.getallnotficationsunread = getallnotficationsunread;
