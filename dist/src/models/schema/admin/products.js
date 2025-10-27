@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductModel = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const productSchema = new mongoose_1.default.Schema({
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true },
     image: { type: String },
     categoryId: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Category" }],
     brandId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Brand" },
