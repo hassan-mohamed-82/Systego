@@ -6,6 +6,6 @@ import{
 
 const router=Router();
 
-router.get("/",catchAsync(getproductWarehouse));
+router.get("/:warehouse_id",catchAsync(getproductWarehouse));
 router.get("/:id",catchAsync(getproductWarehousebyid));
 export default router;
