@@ -128,6 +128,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       }
       if (ware_house) {
         ware_house.stock_Quantity += p.quantity ?? 0;
+        
         await ware_house.save();
       }
 
