@@ -19,43 +19,79 @@ export const getCountryById = async (req: Request, res: Response) => {
 }
 
 export const createCountry = async (req: Request, res: Response) => {
-    const { name, isDefault } = req.body;
-    if (!name) throw new BadRequest("Country name is required");
+  const { name, isDefault } = req.body;
 
-    const existingCountry = await CountryModel.findOne({ name });
-    if (existingCountry) throw new BadRequest("Country already exists");
+  if (!name) throw new BadRequest("Country name is required");
 
-    let country;
+  const existingCountry = await CountryModel.findOne({ name });
+  if (existingCountry) throw new BadRequest("Country already exists");
 
-    if (isDefault) {
-        // لو البلد الجديدة Default → شيل العلامة من أي بلد تانية
-        await CountryModel.updateMany({}, { $set: { isDefault: false } });
-        country = await CountryModel.create({ name, isDefault: true });
-    } else {
-        country = await CountryModel.create({ name });
-    }
+  const hasDefaultCountry = await CountryModel.findOne({ isDefault: true });
 
-    SuccessResponse(res, { message: "create country successfully", country });
-}
+  let country;
+
+  // الحالة 1: أول دولة في النظام
+  if (!hasDefaultCountry) {
+    country = await CountryModel.create({ name, isDefault: true });
+    return SuccessResponse(res, {
+      message: "Country created as default (first country)",
+      country,
+    });
+  }
+
+  // الحالة 2: لو الدولة الجديدة default
+  if (isDefault) {
+    await CountryModel.updateMany({}, { $set: { isDefault: false } });
+    country = await CountryModel.create({ name, isDefault: true });
+  } 
+  // الحالة 3: لو الدولة الجديدة مش default
+  else {
+    // لازم يكون فيه واحدة default بالفعل
+    if (!hasDefaultCountry)
+      throw new BadRequest("At least one country must be default");
+    country = await CountryModel.create({ name, isDefault: false });
+  }
+
+  SuccessResponse(res, { message: "Country created successfully", country });
+};
 
 
 export const updateCountry = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    if (!id) throw new BadRequest("Country id is required");
+  const { id } = req.params;
+  if (!id) throw new BadRequest("Country id is required");
 
-    const updateData: any = { ...req.body };
+  const updateData: any = { ...req.body };
 
-    if (updateData.isDefault) {
-        // لو الـ update هيخلي البلد دي Default → لازم نلغي الباقي
-        await CountryModel.updateMany({}, { $set: { isDefault: false } });
-        updateData.isDefault = true;
+  const existingCountry = await CountryModel.findById(id);
+  if (!existingCountry) throw new NotFound("Country not found");
+
+  // الحالة 1️⃣: لو المستخدم بيخلي البلد دي Default
+  if (updateData.isDefault === true) {
+    // نلغي الـ default من أي بلد تانية
+    await CountryModel.updateMany({}, { $set: { isDefault: false } });
+    updateData.isDefault = true;
+  }
+
+  // الحالة 2️⃣: لو المستخدم بيشيل الـ default (بيخليها false)
+  if (updateData.isDefault === false) {
+    // نتحقق هل دي آخر default ولا لأ
+    const hasOtherDefault = await CountryModel.findOne({
+      _id: { $ne: id },
+      isDefault: true,
+    });
+
+    // لو مفيش غيرها default → نمنع العملية
+    if (!hasOtherDefault) {
+      throw new BadRequest("At least one country must remain as default");
     }
+  }
 
-    const country = await CountryModel.findByIdAndUpdate(id, updateData, { new: true });
-    if (!country) throw new NotFound("Country not found");
+  const country = await CountryModel.findByIdAndUpdate(id, updateData, {
+    new: true,
+  });
 
-    SuccessResponse(res, { message: "update country successfully", country });
-}
+  SuccessResponse(res, { message: "Country updated successfully", country });
+};
 
 
 export const deleteCountry = async (req: Request, res: Response) => {
