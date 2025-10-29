@@ -44,11 +44,12 @@ export const createTransfer = async (req: Request, res: Response) => {
 
     productInWarehouse.quantity -= quantity;
     await productInWarehouse.save();
-    const product = await ProductModel.findById(productId) as any;
-    if(product){
-      product.quantity -= quantity;
-      await product.save();
-    }
+    // مسحت الخصم من الكمية بتاعة product
+    // const product = await ProductModel.findById(productId) as any;
+    // if(product){
+    //  product.quantity -= quantity;
+    //  await product.save();
+    // }
     SuccessResponse(res, { message: "Transfer created successfully", transfer });  
 };
 
@@ -97,6 +98,7 @@ export const markTransferAsReceived = async (req: Request, res: Response) => {
     const { warehouseId } = req.body; // المستودع اللي بيعمل العملية
 
     const transfer = await TransferModel.findById(id);
+    
     if (!transfer) throw new NotFound("Transfer not found");
 
     // لو التحويل مش pending مينفعش يتعدل
@@ -110,6 +112,20 @@ export const markTransferAsReceived = async (req: Request, res: Response) => {
     // تحديث الحالة
     transfer.status = "received";
     await transfer.save();
+
+    //تحديث كمية المنتجات فى الفرع اللى جايله كده فاضل اللى طالع منه انت عاملها فوق
+    const productInWarehouse = await Product_WarehouseModel.findOne({productId: transfer.productId, warehouseId});
+    if(productInWarehouse){
+      productInWarehouse.quantity += transfer.quantity;
+      await productInWarehouse.save();
+    }
+    else{
+      await Product_WarehouseModel.create({
+        quantity: transfer.quantity,
+        productId: transfer.productId,
+        warehouseId,
+      });
+    }
 
     SuccessResponse(res, { message: "Transfer marked as received successfully", transfer });  
 };
