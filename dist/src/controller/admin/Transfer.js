@@ -7,7 +7,6 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const index_1 = require("../../Errors/index");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const response_1 = require("../../utils/response");
-const products_1 = require("../../models/schema/admin/products");
 // 🟢 إنشاء تحويل جديد (يبدأ pending)
 const createTransfer = async (req, res) => {
     const { fromWarehouseId, toWarehouseId, quantity, productId, categoryId, productCode } = req.body;
@@ -37,11 +36,6 @@ const createTransfer = async (req, res) => {
     });
     productInWarehouse.quantity -= quantity;
     await productInWarehouse.save();
-    const product = await products_1.ProductModel.findById(productId);
-    if (product) {
-        product.quantity -= quantity;
-        await product.save();
-    }
     (0, response_1.SuccessResponse)(res, { message: "Transfer created successfully", transfer });
 };
 exports.createTransfer = createTransfer;
@@ -93,6 +87,19 @@ const markTransferAsReceived = async (req, res) => {
     // تحديث الحالة
     transfer.status = "received";
     await transfer.save();
+    //تحديث كمية المنتجات فى الفرع اللى جايله كده فاضل اللى طالع منه انت عاملها فوق
+    const productInWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({ productId: transfer.productId, warehouseId });
+    if (productInWarehouse) {
+        productInWarehouse.quantity += transfer.quantity;
+        await productInWarehouse.save();
+    }
+    else {
+        await Product_Warehouse_1.Product_WarehouseModel.create({
+            quantity: transfer.quantity,
+            productId: transfer.productId,
+            warehouseId,
+        });
+    }
     (0, response_1.SuccessResponse)(res, { message: "Transfer marked as received successfully", transfer });
 };
 exports.markTransferAsReceived = markTransferAsReceived;

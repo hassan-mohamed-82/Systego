@@ -44,12 +44,7 @@ export const createTransfer = async (req: Request, res: Response) => {
 
     productInWarehouse.quantity -= quantity;
     await productInWarehouse.save();
-    // مسحت الخصم من الكمية بتاعة product
-    // const product = await ProductModel.findById(productId) as any;
-    // if(product){
-    //  product.quantity -= quantity;
-    //  await product.save();
-    // }
+    
     SuccessResponse(res, { message: "Transfer created successfully", transfer });  
 };
 

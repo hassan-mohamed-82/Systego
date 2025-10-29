@@ -7,7 +7,7 @@ const TransferSchema = new mongoose.Schema({
   toWarehouseId: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", required: true },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   quantity: { type: Number, required: true },
-  status: { type: String, enum: ["pending", "received"], default: "pending" },
+  status: { type: String, enum: ["pending", "received","rejected"], default: "pending" },
 });
 
 TransferSchema.pre("save", async function (next) {

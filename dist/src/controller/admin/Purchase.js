@@ -107,7 +107,7 @@ const createPurchase = async (req, res) => {
             // ✅ تحديث كمية المنتج في المستودع
             let product_warehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
                 productId: product_id,
-                WarehouseId: purchase.warehouse_id,
+                WarehouseId: warehouse_id,
             });
             if (product_warehouse) {
                 product_warehouse.quantity += p.quantity ?? 0;
@@ -116,7 +116,7 @@ const createPurchase = async (req, res) => {
             else {
                 await Product_Warehouse_1.Product_WarehouseModel.create({
                     productId: product_id,
-                    WarehouseId: purchase.warehouse_id,
+                    WarehouseId: warehouse_id,
                     quantity: p.quantity ?? 0,
                 });
             }

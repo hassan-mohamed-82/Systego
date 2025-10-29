@@ -9,12 +9,10 @@ import supplierRouter from './suppliers';
 import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
 import paymentMethodRouter from "./payment_method";
-import ExpeenseCategoryRouter from "./ExpenseCategory";
 import expensesRouter from './expenses'
 import CouponsRouter from './coupons'
 import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
-import incomeCategoryRouter from "./income_categories";
 import BankAccountRouter from "./Financial_Account";
 import CountryRouter from "./Country";
 import CityRouter from "./City";
@@ -56,13 +54,11 @@ route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
 route.use("/warehouse",WarehouseRouter)
 route.use("/courier",CouriersRouter)
-route.use("/expense_category",ExpeenseCategoryRouter)
 route.use("/payment_method",paymentMethodRouter)
 route.use("/expense",expensesRouter)
 route.use("/coupon",CouponsRouter)
 route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)
-route.use("/income_category",incomeCategoryRouter)
 route.use("/bank_account",BankAccountRouter)
 route.use("/country",CountryRouter);
 route.use("/city",CityRouter);
