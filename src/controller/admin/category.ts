@@ -5,6 +5,8 @@ import {CategoryModel  } from "../../models/schema/admin/category";
 import { saveBase64Image } from "../../utils/handleImages";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
+import { ProductModel } from "../../models/schema/admin/products";
+import mongoose from "mongoose";
 
 export const createcategory = async (req: Request, res: Response) => {
   const { name, image, parentId } = req.body;
@@ -44,10 +46,29 @@ export const getCategoryById = async (req: Request, res: Response) => {
 
 export const deleteCategory = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   if (!id) throw new BadRequest("Category id is required");
-  const category = await CategoryModel.findByIdAndDelete(id);
+
+  if (!mongoose.Types.ObjectId.isValid(id)) throw new BadRequest("Invalid category id");
+
+  const category = await CategoryModel.findById(id);
   if (!category) throw new NotFound("Category not found");
-  SuccessResponse(res, { message: "delete category successfully" });
+
+  const deleteCategoryAndChildren = async (categoryId: string) => {
+    await ProductModel.deleteMany({ categoryId });
+
+    const children = await CategoryModel.find({ parentId: categoryId });
+
+    for (const child of children) {
+      await deleteCategoryAndChildren(child._id.toString());
+    }
+
+    await CategoryModel.findByIdAndDelete(categoryId);
+  };
+
+  await deleteCategoryAndChildren(id);
+
+  SuccessResponse(res, { message: "Category and related data deleted successfully" });
 };
 
 export const updateCategory =async (req: Request, res: Response) => {

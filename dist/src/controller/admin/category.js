@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateCategory = exports.deleteCategory = exports.getCategoryById = exports.getCategories = exports.createcategory = void 0;
 const response_1 = require("../../utils/response");
@@ -6,6 +9,8 @@ const category_1 = require("../../models/schema/admin/category");
 const handleImages_1 = require("../../utils/handleImages");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors/");
+const products_1 = require("../../models/schema/admin/products");
+const mongoose_1 = __importDefault(require("mongoose"));
 const createcategory = async (req, res) => {
     const { name, image, parentId } = req.body;
     if (!name)
@@ -49,10 +54,21 @@ const deleteCategory = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Category id is required");
-    const category = await category_1.CategoryModel.findByIdAndDelete(id);
+    if (!mongoose_1.default.Types.ObjectId.isValid(id))
+        throw new BadRequest_1.BadRequest("Invalid category id");
+    const category = await category_1.CategoryModel.findById(id);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    (0, response_1.SuccessResponse)(res, { message: "delete category successfully" });
+    const deleteCategoryAndChildren = async (categoryId) => {
+        await products_1.ProductModel.deleteMany({ categoryId });
+        const children = await category_1.CategoryModel.find({ parentId: categoryId });
+        for (const child of children) {
+            await deleteCategoryAndChildren(child._id.toString());
+        }
+        await category_1.CategoryModel.findByIdAndDelete(categoryId);
+    };
+    await deleteCategoryAndChildren(id);
+    (0, response_1.SuccessResponse)(res, { message: "Category and related data deleted successfully" });
 };
 exports.deleteCategory = deleteCategory;
 const updateCategory = async (req, res) => {
