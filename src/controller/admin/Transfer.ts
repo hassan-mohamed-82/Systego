@@ -8,165 +8,268 @@ import { SuccessResponse } from "../../utils/response";
 import { ProductModel } from "../../models/schema/admin/products";
 
 
-// 🟢 إنشاء تحويل جديد (يبدأ pending)
 export const createTransfer = async (req: Request, res: Response) => {
-  
-    const { fromWarehouseId, toWarehouseId, quantity, productId, categoryId, productCode } = req.body;
+  const { fromWarehouseId, toWarehouseId, products } = req.body;
 
-    if (!fromWarehouseId || !toWarehouseId)
-      throw new BadRequest("Both warehouses are required");
+  // ✅ تحقق من البيانات الأساسية
+  if (!fromWarehouseId || !toWarehouseId)
+    throw new BadRequest("Both warehouses are required");
 
-    if (!productId && !categoryId && !productCode)
-      throw new BadRequest("Please provide productId or categoryId or productCode");
+  if (!Array.isArray(products) || products.length === 0)
+    throw new BadRequest("At least one product is required");
 
-    const fromWarehouse = await WarehouseModel.findById(fromWarehouseId);
-    const toWarehouse = await WarehouseModel.findById(toWarehouseId);
-    const productInWarehouse = await Product_WarehouseModel.findOne({productId, warehouseId: fromWarehouseId});
-    if(!productInWarehouse){
-      throw new NotFound("Product not found in the source warehouse");
-    }
-    if(productInWarehouse.quantity < quantity){
-      throw new BadRequest("Insufficient product quantity in the source warehouse");
-    }
+  const fromWarehouse = await WarehouseModel.findById(fromWarehouseId);
+  const toWarehouse = await WarehouseModel.findById(toWarehouseId);
 
-    if (!fromWarehouse || !toWarehouse)
-      throw new NotFound("One or both warehouses not found");
+  if (!fromWarehouse || !toWarehouse)
+    throw new NotFound("One or both warehouses not found");
 
-    const transfer = await TransferModel.create({
-      fromWarehouseId,
-      toWarehouseId,
+  // ✅ تحقق من كل منتج في التحويل
+  for (const item of products) {
+    const { productId, quantity } = item;
+
+    if (!productId || !quantity)
+      throw new BadRequest("Each product must have productId and quantity");
+
+    const productInWarehouse = await Product_WarehouseModel.findOne({
       productId,
-      categoryId,
-      productCode,
-      quantity,
-      status: "pending",
+      warehouseId: fromWarehouseId,
     });
 
+    if (!productInWarehouse) {
+      throw new NotFound(`Product ${productId} not found in the source warehouse`);
+    }
+
+    if (productInWarehouse.quantity < quantity) {
+      throw new BadRequest(
+        `Insufficient quantity for product ${productId} in source warehouse`
+      );
+    }
+
+    // خصم الكمية من المخزن المصدر مؤقتًا
     productInWarehouse.quantity -= quantity;
     await productInWarehouse.save();
-    
-    SuccessResponse(res, { message: "Transfer created successfully", transfer });  
+  }
+
+  // ✅ إنشاء التحويل بعد التحقق من كل المنتجات
+  const transfer = await TransferModel.create({
+    fromWarehouseId,
+    toWarehouseId,
+    products,
+    status: "pending",
+  });
+
+  SuccessResponse(res, {
+    message: "Transfer created successfully",
+    transfer,
+  });
 };
+
 
 
 // 🟡 المستودع يشوف كل التحويلات اللي تخصه (pending / received)
 export const getTransfersForWarehouse = async (req: Request, res: Response) => {
-  
-    const { warehouseId } = req.params;
+  const { warehouseId } = req.params;
 
-    const warehouse = await WarehouseModel.findById(warehouseId);
-    if (!warehouse) throw new NotFound("Warehouse not found");
+  // 🔍 تحقق من وجود المستودع
+  const warehouse = await WarehouseModel.findById(warehouseId);
+  if (!warehouse) throw new NotFound("Warehouse not found");
 
-    // كل التحويلات اللي تخص المستودع سواء كان مرسل أو مستقبل
-    const transfers = await TransferModel.find({
-      $or: [
-        { fromWarehouseId: warehouseId },
-        { toWarehouseId: warehouseId },
-      ],
-    })
-      .populate("fromWarehouseId", "name")
-      .populate("toWarehouseId", "name")
-      .populate("productId", "name productCode");
+  // 🔍 جلب كل التحويلات اللي تخص المستودع (مرسل أو مستقبل)
+  const transfers = await TransferModel.find({
+    $or: [{ fromWarehouseId: warehouseId }, { toWarehouseId: warehouseId }],
+  })
+    .populate("fromWarehouseId", "name")
+    .populate("toWarehouseId", "name")
+    .populate("products.productId", "name productCode");
 
-    const pending = transfers.filter(t => t.status === "pending");
-    const received = transfers.filter(t => t.status === "received");
+  // ✳️ تقسيم التحويلات حسب الحالة
+  const pending = transfers.filter((t) => t.status === "pending");
+  const received = transfers.filter((t) => t.status === "received");
+  const rejected = transfers.filter((t) => t.status === "rejected");
 
-     SuccessResponse(res, { message: "Transfers retrieved successfully", pending, received });
-  
+  SuccessResponse(res, {
+    message: "Transfers retrieved successfully",
+    pending,
+    received,
+    rejected,
+  });
 };
-
 export const getTransferById = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   const transfer = await TransferModel.findById(id)
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("productId", "name productCode");
+    .populate("products.productId", "name productCode");
+
   if (!transfer) throw new NotFound("Transfer not found");
-  SuccessResponse(res, { message: "Transfer retrieved successfully", transfer });
+
+  SuccessResponse(res, {
+    message: "Transfer retrieved successfully",
+    transfer,
+  });
 };
 
 
-// 🟢 تحديث التحويل إلى received (بس المستودع المستقبل يقدر)
-export const markTransferAsReceived = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { warehouseId } = req.body; // المستودع اللي بيعمل العملية
+export const updateTransferStatus = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { warehouseId, status, rejectedProducts, reason } = req.body;
 
-    const transfer = await TransferModel.findById(id);
-    
-    if (!transfer) throw new NotFound("Transfer not found");
+  const transfer = await TransferModel.findById(id);
 
-    // لو التحويل مش pending مينفعش يتعدل
-    if (transfer.status !== "pending")
-      throw new BadRequest("Only pending transfers can be received");
+  if (!transfer) throw new NotFound("Transfer not found");
+  if (transfer.status !== "pending")
+    throw new BadRequest("Only pending transfers can be updated");
 
-    // تحقق إن المستودع المستقبل هو اللي بيعمل الاستلام
-    if (transfer.toWarehouseId.toString() !== warehouseId)
-      throw new BadRequest("Only the receiving warehouse can mark this transfer as received");
+  // تأكد إن اللي بيعمل العملية هو المستودع المستقبل
+  if (transfer.toWarehouseId.toString() !== warehouseId)
+    throw new BadRequest("Only the receiving warehouse can update this transfer");
 
-    // تحديث الحالة
+  // ✅ الحالة الأولى: استلام كامل
+  if (status === "received") {
+    for (const item of transfer.products) {
+      const { productId, quantity } = item;
+
+      let productInWarehouse = await Product_WarehouseModel.findOne({
+        productId,
+        warehouseId,
+      });
+
+      if (productInWarehouse) {
+        productInWarehouse.quantity += quantity;
+        await productInWarehouse.save();
+      } else {
+        await Product_WarehouseModel.create({
+          productId,
+          warehouseId,
+          quantity,
+        });
+      }
+    }
+
     transfer.status = "received";
     await transfer.save();
 
-    //تحديث كمية المنتجات فى الفرع اللى جايله كده فاضل اللى طالع منه انت عاملها فوق
-    const productInWarehouse = await Product_WarehouseModel.findOne({productId: transfer.productId, warehouseId});
-    if(productInWarehouse){
-      productInWarehouse.quantity += transfer.quantity;
-      await productInWarehouse.save();
-    }
-    else{
-      await Product_WarehouseModel.create({
-        quantity: transfer.quantity,
-        productId: transfer.productId,
-        warehouseId,
+    return SuccessResponse(res, {
+      message: "Transfer marked as received successfully",
+      transfer,
+    });
+  }
+
+  // ❌ الحالة الثانية: رفض كلي أو جزئي
+  if (status === "rejected") {
+    // تحقق من وجود قائمة المرفوضين
+    if (!Array.isArray(rejectedProducts) || rejectedProducts.length === 0)
+      throw new BadRequest("Please provide rejectedProducts list");
+
+    // المنتجات اللي اترفضت
+    const rejectedList = transfer.products.filter((p) =>
+      rejectedProducts.includes(p.productId.toString())
+    );
+
+    // رجّع الكمية للمصدر الأصلي
+    for (const item of rejectedList) {
+      const { productId, quantity } = item;
+
+      const productInSource = await Product_WarehouseModel.findOne({
+        productId,
+        warehouseId: transfer.fromWarehouseId,
       });
+
+      if (productInSource) {
+        productInSource.quantity += quantity;
+        await productInSource.save();
+      } else {
+        await Product_WarehouseModel.create({
+          productId,
+          warehouseId: transfer.fromWarehouseId,
+          quantity,
+        });
+      }
     }
 
-    SuccessResponse(res, { message: "Transfer marked as received successfully", transfer });  
+    // إنشاء تحويل عكسي للمنتجات المرفوضة
+    const reverseTransfer = await TransferModel.create({
+      fromWarehouseId: transfer.toWarehouseId,
+      toWarehouseId: transfer.fromWarehouseId,
+      products: rejectedList,
+      status: "pending",
+    });
+
+    // تحديث الحالة الحالية إلى مرفوضة
+    transfer.status = "rejected";
+    (transfer as any).rejectionReason = reason || "No reason provided";
+    await transfer.save();
+
+    return SuccessResponse(res, {
+      message: "Transfer rejected successfully, reverse transfer created",
+      transfer,
+      reverseTransfer,
+    });
+  }
+
+  throw new BadRequest("Invalid status value");
 };
 
 export const gettransferin = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
+
   const warehouse = await WarehouseModel.findById(warehouseId);
-  if (!warehouse)
-    throw new NotFound("Warehouse not found");
-  // كل التحويلات اللي تخص المستودع سواء كان مرسل أو مستقبل
-  const transfers = await TransferModel.find({
-    $or: [
-      { toWarehouseId: warehouseId },
-    ],
-  })
+  if (!warehouse) throw new NotFound("Warehouse not found");
+
+  const transfers = await TransferModel.find({ toWarehouseId: warehouseId })
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("productId", "name productCode");
-  const pending = transfers.filter(t => t.status === "pending");
-  const received = transfers.filter(t => t.status === "received");
-  SuccessResponse(res, { message: "Transfers retrieved successfully", pending, received });
+    .populate("products.productId", "name productCode");
+
+  const pending = transfers.filter((t) => t.status === "pending");
+  const received = transfers.filter((t) => t.status === "received");
+  const rejected = transfers.filter((t) => t.status === "rejected");
+
+  SuccessResponse(res, {
+    message: "Incoming transfers retrieved successfully",
+    pending,
+    received,
+    rejected,
+  });
 };
+
+
+// 📦 التحويلات الخارجة (fromWarehouseId)
 export const gettransferout = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
+
   const warehouse = await WarehouseModel.findById(warehouseId);
-  if (!warehouse)
-    throw new NotFound("Warehouse not found");
-  // كل التحويلات اللي تخص المستودع سواء كان مرسل أو مستقبل
-  const transfers = await TransferModel.find({
-    $or: [
-      { fromWarehouseId: warehouseId },
-    ],
-  })
+  if (!warehouse) throw new NotFound("Warehouse not found");
+
+  const transfers = await TransferModel.find({ fromWarehouseId: warehouseId })
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("productId", "name productCode");
-  const pending = transfers.filter(t => t.status === "pending");
-  const received = transfers.filter(t => t.status === "received");
-  SuccessResponse(res, { message: "Transfers retrieved successfully", pending, received });
+    .populate("products.productId", "name productCode");
+
+  const pending = transfers.filter((t) => t.status === "pending");
+  const received = transfers.filter((t) => t.status === "received");
+  const rejected = transfers.filter((t) => t.status === "rejected");
+
+  SuccessResponse(res, {
+    message: "Outgoing transfers retrieved successfully",
+    pending,
+    received,
+    rejected,
+  });
 };
 
 
+// 🌐 كل التحويلات (للمشرف مثلاً)
 export const getalltransfers = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find()
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("productId", "name productCode");
-  SuccessResponse(res, { message: "Transfers retrieved successfully", transfers });
+    .populate("products.productId", "name productCode");
+
+  SuccessResponse(res, {
+    message: "All transfers retrieved successfully",
+    transfers,
+  });
 };
