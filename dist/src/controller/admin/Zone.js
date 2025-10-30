@@ -8,7 +8,7 @@ const response_1 = require("../../utils/response");
 const City_1 = require("../../models/schema/admin/City");
 const Country_1 = require("../../models/schema/admin/Country");
 const createzone = async (req, res) => {
-    const { name, cityId, countryId, cost } = req.body;
+    const { name, ar_name, cityId, countryId, cost } = req.body;
     if (!name || !cityId || !countryId || !cost)
         throw new BadRequest_1.BadRequest("All fields are required");
     const cityExists = await City_1.CityModels.findById(cityId);
@@ -21,7 +21,7 @@ const createzone = async (req, res) => {
     if (Zoneexists)
         throw new BadRequest_1.BadRequest("Zone already exists");
     const totalshipingcost = cityExists.shipingCost + cost;
-    const zone = await Zone_1.ZoneModel.create({ name, cityId, countryId, cost: totalshipingcost });
+    const zone = await Zone_1.ZoneModel.create({ name, ar_name, cityId, countryId, cost: totalshipingcost });
     (0, response_1.SuccessResponse)(res, { message: "Zone created successfully", zone });
 };
 exports.createzone = createzone;

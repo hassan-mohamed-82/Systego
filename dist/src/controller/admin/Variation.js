@@ -7,11 +7,11 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const createVariationWithOptions = async (req, res) => {
-    const { name, options } = req.body;
+    const { name, ar_name, options } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Variation name is required");
     // إنشاء الـ Variation
-    const variation = await Variation_1.VariationModel.create({ name });
+    const variation = await Variation_1.VariationModel.create({ name, ar_name });
     // إنشاء الـ Options لو موجودة
     if (options && Array.isArray(options)) {
         for (const opt of options) {
@@ -42,12 +42,14 @@ const getOneVariation = async (req, res) => {
 exports.getOneVariation = getOneVariation;
 const updateVariationWithOptions = async (req, res) => {
     const { id } = req.params;
-    const { name, options } = req.body;
+    const { name, ar_name, options } = req.body;
     const variation = await Variation_1.VariationModel.findById(id);
     if (!variation)
         throw new Errors_1.NotFound("Variation not found");
     if (name)
         variation.name = name;
+    if (ar_name)
+        variation.ar_name = ar_name;
     await variation.save();
     if (options && Array.isArray(options)) {
         for (const opt of options) {
