@@ -5,11 +5,11 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 
 export const createCurrency=async(req:Request,res:Response)=>{
-    const {name}=req.body;
+    const {name, ar_name}=req.body;
     if(!name) throw new BadRequest("Currency name is required");
     const existingCurrency=await CurrencyModel.findOne({name});
     if(existingCurrency) throw new BadRequest("Currency already exists");
-    const currency=await CurrencyModel.create({name});
+    const currency=await CurrencyModel.create({name, ar_name});
     SuccessResponse(res,{message:"Currency created successfully",currency});
 }
 

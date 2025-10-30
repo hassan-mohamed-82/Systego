@@ -6,13 +6,13 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 
 export const createTaxes = async (req: Request, res: Response) => {
-  const { name, status,amount ,type } = req.body;
+  const { name, ar_name, status,amount ,type } = req.body;
     if (!name || !amount || !type) {
         throw new BadRequest(" name, amount, type  are required");
     }
     const existingTax = await TaxesModel.findOne({ name });
     if (existingTax) throw new BadRequest("Tax already exists");
-    const tax = await TaxesModel.create({ name, status,amount ,type });
+    const tax = await TaxesModel.create({ name, ar_name, status,amount ,type });
     SuccessResponse(res, { message: "Tax created successfully", tax });
 };
 export const getTaxes = async (req: Request, res: Response) => {

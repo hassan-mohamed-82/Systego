@@ -15,7 +15,7 @@ if (!description) {
     const existingDepartment = await DepartmentModel.findOne({ name });
     if (existingDepartment) throw new BadRequest("Department already exists");
 
-    const department = await DepartmentModel.create({ name, description });
+    const department = await DepartmentModel.create({ name, description, ar_name, ar_description });
     SuccessResponse(res, { message: "create department successfully", department });
 };
 

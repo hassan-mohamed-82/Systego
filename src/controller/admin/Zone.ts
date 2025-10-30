@@ -8,7 +8,7 @@ import { CityModels } from "../../models/schema/admin/City";
 import { CountryModel } from "../../models/schema/admin/Country";
 
 export const createzone=async(req:Request,res:Response)=>{
-    const {name,cityId,countryId,cost}=req.body;
+    const {name,ar_name, cityId,countryId,cost}=req.body;
     if(!name || !cityId || !countryId || !cost) throw new BadRequest("All fields are required");
     const cityExists=await CityModels.findById(cityId);
     if(!cityExists) throw new BadRequest("City not found");
@@ -17,7 +17,7 @@ export const createzone=async(req:Request,res:Response)=>{
     const Zoneexists=await ZoneModel.findOne({name});
     if(Zoneexists) throw new BadRequest("Zone already exists");
     const totalshipingcost=cityExists.shipingCost+cost
-    const zone=await ZoneModel.create({name,cityId,countryId,cost:totalshipingcost});
+    const zone=await ZoneModel.create({name, ar_name, cityId,countryId,cost:totalshipingcost});
     SuccessResponse(res,{message:"Zone created successfully",zone});
 }
 
