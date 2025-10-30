@@ -10,7 +10,7 @@ exports.createVariationSchema = joi_1.default.object({
     ar_name: joi_1.default.string().trim().min(1).max(200).required(),
     options: joi_1.default.array().items(joi_1.default.alternatives().try(joi_1.default.string().trim().min(1).max(200), joi_1.default.object({
         name: joi_1.default.string().trim().min(1).max(200).required(),
-        status: joi_1.default.boolean().optional()
+        status: joi_1.default.boolean().optional(),
     })))
 });
 exports.updateVariationSchema = joi_1.default.object({

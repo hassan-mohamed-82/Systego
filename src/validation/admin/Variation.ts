@@ -8,7 +8,7 @@ export const createVariationSchema = Joi.object({
       Joi.string().trim().min(1).max(200),     
       Joi.object({
         name: Joi.string().trim().min(1).max(200).required(),
-        status: Joi.boolean().optional()
+        status: Joi.boolean().optional(),
       })
     )
   )
