@@ -8,6 +8,10 @@ const countrySchema = new mongoose_1.Schema({
         required: true,
         unique: true,
     },
+    ar_name: {
+        type: String,
+        required: true,
+    },
     isDefault: {
         type: Boolean,
         default: false,

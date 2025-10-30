@@ -12,7 +12,7 @@ const Errors_1 = require("../../Errors/");
 const products_1 = require("../../models/schema/admin/products");
 const mongoose_1 = __importDefault(require("mongoose"));
 const createcategory = async (req, res) => {
-    const { name, image, parentId } = req.body;
+    const { name, ar_name, image, parentId } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Category name is required");
     const existingCategory = await category_1.CategoryModel.findOne({ name });
@@ -27,7 +27,7 @@ const createcategory = async (req, res) => {
     if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
     }
-    const category = await category_1.CategoryModel.create({ name, image: imageUrl, parentId });
+    const category = await category_1.CategoryModel.create({ name, ar_name, image: imageUrl, parentId });
     (0, response_1.SuccessResponse)(res, { message: "create category successfully", category });
 };
 exports.createcategory = createcategory;

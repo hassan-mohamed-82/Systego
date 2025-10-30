@@ -14,7 +14,7 @@ const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createProduct = async (req, res) => {
-    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured } = req.body;
+    const { name, ar_name, image, categoryId, brandId, unit, price, ar_description, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
     // تحقق من أن categoryId مصفوفة
@@ -70,6 +70,7 @@ const createProduct = async (req, res) => {
     // إنشاء المنتج الأساسي
     const product = await products_1.ProductModel.create({
         name,
+        ar_name,
         image: imageUrl,
         categoryId,
         brandId,
@@ -77,6 +78,7 @@ const createProduct = async (req, res) => {
         price,
         quantity: 0,
         description,
+        ar_description,
         exp_ability,
         date_of_expiery,
         minimum_quantity_sale,
@@ -185,7 +187,7 @@ const getProduct = async (req, res) => {
 exports.getProduct = getProduct;
 const updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { name, image, categoryId, brandId, unit, price, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, is_featured } = req.body;
+    const { name, ar_name, image, categoryId, brandId, unit, price, description, ar_description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, is_featured } = req.body;
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
@@ -216,11 +218,13 @@ const updateProduct = async (req, res) => {
     }
     // ✅ تحديث باقي الحقول
     product.name = name ?? product.name;
+    product.ar_name = ar_name ?? product.ar_name;
     product.categoryId = categoryId ?? product.categoryId;
     product.brandId = brandId ?? product.brandId;
     product.unit = unit ?? product.unit;
     product.price = price ?? product.price;
     product.description = description ?? product.description;
+    product.ar_description = ar_description ?? product.ar_description;
     product.exp_ability = exp_ability ?? product.exp_ability;
     product.date_of_expiery = date_of_expiery ?? product.date_of_expiery;
     product.minimum_quantity_sale = minimum_quantity_sale ?? product.minimum_quantity_sale;

@@ -8,6 +8,10 @@ const citySchema = new mongoose_1.Schema({
         required: true,
         unique: true
     },
+    ar_name: {
+        type: String,
+        required: true,
+    },
     country: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Country',

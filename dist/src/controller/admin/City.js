@@ -7,9 +7,9 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors/");
 const Country_1 = require("../../models/schema/admin/Country");
 const createCity = async (req, res) => {
-    const { name, country, shipingCost } = req.body;
-    if (!name || !country || !shipingCost) {
-        throw new BadRequest_1.BadRequest("City name and country  are required");
+    const { name, ar_name, country, shipingCost } = req.body;
+    if (!name || !country || !shipingCost || !ar_name) {
+        throw new BadRequest_1.BadRequest("City name or ar_name and country  are required");
     }
     const existingCity = await City_1.CityModels.findOne({ name, country });
     if (existingCity)
@@ -17,7 +17,7 @@ const createCity = async (req, res) => {
     const countryExists = await Country_1.CountryModel.findById(country);
     if (!countryExists)
         throw new Errors_1.NotFound("Country not found");
-    const city = await City_1.CityModels.create({ name, country, shipingCost });
+    const city = await City_1.CityModels.create({ name, country, ar_name, shipingCost });
     await city.populate("country");
     const countries = await Country_1.CountryModel.find();
     (0, response_1.SuccessResponse)(res, { message: "create city successfully", city, countries });

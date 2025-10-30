@@ -6,7 +6,7 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const createDepartment = async (req, res) => {
-    const { name, description } = req.body;
+    const { name, description, ar_name, ar_description } = req.body;
     if (!name) {
         throw new BadRequest_1.BadRequest("Department name is required");
     }

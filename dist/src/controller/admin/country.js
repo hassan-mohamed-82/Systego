@@ -23,7 +23,7 @@ const getCountryById = async (req, res) => {
 };
 exports.getCountryById = getCountryById;
 const createCountry = async (req, res) => {
-    const { name, isDefault } = req.body;
+    const { name, ar_name, isDefault } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Country name is required");
     const existingCountry = await Country_1.CountryModel.findOne({ name });
@@ -33,7 +33,7 @@ const createCountry = async (req, res) => {
     let country;
     // الحالة 1: أول دولة في النظام
     if (!hasDefaultCountry) {
-        country = await Country_1.CountryModel.create({ name, isDefault: true });
+        country = await Country_1.CountryModel.create({ name, ar_name, isDefault: true });
         return (0, response_1.SuccessResponse)(res, {
             message: "Country created as default (first country)",
             country,

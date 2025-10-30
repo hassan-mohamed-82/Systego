@@ -37,6 +37,7 @@ exports.CategoryModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const categorySchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true },
     image: { type: String },
     parentId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category" },
     product_quantity: { type: Number, default: 0 },

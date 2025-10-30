@@ -7,9 +7,11 @@ exports.updateBrandSchema = exports.createBrandSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.createBrandSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
+    ar_name: joi_1.default.string().required(),
     logo: joi_1.default.string().optional(),
 });
 exports.updateBrandSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
+    ar_name: joi_1.default.string().optional(),
     logo: joi_1.default.string().optional(),
 });
