@@ -94,7 +94,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       } 
 
         const purchase_product_item = await PurchaseItemModel
-        .find({warehouse_id, product_id});
+        .findOne({warehouse_id, product_id});
         if(!purchase_product_item){
           if (ware_house) {
             ware_house.number_of_products += 1;
@@ -104,6 +104,7 @@ export const createPurchase = async (req: Request, res: Response) => {
      
       const PurchaseItems = await PurchaseItemModel.create({
         date: p.date,
+        warehouse_id: warehouse_id,
         purchase_id: purchase._id,
         category_id: category_id,
         product_id: product_id,

@@ -33,7 +33,7 @@ export const createTransfer = async (req: Request, res: Response) => {
 
     const productInWarehouse = await Product_WarehouseModel.findOne({
       productId,
-      warehouseId: fromWarehouseId,
+    WarehouseId: fromWarehouseId,
     });
 
     if (!productInWarehouse) {

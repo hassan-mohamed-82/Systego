@@ -71,7 +71,7 @@ const createPurchase = async (req, res) => {
                 }
             }
             const purchase_product_item = await purchase_item_1.PurchaseItemModel
-                .find({ warehouse_id, product_id });
+                .findOne({ warehouse_id, product_id });
             if (!purchase_product_item) {
                 if (ware_house) {
                     ware_house.number_of_products += 1;
@@ -80,6 +80,7 @@ const createPurchase = async (req, res) => {
             }
             const PurchaseItems = await purchase_item_1.PurchaseItemModel.create({
                 date: p.date,
+                warehouse_id: warehouse_id,
                 purchase_id: purchase._id,
                 category_id: category_id,
                 product_id: product_id,

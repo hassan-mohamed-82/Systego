@@ -8,11 +8,17 @@ import { SuccessResponse } from "../../utils/response";
 
 export const getproductWarehouse = async (req: Request, res: Response): Promise<void> => {
   const { warehouse_id } = req.params;
-    const warehouse = await WarehouseModel.findById(warehouse_id);
-    if (!warehouse) throw new NotFound("Warehouse not found");
-    const productWarehouses = await Product_WarehouseModel.find({ warehouse_id }).populate('product_id', 'name').populate('variation_id', 'name options').lean();
-    SuccessResponse(res, { productWarehouses });
-}
+
+  const warehouse = await WarehouseModel.findById(warehouse_id);
+  if (!warehouse) throw new NotFound("Warehouse not found");
+
+  const productWarehouses = await Product_WarehouseModel.find({ WarehouseId: warehouse_id })
+    .populate('productId', 'name')  
+    .lean();
+
+  SuccessResponse(res, { productWarehouses });
+};
+
 
 export const getproductWarehousebyid = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;

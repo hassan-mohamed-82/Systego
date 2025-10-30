@@ -10,7 +10,9 @@ const getproductWarehouse = async (req, res) => {
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     if (!warehouse)
         throw new index_1.NotFound("Warehouse not found");
-    const productWarehouses = await Product_Warehouse_1.Product_WarehouseModel.find({ warehouse_id }).populate('product_id', 'name').populate('variation_id', 'name options').lean();
+    const productWarehouses = await Product_Warehouse_1.Product_WarehouseModel.find({ WarehouseId: warehouse_id })
+        .populate('productId', 'name')
+        .lean();
     (0, response_1.SuccessResponse)(res, { productWarehouses });
 };
 exports.getproductWarehouse = getproductWarehouse;

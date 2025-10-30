@@ -25,7 +25,7 @@ const createTransfer = async (req, res) => {
             throw new BadRequest_1.BadRequest("Each product must have productId and quantity");
         const productInWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
             productId,
-            warehouseId: fromWarehouseId,
+            WarehouseId: fromWarehouseId,
         });
         if (!productInWarehouse) {
             throw new index_1.NotFound(`Product ${productId} not found in the source warehouse`);
