@@ -24,7 +24,7 @@ const getBrandById = async (req, res) => {
 };
 exports.getBrandById = getBrandById;
 const createBrand = async (req, res) => {
-    const { name, logo } = req.body;
+    const { name, logo, ar_name } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Brand name is required");
     const existingBrand = await brand_1.BrandModel.findOne({ name });
@@ -34,7 +34,7 @@ const createBrand = async (req, res) => {
     if (logo) {
         logoUrl = await (0, handleImages_1.saveBase64Image)(logo, Date.now().toString(), req, "brands");
     }
-    const brand = await brand_1.BrandModel.create({ name, logo: logoUrl });
+    const brand = await brand_1.BrandModel.create({ name, ar_name, logo: logoUrl });
     (0, response_1.SuccessResponse)(res, { message: "create brand successfully", brand });
 };
 exports.createBrand = createBrand;

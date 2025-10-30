@@ -17,6 +17,8 @@ exports.priceSchema = joi_1.default.object({
 });
 exports.createProductSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
+    ar_name: joi_1.default.string().required(),
+    ar_description: joi_1.default.string().required(),
     image: joi_1.default.string().optional(),
     categoryId: joi_1.default.array().items(exports.objectId).min(1).required(),
     brandId: exports.objectId.required(),
@@ -41,6 +43,8 @@ exports.createProductSchema = joi_1.default.object({
 });
 exports.updateProductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
+    ar_name: joi_1.default.string().optional(),
+    ar_description: joi_1.default.string().optional(),
     image: joi_1.default.string().optional(),
     categoryId: joi_1.default.array().items(exports.objectId).optional(),
     brandId: exports.objectId.optional(),

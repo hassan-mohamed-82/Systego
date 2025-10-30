@@ -7,6 +7,7 @@ exports.BrandModel = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const brandSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String },
     logo: { type: String },
 }, { timestamps: true });
 brandSchema.virtual("products", {
