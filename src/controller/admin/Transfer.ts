@@ -114,7 +114,7 @@ export const getTransferById = async (req: Request, res: Response) => {
 
 export const updateTransferStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { warehouseId, status, rejectedProducts, reason } = req.body;
+  const { warehouseId, rejected_products, approved_products, reason } = req.body;
 
   const transfer = await TransferModel.findById(id);
 
@@ -126,90 +126,41 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   if (transfer.toWarehouseId.toString() !== warehouseId)
     throw new BadRequest("Only the receiving warehouse can update this transfer");
 
-  // ✅ الحالة الأولى: استلام كامل
-  if (status === "received") {
-    for (const item of transfer.products) {
-      const { productId, quantity } = item;
+  // ✅ الحالة الأولى: استلام كامل 
 
-      let productInWarehouse = await Product_WarehouseModel.findOne({
-        productId,
-        warehouseId,
-      });
+    if(approved_products){
+      for (const item of approved_products) {
+        const { productId, quantity } = item;
 
-      if (productInWarehouse) {
-        productInWarehouse.quantity += quantity;
-        await productInWarehouse.save();
-      } else {
-        await Product_WarehouseModel.create({
+        let productInWarehouse = await Product_WarehouseModel.findOne({
           productId,
           warehouseId,
-          quantity,
         });
+
+        if (productInWarehouse) {
+          productInWarehouse.quantity += quantity;
+          await productInWarehouse.save();
+        } else {
+          await Product_WarehouseModel.create({
+            productId,
+            warehouseId,
+            quantity,
+          });
+        }
       }
     }
 
-    transfer.status = "received";
+    if(rejected_products){
+      transfer.rejected_products = rejected_products;
+      await transfer.save();
+    }
+    transfer.status = "done";
     await transfer.save();
 
     return SuccessResponse(res, {
       message: "Transfer marked as received successfully",
       transfer,
     });
-  }
-
-  // ❌ الحالة الثانية: رفض كلي أو جزئي
-  if (status === "rejected") {
-    // تحقق من وجود قائمة المرفوضين
-    if (!Array.isArray(rejectedProducts) || rejectedProducts.length === 0)
-      throw new BadRequest("Please provide rejectedProducts list");
-
-    // المنتجات اللي اترفضت
-    const rejectedList = transfer.products.filter((p) =>
-      rejectedProducts.includes(p.productId.toString())
-    );
-
-    // رجّع الكمية للمصدر الأصلي
-    for (const item of rejectedList) {
-      const { productId, quantity } = item;
-
-      const productInSource = await Product_WarehouseModel.findOne({
-        productId,
-        warehouseId: transfer.fromWarehouseId,
-      });
-
-      if (productInSource) {
-        productInSource.quantity += quantity;
-        await productInSource.save();
-      } else {
-        await Product_WarehouseModel.create({
-          productId,
-          warehouseId: transfer.fromWarehouseId,
-          quantity,
-        });
-      }
-    }
-
-    // إنشاء تحويل عكسي للمنتجات المرفوضة
-    const reverseTransfer = await TransferModel.create({
-      fromWarehouseId: transfer.toWarehouseId,
-      toWarehouseId: transfer.fromWarehouseId,
-      products: rejectedList,
-      status: "pending",
-    });
-
-    // تحديث الحالة الحالية إلى مرفوضة
-    transfer.status = "rejected";
-    (transfer as any).rejectionReason = reason || "No reason provided";
-    await transfer.save();
-
-    return SuccessResponse(res, {
-      message: "Transfer rejected successfully, reverse transfer created",
-      transfer,
-      reverseTransfer,
-    });
-  }
-
-  throw new BadRequest("Invalid status value");
 };
 
 export const gettransferin = async (req: Request, res: Response) => {

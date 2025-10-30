@@ -31,9 +31,45 @@ const TransferSchema = new mongoose.Schema({
     }
   ],
 
+  // مصفوفة المنتجات اللي بتترفض
+  rejected_products: [
+    {
+      productId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: "Product", 
+        required: true 
+      },
+      quantity: { 
+        type: Number, 
+        required: true, 
+        min: 1 
+      },
+      reason: { 
+        type: String, 
+        required: true, 
+      },
+    }
+  ],
+
+  // مصفوفة المنتجات اللي بتترفض
+  approved_products: [
+    {
+      productId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: "Product", 
+        required: true 
+      },
+      quantity: { 
+        type: Number, 
+        required: true, 
+        min: 1 
+      }, 
+    }
+  ],
+
   status: { 
     type: String, 
-    enum: ["pending", "received", "rejected"], 
+    enum: ["pending", "done"], 
     default: "pending" 
   },
 });
