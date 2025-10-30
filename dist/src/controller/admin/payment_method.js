@@ -7,8 +7,8 @@ const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const createPaymentMethod = async (req, res) => {
-    const { name, discription, icon, type } = req.body;
-    if (!name || !discription || !icon || !type) {
+    const { name, discription, icon, type, ar_name } = req.body;
+    if (!name || !discription || !icon || !type || ar_name) {
         throw new BadRequest_1.BadRequest("Please provide all the required fields including icon");
     }
     const existingPaymentMethod = await payment_methods_1.PaymentMethodModel.findOne({ name });
@@ -17,6 +17,7 @@ const createPaymentMethod = async (req, res) => {
     const iconUrl = await (0, handleImages_1.saveBase64Image)(icon, Date.now().toString(), req, "payment_methods");
     const paymentMethod = await payment_methods_1.PaymentMethodModel.create({
         name,
+        ar_name,
         discription,
         icon: iconUrl,
         isActive: true,
