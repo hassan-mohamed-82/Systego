@@ -7,7 +7,7 @@ import{saveBase64Image}from "../../utils/handleImages"
 export const createBankAccount = async (req: Request, res: Response) => {
   const { account_no, name, initial_balance, is_default, note, icon,ar_name } = req.body;
 
-  if (!account_no || !name || initial_balance ||ar_name === undefined) {
+  if (!account_no || !name || !initial_balance || !ar_name === undefined) {
     throw new BadRequest("Please provide all required fields");
   }
 

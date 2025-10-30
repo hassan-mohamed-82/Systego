@@ -8,7 +8,7 @@ const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const createBankAccount = async (req, res) => {
     const { account_no, name, initial_balance, is_default, note, icon, ar_name } = req.body;
-    if (!account_no || !name || initial_balance || ar_name === undefined) {
+    if (!account_no || !name || !initial_balance || !ar_name === undefined) {
         throw new BadRequest_1.BadRequest("Please provide all required fields");
     }
     const exists = await Financial_Account_1.BankAccountModel.findOne({ account_no });
