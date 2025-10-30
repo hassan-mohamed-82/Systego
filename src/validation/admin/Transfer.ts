@@ -16,29 +16,73 @@ export const createTransferSchema = Joi.object({
       "any.invalid": "Source and destination warehouses cannot be the same",
     }),
 
-  quantity: Joi.number()
-    .positive()
+  // 🧩 مصفوفة المنتجات
+  products: Joi.array()
+    .items(
+      Joi.object({
+        productId: Joi.string()
+          .required()
+          .messages({
+            "any.required": "Product ID is required for each item",
+            "string.empty": "Product ID cannot be empty",
+          }),
+        quantity: Joi.number()
+          .positive()
+          .required()
+          .messages({
+            "any.required": "Quantity is required for each product",
+            "number.base": "Quantity must be a number",
+            "number.positive": "Quantity must be a positive number",
+          }),
+      })
+    )
+    .min(1)
     .required()
     .messages({
-      "any.required": "Quantity is required",
-      "number.base": "Quantity must be a number",
-      "number.positive": "Quantity must be a positive number",
+      "array.base": "Products must be an array",
+      "array.min": "At least one product must be provided",
+      "any.required": "Products are required",
     }),
-
-  productId: Joi.string().optional(),
-  categoryId: Joi.string().optional(),
-  productCode: Joi.string().optional(),
-}).or("productId", "categoryId", "productCode") // لازم يكون فيه واحد على الأقل
-  .messages({
-    "object.missing": "Please provide productId, categoryId, or productCode",
-  });
+});
 
 
-export const markTransferAsReceivedSchema = Joi.object({
+// ✅ فاليديشن لتأكيد الاستلام أو الرفض
+export const updateTransferStatusSchema = Joi.object({
   warehouseId: Joi.string()
     .required()
     .messages({
       "any.required": "Receiving warehouse ID is required",
       "string.empty": "Receiving warehouse ID cannot be empty",
+    }),
+
+  status: Joi.string()
+    .valid("received", "rejected")
+    .required()
+    .messages({
+      "any.required": "Status is required",
+      "any.only": "Status must be either 'received' or 'rejected'",
+    }),
+
+  // في حالة الرفض ممكن نرسل منتجات مرفوضة
+  rejectedProducts: Joi.array()
+    .items(Joi.string())
+    .when("status", {
+      is: "rejected",
+      then: Joi.required(),
+      otherwise: Joi.forbidden(),
+    })
+    .messages({
+      "any.required": "rejectedProducts is required when rejecting a transfer",
+    }),
+
+  reason: Joi.string()
+    .allow("")
+    .when("status", {
+      is: "rejected",
+      then: Joi.optional(),
+      otherwise: Joi.forbidden(),
+    })
+    .messages({
+      "string.base": "Reason must be a string",
     }),
 });
