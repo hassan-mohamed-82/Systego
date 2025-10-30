@@ -7,6 +7,10 @@ const currencySchema = new Schema({
         required: true,
         unique: true
     },
+    ar_name: {
+        type: String,
+        required: true,
+    },
 }, { timestamps: true } );
 
 export const CurrencyModel = mongoose.model("Currency", currencySchema);

@@ -7,11 +7,11 @@ import { SuccessResponse } from "../../utils/response";
 
 export const createVariationWithOptions = async (req: Request, res: Response) => {
 
-const { name, options } = req.body;
+const { name, ar_name, options } = req.body;
     if (!name) throw new BadRequest("Variation name is required");
 
     // إنشاء الـ Variation
-    const variation = await VariationModel.create({ name });
+    const variation = await VariationModel.create({ name, ar_name });
 
     // إنشاء الـ Options لو موجودة
     if (options && Array.isArray(options)) {
@@ -52,12 +52,13 @@ export const getOneVariation = async (req: Request, res: Response) => {
 
 export const updateVariationWithOptions = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { name, options } = req.body;
+    const { name, ar_name, options } = req.body;
 
     const variation = await VariationModel.findById(id);
     if (!variation) throw new NotFound("Variation not found");
 
     if (name) variation.name = name;
+    if (ar_name) variation.ar_name = ar_name;
     await variation.save();
 
     if (options && Array.isArray(options)) {

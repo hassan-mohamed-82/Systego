@@ -2,6 +2,7 @@ import mongoose, { Document, Schema, Model } from "mongoose";
 
 // واجهة Variation
 export interface IVariation extends Document {
+  ar_name: string;
   name: string;
   createdAt: Date;
   updatedAt: Date;
@@ -18,6 +19,7 @@ export interface IOption extends Document {
   const VariationSchema: Schema<IVariation> = new Schema(
   {
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true },
   },
   { timestamps: true }
 );
