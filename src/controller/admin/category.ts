@@ -9,7 +9,7 @@ import { ProductModel } from "../../models/schema/admin/products";
 import mongoose from "mongoose";
 
 export const createcategory = async (req: Request, res: Response) => {
-  const { name, image, parentId } = req.body;
+  const { name, ar_name, image, parentId } = req.body;
   if (!name ) throw new BadRequest("Category name is required");
   const existingCategory = await CategoryModel.findOne({ name });
   if (existingCategory) throw new BadRequest("Category already exists");
@@ -24,7 +24,7 @@ export const createcategory = async (req: Request, res: Response) => {
   }
 
 
-  const category = await CategoryModel.create({ name, image: imageUrl , parentId });
+  const category = await CategoryModel.create({ name, ar_name, image: imageUrl , parentId });
   SuccessResponse(res, { message: "create category successfully", category });
 };
 

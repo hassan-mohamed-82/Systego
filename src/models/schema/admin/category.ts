@@ -3,6 +3,7 @@ import mongoose, { Schema } from "mongoose";
 const categorySchema =new Schema(
   {
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true },
     image: { type: String },
     parentId: { type: Schema.Types.ObjectId, ref: "Category" },
     product_quantity: { type: Number, default: 0 },

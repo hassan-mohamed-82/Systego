@@ -6,6 +6,10 @@ const countrySchema = new Schema({
     required: true,
     unique: true,
   },
+  ar_name: {
+    type: String,
+    required: true, 
+  },
   isDefault: {
     type: Boolean,
     default: false, 

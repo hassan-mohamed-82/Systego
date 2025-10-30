@@ -6,6 +6,10 @@ const citySchema = new Schema({
     required: true,
     unique: true
   },
+  ar_name: {
+    type: String,
+    required: true, 
+  },
   country: {
     type: Schema.Types.ObjectId, 
     ref: 'Country',

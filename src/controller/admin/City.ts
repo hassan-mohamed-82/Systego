@@ -7,9 +7,9 @@ import { NotFound } from "../../Errors/";
 import { CountryModel } from "../../models/schema/admin/Country";
 
 export const createCity = async (req: Request, res: Response) => {
-  const { name, country , shipingCost } = req.body;
-  if (!name || !country || !shipingCost) {
-    throw new BadRequest("City name and country  are required");
+  const { name, ar_name, country , shipingCost } = req.body;
+  if (!name || !country || !shipingCost || !ar_name) {
+    throw new BadRequest("City name or ar_name and country  are required");
   }
   const existingCity = await CityModels.findOne({ name, country });
   if (existingCity) throw new BadRequest("City already exists in this country");
@@ -17,7 +17,7 @@ export const createCity = async (req: Request, res: Response) => {
   const countryExists = await CountryModel.findById(country);
   if (!countryExists) throw new NotFound("Country not found");
 
-  const city = await CityModels.create({ name, country ,shipingCost });
+  const city = await CityModels.create({ name, country, ar_name, shipingCost });
   await city.populate("country");
   const countries = await CountryModel.find();
 
@@ -59,9 +59,6 @@ export const updateCity = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "update city successfully", city });
 };
-
-
-
 
 export const deleteCity = async (req: Request, res: Response) => {
   const { id } = req.params;

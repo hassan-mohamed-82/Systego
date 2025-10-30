@@ -16,11 +16,13 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 export const createProduct = async (req: Request, res: Response) => {
   const {
     name,
+    ar_name,
     image,
     categoryId,
     brandId,
     unit,
     price,
+    ar_description,
     description,
     exp_ability,
     date_of_expiery,
@@ -101,6 +103,7 @@ export const createProduct = async (req: Request, res: Response) => {
   // إنشاء المنتج الأساسي
   const product = await ProductModel.create({
     name,
+    ar_name,
     image: imageUrl,
     categoryId,
     brandId,
@@ -108,6 +111,7 @@ export const createProduct = async (req: Request, res: Response) => {
     price,
     quantity: 0,
     description,
+    ar_description,
     exp_ability,
     date_of_expiery,
     minimum_quantity_sale,
@@ -242,12 +246,14 @@ export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
   const {
     name,
+    ar_name,
     image,
     categoryId,
     brandId,
     unit,
     price,
     description,
+    ar_description,
     exp_ability,
     date_of_expiery,
     minimum_quantity_sale,
@@ -298,11 +304,13 @@ export const updateProduct = async (req: Request, res: Response) => {
 
   // ✅ تحديث باقي الحقول
   product.name = name ?? product.name;
+  product.ar_name = ar_name ?? product.ar_name;
   product.categoryId = categoryId ?? product.categoryId;
   product.brandId = brandId ?? product.brandId;
   product.unit = unit ?? product.unit;
   product.price = price ?? product.price;
   product.description = description ?? product.description;
+  product.ar_description = ar_description ?? product.ar_description;
   product.exp_ability = exp_ability ?? product.exp_ability;
   product.date_of_expiery = date_of_expiery ?? product.date_of_expiery;
   product.minimum_quantity_sale = minimum_quantity_sale ?? product.minimum_quantity_sale;

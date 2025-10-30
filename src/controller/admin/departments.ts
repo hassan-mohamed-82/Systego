@@ -5,7 +5,7 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 
 export const createDepartment = async (req: Request, res: Response) => {
-    const { name, description } = req.body;
+    const { name, description, ar_name, ar_description } = req.body;
     if (!name) {
   throw new BadRequest("Department name is required");
 }
