@@ -6,14 +6,14 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const createTaxes = async (req, res) => {
-    const { name, status, amount, type } = req.body;
+    const { name, ar_name, status, amount, type } = req.body;
     if (!name || !amount || !type) {
         throw new BadRequest_1.BadRequest(" name, amount, type  are required");
     }
     const existingTax = await Taxes_1.TaxesModel.findOne({ name });
     if (existingTax)
         throw new BadRequest_1.BadRequest("Tax already exists");
-    const tax = await Taxes_1.TaxesModel.create({ name, status, amount, type });
+    const tax = await Taxes_1.TaxesModel.create({ name, ar_name, status, amount, type });
     (0, response_1.SuccessResponse)(res, { message: "Tax created successfully", tax });
 };
 exports.createTaxes = createTaxes;

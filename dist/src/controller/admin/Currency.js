@@ -6,13 +6,13 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const createCurrency = async (req, res) => {
-    const { name } = req.body;
+    const { name, ar_name } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Currency name is required");
     const existingCurrency = await Currency_1.CurrencyModel.findOne({ name });
     if (existingCurrency)
         throw new BadRequest_1.BadRequest("Currency already exists");
-    const currency = await Currency_1.CurrencyModel.create({ name });
+    const currency = await Currency_1.CurrencyModel.create({ name, ar_name });
     (0, response_1.SuccessResponse)(res, { message: "Currency created successfully", currency });
 };
 exports.createCurrency = createCurrency;

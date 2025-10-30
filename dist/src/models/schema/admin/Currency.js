@@ -41,5 +41,9 @@ const currencySchema = new mongoose_1.Schema({
         required: true,
         unique: true
     },
+    ar_name: {
+        type: String,
+        required: true,
+    },
 }, { timestamps: true });
 exports.CurrencyModel = mongoose_1.default.model("Currency", currencySchema);

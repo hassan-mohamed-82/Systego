@@ -7,6 +7,7 @@ exports.ZoneModel = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const ZoneSchema = new mongoose_1.default.Schema({
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true },
     countryId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Country", required: true },
     cityId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "City", required: true },
     cost: { type: Number, },

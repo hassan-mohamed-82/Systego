@@ -8,8 +8,12 @@ const joi_1 = __importDefault(require("joi"));
 exports.createDepartmentSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
     description: joi_1.default.string().required(),
+    ar_name: joi_1.default.string().required(),
+    ar_description: joi_1.default.string().required(),
 });
 exports.updateDepartmentSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     description: joi_1.default.string().optional(),
+    ar_name: joi_1.default.string().optional(),
+    ar_description: joi_1.default.string().optional(),
 });

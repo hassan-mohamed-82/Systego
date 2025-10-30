@@ -8,6 +8,7 @@ const joi_1 = __importDefault(require("joi"));
 exports.createBankAccountSchema = joi_1.default.object({
     account_no: joi_1.default.string().max(100).required(),
     name: joi_1.default.string().max(100).required(),
+    ar_name: joi_1.default.string().max(100).required(),
     initial_balance: joi_1.default.number().min(0).required(),
     is_default: joi_1.default.boolean().default(false),
     note: joi_1.default.string().allow("", null),
@@ -16,6 +17,7 @@ exports.createBankAccountSchema = joi_1.default.object({
 exports.updateBankAccountSchema = joi_1.default.object({
     account_no: joi_1.default.string().max(100),
     name: joi_1.default.string().max(100),
+    ar_name: joi_1.default.string().max(100),
     initial_balance: joi_1.default.number().min(0),
     is_default: joi_1.default.boolean(),
     note: joi_1.default.string().allow("", null),

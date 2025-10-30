@@ -38,6 +38,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const BankAccountSchema = new mongoose_1.Schema({
     account_no: { type: String, required: true, maxlength: 100, unique: true, trim: true },
     name: { type: String, required: true, maxlength: 100, trim: true },
+    ar_name: { type: String, required: true, maxlength: 100, trim: true },
     initial_balance: { type: Number, required: true, min: 0 },
     is_default: { type: Boolean, default: false },
     note: { type: String, trim: true },

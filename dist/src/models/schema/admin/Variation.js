@@ -37,6 +37,7 @@ exports.OptionModel = exports.VariationModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const VariationSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true },
 }, { timestamps: true });
 const OptionSchema = new mongoose_1.Schema({
     variationId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Variation", required: true },
