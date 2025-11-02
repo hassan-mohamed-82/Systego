@@ -69,9 +69,10 @@ const TransferSchema = new mongoose_1.default.Schema({
     ],
     status: {
         type: String,
-        enum: ["pending", "done"],
+        enum: ["pending", "done", "rejected"],
         default: "pending"
     },
+    reason: { type: String, required: true },
 });
 TransferSchema.pre("save", async function (next) {
     if (!this.reference) {

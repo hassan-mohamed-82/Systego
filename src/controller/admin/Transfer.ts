@@ -119,56 +119,82 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { warehouseId, rejected_products, approved_products, reason } = req.body;
 
+  // 🧩 1. التأكد من وجود التحويل
   const transfer = await TransferModel.findById(id);
-
   if (!transfer) throw new NotFound("Transfer not found");
+
+  // 🧩 2. التأكد من أن حالته ما زالت pending
   if (transfer.status !== "pending")
     throw new BadRequest("Only pending transfers can be updated");
 
-  // تأكد إن اللي بيعمل العملية هو المستودع المستقبل
+  // 🧩 3. التأكد من أن المستودع المستلم هو اللي بينفّذ التحديث
   if (transfer.toWarehouseId.toString() !== warehouseId)
     throw new BadRequest("Only the receiving warehouse can update this transfer");
 
-  // ✅ الحالة الأولى: استلام كامل 
+  // ✅ 4. استلام المنتجات المقبولة
+  if (approved_products && approved_products.length > 0) {
+    for (const item of approved_products) {
+      const { productId, quantity } = item;
 
-    if(approved_products){
-      for (const item of approved_products) {
-        const { productId, quantity } = item;
+      let productInWarehouse = await Product_WarehouseModel.findOne({
+        productId,
+        warehouseId,
+      });
 
-        let productInWarehouse = await Product_WarehouseModel.findOne({
+      if (productInWarehouse) {
+        productInWarehouse.quantity += quantity;
+        await productInWarehouse.save();
+      } else {
+        await Product_WarehouseModel.create({
           productId,
           warehouseId,
+          quantity,
         });
-
-        if (productInWarehouse) {
-          productInWarehouse.quantity += quantity;
-          await productInWarehouse.save();
-        } else {
-          await Product_WarehouseModel.create({
-            productId,
-            warehouseId,
-            quantity,
-          });
-        }
       }
     }
 
-    if(rejected_products){
-      transfer.rejected_products = rejected_products;
-      await transfer.save();
-    }
-    transfer.status = "done";
-    await transfer.save();
-   const toWarehouse = await WarehouseModel.findById(warehouseId);
-if (toWarehouse) {
-  toWarehouse.stock_Quantity += transfer.products.reduce((acc: number, item: any) => acc + item.quantity, 0);
-  await toWarehouse.save();
-}
+    // حفظ المنتجات المقبولة داخل التحويل
+    transfer.approved_products = approved_products;
+  }
 
-    return SuccessResponse(res, {
-      message: "Transfer marked as received successfully",
-      transfer,
-    });
+  // ❌ 5. حفظ المنتجات المرفوضة (إن وُجدت)
+  if (rejected_products && rejected_products.length > 0) {
+    transfer.rejected_products = rejected_products;
+    transfer.reason = reason || "";
+  }
+
+  // ⚙️ 6. تحديد الحالة الجديدة للتحويل
+  if (approved_products && approved_products.length > 0) {
+    transfer.status = "done";
+  } else if (rejected_products && rejected_products.length > 0) {
+    transfer.status = "rejected";
+  }
+
+  await transfer.save();
+
+  // 🏬 7. تحديث المخزون الكلي للمستودع بناءً على المنتجات المقبولة فقط
+  const toWarehouse = await WarehouseModel.findById(warehouseId);
+  if (toWarehouse && transfer.approved_products && transfer.approved_products.length > 0) {
+    const totalApprovedQty = transfer.approved_products.reduce(
+      (acc: number, item: any) => acc + item.quantity,
+      0
+    );
+
+    console.log("Before:", toWarehouse.stock_Quantity);
+    console.log("Approved Products:", transfer.approved_products);
+    console.log("Added:", totalApprovedQty);
+
+    toWarehouse.stock_Quantity += totalApprovedQty;
+    await toWarehouse.save();
+
+    console.log("After:", toWarehouse.stock_Quantity);
+  }
+
+  // 🎉 8. إرسال استجابة النجاح
+  return SuccessResponse(res, {
+    message: "Transfer status updated successfully",
+    transfer,
+  });
 };
 
 export const gettransferin = async (req: Request, res: Response) => {
