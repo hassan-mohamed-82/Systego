@@ -26,7 +26,6 @@ export const createCity = async (req: Request, res: Response) => {
 };
 export const getCities = async (req: Request, res: Response) => {
   const cities = await CityModels.find().populate("country");
-  if (!cities || cities.length === 0) throw new NotFound("No cities found");
   const countries = await CountryModel.find();
 
   SuccessResponse(res, { message: "get all cities successfully", cities , countries});
