@@ -23,8 +23,8 @@ export const createzone=async(req:Request,res:Response)=>{
 
 export const getZones = async (req: Request, res: Response) => {
   const zones = await ZoneModel.find()
-    .populate("cityId", "name shipingCost")
-    .populate("countryId", "name");
+    .populate("cityId", "name shipingCost ar_name ")
+    .populate("countryId", "name ar_name ");
 
   SuccessResponse(res, {
     message: "Zones fetched successfully",
@@ -37,8 +37,8 @@ export const getZoneById = async (req: Request, res: Response) => {
   if (!id) throw new BadRequest("Zone id is required");
 
   const zone = await ZoneModel.findById(id)
-    .populate("cityId", "name shipingCost")
-    .populate("countryId", "name");
+    .populate("cityId", "name shipingCost ar_name ")
+    .populate("countryId", "name ar_name ");
 
   if (!zone) throw new NotFound("Zone not found");
 
