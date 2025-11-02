@@ -4,6 +4,8 @@ import { Request, Response } from "express";
 import { CountryModel } from "../../models/schema/admin/Country";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
+import { CityModels } from "../../models/schema/admin/City";
+import { ZoneModel } from "../../models/schema/admin/Zone";
 
 export const getCountries = async (req: Request, res: Response) => {
     const countries = await CountryModel.find();
@@ -95,10 +97,27 @@ export const updateCountry = async (req: Request, res: Response) => {
 
 
 export const deleteCountry = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    if (!id) throw new BadRequest("Country id is required");
-    const country = await CountryModel.findByIdAndDelete(id);
-    if (!country) throw new NotFound("Country not found");
-    SuccessResponse(res, { message: "delete country successfully", country });
+  const { id } = req.params;
+  if (!id) throw new BadRequest("Country id is required");
 
+  // 1️⃣ احذف الدولة
+  const country = await CountryModel.findByIdAndDelete(id);
+  if (!country) throw new NotFound("Country not found");
+
+  // 2️⃣ احذف المدن التابعة للدولة دي
+  const cities = await CityModels.find({ country: id });
+  const cityIds = cities.map((city) => city._id);
+
+  await CityModels.deleteMany({ country: id });
+
+  // 3️⃣ احذف الزونات التابعة لكل المدن دي
+  if (cityIds.length > 0) {
+    await ZoneModel.deleteMany({ city: { $in: cityIds } });
+  }
+
+  // 4️⃣ رجّع استجابة النجاح
+  SuccessResponse(res, {
+    message: "Country and related cities and zones deleted successfully",
+    country,
+  });
 };

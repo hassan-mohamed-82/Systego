@@ -6,6 +6,7 @@ const City_1 = require("../../models/schema/admin/City");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors/");
 const Country_1 = require("../../models/schema/admin/Country");
+const Zone_1 = require("../../models/schema/admin/Zone");
 const createCity = async (req, res) => {
     const { name, ar_name, country, shipingCost } = req.body;
     if (!name || !country || !shipingCost || !ar_name) {
@@ -63,6 +64,9 @@ const deleteCity = async (req, res) => {
     const city = await City_1.CityModels.findByIdAndDelete(id);
     if (!city)
         throw new Errors_1.NotFound("City not found");
+    const zones = await Zone_1.ZoneModel.find({ city: id });
+    const zoneIds = zones.map((zone) => zone._id);
+    await Zone_1.ZoneModel.deleteMany({ city: id });
     (0, response_1.SuccessResponse)(res, { message: "delete city successfully" });
 };
 exports.deleteCity = deleteCity;

@@ -5,6 +5,7 @@ import { CityModels } from "../../models/schema/admin/City";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
 import { CountryModel } from "../../models/schema/admin/Country";
+import { ZoneModel } from "../../models/schema/admin/Zone";
 
 export const createCity = async (req: Request, res: Response) => {
   const { name, ar_name, country , shipingCost } = req.body;
@@ -65,7 +66,10 @@ export const deleteCity = async (req: Request, res: Response) => {
 
   const city = await CityModels.findByIdAndDelete(id);
   if (!city) throw new NotFound("City not found");
-
+ 
+  const zones = await ZoneModel.find({ city: id });
+  const zoneIds = zones.map((zone) => zone._id);
+  await ZoneModel.deleteMany({ city: id });
   SuccessResponse(res, { message: "delete city successfully" });
 };
 

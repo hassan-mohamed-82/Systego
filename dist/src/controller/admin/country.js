@@ -5,6 +5,8 @@ const response_1 = require("../../utils/response");
 const Country_1 = require("../../models/schema/admin/Country");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors/");
+const City_1 = require("../../models/schema/admin/City");
+const Zone_1 = require("../../models/schema/admin/Zone");
 const getCountries = async (req, res) => {
     const countries = await Country_1.CountryModel.find();
     if (!countries || countries.length === 0)
@@ -90,9 +92,22 @@ const deleteCountry = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Country id is required");
+    // 1️⃣ احذف الدولة
     const country = await Country_1.CountryModel.findByIdAndDelete(id);
     if (!country)
         throw new Errors_1.NotFound("Country not found");
-    (0, response_1.SuccessResponse)(res, { message: "delete country successfully", country });
+    // 2️⃣ احذف المدن التابعة للدولة دي
+    const cities = await City_1.CityModels.find({ country: id });
+    const cityIds = cities.map((city) => city._id);
+    await City_1.CityModels.deleteMany({ country: id });
+    // 3️⃣ احذف الزونات التابعة لكل المدن دي
+    if (cityIds.length > 0) {
+        await Zone_1.ZoneModel.deleteMany({ city: { $in: cityIds } });
+    }
+    // 4️⃣ رجّع استجابة النجاح
+    (0, response_1.SuccessResponse)(res, {
+        message: "Country and related cities and zones deleted successfully",
+        country,
+    });
 };
 exports.deleteCountry = deleteCountry;
