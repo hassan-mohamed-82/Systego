@@ -4,7 +4,7 @@ import { BadRequest } from '../../../Errors/BadRequest';
 import { SuccessResponse } from '../../../utils/response';
 import { NotFound } from '../../../Errors';
 // Create Customer Group
-export const createCustomerGroup = async (req: Request, res: Response): Promise<void> => {
+export const createCustomerGroup = async (req: Request, res: Response) => {
         const { name, status = true } = req.body;
 
         // Validate required fields

@@ -7,7 +7,7 @@ import { BadRequest } from '../../../Errors/BadRequest';
 import { UserModel } from '../../../models/schema/admin/User';
 
 
-export const startCashierShift = async (req: Request, res: Response): Promise<void> => {
+export const startCashierShift = async (req: Request, res: Response)=> {
     const cashier_id = req.user?.id;
     console.log(cashier_id)
 

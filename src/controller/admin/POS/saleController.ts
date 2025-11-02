@@ -21,7 +21,7 @@ import { BankAccountModel } from '../../../models/schema/admin/Financial_Account
 
 
 
-export const createSale = async (req: Request, res: Response): Promise<void> => {
+export const createSale = async (req: Request, res: Response)=> {
     const {
         customer_id,
         warehouse_id,
@@ -240,7 +240,7 @@ export const createSale = async (req: Request, res: Response): Promise<void> => 
 };
 
 
-export const getSales = async (req: Request, res: Response): Promise<void> => {
+export const getSales = async (req: Request, res: Response)=> {
     const sales = await SaleModel.find()
         .populate('customer_id', 'name email phone_number')
         .populate('warehouse_id', 'name location')
@@ -255,7 +255,7 @@ export const getSales = async (req: Request, res: Response): Promise<void> => {
 }
 
 // update status sale
-export const updateSaleStatus = async (req: Request, res: Response): Promise<void> => {
+export const updateSaleStatus = async (req: Request, res: Response) => {
     const { saleId } = req.params;
     const { sale_status } = req.body;
     const sale = await SaleModel.findById(saleId);
@@ -265,7 +265,7 @@ export const updateSaleStatus = async (req: Request, res: Response): Promise<voi
     SuccessResponse(res, { message: "Sale status updated successfully"});
 }
 
-export const getSaleById = async (req: Request, res: Response): Promise<void> => {
+export const getSaleById = async (req: Request, res: Response)=> {
     const { saleId } = req.params;
     const sale = await SaleModel.findById(saleId)
         .populate('customer_id', 'name email phone_number')
@@ -286,7 +286,7 @@ export const getSaleById = async (req: Request, res: Response): Promise<void> =>
     SuccessResponse(res, {sale, products });
 }
 
-export const getAllSales = async (req: Request, res: Response): Promise<void> => {
+export const getAllSales = async (req: Request, res: Response) => {
     const sales = await SaleModel.find()
     .select('grand_total')
     .populate('customer_id', 'name')
@@ -294,7 +294,7 @@ export const getAllSales = async (req: Request, res: Response): Promise<void> =>
 }
 
 // get sales by status 
-export const getSalesByStatus = async (req: Request, res: Response): Promise<void> => {
+export const getSalesByStatus = async (req: Request, res: Response) => {
     const { status } = req.params;
     const sales = await SaleModel.find({ sale_status: status })
     .select('grand_total')

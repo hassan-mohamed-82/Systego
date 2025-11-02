@@ -5,7 +5,7 @@ import { NotFound } from "../../../Errors/NotFound";
 import { SuccessResponse } from "../../../utils/response";
 
 
-export const createGiftCard = async (req: Request, res: Response): Promise<void> => {
+export const createGiftCard = async (req: Request, res: Response) => {
     const { code, amount, customer_id, expiration_date } = req.body;
 
     const existingCard = await GiftCardModel.findOne({ code });

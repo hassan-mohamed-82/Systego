@@ -5,7 +5,7 @@ import { NotFound } from '../../../Errors';
 import { SuccessResponse } from '../../../utils/response';
 
 // Create Customer
-export const createCustomer = async (req: Request, res: Response): Promise<void> => {
+export const createCustomer = async (req: Request, res: Response)=> {
         const {
             name,
             email,
