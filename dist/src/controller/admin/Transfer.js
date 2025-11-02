@@ -44,6 +44,8 @@ const createTransfer = async (req, res) => {
         products,
         status: "pending",
     });
+    fromWarehouse.stock_Quantity -= transfer.products.reduce((acc, item) => acc + item.quantity, 0);
+    await fromWarehouse.save();
     (0, response_1.SuccessResponse)(res, {
         message: "Transfer created successfully",
         transfer,
@@ -126,6 +128,11 @@ const updateTransferStatus = async (req, res) => {
     }
     transfer.status = "done";
     await transfer.save();
+    const toWarehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
+    if (toWarehouse) {
+        toWarehouse.stock_Quantity += transfer.products.reduce((acc, item) => acc + item.quantity, 0);
+        await toWarehouse.save();
+    }
     return (0, response_1.SuccessResponse)(res, {
         message: "Transfer marked as received successfully",
         transfer,

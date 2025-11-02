@@ -51,6 +51,8 @@ export const createTransfer = async (req: Request, res: Response) => {
     await productInWarehouse.save();
   }
 
+
+
   // ✅ إنشاء التحويل بعد التحقق من كل المنتجات
   const transfer = await TransferModel.create({
     fromWarehouseId,
@@ -58,6 +60,9 @@ export const createTransfer = async (req: Request, res: Response) => {
     products,
     status: "pending",
   });
+
+  fromWarehouse.stock_Quantity -=transfer.products.reduce((acc: number, item: any) => acc + item.quantity, 0);
+  await fromWarehouse.save();
 
   SuccessResponse(res, {
     message: "Transfer created successfully",
@@ -154,6 +159,11 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     }
     transfer.status = "done";
     await transfer.save();
+   const toWarehouse = await WarehouseModel.findById(warehouseId);
+if (toWarehouse) {
+  toWarehouse.stock_Quantity += transfer.products.reduce((acc: number, item: any) => acc + item.quantity, 0);
+  await toWarehouse.save();
+}
 
     return SuccessResponse(res, {
       message: "Transfer marked as received successfully",
