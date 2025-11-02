@@ -49,7 +49,7 @@ const createCountry = async (req, res) => {
         // لازم يكون فيه واحدة default بالفعل
         if (!hasDefaultCountry)
             throw new BadRequest_1.BadRequest("At least one country must be default");
-        country = await Country_1.CountryModel.create({ name, isDefault: false });
+        country = await Country_1.CountryModel.create({ name, ar_name, isDefault: false });
     }
     (0, response_1.SuccessResponse)(res, { message: "Country created successfully", country });
 };
