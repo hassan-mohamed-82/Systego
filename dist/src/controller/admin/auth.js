@@ -20,7 +20,6 @@ const login = async (req, res, next) => {
         if (!email || !password) {
             throw new BadRequest_1.BadRequest("Email and password are required");
         }
-        // ✅ نجيب المستخدم
         const user = await User_1.UserModel.findOne({ email })
             .populate("positionId")
             .lean();

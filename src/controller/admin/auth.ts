@@ -22,7 +22,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       throw new BadRequest("Email and password are required");
     }
 
-    // ✅ نجيب المستخدم
     const user = await UserModel.findOne({ email })
       .populate("positionId")
       .lean<AppUser>();
