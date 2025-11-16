@@ -40,7 +40,7 @@ export const getProductsByBrand = async (req: Request, res: Response) => {
     const { brandId } = req.params;
     const brand = await BrandModel.findById(brandId);
     if (!brand) throw new NotFound("Brand not found");
-    const products = await ProductModel.find({ brandId: brandId }).select('name')
+    const products = await ProductModel.find({ brandId: brandId }).select('name price image ar-name')
     SuccessResponse(res, {message: "Products list", products});
 }
 
