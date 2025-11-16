@@ -32,7 +32,7 @@ const getProductsByCategory = async (req, res) => {
     const category = await category_1.CategoryModel.findById(categoryId);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    const products = await products_1.ProductModel.find({ categoryId: categoryId }).select('name');
+    const products = await products_1.ProductModel.find({ categoryId: categoryId }).select('name price image ar-name');
     (0, response_1.SuccessResponse)(res, { message: "Products list", products });
 };
 exports.getProductsByCategory = getProductsByCategory;
@@ -62,7 +62,7 @@ const getAllSelections = async (req, res) => {
 exports.getAllSelections = getAllSelections;
 // get featured product
 const getFeaturedProducts = async (req, res) => {
-    const products = await products_1.ProductModel.find({ is_featured: true }).select('name price image');
+    const products = await products_1.ProductModel.find({ is_featured: true }).select('name price image ar-name');
     (0, response_1.SuccessResponse)(res, { message: "Featured products", products });
 };
 exports.getFeaturedProducts = getFeaturedProducts;

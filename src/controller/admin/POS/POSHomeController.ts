@@ -31,7 +31,7 @@ export const getProductsByCategory = async (req: Request, res: Response) => {
     const { categoryId } = req.params;
     const category = await CategoryModel.findById(categoryId);
     if (!category) throw new NotFound("Category not found");
-    const products = await ProductModel.find({ categoryId: categoryId }).select('name')
+    const products = await ProductModel.find({ categoryId: categoryId }).select('name price image ar-name');
     SuccessResponse(res, {message: "Products list", products});
 }
 
@@ -61,6 +61,6 @@ export const getAllSelections = async (req: Request, res: Response) => {
 
 // get featured product
 export const getFeaturedProducts = async (req: Request, res: Response) => {
-    const products = await ProductModel.find({ is_featured: true }).select('name price image');
+    const products = await ProductModel.find({ is_featured: true }).select('name price image ar-name');
     SuccessResponse(res, {message: "Featured products", products});
 }
