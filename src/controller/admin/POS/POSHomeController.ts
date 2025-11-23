@@ -13,6 +13,7 @@ import { NotFound } from "../../../Errors";
 import { SuccessResponse } from "../../../utils/response";
 import { Request, Response } from "express";
 import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
+import { CurrencyModel } from "../../../models/schema/admin/Currency";
 
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
@@ -55,7 +56,8 @@ export const getAllSelections = async (req: Request, res: Response) => {
     const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await CustomerModel.find().select('name');
     const customerGroups = await CustomerGroupModel.find().select('name');
-    SuccessResponse(res, {message: "Selections list", warehouses, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
+    const currency=await CurrencyModel.find().select('name  ar-name')
+    SuccessResponse(res, {message: "Selections list", warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
 

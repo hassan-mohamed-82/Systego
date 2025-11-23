@@ -301,3 +301,6 @@ export const getSalesByStatus = async (req: Request, res: Response) => {
     .populate('customer_id', 'name')
     SuccessResponse(res, { sales });
 }
+
+
+
