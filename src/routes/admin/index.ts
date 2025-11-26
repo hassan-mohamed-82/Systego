@@ -16,6 +16,7 @@ import AdjustmentRouter from './adjustments'
 import BankAccountRouter from "./Financial_Account";
 import CountryRouter from "./Country";
 import CityRouter from "./City";
+import Category_MaterialRouter from "./Category_Material";
 import PurchaseRouter from "./Purchase";
 import StockRouter from "./stocks";
 import ZoneRouter from "./Zone";
@@ -67,6 +68,7 @@ route.use("/stock",StockRouter);
 route.use("/zone",ZoneRouter);
 route.use("/currency",CurrencyRouter);
 route.use("/taxes",TaxesRouter);
+route.use("/category_material",Category_MaterialRouter);
 route.use("/variation",VariationRouter);
 route.use("/transfer",trnsferRouter)
 route.use("/product_warehouse",Product_warehouseRouter)

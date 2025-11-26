@@ -48,8 +48,8 @@ export const getProductsByBrand = async (req: Request, res: Response) => {
 // get all selections
 export const getAllSelections = async (req: Request, res: Response) => {
     const warehouses = await WarehouseModel.find().select('name');
-    const accounts = await BankAccountModel.find({ is_default: true}).select('name');
-    const taxes = await TaxesModel.find().select('name');
+    const accounts = await BankAccountModel.find({ is_default: true}).select('name account_no ar_name initial_balance icon note is_default');
+    const taxes = await TaxesModel.find().select('name status amount type'); 
     const discounts = await DiscountModel.find().select('name');
     const coupons = await CouponModel.find().select('coupon_code');
     const giftCards = await GiftCardModel.find().select('code amount');

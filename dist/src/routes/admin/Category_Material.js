@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Category_Material_1 = require("../../controller/admin/Category_Material");
+const validation_1 = require("../../middlewares/validation");
+const Category_Material_2 = require("../../validation/admin/Category_Material");
+const catchAsync_1 = require("../../utils/catchAsync");
+const router = (0, express_1.Router)();
+router.post("/", (0, validation_1.validate)(Category_Material_2.createCategoryMaterialSchema), (0, catchAsync_1.catchAsync)(Category_Material_1.createcategory));
+router.get("/", (0, catchAsync_1.catchAsync)(Category_Material_1.getCategories));
+router.get("/:id", (0, catchAsync_1.catchAsync)(Category_Material_1.getCategoryById));
+router.put("/:id", (0, validation_1.validate)(Category_Material_2.updateCategoryMaterialSchema), (0, catchAsync_1.catchAsync)(Category_Material_1.updateCategory));
+router.delete("/:id", (0, catchAsync_1.catchAsync)(Category_Material_1.deleteCategory));
+exports.default = router;
