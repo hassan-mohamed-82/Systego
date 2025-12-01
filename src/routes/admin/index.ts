@@ -24,6 +24,7 @@ import CurrencyRouter from "./Currency";
 import TaxesRouter from "./Taxes";
 import VariationRouter from "./Variation";
 import trnsferRouter from "./Transfer"
+import RecipeRouter from "./Recipe"
 import PointRouter from "./points"
 import redeem_PointsRouter from "./redeem_Points"
 import Product_warehouseRouter from "./product_warehouse"
@@ -53,6 +54,7 @@ route.use("/permission",permissionRouter);
 route.use("/category",CategoryRouter);
 route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
+route.use("/recipe",RecipeRouter);
 route.use("/warehouse",WarehouseRouter)
 route.use("/courier",CouriersRouter)
 route.use("/payment_method",paymentMethodRouter)

@@ -31,6 +31,10 @@ export const deleteMaterial = async (req:Request, res:Response) => {
 
 export const creatematerial=async(req:Request, res:Response) => {
   const {name,ar_name,photo,description,ar_description,category_id,quantity,expired_ability,date_of_expiry,low_stock,unit}=req.body;
-  const material = await MaterialModel.create({name,ar_name,photo,description,ar_description,category_id,quantity,expired_ability,date_of_expiry,low_stock,unit});
+  const photoUrl = await saveBase64Image(photo, Date.now().toString(), req, "materials");
+  const photoFinal = photoUrl || "";
+  const existingMaterial = await MaterialModel.findOne({ name });
+  if (existingMaterial) throw new BadRequest("Material with this name already exists");
+  const material = await MaterialModel.create({name,ar_name,photo: photoFinal,description,ar_description,category_id,quantity,expired_ability,date_of_expiry,low_stock,unit});
   return SuccessResponse(res,{message:"material created successfully", material});
 }

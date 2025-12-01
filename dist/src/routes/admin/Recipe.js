@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Recipe_1 = require("../../controller/admin/Recipe");
+const catchAsync_1 = require("../../utils/catchAsync");
+const router = (0, express_1.Router)();
+router.post("/", (0, catchAsync_1.catchAsync)(Recipe_1.createRecipe));
+router.get("/:productId", (0, catchAsync_1.catchAsync)(Recipe_1.getRecipesByProductId));
+router.get("/", (0, catchAsync_1.catchAsync)(Recipe_1.getAllRecipes));
+router.delete("/:id", (0, catchAsync_1.catchAsync)(Recipe_1.deleteRecipe));
+router.put("/:id", (0, catchAsync_1.catchAsync)(Recipe_1.updateRecipe));
+router.get("/check/:productId", (0, catchAsync_1.catchAsync)(Recipe_1.checkProductRecipe));
+router.post("/produce", (0, catchAsync_1.catchAsync)(Recipe_1.produceProductFromRecipe));
+router.get("/selection", (0, catchAsync_1.catchAsync)(Recipe_1.selecttion));
+exports.default = router;

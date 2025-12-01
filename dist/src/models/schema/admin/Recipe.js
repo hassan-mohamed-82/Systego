@@ -33,12 +33,24 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RecipeModel = void 0;
+exports.ProductionModel = exports.RecipeModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const recipeSchema = new mongoose_1.default.Schema({
     product_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Product', required: true },
     material_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Material', required: true },
-    quantity: { type: Number, required: true },
+    material_quantity: { type: Number, required: true },
     unit: { type: String, enum: ['kg', 'g', 'piece', 'liter', 'meter'], required: true },
 }, { timestamps: true });
 exports.RecipeModel = mongoose_1.default.model("Recipe", recipeSchema);
+const productionSchema = new mongoose_1.default.Schema({
+    product_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Product", required: true },
+    product_quantity: { type: Number, required: true }, // كام وحدة اتعملت
+    materials: [
+        {
+            material_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Material", required: true },
+            material_quantity: { type: Number, required: true }, // الكمية اللي اتخصمت
+            unit: { type: String, required: true },
+        },
+    ],
+}, { timestamps: true });
+exports.ProductionModel = mongoose_1.default.model("Production", productionSchema);

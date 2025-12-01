@@ -5,6 +5,7 @@ const Materials_1 = require("../../models/schema/admin/Materials");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
+const handleImages_1 = require("../../utils/handleImages");
 const deleteImage_1 = require("../../utils/deleteImage");
 const getMaterials = async (req, res) => {
     const materials = await Materials_1.MaterialModel.find();
@@ -35,7 +36,12 @@ const deleteMaterial = async (req, res) => {
 exports.deleteMaterial = deleteMaterial;
 const creatematerial = async (req, res) => {
     const { name, ar_name, photo, description, ar_description, category_id, quantity, expired_ability, date_of_expiry, low_stock, unit } = req.body;
-    const material = await Materials_1.MaterialModel.create({ name, ar_name, photo, description, ar_description, category_id, quantity, expired_ability, date_of_expiry, low_stock, unit });
+    const photoUrl = await (0, handleImages_1.saveBase64Image)(photo, Date.now().toString(), req, "materials");
+    const photoFinal = photoUrl || "";
+    const existingMaterial = await Materials_1.MaterialModel.findOne({ name });
+    if (existingMaterial)
+        throw new BadRequest_1.BadRequest("Material with this name already exists");
+    const material = await Materials_1.MaterialModel.create({ name, ar_name, photo: photoFinal, description, ar_description, category_id, quantity, expired_ability, date_of_expiry, low_stock, unit });
     return (0, response_1.SuccessResponse)(res, { message: "material created successfully", material });
 };
 exports.creatematerial = creatematerial;
