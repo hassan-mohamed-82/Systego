@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.produceProductFromRecipe = exports.checkProductRecipe = exports.selecttion = exports.getAllRecipes = exports.updateRecipe = exports.deleteRecipe = exports.getRecipesByProductId = exports.createRecipe = void 0;
+exports.getAllProductions = exports.produceProductFromRecipe = exports.checkProductRecipe = exports.selecttion = exports.getAllRecipes = exports.updateRecipe = exports.deleteRecipe = exports.getRecipesByProductId = exports.createRecipe = void 0;
 const Recipe_1 = require("../../models/schema/admin/Recipe");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -232,3 +232,8 @@ const produceProductFromRecipe = async (req, res) => {
     });
 };
 exports.produceProductFromRecipe = produceProductFromRecipe;
+const getAllProductions = async (req, res) => {
+    const productions = await Recipe_1.ProductionModel.find();
+    return (0, response_1.SuccessResponse)(res, { message: "Productions fetched successfully", productions });
+};
+exports.getAllProductions = getAllProductions;

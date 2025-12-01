@@ -250,3 +250,9 @@ export const produceProductFromRecipe = async (req: Request, res: Response) => {
     materials,
   });
 };
+
+
+export const getAllProductions = async (req: Request, res: Response) => {
+  const productions = await ProductionModel.find();
+  return SuccessResponse(res, { message: "Productions fetched successfully", productions });
+};

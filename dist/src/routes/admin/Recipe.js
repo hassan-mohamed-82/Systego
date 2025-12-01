@@ -6,6 +6,7 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const router = (0, express_1.Router)();
 router.post("/", (0, catchAsync_1.catchAsync)(Recipe_1.createRecipe));
 router.get("/:productId", (0, catchAsync_1.catchAsync)(Recipe_1.getRecipesByProductId));
+router.get("/productions", (0, catchAsync_1.catchAsync)(Recipe_1.getAllProductions));
 router.get("/", (0, catchAsync_1.catchAsync)(Recipe_1.getAllRecipes));
 router.delete("/:id", (0, catchAsync_1.catchAsync)(Recipe_1.deleteRecipe));
 router.put("/:id", (0, catchAsync_1.catchAsync)(Recipe_1.updateRecipe));
