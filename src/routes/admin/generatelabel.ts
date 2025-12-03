@@ -1,7 +1,12 @@
 import { Router } from "express";
-import { generateLabelsController } from "../../controller/admin/genrateLabel";
+import { generateLabelsController , getAvailableLabelSizes} from "../../controller/admin/genrateLabel";
 import { catchAsync } from "../../utils/catchAsync";
 const router = Router();
+
+router.get(
+  "/sizes",
+  catchAsync(getAvailableLabelSizes)
+);
 
 router.post(
   "/generate",

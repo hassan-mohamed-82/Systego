@@ -3,27 +3,140 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateLabelsPDF = void 0;
+exports.generateLabelsPDF = exports.PAPER_CONFIGS = void 0;
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const bwip_js_1 = __importDefault(require("bwip-js"));
 const products_1 = require("../models/schema/admin/products");
 const product_price_1 = require("../models/schema/admin/product_price");
 const NotFound_1 = require("../Errors/NotFound");
-const PAPER_CONFIGS = {
-    "20_per_sheet_8.5x11": {
-        labelsPerSheet: 20,
-        sheetWidth: 215.9,
-        sheetHeight: 279.4,
-        labelWidth: 101.6,
-        labelHeight: 25.4,
-        columns: 2,
-        rows: 10,
-        marginTop: 12.7,
-        marginLeft: 4.8,
-        gapX: 3,
+// ============================================
+// Paper Configurations
+// ============================================
+exports.PAPER_CONFIGS = {
+    // ============================================
+    // A4 Size (210mm x 297mm)
+    // ============================================
+    "65_per_sheet_a4": {
+        labelsPerSheet: 65,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 38.1,
+        labelHeight: 21.2,
+        columns: 5,
+        rows: 13,
+        marginTop: 10.7,
+        marginLeft: 4.7,
+        gapX: 2.5,
         gapY: 0,
     },
-    "30_per_sheet_8.5x11": {
+    "40_per_sheet_a4": {
+        labelsPerSheet: 40,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 48.5,
+        labelHeight: 25.4,
+        columns: 4,
+        rows: 10,
+        marginTop: 22,
+        marginLeft: 6,
+        gapX: 0,
+        gapY: 0,
+    },
+    "24_per_sheet_a4": {
+        labelsPerSheet: 24,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 64,
+        labelHeight: 34,
+        columns: 3,
+        rows: 8,
+        marginTop: 15,
+        marginLeft: 9,
+        gapX: 2.5,
+        gapY: 0,
+    },
+    "21_per_sheet_a4": {
+        labelsPerSheet: 21,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 63.5,
+        labelHeight: 38.1,
+        columns: 3,
+        rows: 7,
+        marginTop: 15.1,
+        marginLeft: 7.2,
+        gapX: 2.5,
+        gapY: 0,
+    },
+    "14_per_sheet_a4": {
+        labelsPerSheet: 14,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 99.1,
+        labelHeight: 38.1,
+        columns: 2,
+        rows: 7,
+        marginTop: 15.1,
+        marginLeft: 4.7,
+        gapX: 2.5,
+        gapY: 0,
+    },
+    "8_per_sheet_a4": {
+        labelsPerSheet: 8,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 99.1,
+        labelHeight: 67.7,
+        columns: 2,
+        rows: 4,
+        marginTop: 13.1,
+        marginLeft: 4.7,
+        gapX: 2.5,
+        gapY: 0,
+    },
+    "4_per_sheet_a4": {
+        labelsPerSheet: 4,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 99.1,
+        labelHeight: 139,
+        columns: 2,
+        rows: 2,
+        marginTop: 9.5,
+        marginLeft: 4.7,
+        gapX: 2.5,
+        gapY: 0,
+    },
+    "2_per_sheet_a4": {
+        labelsPerSheet: 2,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 199.6,
+        labelHeight: 143.5,
+        columns: 1,
+        rows: 2,
+        marginTop: 5,
+        marginLeft: 5.2,
+        gapX: 0,
+        gapY: 5,
+    },
+    // ============================================
+    // Letter Size (8.5" x 11")
+    // ============================================
+    "80_per_sheet_letter": {
+        labelsPerSheet: 80,
+        sheetWidth: 215.9,
+        sheetHeight: 279.4,
+        labelWidth: 44.5,
+        labelHeight: 17.5,
+        columns: 4,
+        rows: 20,
+        marginTop: 12.7,
+        marginLeft: 9.5,
+        gapX: 7.9,
+        gapY: 0,
+    },
+    "30_per_sheet_letter": {
         labelsPerSheet: 30,
         sheetWidth: 215.9,
         sheetHeight: 279.4,
@@ -33,13 +146,142 @@ const PAPER_CONFIGS = {
         rows: 10,
         marginTop: 12.7,
         marginLeft: 4.8,
-        gapX: 3,
+        gapX: 3.2,
+        gapY: 0,
+    },
+    "20_per_sheet_letter": {
+        labelsPerSheet: 20,
+        sheetWidth: 215.9,
+        sheetHeight: 279.4,
+        labelWidth: 101.6,
+        labelHeight: 25.4,
+        columns: 2,
+        rows: 10,
+        marginTop: 12.7,
+        marginLeft: 4.8,
+        gapX: 3.2,
+        gapY: 0,
+    },
+    "10_per_sheet_letter": {
+        labelsPerSheet: 10,
+        sheetWidth: 215.9,
+        sheetHeight: 279.4,
+        labelWidth: 101.6,
+        labelHeight: 50.8,
+        columns: 2,
+        rows: 5,
+        marginTop: 12.7,
+        marginLeft: 4.8,
+        gapX: 3.2,
+        gapY: 0,
+    },
+    "6_per_sheet_letter": {
+        labelsPerSheet: 6,
+        sheetWidth: 215.9,
+        sheetHeight: 279.4,
+        labelWidth: 101.6,
+        labelHeight: 84.7,
+        columns: 2,
+        rows: 3,
+        marginTop: 12.7,
+        marginLeft: 4.8,
+        gapX: 3.2,
+        gapY: 0,
+    },
+    // ============================================
+    // Thermal Labels
+    // ============================================
+    "1_per_sheet_4x6": {
+        labelsPerSheet: 1,
+        sheetWidth: 101.6,
+        sheetHeight: 152.4,
+        labelWidth: 101.6,
+        labelHeight: 152.4,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
+    },
+    "1_per_sheet_4x4": {
+        labelsPerSheet: 1,
+        sheetWidth: 101.6,
+        sheetHeight: 101.6,
+        labelWidth: 101.6,
+        labelHeight: 101.6,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
+    },
+    "1_per_sheet_3x2": {
+        labelsPerSheet: 1,
+        sheetWidth: 76.2,
+        sheetHeight: 50.8,
+        labelWidth: 76.2,
+        labelHeight: 50.8,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
+    },
+    "1_per_sheet_2x1": {
+        labelsPerSheet: 1,
+        sheetWidth: 50.8,
+        sheetHeight: 25.4,
+        labelWidth: 50.8,
+        labelHeight: 25.4,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
+    },
+    // ============================================
+    // Roll Labels
+    // ============================================
+    "1_per_sheet_58mm": {
+        labelsPerSheet: 1,
+        sheetWidth: 58,
+        sheetHeight: 40,
+        labelWidth: 58,
+        labelHeight: 40,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
+    },
+    "1_per_sheet_80mm": {
+        labelsPerSheet: 1,
+        sheetWidth: 80,
+        sheetHeight: 50,
+        labelWidth: 80,
+        labelHeight: 50,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
         gapY: 0,
     },
 };
+// ============================================
+// Helper Functions
+// ============================================
 const mmToPoints = (mm) => mm * 2.83465;
+// ============================================
+// Main Functions
+// ============================================
 const generateLabelsPDF = async (products, labelConfig, paperSize) => {
-    const paperConfig = PAPER_CONFIGS[paperSize];
+    const paperConfig = exports.PAPER_CONFIGS[paperSize];
     if (!paperConfig) {
         throw new NotFound_1.NotFound("Paper size configuration not found");
     }
@@ -109,7 +351,8 @@ const drawLabel = async (doc, data, x, y, width, height, config) => {
     const lineHeight = 10;
     // Business Name
     if (config.showBusinessName && data.businessName) {
-        doc.fontSize(config.businessNameSize || 10)
+        doc
+            .fontSize(config.businessNameSize || 10)
             .font("Helvetica-Bold")
             .text(data.businessName, innerX, currentY, {
             width: innerWidth,
@@ -119,7 +362,8 @@ const drawLabel = async (doc, data, x, y, width, height, config) => {
     }
     // Product Name
     if (config.showProductName && data.productName) {
-        doc.fontSize(config.productNameSize || 8)
+        doc
+            .fontSize(config.productNameSize || 8)
             .font("Helvetica")
             .text(data.productName, innerX, currentY, {
             width: innerWidth,
@@ -130,7 +374,8 @@ const drawLabel = async (doc, data, x, y, width, height, config) => {
     }
     // Brand
     if (config.showBrand && data.brandName) {
-        doc.fontSize(config.brandSize || 8)
+        doc
+            .fontSize(config.brandSize || 8)
             .font("Helvetica")
             .text(data.brandName, innerX, currentY, {
             width: innerWidth,
@@ -138,7 +383,7 @@ const drawLabel = async (doc, data, x, y, width, height, config) => {
         });
         currentY += lineHeight;
     }
-    // Price - بدون currency
+    // Price
     if (config.showPrice) {
         let priceText;
         if (config.showPromotionalPrice && data.promotionalPrice) {
@@ -147,7 +392,8 @@ const drawLabel = async (doc, data, x, y, width, height, config) => {
         else {
             priceText = `${data.price}`;
         }
-        doc.fontSize(config.priceSize || 9)
+        doc
+            .fontSize(config.priceSize || 9)
             .font("Helvetica-Bold")
             .text(priceText, innerX, currentY, {
             width: innerWidth,

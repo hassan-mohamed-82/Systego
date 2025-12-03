@@ -19,10 +19,10 @@ export interface LabelConfig {
 
 export interface PaperConfig {
   labelsPerSheet: number;
-  sheetWidth: number;  // بالـ mm
-  sheetHeight: number; // بالـ mm
-  labelWidth: number;  // بالـ mm
-  labelHeight: number; // بالـ mm
+  sheetWidth: number;
+  sheetHeight: number;
+  labelWidth: number;
+  labelHeight: number;
   columns: number;
   rows: number;
   marginTop: number;
@@ -31,8 +31,19 @@ export interface PaperConfig {
   gapY: number;
 }
 
+export interface LabelSize {
+  id: string;
+  name: string;
+  description: string;
+  paperType: "A4" | "Letter" | "Thermal" | "Roll";
+  labelsPerSheet: number;
+  labelSize: string;
+  recommended: boolean;
+  useCase: string;
+}
+
 export interface GenerateLabelsRequest {
   products: LabelProduct[];
   labelConfig: LabelConfig;
-  paperSize: string; // مثل "20_per_sheet_8.5x11"
+  paperSize: string;
 }
