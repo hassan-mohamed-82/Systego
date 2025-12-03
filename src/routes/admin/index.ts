@@ -21,6 +21,7 @@ import PurchaseRouter from "./Purchase";
 import StockRouter from "./stocks";
 import ZoneRouter from "./Zone";
 import CurrencyRouter from "./Currency";
+import generatelabelRouter from "./generatelabel";
 import TaxesRouter from "./Taxes";
 import VariationRouter from "./Variation";
 import trnsferRouter from "./Transfer"
@@ -62,6 +63,7 @@ route.use("/expense",expensesRouter)
 route.use("/coupon",CouponsRouter)
 route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)
+route.use("/label", generatelabelRouter);
 route.use("/bank_account",BankAccountRouter)
 route.use("/country",CountryRouter);
 route.use("/city",CityRouter);

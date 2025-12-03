@@ -7,7 +7,7 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const getPopup = async (req, res) => {
-    const popup = await Popup_1.PopupModel.findOne();
+    const popup = await Popup_1.PopupModel.find();
     if (!popup)
         throw new Errors_1.NotFound("Popup not found");
     return (0, response_1.SuccessResponse)(res, { message: "Popup found successfully", popup });

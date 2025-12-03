@@ -6,7 +6,7 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 
 export const getPopup = async (req: Request, res: Response) => {
-    const popup = await PopupModel.findOne();
+    const popup = await PopupModel.find();
     if (!popup) throw new NotFound("Popup not found");
     return SuccessResponse(res, {message: "Popup found successfully", popup});
 };
