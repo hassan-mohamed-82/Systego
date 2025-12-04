@@ -17,7 +17,7 @@ export const getPaymobId = async (req: Request, res: Response) => {
 };
 
 export const getPaymob = async (req: Request, res: Response) => {
-  const paymob = await PaymobModel.find();
+  const paymob = await PaymobModel.find().populate('payment_method_id', "name icon");
   if (!paymob) throw new NotFound("Paymob not found");
   return SuccessResponse(res, {
     message: "Get Paymob successfully",

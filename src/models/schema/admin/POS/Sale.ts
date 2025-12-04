@@ -1,6 +1,5 @@
 import mongoose, { Schema } from "mongoose";
 
-
 const SaleSchema = new Schema(
   {
     reference: {
@@ -18,7 +17,12 @@ const SaleSchema = new Schema(
     currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
     account_id: { type: Schema.Types.ObjectId, ref: 'BankAccount' },
     payment_method: { type: Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
-    sale_status: { type: String, required: true, default: 'pending', enum: ['completed', 'pending', 'returned', 'draft', 'processing'] },
+    sale_status: { 
+      type: String, 
+      required: true, 
+      default: 'pending', 
+      enum: ['completed', 'pending', 'returned', 'draft', 'processing'] 
+    },
     order_tax: { type: Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: Schema.Types.ObjectId, ref: 'Discount' },
     shipping_cost: { type: Number, default: 0 },
@@ -26,23 +30,34 @@ const SaleSchema = new Schema(
     coupon_id: { type: Schema.Types.ObjectId, ref: 'Coupon' },
     gift_card_id: { type: Schema.Types.ObjectId, ref: 'GiftCard' }
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-
-const productSalesSchema = new Schema({
+const productSalesSchema = new Schema(
+  {
     sale_id: { type: Schema.Types.ObjectId, ref: 'Sale', required: true },
-    product_id: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
-    quantity: { type: Number, required: true, min: 0 },
+    product_id: { type: Schema.Types.ObjectId, ref: 'Product' },  // ✅ مش required عشان الـ Bundle
+    bundle_id: { type: Schema.Types.ObjectId, ref: 'Pandel' },    // ✅ جديد
+    quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
-    options_id: [{ type: Schema.Types.ObjectId, ref: 'Option' }], 
-    isGift: { type: Boolean, default: false }
+    options_id: [{ type: Schema.Types.ObjectId, ref: 'Option' }],
+    isGift: { type: Boolean, default: false },
+    isBundle: { type: Boolean, default: false },  // ✅ جديد
   },
   { timestamps: true }
 );
+
+// ✅ Validation: لازم يكون فيه product_id أو bundle_id
+productSalesSchema.pre('save', function (next) {
+  if (!this.product_id && !this.bundle_id) {
+    return next(new Error('Either product_id or bundle_id is required'));
+  }
+  if (this.product_id && this.bundle_id) {
+    return next(new Error('Cannot have both product_id and bundle_id'));
+  }
+  next();
+});
 
 export const SaleModel = mongoose.model("Sale", SaleSchema);
 export const ProductSalesModel = mongoose.model("ProductSale", productSalesSchema);

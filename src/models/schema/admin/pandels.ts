@@ -7,8 +7,9 @@ const pandelSchema = new mongoose.Schema(
     enddate: { type: Date, required: true },
     status:{type:Boolean,default:true},
     images: [{ type: String }],
-    products: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
-    
+    productsId: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
+    price: { type: Number, required: true },
+  
   },
   { timestamps: true }
 );

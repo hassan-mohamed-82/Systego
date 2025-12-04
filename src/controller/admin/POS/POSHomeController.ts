@@ -14,6 +14,8 @@ import { SuccessResponse } from "../../../utils/response";
 import { Request, Response } from "express";
 import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
 import { CurrencyModel } from "../../../models/schema/admin/Currency";
+import { get } from "axios";
+import { PandelModel } from "../../../models/schema/admin/pandels";
 
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
@@ -66,3 +68,55 @@ export const getFeaturedProducts = async (req: Request, res: Response) => {
     const products = await ProductModel.find({ is_featured: true }).select('name price image ar-name');
     SuccessResponse(res, {message: "Featured products", products});
 }
+
+
+// get active bundles (pandels) for POS
+export const getActiveBundles = async (req: Request, res: Response) => {
+  const currentDate = new Date();
+
+  // جلب الـ Bundles النشطة فقط (في نطاق التاريخ)
+  const bundles = await PandelModel.find({
+    status: true,
+    startdate: { $lte: currentDate },
+    enddate: { $gte: currentDate },
+  }).populate("productsId", "name price image ar_name");
+
+  // حساب السعر الأصلي ونسبة التوفير
+  const bundlesWithPricing = bundles.map((bundle) => {
+    const products = bundle.productsId as any[];
+
+    // حساب السعر الأصلي (مجموع أسعار المنتجات)
+    const originalPrice = products.reduce((sum, product) => {
+      return sum + (product.price || 0);
+    }, 0);
+
+    // حساب التوفير
+    const savings = originalPrice - bundle.price;
+    const savingsPercentage =
+      originalPrice > 0 ? Math.round((savings / originalPrice) * 100) : 0;
+
+    return {
+      _id: bundle._id,
+      name: bundle.name,
+      images: bundle.images,
+      products: products.map((p) => ({
+        _id: p._id,
+        name: p.name,
+        ar_name: p.ar_name,
+        price: p.price,
+        image: p.image,
+      })),
+      originalPrice: originalPrice,
+      bundlePrice: bundle.price,
+      savings: savings,
+      savingsPercentage: savingsPercentage,
+      startdate: bundle.startdate,
+      enddate: bundle.enddate,
+    };
+  });
+
+  SuccessResponse(res, {
+    message: "Active bundles",
+    bundles: bundlesWithPricing,
+  });
+};

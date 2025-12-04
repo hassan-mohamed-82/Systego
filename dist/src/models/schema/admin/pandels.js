@@ -11,6 +11,7 @@ const pandelSchema = new mongoose_1.default.Schema({
     enddate: { type: Date, required: true },
     status: { type: Boolean, default: true },
     images: [{ type: String }],
-    products: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Product" }],
+    productsId: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Product" }],
+    price: { type: Number, required: true },
 }, { timestamps: true });
 exports.PandelModel = mongoose_1.default.model("Pandel", pandelSchema);

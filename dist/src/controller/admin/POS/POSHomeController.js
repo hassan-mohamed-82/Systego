@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
+exports.getActiveBundles = exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
 const products_1 = require("../../../models/schema/admin/products");
 const category_1 = require("../../../models/schema/admin/category");
 const brand_1 = require("../../../models/schema/admin/brand");
@@ -15,6 +15,7 @@ const Errors_1 = require("../../../Errors");
 const response_1 = require("../../../utils/response");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const Currency_1 = require("../../../models/schema/admin/Currency");
+const pandels_1 = require("../../../models/schema/admin/pandels");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const category = await category_1.CategoryModel.find();
@@ -68,3 +69,47 @@ const getFeaturedProducts = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Featured products", products });
 };
 exports.getFeaturedProducts = getFeaturedProducts;
+// get active bundles (pandels) for POS
+const getActiveBundles = async (req, res) => {
+    const currentDate = new Date();
+    // جلب الـ Bundles النشطة فقط (في نطاق التاريخ)
+    const bundles = await pandels_1.PandelModel.find({
+        status: true,
+        startdate: { $lte: currentDate },
+        enddate: { $gte: currentDate },
+    }).populate("productsId", "name price image ar_name");
+    // حساب السعر الأصلي ونسبة التوفير
+    const bundlesWithPricing = bundles.map((bundle) => {
+        const products = bundle.productsId;
+        // حساب السعر الأصلي (مجموع أسعار المنتجات)
+        const originalPrice = products.reduce((sum, product) => {
+            return sum + (product.price || 0);
+        }, 0);
+        // حساب التوفير
+        const savings = originalPrice - bundle.price;
+        const savingsPercentage = originalPrice > 0 ? Math.round((savings / originalPrice) * 100) : 0;
+        return {
+            _id: bundle._id,
+            name: bundle.name,
+            images: bundle.images,
+            products: products.map((p) => ({
+                _id: p._id,
+                name: p.name,
+                ar_name: p.ar_name,
+                price: p.price,
+                image: p.image,
+            })),
+            originalPrice: originalPrice,
+            bundlePrice: bundle.price,
+            savings: savings,
+            savingsPercentage: savingsPercentage,
+            startdate: bundle.startdate,
+            enddate: bundle.enddate,
+        };
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Active bundles",
+        bundles: bundlesWithPricing,
+    });
+};
+exports.getActiveBundles = getActiveBundles;

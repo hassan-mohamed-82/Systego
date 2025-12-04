@@ -15,6 +15,7 @@ import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
 import BankAccountRouter from "./Financial_Account";
 import CountryRouter from "./Country";
+import pandelRouter from "./pandels";
 import CityRouter from "./City";
 import Category_MaterialRouter from "./Category_Material";
 import PurchaseRouter from "./Purchase";
@@ -60,6 +61,7 @@ route.use("/warehouse",WarehouseRouter)
 route.use("/courier",CouriersRouter)
 route.use("/payment_method",paymentMethodRouter)
 route.use("/expense",expensesRouter)
+route.use("/pandel",pandelRouter)
 route.use("/coupon",CouponsRouter)
 route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)
