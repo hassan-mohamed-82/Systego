@@ -29,7 +29,9 @@ const updateExpense = async (req, res) => {
 };
 exports.updateExpense = updateExpense;
 const getExpenses = async (req, res) => {
-    const expenses = await expenses_1.ExpenseModel.find().populate("Category_id", "name ").populate("BankAccount ", "name ar-name");
+    const expenses = await expenses_1.ExpenseModel.find()
+        .populate("Category_id", "name")
+        .populate("financial_accountId", "name ar_name");
     (0, response_1.SuccessResponse)(res, { message: "Expenses retrieved successfully", expenses });
 };
 exports.getExpenses = getExpenses;
@@ -37,7 +39,9 @@ const getExpenseById = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Expense ID is required");
-    const expense = await expenses_1.ExpenseModel.findById(id).populate("Category_id", "name").populate("BankAccount", "name");
+    const expense = await expenses_1.ExpenseModel.findById(id)
+        .populate("Category_id", "name")
+        .populate("financial_accountId", "name ar_name");
     if (!expense)
         throw new Errors_1.NotFound("Expense not found");
     (0, response_1.SuccessResponse)(res, { message: "Expense retrieved successfully", expense });
