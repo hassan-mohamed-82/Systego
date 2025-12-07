@@ -51,7 +51,7 @@ export const getExpenseById = async (req: Request, res: Response) => {
 
 export const selectionExpense = async (req: Request, res: Response) => {
  const categories = await CategoryModel.find();
- const accounts = await BankAccountModel.find();
+ const accounts = await BankAccountModel.find({is_default:true});
 
  SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
 }
