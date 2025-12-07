@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteVariationWithOptions = exports.updateVariationWithOptions = exports.getOneVariation = exports.getAllVariations = exports.createVariationWithOptions = void 0;
+exports.deleteOption = exports.deleteVariationWithOptions = exports.updateVariationWithOptions = exports.getOneVariation = exports.getAllVariations = exports.createVariationWithOptions = void 0;
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Variation_2 = require("../../models/schema/admin/Variation");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -75,3 +75,11 @@ const deleteVariationWithOptions = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Variation and all related options deleted successfully" });
 };
 exports.deleteVariationWithOptions = deleteVariationWithOptions;
+const deleteOption = async (req, res) => {
+    const { id } = req.params;
+    const option = await Variation_2.OptionModel.findByIdAndDelete(id);
+    if (!option)
+        throw new Errors_1.NotFound("Option not found");
+    (0, response_1.SuccessResponse)(res, { message: "Option deleted successfully" });
+};
+exports.deleteOption = deleteOption;

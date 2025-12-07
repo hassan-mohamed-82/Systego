@@ -11,4 +11,5 @@ router.get("/", (0, catchAsync_1.catchAsync)(Variation_1.getAllVariations));
 router.get("/:id", (0, catchAsync_1.catchAsync)(Variation_1.getOneVariation));
 router.put("/:id", (0, validation_1.validate)(Variation_2.updateVariationSchema), (0, catchAsync_1.catchAsync)(Variation_1.updateVariationWithOptions));
 router.delete("/:id", (0, catchAsync_1.catchAsync)(Variation_1.deleteVariationWithOptions));
+router.delete("/option/:id", (0, catchAsync_1.catchAsync)(Variation_1.deleteOption));
 exports.default = router;

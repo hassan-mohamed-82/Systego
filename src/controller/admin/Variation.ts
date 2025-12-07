@@ -88,3 +88,11 @@ export const deleteVariationWithOptions = async (req: Request, res: Response) =>
     SuccessResponse(res, { message: "Variation and all related options deleted successfully" });
  
 };
+
+export const deleteOption = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const option = await OptionModel.findByIdAndDelete(id);
+    if (!option) throw new NotFound("Option not found");
+    SuccessResponse(res, { message: "Option deleted successfully" });
+ 
+};
