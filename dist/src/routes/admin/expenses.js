@@ -8,6 +8,7 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const route = (0, express_1.Router)();
 route.post("/", (0, validation_1.validate)(expenses_2.createExpenseSchema), (0, catchAsync_1.catchAsync)(expenses_1.createExpense));
 route.get("/", (0, catchAsync_1.catchAsync)(expenses_1.getExpenses));
+route.get("/selection", (0, catchAsync_1.catchAsync)(expenses_1.selectionExpense));
 route.get("/:id", (0, catchAsync_1.catchAsync)(expenses_1.getExpenseById));
 route.put("/:id", (0, validation_1.validate)(expenses_2.updateExpenseSchema), (0, catchAsync_1.catchAsync)(expenses_1.updateExpense));
 exports.default = route;

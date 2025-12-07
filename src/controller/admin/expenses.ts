@@ -3,6 +3,8 @@ import { ExpenseModel } from "../../models/schema/admin/expenses";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
+import { CategoryModel } from "../../models/schema/admin/category";
+import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 
 export const createExpense = async (req: Request, res: Response) => {
   const { name, amount, Category_id, note, financial_accountId } = req.body;
@@ -44,4 +46,12 @@ export const getExpenseById = async (req: Request, res: Response) => {
   if (!expense) throw new NotFound("Expense not found");
 
   SuccessResponse(res, { message: "Expense retrieved successfully", expense });
+}
+
+
+export const selectionExpense = async (req: Request, res: Response) => {
+ const categories = await CategoryModel.find();
+ const accounts = await BankAccountModel.find();
+
+ SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
 }

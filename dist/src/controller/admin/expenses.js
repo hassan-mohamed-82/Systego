@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getExpenseById = exports.getExpenses = exports.updateExpense = exports.createExpense = void 0;
+exports.selectionExpense = exports.getExpenseById = exports.getExpenses = exports.updateExpense = exports.createExpense = void 0;
 const expenses_1 = require("../../models/schema/admin/expenses");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
+const category_1 = require("../../models/schema/admin/category");
+const Financial_Account_1 = require("../../models/schema/admin/Financial_Account");
 const createExpense = async (req, res) => {
     const { name, amount, Category_id, note, financial_accountId } = req.body;
     const expense = new expenses_1.ExpenseModel({
@@ -47,3 +49,9 @@ const getExpenseById = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Expense retrieved successfully", expense });
 };
 exports.getExpenseById = getExpenseById;
+const selectionExpense = async (req, res) => {
+    const categories = await category_1.CategoryModel.find();
+    const accounts = await Financial_Account_1.BankAccountModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "Selection data retrieved successfully", categories, accounts });
+};
+exports.selectionExpense = selectionExpense;
