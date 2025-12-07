@@ -1,39 +1,37 @@
 import Joi from "joi";
 
 export const createExpenseSchema = Joi.object({
-  date: Joi.date().required().messages({
-    "any.required": "Expense date is required",
-  }),
-  reference: Joi.string().max(100).allow(null, ""),
-  warehouse_id: Joi.string().hex().length(24).required().messages({
-    "any.required": "Warehouse ID is required",
-  }),
-  expense_category_id: Joi.string().hex().length(24).required().messages({
-    "any.required": "Expense category is required",
+name: Joi.string().max(100).required().messages({
+    "any.required": "Expense name is required",
   }),
   amount: Joi.number().positive().precision(2).required().messages({
     "any.required": "Amount is required",
     "number.positive": "Amount must be greater than 0",
   }),
+  Category_id: Joi.string().hex().length(24).required().messages({
+    "any.required": "Category ID is required",
+  }),
   note: Joi.string().allow(null, ""),
- 
+  financial_accountId: Joi.string().hex().length(24).required().messages({
+    "any.required": "Financial Account ID is required",
+  }),
+
 });
 
 
 export const updateExpenseSchema = Joi.object({
-  date: Joi.date().optional().messages({
-    "any.required": "Expense date is required",
+
+  name: Joi.string().max(100).messages({
+    "string.max": "Expense name must be at most 100 characters",
   }),
-  reference: Joi.string().max(100).allow(null, ""),
-  warehouse_id: Joi.string().hex().length(24).optional().messages({
-    "any.required": "Warehouse ID is required",
-  }),
-  expense_category_id: Joi.string().hex().length(24).optional().messages({
-    "any.required": "Expense category is required",
-  }),
-  amount: Joi.number().positive().precision(2).optional().messages({
-    "any.required": "Amount is required",
+  amount: Joi.number().positive().precision(2).messages({
     "number.positive": "Amount must be greater than 0",
   }),
+  Category_id: Joi.string().hex().length(24).messages({
+    "string.length": "Category ID must be a valid 24-character hex string",
+  }),
   note: Joi.string().allow(null, ""),
+  financial_accountId: Joi.string().hex().length(24).messages({
+    "string.length": "Financial Account ID must be a valid 24-character hex string",
+  }),
 });

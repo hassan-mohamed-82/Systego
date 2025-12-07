@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  createExpense,getExpenseById,getExpenses,updateExpense,deleteExpense
+  createExpense,getExpenseById,getExpenses,updateExpense
 
 } from "../../controller/admin/expenses"
 import {validate} from"../../middlewares/validation";
@@ -14,6 +14,5 @@ route.post("/" ,validate(createExpenseSchema), catchAsync(createExpense));
 route.get("/",catchAsync(getExpenses));
 route.get("/:id" ,catchAsync(getExpenseById));
 route.put("/:id" ,validate(updateExpenseSchema), catchAsync(updateExpense));
-route.delete("/:id",catchAsync(deleteExpense));
 
 export default route;

@@ -10,5 +10,4 @@ route.post("/", (0, validation_1.validate)(expenses_2.createExpenseSchema), (0, 
 route.get("/", (0, catchAsync_1.catchAsync)(expenses_1.getExpenses));
 route.get("/:id", (0, catchAsync_1.catchAsync)(expenses_1.getExpenseById));
 route.put("/:id", (0, validation_1.validate)(expenses_2.updateExpenseSchema), (0, catchAsync_1.catchAsync)(expenses_1.updateExpense));
-route.delete("/:id", (0, catchAsync_1.catchAsync)(expenses_1.deleteExpense));
 exports.default = route;

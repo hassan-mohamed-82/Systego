@@ -1,15 +1,11 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose from "mongoose";
+import { CategoryMaterialModel } from "./Category_Material";
+const expenseSchema = new mongoose.Schema({
+name: { type: String, required: true },
+amount: { type: Number, required: true },
+Category_id: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
+note: { type: String },
+financial_accountId: { type: mongoose.Schema.Types.ObjectId, ref: "Financial_Account", required: true }
+}, { timestamps: true });
 
-const ExpenseSchema = new Schema(
-  {
-    date: { type: Date, required: true },
-    reference: { type: String, maxlength: 100, trim: true },
-    warehouse_id: { type: Schema.Types.ObjectId, ref: "Warehouse", required: true },
-    expense_category_id: { type: Schema.Types.ObjectId, ref: "ExpenseCategory", required: true },
-    amount: { type: Number, required: true },
-    note: { type: String, trim: true },
-  },
-  { timestamps: true }
-);
-
-export const ExpenseModel = mongoose.model("Expense", ExpenseSchema);
+export const ExpenseModel = mongoose.model("Expense", expenseSchema);
