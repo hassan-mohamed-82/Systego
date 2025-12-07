@@ -19,6 +19,7 @@ import pandelRouter from "./pandels";
 import CityRouter from "./City";
 import Category_MaterialRouter from "./Category_Material";
 import PurchaseRouter from "./Purchase";
+import discountRouter from "./discount";
 import StockRouter from "./stocks";
 import ZoneRouter from "./Zone";
 import CurrencyRouter from "./Currency";
@@ -58,6 +59,7 @@ route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
 route.use("/recipe",RecipeRouter);
 route.use("/warehouse",WarehouseRouter)
+route.use("/discount",discountRouter)
 route.use("/courier",CouriersRouter)
 route.use("/payment_method",paymentMethodRouter)
 route.use("/expense",expensesRouter)
