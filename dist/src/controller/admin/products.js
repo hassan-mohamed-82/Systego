@@ -14,7 +14,7 @@ const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createProduct = async (req, res) => {
-    const { name, ar_name, image, categoryId, brandId, unit, price, ar_description, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured } = req.body;
+    const { name, ar_name, image, categoryId, brandId, unit, price, ar_description, quantity, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
     // تحقق من أن categoryId مصفوفة
@@ -76,7 +76,7 @@ const createProduct = async (req, res) => {
         brandId,
         unit,
         price,
-        quantity: 0,
+        quantity,
         description,
         ar_description,
         exp_ability,
