@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getActiveBundles = exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
-const products_1 = require("../../../models/schema/admin/products");
 const category_1 = require("../../../models/schema/admin/category");
 const brand_1 = require("../../../models/schema/admin/brand");
 const coupons_1 = require("../../../models/schema/admin/coupons");
@@ -16,6 +15,7 @@ const response_1 = require("../../../utils/response");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const Currency_1 = require("../../../models/schema/admin/Currency");
 const pandels_1 = require("../../../models/schema/admin/pandels");
+const producthelper_1 = require("../../../utils/producthelper");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const category = await category_1.CategoryModel.find();
@@ -34,8 +34,12 @@ const getProductsByCategory = async (req, res) => {
     const category = await category_1.CategoryModel.findById(categoryId);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    const products = await products_1.ProductModel.find({ categoryId: categoryId }).select('name price image ar-name');
-    (0, response_1.SuccessResponse)(res, { message: "Products list", products });
+    // 🔹 استخدم نفس الـ helper لكن بفلتر الكاتيجوري
+    const products = await (0, producthelper_1.buildProductsWithVariations)({ categoryId });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Products list by category",
+        products,
+    });
 };
 exports.getProductsByCategory = getProductsByCategory;
 // get all products by brand 
@@ -44,8 +48,11 @@ const getProductsByBrand = async (req, res) => {
     const brand = await brand_1.BrandModel.findById(brandId);
     if (!brand)
         throw new Errors_1.NotFound("Brand not found");
-    const products = await products_1.ProductModel.find({ brandId: brandId }).select('name price image ar-name');
-    (0, response_1.SuccessResponse)(res, { message: "Products list", products });
+    const products = await (0, producthelper_1.buildProductsWithVariations)({ brandId });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Products list by brand",
+        products,
+    });
 };
 exports.getProductsByBrand = getProductsByBrand;
 // get all selections
@@ -65,8 +72,11 @@ const getAllSelections = async (req, res) => {
 exports.getAllSelections = getAllSelections;
 // get featured product
 const getFeaturedProducts = async (req, res) => {
-    const products = await products_1.ProductModel.find({ is_featured: true }).select('name price image ar-name');
-    (0, response_1.SuccessResponse)(res, { message: "Featured products", products });
+    const products = await (0, producthelper_1.buildProductsWithVariations)({ is_featured: true });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Featured products",
+        products,
+    });
 };
 exports.getFeaturedProducts = getFeaturedProducts;
 // get active bundles (pandels) for POS

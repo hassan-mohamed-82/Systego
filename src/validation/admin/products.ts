@@ -36,7 +36,7 @@ export const createProductSchema = Joi.object({
   show_quantity: Joi.boolean().optional(),
   maximum_to_show: Joi.number().optional(),
   gallery_product: Joi.array().items(Joi.string()).optional(), 
-  prices: Joi.array().items(priceSchema).required(),
+  prices: Joi.array().items(priceSchema).optional(),
   is_featured: Joi.boolean().optional()
 });
 

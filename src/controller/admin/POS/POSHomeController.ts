@@ -16,7 +16,7 @@ import { BankAccountModel } from "../../../models/schema/admin/Financial_Account
 import { CurrencyModel } from "../../../models/schema/admin/Currency";
 import { get } from "axios";
 import { PandelModel } from "../../../models/schema/admin/pandels";
-
+import {buildProductsWithVariations  } from "../../../utils/producthelper";
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
     const category = await CategoryModel.find()
@@ -31,21 +31,36 @@ export const getAllBrands = async (req: Request, res: Response) => {
 
 // get all products by category 
 export const getProductsByCategory = async (req: Request, res: Response) => {
-    const { categoryId } = req.params;
-    const category = await CategoryModel.findById(categoryId);
-    if (!category) throw new NotFound("Category not found");
-    const products = await ProductModel.find({ categoryId: categoryId }).select('name price image ar-name');
-    SuccessResponse(res, {message: "Products list", products});
-}
+  const { categoryId } = req.params;
+
+  const category = await CategoryModel.findById(categoryId);
+  if (!category) throw new NotFound("Category not found");
+
+  // 🔹 استخدم نفس الـ helper لكن بفلتر الكاتيجوري
+  const products = await buildProductsWithVariations({ categoryId });
+
+  SuccessResponse(res, {
+    message: "Products list by category",
+    products,
+  });
+};
+
 
 // get all products by brand 
 export const getProductsByBrand = async (req: Request, res: Response) => {
-    const { brandId } = req.params;
-    const brand = await BrandModel.findById(brandId);
-    if (!brand) throw new NotFound("Brand not found");
-    const products = await ProductModel.find({ brandId: brandId }).select('name price image ar-name')
-    SuccessResponse(res, {message: "Products list", products});
-}
+  const { brandId } = req.params;
+
+  const brand = await BrandModel.findById(brandId);
+  if (!brand) throw new NotFound("Brand not found");
+
+  const products = await buildProductsWithVariations({ brandId });
+
+  SuccessResponse(res, {
+    message: "Products list by brand",
+    products,
+  });
+};
+
 
 // get all selections
 export const getAllSelections = async (req: Request, res: Response) => {
@@ -65,9 +80,14 @@ export const getAllSelections = async (req: Request, res: Response) => {
 
 // get featured product
 export const getFeaturedProducts = async (req: Request, res: Response) => {
-    const products = await ProductModel.find({ is_featured: true }).select('name price image ar-name');
-    SuccessResponse(res, {message: "Featured products", products});
-}
+  const products = await buildProductsWithVariations({ is_featured: true });
+
+  SuccessResponse(res, {
+    message: "Featured products",
+    products,
+  });
+};
+
 
 
 // get active bundles (pandels) for POS

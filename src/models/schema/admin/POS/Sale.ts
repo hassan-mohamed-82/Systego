@@ -1,3 +1,4 @@
+import { number } from "joi";
 import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
@@ -17,12 +18,7 @@ const SaleSchema = new Schema(
     currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
     account_id: { type: Schema.Types.ObjectId, ref: 'BankAccount' },
     payment_method: { type: Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
-    sale_status: { 
-      type: String, 
-      required: true, 
-      default: 'pending', 
-      enum: ['completed', 'pending', 'returned', 'draft', 'processing'] 
-    },
+    order_pending: { type: Number, enum: [0, 1], default: 0 }, // 0: pending, 1: completed, 2: partial
     order_tax: { type: Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: Schema.Types.ObjectId, ref: 'Discount' },
     shipping_cost: { type: Number, default: 0 },

@@ -38,7 +38,7 @@ exports.createProductSchema = joi_1.default.object({
     show_quantity: joi_1.default.boolean().optional(),
     maximum_to_show: joi_1.default.number().optional(),
     gallery_product: joi_1.default.array().items(joi_1.default.string()).optional(),
-    prices: joi_1.default.array().items(exports.priceSchema).required(),
+    prices: joi_1.default.array().items(exports.priceSchema).optional(),
     is_featured: joi_1.default.boolean().optional()
 });
 exports.updateProductSchema = joi_1.default.object({

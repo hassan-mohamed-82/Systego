@@ -51,12 +51,7 @@ const SaleSchema = new mongoose_1.Schema({
     currency_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Currency' },
     account_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'BankAccount' },
     payment_method: { type: mongoose_1.Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
-    sale_status: {
-        type: String,
-        required: true,
-        default: 'pending',
-        enum: ['completed', 'pending', 'returned', 'draft', 'processing']
-    },
+    order_pending: { type: Number, enum: [0, 1], default: 0 }, // 0: pending, 1: completed, 2: partial
     order_tax: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Discount' },
     shipping_cost: { type: Number, default: 0 },
