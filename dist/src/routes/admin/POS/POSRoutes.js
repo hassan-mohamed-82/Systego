@@ -5,10 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const saleController_1 = require("../../../controller/admin/POS/saleController");
-const catchAsync_1 = require("../../../utils/catchAsync");
 const router = express_1.default.Router();
-router.post('/sales', (0, catchAsync_1.catchAsync)(saleController_1.createSale));
-router.get('/sales', (0, catchAsync_1.catchAsync)(saleController_1.getSales));
-router.get('/sales/pending', (0, catchAsync_1.catchAsync)(saleController_1.getsalePending));
-router.get('/sales/complete', (0, catchAsync_1.catchAsync)(saleController_1.getsaleunPending));
+router.post('/sales', saleController_1.createSale);
+router.get('/sales/:saleId', saleController_1.getSaleById);
+router.get('/sales', saleController_1.getSales);
+router.get('/sales/status/:status', saleController_1.getSalesByStatus);
+router.put('/sales/:saleId/status', saleController_1.updateSaleStatus);
 exports.default = router;
