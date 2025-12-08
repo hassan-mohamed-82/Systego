@@ -57,7 +57,9 @@ const SaleSchema = new mongoose_1.Schema({
     shipping_cost: { type: Number, default: 0 },
     grand_total: { type: Number, required: true },
     coupon_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Coupon' },
-    gift_card_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'GiftCard' }
+    gift_card_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'GiftCard' },
+    cashier_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    shift_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'CashierShift', required: true },
 }, { timestamps: true });
 const productSalesSchema = new mongoose_1.Schema({
     sale_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Sale', required: true },

@@ -291,7 +291,6 @@ export const createSale = async (req: Request, res: Response) => {
   });
 };
 
-
 export const getSales = async (req: Request, res: Response)=> {
     const sales = await SaleModel.find()
         .populate('customer_id', 'name email phone_number')
@@ -305,9 +304,6 @@ export const getSales = async (req: Request, res: Response)=> {
         .lean();
     SuccessResponse(res, { sales });
 }
-
-
-
 
 export const getAllSales = async (req: Request, res: Response) => {
     const sales = await SaleModel.find()

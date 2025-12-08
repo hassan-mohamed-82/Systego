@@ -1,14 +1,16 @@
 import express from 'express';
 import {
-    startCashierShift,
-    endCashierShift
+    startcashierShift,
+    endShiftWithReport,
+    endshiftcashier
 } from '../../../controller/admin/POS/CashierShiftController';
 import { authorize } from '../../../middlewares/authorized';
 
 const router = express.Router();
 
 
-router.post('/start', authorize("shift","add"), startCashierShift);
-router.put('/end/:shiftId', endCashierShift);
+router.post('/start', startcashierShift);
+router.put('/end', endshiftcashier);
+router.put('/end/:shiftId/report', endShiftWithReport);
 
 export default router;

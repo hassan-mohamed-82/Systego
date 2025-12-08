@@ -13,8 +13,8 @@ export function authenticated(
   }
 
   const token = authHeader.split(" ")[1];
-  const decoded = verifyToken(token); // 👈 بيرجع { id, name, role, positionId, roles, actions }
+  const decoded = verifyToken(token); // { id, name, role, positionId, roles, actions }
 
-  req.user = decoded; // ✅ نضيف كل البيانات للـ request
+  req.user = decoded; // 👈 كده نقدر نستخدمه جوّه أى controller
   next();
 }

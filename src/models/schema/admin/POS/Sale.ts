@@ -24,7 +24,10 @@ const SaleSchema = new Schema(
     shipping_cost: { type: Number, default: 0 },
     grand_total: { type: Number, required: true },
     coupon_id: { type: Schema.Types.ObjectId, ref: 'Coupon' },
-    gift_card_id: { type: Schema.Types.ObjectId, ref: 'GiftCard' }
+    gift_card_id: { type: Schema.Types.ObjectId, ref: 'GiftCard' },
+      cashier_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  shift_id:   { type: Schema.Types.ObjectId, ref: 'CashierShift', required: true },
+    
   },
   { timestamps: true }
 );
