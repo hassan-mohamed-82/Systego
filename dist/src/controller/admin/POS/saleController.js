@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSalesByStatus = exports.getAllSales = exports.getSaleById = exports.updateSaleStatus = exports.getSales = exports.createSale = void 0;
+exports.getsaleunPending = exports.getsalePending = exports.getAllSales = exports.getSales = exports.createSale = void 0;
 const Sale_1 = require("../../../models/schema/admin/POS/Sale");
 const Warehouse_1 = require("../../../models/schema/admin/Warehouse");
 const Errors_1 = require("../../../Errors");
@@ -18,7 +18,7 @@ const points_1 = require("../../../models/schema/admin/points");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const pandels_1 = require("../../../models/schema/admin/pandels");
 const createSale = async (req, res) => {
-    const { customer_id, warehouse_id, currency_id, account_id, sale_status = 'pending', order_tax, order_discount, shipping_cost = 0, grand_total, coupon_id, products = [], bundles = [], payment_method, gift_card_id } = req.body;
+    const { customer_id, warehouse_id, currency_id, account_id, order_pending = 0, order_tax, order_discount, shipping_cost = 0, grand_total, coupon_id, products = [], bundles = [], payment_method, gift_card_id } = req.body;
     // Helper function to find product price
     const findProductPrice = async (item) => {
         const query = item.product_id
@@ -30,6 +30,7 @@ const createSale = async (req, res) => {
         }
         return productPrice;
     };
+    const isPending = order_pending === 1;
     // ========== Validations ==========
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     if (!warehouse)
@@ -52,6 +53,10 @@ const createSale = async (req, res) => {
     // Points payment check
     const isPointsPayment = paymentMethod.name?.toLowerCase() === 'points' ||
         paymentMethod.type?.toLowerCase() === 'points';
+    // الدفع بالنقاط لازم يكون الطلب مش pending
+    if (isPointsPayment && isPending) {
+        throw new BadRequest_1.BadRequest("Points payment cannot be used for pending orders");
+    }
     if (isPointsPayment) {
         const pointsConfig = await points_1.PointModel.findOne().sort({ createdAt: -1 });
         if (!pointsConfig)
@@ -147,7 +152,7 @@ const createSale = async (req, res) => {
         warehouse_id,
         currency_id,
         account_id,
-        sale_status,
+        order_pending,
         order_tax,
         order_discount,
         shipping_cost,
@@ -158,8 +163,8 @@ const createSale = async (req, res) => {
     });
     const savedSale = await newSale.save();
     const saleId = savedSale._id;
-    // Create payment
-    if (payment_method && !isPointsPayment) {
+    // ========== Create Payment (فقط لو مش pending) ==========
+    if (!isPending && payment_method && !isPointsPayment) {
         await payment_1.PaymentModel.create({
             sale_id: saleId,
             amount: grand_total,
@@ -181,14 +186,15 @@ const createSale = async (req, res) => {
             isGift: item.isGift || false,
             isBundle: false,
         });
-        // Update inventory
-        await product_price_1.ProductPriceModel.findOneAndUpdate({ productId: productPrice.productId }, { $inc: { quantity: -item.quantity } });
+        // خصم المخزون فقط لو مش pending
+        if (!isPending) {
+            await product_price_1.ProductPriceModel.findOneAndUpdate({ productId: productPrice.productId }, { $inc: { quantity: -item.quantity } });
+        }
     }
     // ========== Process Bundles ==========
     for (const bundleItem of bundles) {
         const bundle = await pandels_1.PandelModel.findById(bundleItem.bundle_id).populate("productsId");
         const bundleProducts = bundle.productsId;
-        // Create bundle sale record
         await Sale_1.ProductSalesModel.create({
             sale_id: saleId,
             bundle_id: bundle._id,
@@ -197,22 +203,24 @@ const createSale = async (req, res) => {
             subtotal: bundle.price * bundleItem.quantity,
             isBundle: true,
         });
-        // Update inventory for each product in bundle
-        for (const product of bundleProducts) {
-            await product_price_1.ProductPriceModel.findOneAndUpdate({ productId: product._id }, { $inc: { quantity: -bundleItem.quantity } });
+        // خصم المخزون فقط لو مش pending
+        if (!isPending) {
+            for (const product of bundleProducts) {
+                await product_price_1.ProductPriceModel.findOneAndUpdate({ productId: product._id }, { $inc: { quantity: -bundleItem.quantity } });
+            }
         }
     }
-    // ========== Update Coupon ==========
-    if (coupon_id) {
+    // ========== Update Coupon (فقط لو مش pending) ==========
+    if (coupon_id && !isPending) {
         await coupons_1.CouponModel.findByIdAndUpdate(coupon_id, { $inc: { available: -1 } });
     }
-    // ========== Update Gift Card ==========
-    if (gift_card_id) {
+    // ========== Update Gift Card (فقط لو مش pending) ==========
+    if (gift_card_id && !isPending) {
         await giftCard_1.GiftCardModel.findByIdAndUpdate(gift_card_id, { $inc: { amount: -grand_total } });
     }
-    // ========== Calculate Points ==========
+    // ========== Calculate Points (فقط لو مش pending) ==========
     let pointsEarned = 0;
-    if (!isPointsPayment) {
+    if (!isPointsPayment && !isPending) {
         const pointsConfig = await points_1.PointModel.findOne().sort({ createdAt: -1 });
         if (pointsConfig && pointsConfig.amount > 0 && pointsConfig.points > 0) {
             pointsEarned = Math.floor(grand_total / pointsConfig.amount) * pointsConfig.points;
@@ -223,10 +231,14 @@ const createSale = async (req, res) => {
             }
         }
     }
+    // ========== Response ==========
     (0, response_1.SuccessResponse)(res, {
-        message: "Sale created successfully",
+        message: isPending
+            ? "Sale created as pending - awaiting confirmation"
+            : "Sale created successfully",
         sale: savedSale,
-        pointsEarned
+        pointsEarned,
+        status: isPending ? 'pending' : 'confirmed'
     });
 };
 exports.createSale = createSale;
@@ -244,21 +256,15 @@ const getSales = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { sales });
 };
 exports.getSales = getSales;
-// update status sale
-const updateSaleStatus = async (req, res) => {
-    const { saleId } = req.params;
-    const { sale_status } = req.body;
-    const sale = await Sale_1.SaleModel.findById(saleId);
-    if (!sale)
-        throw new Errors_1.NotFound("Sale not found");
-    sale.sale_status = sale_status || sale.sale_status;
-    await sale.save();
-    (0, response_1.SuccessResponse)(res, { message: "Sale status updated successfully" });
+const getAllSales = async (req, res) => {
+    const sales = await Sale_1.SaleModel.find()
+        .select('grand_total')
+        .populate('customer_id', 'name');
+    (0, response_1.SuccessResponse)(res, { sales });
 };
-exports.updateSaleStatus = updateSaleStatus;
-const getSaleById = async (req, res) => {
-    const { saleId } = req.params;
-    const sale = await Sale_1.SaleModel.findById(saleId)
+exports.getAllSales = getAllSales;
+const getsalePending = async (req, res) => {
+    const sales = await Sale_1.SaleModel.find({ order_pending: 1 })
         .populate('customer_id', 'name email phone_number')
         .populate('warehouse_id', 'name location')
         .populate('currency_id', 'code symbol')
@@ -267,28 +273,19 @@ const getSaleById = async (req, res) => {
         .populate('coupon_id', 'code discount_amount')
         .populate('gift_card_id', 'code amount')
         .lean();
-    if (!sale)
-        throw new Errors_1.NotFound("Sale not found");
-    const products = await Sale_1.ProductSalesModel.find({ sale_id: saleId })
-        .select('product_id quantity price subtotal')
-        .populate('product_id', 'name')
+    (0, response_1.SuccessResponse)(res, { sales });
+};
+exports.getsalePending = getsalePending;
+const getsaleunPending = async (req, res) => {
+    const sales = await Sale_1.SaleModel.find({ order_pending: 0 })
+        .populate('customer_id', 'name email phone_number')
+        .populate('warehouse_id', 'name location')
+        .populate('currency_id', 'code symbol')
+        .populate('order_tax', 'name rate')
+        .populate('order_discount', 'name rate')
+        .populate('coupon_id', 'code discount_amount')
+        .populate('gift_card_id', 'code amount')
         .lean();
-    (0, response_1.SuccessResponse)(res, { sale, products });
-};
-exports.getSaleById = getSaleById;
-const getAllSales = async (req, res) => {
-    const sales = await Sale_1.SaleModel.find()
-        .select('grand_total')
-        .populate('customer_id', 'name');
     (0, response_1.SuccessResponse)(res, { sales });
 };
-exports.getAllSales = getAllSales;
-// get sales by status 
-const getSalesByStatus = async (req, res) => {
-    const { status } = req.params;
-    const sales = await Sale_1.SaleModel.find({ sale_status: status })
-        .select('grand_total')
-        .populate('customer_id', 'name');
-    (0, response_1.SuccessResponse)(res, { sales });
-};
-exports.getSalesByStatus = getSalesByStatus;
+exports.getsaleunPending = getsaleunPending;
