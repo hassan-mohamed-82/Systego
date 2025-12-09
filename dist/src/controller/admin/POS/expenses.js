@@ -5,7 +5,6 @@ const expenses_1 = require("../../../models/schema/admin/POS/expenses");
 const BadRequest_1 = require("../../../Errors/BadRequest");
 const Errors_1 = require("../../../Errors");
 const response_1 = require("../../../utils/response");
-const category_1 = require("../../../models/schema/admin/category");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
 const expensecategory_1 = require("../../../models/schema/admin/expensecategory");
@@ -26,7 +25,7 @@ const createExpense = async (req, res) => {
         throw new BadRequest_1.BadRequest("No open shift for this cashier");
     }
     // ✅ 2) تأكيد الكاتجوري و الحساب المالي
-    const category = await category_1.CategoryModel.findById(Category_id);
+    const category = await expensecategory_1.ExpenseCategoryModel.findById(Category_id);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
     const account = await Financial_Account_1.BankAccountModel.findById(financial_accountId);

@@ -29,7 +29,7 @@ export const createExpense = async (req: Request, res: Response) => {
   }
 
   // ✅ 2) تأكيد الكاتجوري و الحساب المالي
-  const category = await CategoryModel.findById(Category_id);
+  const category = await ExpenseCategoryModel.findById(Category_id);
   if (!category) throw new NotFound("Category not found");
 
   const account = await BankAccountModel.findById(financial_accountId);
