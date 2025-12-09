@@ -4,80 +4,80 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import{saveBase64Image}from "../../utils/handleImages"
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
+
+
 export const createBankAccount = async (req: Request, res: Response) => {
-  const { account_no, name, initial_balance, is_default, note, icon,ar_name } = req.body;
+  const { name, warhouseId, image, description, status, in_POS } = req.body;
 
-  if (!account_no || !name || !initial_balance || !ar_name === undefined) {
-    throw new BadRequest("Please provide all required fields");
+  const existingAccount = await BankAccountModel.findOne({ name });
+  if (existingAccount) {
+    throw new BadRequest("Account name already exists");
+  }
+  const existwarhouse = await WarehouseModel.findById(warhouseId);
+  if (!existwarhouse) {
+    throw new NotFound("Warhouse not found");
   }
 
-  const exists = await BankAccountModel.findOne({ account_no });
-  if (exists) throw new BadRequest("Account number already exists");
-
-  if (is_default) {
-    await BankAccountModel.updateMany({}, { is_default: false });
+let imageUrl = "";
+  if (image) {
+    imageUrl = await saveBase64Image(image, Date.now().toString(), req, "category");
   }
-  let iconUrl = "";
-  if (icon) {
-    iconUrl = await saveBase64Image(icon, Date.now().toString(), req, "bank_accounts");
-  }
-
   const bankAccount = await BankAccountModel.create({
-    account_no,
     name,
-    ar_name,
-    initial_balance,
-    is_default,
-    note,
-    icon: iconUrl,
+    warhouseId,
+    image: imageUrl,
+    description,
+    status,
+    in_POS,
   });
 
   SuccessResponse(res, { message: "Bank account created successfully", bankAccount });
 };
 
 export const getBankAccounts = async (req: Request, res: Response) => {
-  const accounts = await BankAccountModel.find();
-  if (!accounts || accounts.length === 0) throw new NotFound("No bank accounts found");
-
-  // ✅ total = sum of initial_balance
-  const total = accounts.reduce((sum, acc) => sum + acc.initial_balance, 0);
-
-  SuccessResponse(res, { message: "Get bank accounts successfully", accounts, total });
-};
+  const bankAccounts = await BankAccountModel.find().populate("warhouseId", "name");
+  SuccessResponse(res, { message: "Bank accounts retrieved successfully", bankAccounts });
+}
 
 export const getBankAccountById = async (req: Request, res: Response) => {
   const { id } = req.params;
-  if (!id) throw new BadRequest("Bank account ID is required");
+  if (!id) throw new BadRequest("Bank account id is required");
 
-  const account = await BankAccountModel.findById(id);
-  if (!account) throw new NotFound("Bank account not found");
-
-  SuccessResponse(res, { message: "Get bank account successfully", account });
-};
-
-export const updateBankAccount = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!id) throw new BadRequest("Bank account ID is required");
-
-  const { is_default } = req.body;
-
-  // ✅ لو التحديث فيه is_default = true
-  if (is_default) {
-    await BankAccountModel.updateMany({}, { is_default: false });
-  }
-
-  const account = await BankAccountModel.findByIdAndUpdate(id, req.body, { new: true });
-  if (!account) throw new NotFound("Bank account not found");
-
-  SuccessResponse(res, { message: "Bank account updated successfully", account });
-};
+  const bankAccount = await BankAccountModel.findById(id).populate("warhouseId", "name");
+  if (!bankAccount) throw new NotFound("Bank account not found");
+  SuccessResponse(res, { message: "Bank account retrieved successfully", bankAccount });
+}
 
 export const deleteBankAccount = async (req: Request, res: Response) => {
   const { id } = req.params;
-  if (!id) throw new BadRequest("Bank account ID is required");
-
-  const account = await BankAccountModel.findByIdAndDelete(id);
-  if (!account) throw new NotFound("Bank account not found");
-
+  if (!id) throw new BadRequest("Bank account id is required");
+  const bankAccount = await BankAccountModel.findByIdAndDelete(id);
+  if (!bankAccount) throw new NotFound("Bank account not found");
   SuccessResponse(res, { message: "Bank account deleted successfully" });
-};
+}
+
+export const updateBankAccount = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { name, warhouseId, image, description, status, in_POS } = req.body;
+  if (!id) throw new BadRequest("Bank account id is required");
+
+  const bankAccount = await BankAccountModel.findById(id);
+  if (!bankAccount) throw new NotFound("Bank account not found");
+  if (name) bankAccount.name = name;
+  if (warhouseId) {
+    const existwarhouse = await WarehouseModel.findById(warhouseId);
+    if (!existwarhouse) {
+      throw new NotFound("Warhouse not found");
+    } }
+    bankAccount.warhouseId = warhouseId;
+  if (image) {
+    bankAccount.image = await saveBase64Image(image, Date.now().toString(), req, "category");
+  }
+  if (description) bankAccount.description = description;
+  if (status) bankAccount.status = status;
+  if (in_POS) bankAccount.in_POS = in_POS;
+  await bankAccount.save();
+  SuccessResponse(res, { message: "Bank account updated successfully", bankAccount });
+}
+

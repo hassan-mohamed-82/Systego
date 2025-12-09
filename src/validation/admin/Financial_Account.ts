@@ -1,21 +1,23 @@
 import Joi from "joi";
 
 export const createBankAccountSchema = Joi.object({
-  account_no: Joi.string().max(100).required(),
-  name: Joi.string().max(100).required(),
-  ar_name: Joi.string().max(100).required(),
-  initial_balance: Joi.number().min(0).required(),
-  is_default: Joi.boolean().default(false),
-  note: Joi.string().allow("", null),
-  icon:Joi.string().allow("", null),
+  name: Joi.string().required(),
+  warhouseId: Joi.string().required(),
+  image: Joi.string().optional(),
+  balance: Joi.number().optional(),
+  description: Joi.string().optional(),
+  status: Joi.boolean().optional(),
+  in_POS: Joi.boolean().optional(),
+ 
 });
 
 export const updateBankAccountSchema = Joi.object({
-  account_no: Joi.string().max(100),
-  name: Joi.string().max(100),
-  ar_name: Joi.string().max(100),
-  initial_balance: Joi.number().min(0),
-  is_default: Joi.boolean(),
-  note: Joi.string().allow("", null),
-  icon:Joi.string().allow("", null),
+  name: Joi.string().optional(),
+  warhouseId: Joi.string().optional(),
+  image: Joi.string().optional(),
+  balance: Joi.number().optional(),
+  description: Joi.string().optional(),
+  status: Joi.boolean().optional(),
+  in_POS: Joi.boolean().optional(),
+  
 });

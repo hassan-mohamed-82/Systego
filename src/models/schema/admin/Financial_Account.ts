@@ -2,15 +2,15 @@ import mongoose, { Schema } from "mongoose";
 
 const BankAccountSchema = new Schema(
   {
-    account_no: { type: String, required: true, maxlength: 100, unique: true, trim: true },
-    name: { type: String, required: true, maxlength: 100, trim: true },
-    ar_name: {type: String, required: true, maxlength: 100, trim: true },
-    initial_balance: { type: Number, required: true, min: 0 },
-    is_default: { type: Boolean, default: false },
-    note: { type: String, trim: true },
-    icon:{type:String}
+    name: { type: String, required: true },
+    warhouseId: { type: mongoose.Schema.Types.ObjectId, ref: "Warhouse", required: true },
+    image: { type: String  },
+    balance: { type: Number, default: 0 },
+    description: { type: String  },
+    status: { type: Boolean, default: true },
+    in_POS: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true }                                                
 );
 
 export const BankAccountModel = mongoose.model("BankAccount", BankAccountSchema);
