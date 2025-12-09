@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { CategoryMaterialModel } from "./Category_Material";
+import { CategoryMaterialModel } from "../Category_Material";
 const expenseSchema = new mongoose.Schema({
 name: { type: String, required: true },
 amount: { type: Number, required: true },

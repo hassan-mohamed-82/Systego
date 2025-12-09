@@ -2,11 +2,11 @@ import { Router } from "express";
 import {
   createExpense,getExpenses,updateExpense,selectionExpense,getExpenseById
 
-} from "../../controller/admin/expenses"
-import {validate} from"../../middlewares/validation";
-import {createExpenseSchema,updateExpenseSchema} from "../../validation/admin/expenses"
-import { catchAsync } from "../../utils/catchAsync";
-import { authenticated } from "../../middlewares/authenticated";
+} from "../../../controller/admin/POS/expenses"
+import {validate} from"../../../middlewares/validation";
+import {createExpenseSchema,updateExpenseSchema} from "../../../validation/admin/expenses"
+import { catchAsync } from "../../../utils/catchAsync";
+import { authenticated } from "../../../middlewares/authenticated";
 
 const route =Router();
 

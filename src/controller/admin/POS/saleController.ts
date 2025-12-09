@@ -21,25 +21,33 @@ export const createSale = async (req: Request, res: Response) => {
   const {
     customer_id,
     warehouse_id,
-    account_id,          // Array of BankAccount IDs
-    order_pending = 0,   // ✅ 0: pending, 1: completed
+    account_id,          // Array of BankAccount IDs أو ID واحد
+    order_pending = 0,   // 0: pending, 1: completed
     order_tax,
     order_discount,
     grand_total,
     coupon_id,
     products = [],
     bundles = [],
-    payment_method,
     gift_card_id,
   } = req.body;
 
   // نخلي account_id دايمًا Array عشان يمشي مع الـ Schema
-  const accountIds: string[] =
-    account_id
-      ? Array.isArray(account_id)
-        ? account_id
-        : [account_id]
-      : [];
+  const accountIds: string[] = account_id
+    ? Array.isArray(account_id)
+      ? account_id
+      : [account_id]
+    : [];
+
+  // ✅ 0 = pending, 1 = completed
+  const isPending = order_pending === 0;
+
+  // لو الطلب Completed لازم يكون فيه على الأقل حساب بنكي واحد
+  if (!isPending && accountIds.length === 0) {
+    throw new BadRequest(
+      "At least one bank account (account_id) is required for completed sales"
+    );
+  }
 
   // Helper function to find product price
   const findProductPrice = async (item: any) => {
@@ -56,10 +64,6 @@ export const createSale = async (req: Request, res: Response) => {
     return productPrice;
   };
 
-  // ✅ بما إن القيم 0 و 1 بس
-  // 0 = pending, 1 = completed
-  const isPending = order_pending === 0;
-
   // ========== Basic Validations ==========
 
   const warehouse = await WarehouseModel.findById(warehouse_id);
@@ -67,10 +71,6 @@ export const createSale = async (req: Request, res: Response) => {
 
   const customer = await CustomerModel.findById(customer_id);
   if (!customer) throw new NotFound("Customer not found");
-
-  const paymentMethod = await PaymentMethodModel.findById(payment_method);
-  if (!paymentMethod) throw new NotFound("Payment method not found");
-  if (!paymentMethod.isActive) throw new BadRequest("Payment method is not active");
 
   // ===== Validate Bank Accounts: لازم status = true && in_POS = true =====
   if (accountIds.length > 0) {
@@ -86,7 +86,7 @@ export const createSale = async (req: Request, res: Response) => {
       );
     }
 
-    // لو محتاج تربط بالحسابات الخاصة بالمخزن نفسه، فعّل ده:
+    // لو حابب تربط الحساب بالمخزن نفسه، فعّل ده:
     /*
     const wrongWarehouseAccount = bankAccounts.find(
       (acc: any) => acc.warhouseId?.toString() !== warehouse_id.toString()
@@ -97,35 +97,6 @@ export const createSale = async (req: Request, res: Response) => {
       );
     }
     */
-  }
-
-  // Points payment check
-  const isPointsPayment =
-    paymentMethod.name?.toLowerCase() === "points" ||
-    paymentMethod.type?.toLowerCase() === "points";
-
-  // الدفع بالنقاط لازم يكون الطلب مش pending
-  if (isPointsPayment && isPending) {
-    throw new BadRequest("Points payment cannot be used for pending orders");
-  }
-
-  if (isPointsPayment) {
-    const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
-    if (!pointsConfig) throw new BadRequest("Points system is not configured");
-
-    const pointsRequired =
-      Math.ceil(grand_total / pointsConfig.amount) * pointsConfig.points;
-
-    if (
-      !customer.total_points_earned ||
-      customer.total_points_earned < pointsRequired
-    ) {
-      throw new BadRequest("Points Not enough");
-    }
-
-    await CustomerModel.findByIdAndUpdate(customer_id, {
-      $inc: { total_points_earned: -pointsRequired },
-    });
   }
 
   // Coupon validation
@@ -231,19 +202,19 @@ export const createSale = async (req: Request, res: Response) => {
     grand_total,
     coupon_id,
     gift_card_id,
-    payment_method,
+    // مفيش payment_method في الـ Schema
   });
 
   const savedSale = await newSale.save();
   const saleId = savedSale._id;
 
-  // ========== Create Payment (لو مش pending و مش points) ==========
+  // ========== Create Payment (لو مش pending) باستخدام account_id Array ==========
 
-  if (!isPending && payment_method && !isPointsPayment) {
+  if (!isPending && accountIds.length > 0) {
     await PaymentModel.create({
       sale_id: saleId,
+      account_id: accountIds,   // Array كاملة زي الـ Schema بتاع Payment
       amount: grand_total,
-      payment_method: payment_method,
       status: "completed",
       payment_proof: null,
     });
@@ -316,24 +287,6 @@ export const createSale = async (req: Request, res: Response) => {
     });
   }
 
-  // ========== Calculate Points (لو مش pending و مش points payment) ==========
-
-  let pointsEarned = 0;
-  if (!isPointsPayment && !isPending) {
-    const pointsConfig = await PointModel.findOne().sort({ createdAt: -1 });
-
-    if (pointsConfig && pointsConfig.amount > 0 && pointsConfig.points > 0) {
-      pointsEarned =
-        Math.floor(grand_total / pointsConfig.amount) * pointsConfig.points;
-
-      if (pointsEarned > 0) {
-        await CustomerModel.findByIdAndUpdate(customer_id, {
-          $inc: { total_points_earned: pointsEarned },
-        });
-      }
-    }
-  }
-
   // ========== Response ==========
 
   SuccessResponse(res, {
@@ -341,7 +294,6 @@ export const createSale = async (req: Request, res: Response) => {
       ? "Sale created as pending - awaiting confirmation"
       : "Sale created successfully",
     sale: savedSale,
-    pointsEarned,
     status: isPending ? "pending" : "confirmed",
   });
 };
@@ -349,7 +301,6 @@ export const getSales = async (req: Request, res: Response)=> {
     const sales = await SaleModel.find()
         .populate('customer_id', 'name email phone_number')
         .populate('warehouse_id', 'name location')
-        .populate('currency_id', 'code symbol')
         .populate('order_tax', 'name rate')
         .populate('order_discount', 'name rate')
         .populate('coupon_id', 'code discount_amount')

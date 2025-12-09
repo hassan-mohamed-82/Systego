@@ -1,1 +1,12 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const expensecategory_1 = require("../../controller/admin/expensecategory");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.post("/", (0, catchAsync_1.catchAsync)(expensecategory_1.createExpenseCategory));
+route.get("/", (0, catchAsync_1.catchAsync)(expensecategory_1.getExpenseCategories));
+route.get("/:id", (0, catchAsync_1.catchAsync)(expensecategory_1.getExpenseCategoryById));
+route.put("/:id", (0, catchAsync_1.catchAsync)(expensecategory_1.updateExpenseCategory));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(expensecategory_1.deleteExpenseCategory));
+exports.default = route;

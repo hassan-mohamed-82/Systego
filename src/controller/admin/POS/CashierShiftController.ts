@@ -7,7 +7,7 @@ import { BadRequest } from '../../../Errors/BadRequest';
 import { UserModel } from '../../../models/schema/admin/User';
 import { PositionModel } from '../../../models/schema/admin/position';
 import bcrypt from "bcryptjs";
-import { ExpenseModel } from '../../../models/schema/admin/expenses';
+import { ExpenseModel } from '../../../models/schema/admin/POS/expenses';
 
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 

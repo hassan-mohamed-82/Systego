@@ -9,7 +9,7 @@ import supplierRouter from './suppliers';
 import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
 import paymentMethodRouter from "./payment_method";
-import expensesRouter from './expenses'
+import expensesRouter from './POS/expenses'
 import CouponsRouter from './coupons'
 import DepartmentRouter from './departments'
 import AdjustmentRouter from './adjustments'
@@ -43,6 +43,7 @@ import PopupRouter from "./Popup"
 import ReturnRouter from "./POS/ReturnSaleRoutes"
 import paymentRouter from "./payments"
 import OffersRouter from "./Offers"
+import ExpensecategoryRouter from "./expensecategory" //Rputer
 import PaymobRouter from "./Paymob"
 import notificationRoutrt from "./notifications"
 import { authenticated } from "../../middlewares/authenticated";
@@ -59,6 +60,7 @@ route.use("/product",productRouter);
 route.use("/supplier",supplierRouter);
 route.use("/recipe",RecipeRouter);
 route.use("/warehouse",WarehouseRouter)
+route.use("/expensecategory",ExpensecategoryRouter)
 route.use("/discount",discountRouter)
 route.use("/courier",CouriersRouter)
 route.use("/payment_method",paymentMethodRouter)

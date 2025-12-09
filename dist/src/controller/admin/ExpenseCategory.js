@@ -1,56 +1,57 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateExpenseCategory = exports.deleteExpenseCategory = exports.getExpenseCategories = exports.getExpenseCategory = exports.createExpenseCategory = void 0;
-const ExpenseCategory_1 = require("../../models/schema/admin/ExpenseCategory");
-const BadRequest_1 = require("../../Errors/BadRequest");
-const NotFound_1 = require("../../Errors/NotFound");
+exports.deleteExpenseCategory = exports.getExpenseCategoryById = exports.updateExpenseCategory = exports.getExpenseCategories = exports.createExpenseCategory = void 0;
 const response_1 = require("../../utils/response");
+const BadRequest_1 = require("../../Errors/BadRequest");
+const Errors_1 = require("../../Errors");
+const expensecategory_1 = require("../../models/schema/admin/expensecategory");
 const createExpenseCategory = async (req, res) => {
-    const { name } = req.body;
-    if (!name)
-        throw new BadRequest_1.BadRequest("Please provide all the required fields");
-    const category = await ExpenseCategory_1.ExpenseCategoryModel.findOne({ name });
-    if (category)
-        throw new BadRequest_1.BadRequest("Category already exists");
-    const newCategories = await ExpenseCategory_1.ExpenseCategoryModel.create({ name });
-    (0, response_1.SuccessResponse)(res, { message: "Category created successfully", newCategories });
+    const { name, ar_name, status } = req.body;
+    if (!name || !ar_name) {
+        throw new BadRequest_1.BadRequest(" name and ar_name  are required");
+    }
+    const existingExpenseCategory = await expensecategory_1.ExpenseCategoryModel.findOne({ name });
+    if (existingExpenseCategory)
+        throw new BadRequest_1.BadRequest("ExpenseCategory already exists");
+    const expenseCategory = await expensecategory_1.ExpenseCategoryModel.create({ name, ar_name, status });
+    (0, response_1.SuccessResponse)(res, { message: "ExpenseCategory created successfully", expenseCategory });
 };
 exports.createExpenseCategory = createExpenseCategory;
-const getExpenseCategory = async (req, res) => {
-    const { id } = req.params;
-    if (!id)
-        throw new BadRequest_1.BadRequest("Category id is required");
-    const category = await ExpenseCategory_1.ExpenseCategoryModel.findById(id);
-    if (!category)
-        throw new NotFound_1.NotFound("Category not found");
-    (0, response_1.SuccessResponse)(res, { message: "get category successfully", category });
-};
-exports.getExpenseCategory = getExpenseCategory;
 const getExpenseCategories = async (req, res) => {
-    const categories = await ExpenseCategory_1.ExpenseCategoryModel.find({});
-    if (!categories || categories.length === 0)
-        throw new NotFound_1.NotFound("No categories found");
-    (0, response_1.SuccessResponse)(res, { message: "get categories successfully", categories });
+    const expenseCategories = await expensecategory_1.ExpenseCategoryModel.find({ status: true });
+    (0, response_1.SuccessResponse)(res, { expenseCategories });
 };
 exports.getExpenseCategories = getExpenseCategories;
-const deleteExpenseCategory = async (req, res) => {
-    const { id } = req.params;
-    if (!id)
-        throw new BadRequest_1.BadRequest("Category id is required");
-    const category = await ExpenseCategory_1.ExpenseCategoryModel.findByIdAndDelete(id);
-    if (!category)
-        throw new NotFound_1.NotFound("Category not found");
-    (0, response_1.SuccessResponse)(res, { message: "delete category successfully" });
-};
-exports.deleteExpenseCategory = deleteExpenseCategory;
 const updateExpenseCategory = async (req, res) => {
     const { id } = req.params;
-    if (!id)
-        throw new BadRequest_1.BadRequest("Category id is required");
-    const updateData = { ...req.body };
-    const category = await ExpenseCategory_1.ExpenseCategoryModel.findByIdAndUpdate(id, updateData, { new: true });
-    if (!category)
-        throw new NotFound_1.NotFound("Category not found");
-    (0, response_1.SuccessResponse)(res, { message: "update category successfully", category });
+    const { name, ar_name, status } = req.body;
+    const expenseCategory = await expensecategory_1.ExpenseCategoryModel.findById(id);
+    if (!expenseCategory)
+        throw new Errors_1.NotFound("ExpenseCategory not found");
+    if (name)
+        expenseCategory.name = name;
+    if (ar_name)
+        expenseCategory.ar_name = ar_name;
+    if (status)
+        expenseCategory.status = status;
+    await expenseCategory.save();
+    (0, response_1.SuccessResponse)(res, { message: "ExpenseCategory updated successfully", expenseCategory });
 };
 exports.updateExpenseCategory = updateExpenseCategory;
+const getExpenseCategoryById = async (req, res) => {
+    const { id } = req.params;
+    const expenseCategory = await expensecategory_1.ExpenseCategoryModel.findById(id);
+    if (!expenseCategory)
+        throw new Errors_1.NotFound("ExpenseCategory not found");
+    (0, response_1.SuccessResponse)(res, { message: "ExpenseCategory found successfully", expenseCategory });
+};
+exports.getExpenseCategoryById = getExpenseCategoryById;
+const deleteExpenseCategory = async (req, res) => {
+    const { id } = req.params;
+    const expenseCategory = await expensecategory_1.ExpenseCategoryModel.findById(id);
+    if (!expenseCategory)
+        throw new Errors_1.NotFound("ExpenseCategory not found");
+    await expensecategory_1.ExpenseCategoryModel.findByIdAndDelete(id);
+    (0, response_1.SuccessResponse)(res, { message: "ExpenseCategory deleted successfully" });
+};
+exports.deleteExpenseCategory = deleteExpenseCategory;

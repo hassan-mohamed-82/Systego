@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
-import { ExpenseModel } from "../../models/schema/admin/expenses";
-import { BadRequest } from "../../Errors/BadRequest";
-import { NotFound } from "../../Errors";
-import { SuccessResponse } from "../../utils/response";
-import { CategoryModel } from "../../models/schema/admin/category";
-import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
-import { CashierShift } from "../../models/schema/admin/POS/CashierShift";
+import { ExpenseModel } from "../../../models/schema/admin/POS/expenses";
+import { BadRequest } from "../../../Errors/BadRequest";
+import { NotFound } from "../../../Errors";
+import { SuccessResponse } from "../../../utils/response";
+import { CategoryModel } from "../../../models/schema/admin/category";
+import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
+import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
+import { ExpenseCategoryModel } from "../../../models/schema/admin/expensecategory";
 
 
 export const createExpense = async (req: Request, res: Response) => {
@@ -101,7 +102,7 @@ export const getExpenses = async (req: Request, res: Response) => {
 
 
 export const selectionExpense = async (req: Request, res: Response) => {
- const categories = await CategoryModel.find();
+ const categories = await ExpenseCategoryModel.find({status: true});
  const accounts = await BankAccountModel.find({ in_POS: true , status: true});
 
  SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });

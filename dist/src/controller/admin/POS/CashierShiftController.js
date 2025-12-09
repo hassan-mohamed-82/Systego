@@ -12,7 +12,7 @@ const BadRequest_1 = require("../../../Errors/BadRequest");
 const User_1 = require("../../../models/schema/admin/User");
 const position_1 = require("../../../models/schema/admin/position");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const expenses_1 = require("../../../models/schema/admin/expenses");
+const expenses_1 = require("../../../models/schema/admin/POS/expenses");
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 const startcashierShift = async (req, res) => {
     const cachier_id = req.user?.id; // من الـ JWT
