@@ -15,13 +15,13 @@ const SaleSchema = new Schema(
     },
     customer_id: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
     warehouse_id: { type: Schema.Types.ObjectId, ref: 'Warehouse', required: true },
-    currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
-    account_id: { type: Schema.Types.ObjectId, ref: 'BankAccount' },
+    // currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
+    account_id:[ { type: Schema.Types.ObjectId, ref: 'BankAccount' }],
     payment_method: { type: Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
     order_pending: { type: Number, enum: [0, 1], default: 0 }, // 0: pending, 1: completed, 2: partial
     order_tax: { type: Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: Schema.Types.ObjectId, ref: 'Discount' },
-    shipping_cost: { type: Number, default: 0 },
+    // shipping_cost: { type: Number, default: 0 },
     grand_total: { type: Number, required: true },
     coupon_id: { type: Schema.Types.ObjectId, ref: 'Coupon' },
     gift_card_id: { type: Schema.Types.ObjectId, ref: 'GiftCard' }

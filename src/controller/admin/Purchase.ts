@@ -209,7 +209,7 @@ export const createPurchase = async (req: Request, res: Response) => {
 
       const financial = await BankAccountModel.findById(ele.financial_id);
       if (financial) {
-        financial.initial_balance -= ele.payment_amount;
+        financial.balance -= ele.payment_amount;
         await financial.save();
       }
     }

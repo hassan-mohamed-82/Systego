@@ -102,7 +102,21 @@ export const getExpenses = async (req: Request, res: Response) => {
 
 export const selectionExpense = async (req: Request, res: Response) => {
  const categories = await CategoryModel.find();
- const accounts = await BankAccountModel.find({is_default:true});
+ const accounts = await BankAccountModel.find({ in_POS: true , status: true});
 
  SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
 }
+
+
+export const getExpenseById = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) throw new BadRequest("User ID is required");
+
+  const { id } = req.params;
+  if (!id) throw new BadRequest("Expense ID is required");
+
+  const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId });
+  if (!expense) throw new NotFound("Expense not found");
+
+  SuccessResponse(res, { message: "Expense retrieved successfully", expense });
+};

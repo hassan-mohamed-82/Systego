@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.selectionExpense = exports.getExpenses = exports.updateExpense = exports.createExpense = void 0;
+exports.getExpenseById = exports.selectionExpense = exports.getExpenses = exports.updateExpense = exports.createExpense = void 0;
 const expenses_1 = require("../../models/schema/admin/expenses");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -95,7 +95,20 @@ const getExpenses = async (req, res) => {
 exports.getExpenses = getExpenses;
 const selectionExpense = async (req, res) => {
     const categories = await category_1.CategoryModel.find();
-    const accounts = await Financial_Account_1.BankAccountModel.find({ is_default: true });
+    const accounts = await Financial_Account_1.BankAccountModel.find({ in_POS: true, status: true });
     (0, response_1.SuccessResponse)(res, { message: "Selection data retrieved successfully", categories, accounts });
 };
 exports.selectionExpense = selectionExpense;
+const getExpenseById = async (req, res) => {
+    const userId = req.user?.id;
+    if (!userId)
+        throw new BadRequest_1.BadRequest("User ID is required");
+    const { id } = req.params;
+    if (!id)
+        throw new BadRequest_1.BadRequest("Expense ID is required");
+    const expense = await expenses_1.ExpenseModel.findOne({ _id: id, cashier_id: userId });
+    if (!expense)
+        throw new Errors_1.NotFound("Expense not found");
+    (0, response_1.SuccessResponse)(res, { message: "Expense retrieved successfully", expense });
+};
+exports.getExpenseById = getExpenseById;

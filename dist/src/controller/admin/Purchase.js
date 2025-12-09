@@ -168,7 +168,7 @@ const createPurchase = async (req, res) => {
             });
             const financial = await Financial_Account_1.BankAccountModel.findById(ele.financial_id);
             if (financial) {
-                financial.initial_balance -= ele.payment_amount;
+                financial.balance -= ele.payment_amount;
                 await financial.save();
             }
         }
