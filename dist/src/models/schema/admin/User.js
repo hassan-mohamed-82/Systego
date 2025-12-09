@@ -49,5 +49,6 @@ const UserSchema = new mongoose_1.Schema({
     vat_number: { type: String },
     state: { type: String },
     postal_code: { type: String },
+    warehouse_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Warehouse" },
 }, { timestamps: true });
 exports.UserModel = mongoose_1.default.model("User", UserSchema);

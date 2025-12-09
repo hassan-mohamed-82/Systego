@@ -116,7 +116,7 @@ export const getExpenseById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Expense ID is required");
 
-  const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId });
+  const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId }).populate("Category_id", "name ar_name").populate("financial_accountId", "name ar_name");
   if (!expense) throw new NotFound("Expense not found");
 
   SuccessResponse(res, { message: "Expense retrieved successfully", expense });

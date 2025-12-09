@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.updateUser = exports.getUserById = exports.getAllUsers = exports.createUser = void 0;
+exports.selection = exports.deleteUser = exports.updateUser = exports.getUserById = exports.getAllUsers = exports.createUser = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const User_1 = require("../../models/schema/admin/User");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -11,14 +11,19 @@ const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const Errors_1 = require("../../Errors");
 const position_1 = require("../../models/schema/admin/position");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const roles_1 = require("../../models/schema/admin/roles");
 const Action_1 = require("../../models/schema/admin/Action");
 const mongoose_1 = __importDefault(require("mongoose"));
 const createUser = async (req, res, next) => {
     const currentUser = req.user;
-    const { username, email, password, positionId, company_name, phone, image_base64 } = req.body;
-    if (!username || !email || !password || !positionId) {
-        throw new BadRequest_1.BadRequest("Username, email, password, and positionId are required");
+    const { username, email, password, positionId, company_name, phone, image_base64, warehouse_id } = req.body;
+    if (!username || !email || !password || !positionId || !warehouse_id) {
+        throw new BadRequest_1.BadRequest("Username, email, password, positionId, and warehouse_id are required");
+    }
+    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+    if (!warehouseExists) {
+        throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
     }
     // ✅ التأكد من تكرار البيانات
     const existingUser = await User_1.UserModel.findOne({ $or: [{ email }, { username }] });
@@ -41,6 +46,7 @@ const createUser = async (req, res, next) => {
         company_name,
         phone,
         image_url,
+        warehouse_id
     }))).populate("positionId");
     (0, response_1.SuccessResponse)(res, {
         message: "User created successfully",
@@ -51,13 +57,14 @@ const createUser = async (req, res, next) => {
             positionId: newUser.positionId,
             status: newUser.status,
             image_url: newUser.image_url,
+            warehouse_id: newUser.warehouse_id
         },
     });
 };
 exports.createUser = createUser;
 const getAllUsers = async (req, res, next) => {
     // 🧍‍♂️ 1️⃣ هات المستخدمين
-    const users = await User_1.UserModel.find().select("-password_hash");
+    const users = await User_1.UserModel.find().select("-password_hash").populate("warehouse_id", "name");
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
     }
@@ -97,7 +104,7 @@ const getUserById = async (req, res, next) => {
         throw new BadRequest_1.BadRequest("Invalid or missing user ID");
     }
     // 🧍‍♂️ 2️⃣ هات المستخدم بدون كلمة السر
-    const user = await User_1.UserModel.findById(id).select("-password_hash -__v");
+    const user = await User_1.UserModel.findById(id).select("-password_hash -__v").populate("warehouse_id", "name");
     if (!user)
         throw new Errors_1.NotFound("User not found");
     // 🧩 3️⃣ هات الـ position الخاص بالمستخدم (لو عنده)
@@ -133,7 +140,7 @@ const getUserById = async (req, res, next) => {
 exports.getUserById = getUserById;
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
-    const { username, email, password, positionId, company_name, phone, status, image_base64 } = req.body;
+    const { username, email, password, positionId, company_name, phone, status, image_base64, warehouse_id } = req.body;
     const user = await User_1.UserModel.findById(id);
     if (!user) {
         throw new Errors_1.NotFound("User not found");
@@ -150,6 +157,13 @@ const updateUser = async (req, res, next) => {
         user.phone = phone;
     if (status)
         user.status = status;
+    if (warehouse_id) {
+        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+        if (!warehouseExists) {
+            throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
+        }
+        user.warehouse_id = warehouse_id;
+    }
     if (password) {
         const salt = await bcryptjs_1.default.genSalt(10);
         user.password_hash = await bcryptjs_1.default.hash(password, salt);
@@ -166,6 +180,7 @@ const updateUser = async (req, res, next) => {
             email: user.email,
             positionId: user.positionId,
             status: user.status,
+            warehouse_id: user.warehouse_id,
             image_url: user.image_url,
         },
     });
@@ -185,3 +200,11 @@ const deleteUser = async (req, res, next) => {
     });
 };
 exports.deleteUser = deleteUser;
+const selection = async (req, res, next) => {
+    const warehouse = await Warehouse_1.WarehouseModel.find().select("_id name");
+    (0, response_1.SuccessResponse)(res, {
+        message: "get all users successfully",
+        warehouse,
+    });
+};
+exports.selection = selection;
