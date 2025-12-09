@@ -15,10 +15,18 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const expenses_1 = require("../../../models/schema/admin/POS/expenses");
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 const startcashierShift = async (req, res) => {
-    const cachier_id = req.user?.id; // من الـ JWT
-    const cashier = await User_1.UserModel.findById({ _id: cachier_id });
+    const cashier_id = req.user?.id; // من الـ JWT
+    const cashier = await User_1.UserModel.findById(cashier_id);
     if (!cashier) {
         throw new Errors_1.NotFound("Cashier not found");
+    }
+    // (اختياري لكن مهم) امنع تكرار شيفت مفتوح لنفس الكاشير
+    const existingShift = await CashierShift_1.CashierShift.findOne({
+        cashier_id: cashier._id,
+        status: "open",
+    });
+    if (existingShift) {
+        throw new BadRequest_1.BadRequest("Cashier already has an open shift");
     }
     const cashierShift = new CashierShift_1.CashierShift({
         start_time: new Date(),
@@ -133,8 +141,12 @@ const getCashierUsers = async (req, res) => {
 };
 exports.getCashierUsers = getCashierUsers;
 const endshiftcashier = async (req, res) => {
-    const cachier_id = req.user?.id; // من الـ JWT
-    const shift = await CashierShift_1.CashierShift.findById({ cachier_id: cachier_id, status: 'open' });
+    const cashier_id = req.user?.id; // من الـ JWT
+    // ✅ نستخدم findOne بفلتر على cashier_id + status
+    const shift = await CashierShift_1.CashierShift.findOne({
+        cashier_id: cashier_id,
+        status: 'open',
+    });
     if (!shift) {
         throw new Errors_1.NotFound("Cashier shift not found");
     }

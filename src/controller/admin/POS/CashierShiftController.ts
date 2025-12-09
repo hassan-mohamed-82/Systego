@@ -12,26 +12,35 @@ import { ExpenseModel } from '../../../models/schema/admin/POS/expenses';
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 
 export const startcashierShift = async (req: Request, res: Response)=> {
- const cachier_id = req.user?.id; // من الـ JWT
+  const cashier_id = req.user?.id; // من الـ JWT
     
-    const cashier = await UserModel.findById({_id: cachier_id});
-    if (!cashier) {
-        throw new NotFound("Cashier not found");
-    }
+  const cashier = await UserModel.findById(cashier_id);
+  if (!cashier) {
+    throw new NotFound("Cashier not found");
+  }
 
-    const cashierShift = new CashierShift({
-        start_time: new Date(),
-        cashier_id: cashier._id,
-        status: 'open'
-    });
-    const savedShift = await cashierShift.save();
+  // (اختياري لكن مهم) امنع تكرار شيفت مفتوح لنفس الكاشير
+  const existingShift = await CashierShift.findOne({
+    cashier_id: cashier._id,
+    status: "open",
+  });
+  if (existingShift) {
+    throw new BadRequest("Cashier already has an open shift");
+  }
 
-    SuccessResponse(res, { 
-        message: "Cashier shift started successfully", 
-        shift: savedShift
-    });
-}
+  const cashierShift = new CashierShift({
+    start_time: new Date(),
+    cashier_id: cashier._id,
+    status: 'open'
+  });
 
+  const savedShift = await cashierShift.save();
+
+  SuccessResponse(res, { 
+    message: "Cashier shift started successfully", 
+    shift: savedShift
+  });
+};
 
 
 export const endShiftWithReport = async (req: Request, res: Response) => {
@@ -150,21 +159,29 @@ export const getCashierUsers = async (req: Request, res: Response ) => {
 
 
 export const endshiftcashier = async (req: Request, res: Response) => {
-    const cachier_id = req.user?.id; // من الـ JWT
-    const shift = await CashierShift.findById({cachier_id: cachier_id,status:'open'});
-    if (!shift) {
-        throw new NotFound("Cashier shift not found");
-    }
-    if (shift.end_time) {
-        throw new BadRequest("Cashier shift already ended");
-    }
+  const cashier_id = req.user?.id; // من الـ JWT
 
-    shift.end_time = new Date();
-    shift.status = 'closed';
+  // ✅ نستخدم findOne بفلتر على cashier_id + status
+  const shift = await CashierShift.findOne({
+    cashier_id: cashier_id,
+    status: 'open',
+  });
 
-    await shift.save();
-    SuccessResponse(res, {
-        message: "Cashier shift ended successfully",
-        shift,
-    });
+  if (!shift) {
+    throw new NotFound("Cashier shift not found");
+  }
+
+  if (shift.end_time) {
+    throw new BadRequest("Cashier shift already ended");
+  }
+
+  shift.end_time = new Date();
+  shift.status = 'closed';
+
+  await shift.save();
+
+  SuccessResponse(res, {
+    message: "Cashier shift ended successfully",
+    shift,
+  });
 };
