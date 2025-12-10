@@ -19,6 +19,8 @@ const UserSchema = new Schema(
     state: { type: String },
     postal_code: { type: String },
     warehouse_id: { type: Schema.Types.ObjectId, ref: "Warehouse" },
+        tokenVersion: { type: Number, default: 0 },
+
   },
   { timestamps: true }
 );

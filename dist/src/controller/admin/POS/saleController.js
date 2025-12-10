@@ -15,7 +15,20 @@ const BadRequest_1 = require("../../../Errors/BadRequest");
 const giftCard_1 = require("../../../models/schema/admin/POS/giftCard");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const pandels_1 = require("../../../models/schema/admin/pandels");
+const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
 const createSale = async (req, res) => {
+    const jwtUser = req.user;
+    if (!jwtUser)
+        throw new Errors_1.UnauthorizedError("Unauthorized");
+    const cashierId = jwtUser.id;
+    // ✅ 0) تأكد إن فيه شيفت مفتوح للكاشير ده
+    const openShift = await CashierShift_1.CashierShift.findOne({
+        cashier_id: cashierId,
+        status: "open",
+    }).sort({ start_time: -1 });
+    if (!openShift) {
+        throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
+    }
     const { customer_id, warehouse_id, account_id, // Array of BankAccount IDs أو ID واحد
     order_pending = 0, // 0: pending, 1: completed
     order_tax, order_discount, grand_total, coupon_id, products = [], bundles = [], gift_card_id, } = req.body;
@@ -59,17 +72,6 @@ const createSale = async (req, res) => {
         if (bankAccounts.length !== accountIds.length) {
             throw new BadRequest_1.BadRequest("One or more bank accounts are inactive or not allowed in POS");
         }
-        // لو حابب تربط الحساب بالمخزن نفسه، فعّل ده:
-        /*
-        const wrongWarehouseAccount = bankAccounts.find(
-          (acc: any) => acc.warhouseId?.toString() !== warehouse_id.toString()
-        );
-        if (wrongWarehouseAccount) {
-          throw new BadRequest(
-            `Bank Account ${wrongWarehouseAccount.name || wrongWarehouseAccount._id} does not belong to this warehouse`
-          );
-        }
-        */
     }
     // Coupon validation
     if (coupon_id) {
@@ -160,7 +162,9 @@ const createSale = async (req, res) => {
         grand_total,
         coupon_id,
         gift_card_id,
-        // مفيش payment_method في الـ Schema
+        // 👇 ربط الفاتورة بالكاشير والشيفت
+        cashier_id: cashierId,
+        shift_id: openShift._id,
     });
     const savedSale = await newSale.save();
     const saleId = savedSale._id;

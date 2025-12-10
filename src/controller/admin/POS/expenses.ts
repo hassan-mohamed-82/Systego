@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { ExpenseModel } from "../../../models/schema/admin/POS/expenses";
 import { BadRequest } from "../../../Errors/BadRequest";
-import { NotFound } from "../../../Errors";
+import { NotFound, UnauthorizedError } from "../../../Errors";
 import { SuccessResponse } from "../../../utils/response";
 import { CategoryModel } from "../../../models/schema/admin/category";
 import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
@@ -11,10 +11,11 @@ import { ExpenseCategoryModel } from "../../../models/schema/admin/expensecatego
 
 export const createExpense = async (req: Request, res: Response) => {
   const userId = req.user?.id;
-  if (!userId) throw new BadRequest("User ID is required");
+  if (!userId) throw new UnauthorizedError("Unauthorized");
 
   const { name, amount, Category_id, note, financial_accountId } = req.body;
-  if (!name || !amount || !Category_id || !financial_accountId) {
+
+  if (!name || amount == null || !Category_id || !financial_accountId) {
     throw new BadRequest("Please provide all required fields");
   }
 
@@ -25,28 +26,38 @@ export const createExpense = async (req: Request, res: Response) => {
   }).sort({ start_time: -1 });
 
   if (!openShift) {
-    throw new BadRequest("No open shift for this cashier");
+    // نفس منطق createSale: ممنوع تعمل مصروف من غير شيفت
+    throw new BadRequest(
+      "You must open a cashier shift before creating an expense"
+    );
   }
 
-  // ✅ 2) تأكيد الكاتجوري و الحساب المالي
+  // ✅ 2) تأكيد الكاتجوري
   const category = await ExpenseCategoryModel.findById(Category_id);
   if (!category) throw new NotFound("Category not found");
 
+  // ✅ 3) تأكيد الحساب المالي
   const account = await BankAccountModel.findById(financial_accountId);
   if (!account) throw new NotFound("Financial account not found");
 
-  // ✅ 3) أنشئ الـ Expense مربوط فعلياً بالشيفت
-  const expense = new ExpenseModel({
+  // لو عندك في السكيمة fields زي status / in_POS ممكن تشيك عليهم برضو:
+  if (account.status === false) {
+    throw new BadRequest("Financial account is inactive");
+  }
+  if (account.in_POS === false) {
+    throw new BadRequest("This financial account is not allowed in POS");
+  }
+
+  // ✅ 4) إنشاء الـ Expense مربوط فعلياً بالشيفت المفتوح
+  const expense = await ExpenseModel.create({
     name,
     amount,
     Category_id,
     note,
     financial_accountId,
-    shift_id: openShift._id, // هنا الصح
+    shift_id: openShift._id, // مهم جداً
     cashier_id: userId,
   });
-
-  await expense.save();
 
   SuccessResponse(res, {
     message: "Expense created successfully",
@@ -54,9 +65,10 @@ export const createExpense = async (req: Request, res: Response) => {
   });
 };
 
+
 export const updateExpense = async (req: Request, res: Response) => {
   const userId = req.user?.id;
-  if (!userId) throw new BadRequest("User ID is required");
+  if (!userId) throw new UnauthorizedError("Unauthorized");
   const { id } = req.params;
   if (!id) throw new BadRequest("Expense ID is required");
   const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId });

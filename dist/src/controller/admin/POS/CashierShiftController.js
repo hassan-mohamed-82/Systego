@@ -130,10 +130,11 @@ const endShiftWithReport = async (req, res) => {
 exports.endShiftWithReport = endShiftWithReport;
 const endshiftcashier = async (req, res) => {
     const cashier_id = req.user?.id; // من الـ JWT
-    // ✅ نستخدم findOne بفلتر على cashier_id + status
+    if (!cashier_id)
+        throw new Errors_1.UnauthorizedError("Unauthorized");
     const shift = await CashierShift_1.CashierShift.findOne({
-        cashier_id: cashier_id,
-        status: 'open',
+        cashier_id,
+        status: "open",
     });
     if (!shift) {
         throw new Errors_1.NotFound("Cashier shift not found");
@@ -142,8 +143,12 @@ const endshiftcashier = async (req, res) => {
         throw new BadRequest_1.BadRequest("Cashier shift already ended");
     }
     shift.end_time = new Date();
-    shift.status = 'closed';
+    shift.status = "closed";
     await shift.save();
+    // 🧨 هنا بنبطل كل التوكنز القديمة للكاشير ده
+    await User_1.UserModel.findByIdAndUpdate(cashier_id, {
+        $inc: { tokenVersion: 1 },
+    });
     (0, response_1.SuccessResponse)(res, {
         message: "Cashier shift ended successfully",
         shift,

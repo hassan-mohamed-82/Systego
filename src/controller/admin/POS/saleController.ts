@@ -1,7 +1,7 @@
 import { SaleModel, ProductSalesModel } from '../../../models/schema/admin/POS/Sale';
 import { Request, Response } from 'express';
 import { WarehouseModel } from "../../../models/schema/admin/Warehouse";
-import { NotFound } from '../../../Errors';
+import { NotFound, UnauthorizedError } from '../../../Errors';
 import { CustomerModel } from '../../../models/schema/admin/POS/customer';
 import { SuccessResponse } from '../../../utils/response';
 import { CouponModel } from '../../../models/schema/admin/coupons';
@@ -15,9 +15,25 @@ import { GiftCardModel } from '../../../models/schema/admin/POS/giftCard';
 import { PointModel } from '../../../models/schema/admin/points';
 import { BankAccountModel } from '../../../models/schema/admin/Financial_Account';
 import { PandelModel } from '../../../models/schema/admin/pandels';
+import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
 
 
 export const createSale = async (req: Request, res: Response) => {
+  const jwtUser = req.user;
+  if (!jwtUser) throw new UnauthorizedError("Unauthorized");
+
+  const cashierId = jwtUser.id;
+
+  // ✅ 0) تأكد إن فيه شيفت مفتوح للكاشير ده
+  const openShift = await CashierShift.findOne({
+    cashier_id: cashierId,
+    status: "open",
+  }).sort({ start_time: -1 });
+
+  if (!openShift) {
+    throw new BadRequest("You must open a cashier shift before creating a sale");
+  }
+
   const {
     customer_id,
     warehouse_id,
@@ -85,18 +101,6 @@ export const createSale = async (req: Request, res: Response) => {
         "One or more bank accounts are inactive or not allowed in POS"
       );
     }
-
-    // لو حابب تربط الحساب بالمخزن نفسه، فعّل ده:
-    /*
-    const wrongWarehouseAccount = bankAccounts.find(
-      (acc: any) => acc.warhouseId?.toString() !== warehouse_id.toString()
-    );
-    if (wrongWarehouseAccount) {
-      throw new BadRequest(
-        `Bank Account ${wrongWarehouseAccount.name || wrongWarehouseAccount._id} does not belong to this warehouse`
-      );
-    }
-    */
   }
 
   // Coupon validation
@@ -202,7 +206,10 @@ export const createSale = async (req: Request, res: Response) => {
     grand_total,
     coupon_id,
     gift_card_id,
-    // مفيش payment_method في الـ Schema
+
+    // 👇 ربط الفاتورة بالكاشير والشيفت
+    cashier_id: cashierId,
+    shift_id: openShift._id,
   });
 
   const savedSale = await newSale.save();
@@ -297,6 +304,7 @@ export const createSale = async (req: Request, res: Response) => {
     status: isPending ? "pending" : "confirmed",
   });
 };
+
 export const getSales = async (req: Request, res: Response)=> {
     const sales = await SaleModel.find()
         .populate('customer_id', 'name email phone_number')

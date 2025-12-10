@@ -11,9 +11,9 @@ const expensecategory_1 = require("../../../models/schema/admin/expensecategory"
 const createExpense = async (req, res) => {
     const userId = req.user?.id;
     if (!userId)
-        throw new BadRequest_1.BadRequest("User ID is required");
+        throw new Errors_1.UnauthorizedError("Unauthorized");
     const { name, amount, Category_id, note, financial_accountId } = req.body;
-    if (!name || !amount || !Category_id || !financial_accountId) {
+    if (!name || amount == null || !Category_id || !financial_accountId) {
         throw new BadRequest_1.BadRequest("Please provide all required fields");
     }
     // ✅ 1) هات الشيفت المفتوح للكاشير ده
@@ -22,26 +22,34 @@ const createExpense = async (req, res) => {
         status: "open",
     }).sort({ start_time: -1 });
     if (!openShift) {
-        throw new BadRequest_1.BadRequest("No open shift for this cashier");
+        // نفس منطق createSale: ممنوع تعمل مصروف من غير شيفت
+        throw new BadRequest_1.BadRequest("You must open a cashier shift before creating an expense");
     }
-    // ✅ 2) تأكيد الكاتجوري و الحساب المالي
+    // ✅ 2) تأكيد الكاتجوري
     const category = await expensecategory_1.ExpenseCategoryModel.findById(Category_id);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
+    // ✅ 3) تأكيد الحساب المالي
     const account = await Financial_Account_1.BankAccountModel.findById(financial_accountId);
     if (!account)
         throw new Errors_1.NotFound("Financial account not found");
-    // ✅ 3) أنشئ الـ Expense مربوط فعلياً بالشيفت
-    const expense = new expenses_1.ExpenseModel({
+    // لو عندك في السكيمة fields زي status / in_POS ممكن تشيك عليهم برضو:
+    if (account.status === false) {
+        throw new BadRequest_1.BadRequest("Financial account is inactive");
+    }
+    if (account.in_POS === false) {
+        throw new BadRequest_1.BadRequest("This financial account is not allowed in POS");
+    }
+    // ✅ 4) إنشاء الـ Expense مربوط فعلياً بالشيفت المفتوح
+    const expense = await expenses_1.ExpenseModel.create({
         name,
         amount,
         Category_id,
         note,
         financial_accountId,
-        shift_id: openShift._id, // هنا الصح
+        shift_id: openShift._id, // مهم جداً
         cashier_id: userId,
     });
-    await expense.save();
     (0, response_1.SuccessResponse)(res, {
         message: "Expense created successfully",
         expense,
@@ -51,7 +59,7 @@ exports.createExpense = createExpense;
 const updateExpense = async (req, res) => {
     const userId = req.user?.id;
     if (!userId)
-        throw new BadRequest_1.BadRequest("User ID is required");
+        throw new Errors_1.UnauthorizedError("Unauthorized");
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Expense ID is required");
