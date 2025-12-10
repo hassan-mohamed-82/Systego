@@ -37,7 +37,7 @@ exports.BankAccountModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const BankAccountSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
-    warhouseId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warhouse", required: true },
+    warehouseId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse", required: true },
     image: { type: String },
     balance: { type: Number, default: 0 },
     description: { type: String },

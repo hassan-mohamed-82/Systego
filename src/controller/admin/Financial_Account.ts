@@ -8,15 +8,15 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 
 export const createBankAccount = async (req: Request, res: Response) => {
-  const { name, warhouseId, image, description, status, in_POS } = req.body;
+  const { name, warehouseId, image, description, status, in_POS } = req.body;
 
   const existingAccount = await BankAccountModel.findOne({ name });
   if (existingAccount) {
     throw new BadRequest("Account name already exists");
   }
-  const existwarhouse = await WarehouseModel.findById(warhouseId);
-  if (!existwarhouse) {
-    throw new NotFound("Warhouse not found");
+  const existwarehouse = await WarehouseModel.findById(warehouseId);
+  if (!existwarehouse) {
+    throw new NotFound("Warehouse not found");
   }
 
 let imageUrl = "";
@@ -25,7 +25,7 @@ let imageUrl = "";
   }
   const bankAccount = await BankAccountModel.create({
     name,
-    warhouseId,
+    warehouseId,
     image: imageUrl,
     description,
     status,
@@ -36,7 +36,7 @@ let imageUrl = "";
 };
 
 export const getBankAccounts = async (req: Request, res: Response) => {
-  const bankAccounts = await BankAccountModel.find().populate("warhouseId", "name");
+  const bankAccounts = await BankAccountModel.find().populate("warehouseId", "name");
   SuccessResponse(res, { message: "Bank accounts retrieved successfully", bankAccounts });
 }
 
@@ -44,7 +44,7 @@ export const getBankAccountById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Bank account id is required");
 
-  const bankAccount = await BankAccountModel.findById(id).populate("warhouseId", "name");
+  const bankAccount = await BankAccountModel.findById(id).populate("warehouseId", "name");
   if (!bankAccount) throw new NotFound("Bank account not found");
   SuccessResponse(res, { message: "Bank account retrieved successfully", bankAccount });
 }
@@ -59,18 +59,18 @@ export const deleteBankAccount = async (req: Request, res: Response) => {
 
 export const updateBankAccount = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, warhouseId, image, description, status, in_POS } = req.body;
+  const { name, warehouseId, image, description, status, in_POS } = req.body;
   if (!id) throw new BadRequest("Bank account id is required");
 
   const bankAccount = await BankAccountModel.findById(id);
   if (!bankAccount) throw new NotFound("Bank account not found");
   if (name) bankAccount.name = name;
-  if (warhouseId) {
-    const existwarhouse = await WarehouseModel.findById(warhouseId);
+  if (warehouseId) {
+    const existwarhouse = await WarehouseModel.findById(warehouseId);
     if (!existwarhouse) {
       throw new NotFound("Warhouse not found");
     } }
-    bankAccount.warhouseId = warhouseId;
+    bankAccount.warehouseId = warehouseId;
   if (image) {
     bankAccount.image = await saveBase64Image(image, Date.now().toString(), req, "category");
   }

@@ -8,14 +8,14 @@ const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createBankAccount = async (req, res) => {
-    const { name, warhouseId, image, description, status, in_POS } = req.body;
+    const { name, warehouseId, image, description, status, in_POS } = req.body;
     const existingAccount = await Financial_Account_1.BankAccountModel.findOne({ name });
     if (existingAccount) {
         throw new BadRequest_1.BadRequest("Account name already exists");
     }
-    const existwarhouse = await Warehouse_1.WarehouseModel.findById(warhouseId);
-    if (!existwarhouse) {
-        throw new Errors_1.NotFound("Warhouse not found");
+    const existwarehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
+    if (!existwarehouse) {
+        throw new Errors_1.NotFound("Warehouse not found");
     }
     let imageUrl = "";
     if (image) {
@@ -23,7 +23,7 @@ const createBankAccount = async (req, res) => {
     }
     const bankAccount = await Financial_Account_1.BankAccountModel.create({
         name,
-        warhouseId,
+        warehouseId,
         image: imageUrl,
         description,
         status,
@@ -33,7 +33,7 @@ const createBankAccount = async (req, res) => {
 };
 exports.createBankAccount = createBankAccount;
 const getBankAccounts = async (req, res) => {
-    const bankAccounts = await Financial_Account_1.BankAccountModel.find().populate("warhouseId", "name");
+    const bankAccounts = await Financial_Account_1.BankAccountModel.find().populate("warehouseId", "name");
     (0, response_1.SuccessResponse)(res, { message: "Bank accounts retrieved successfully", bankAccounts });
 };
 exports.getBankAccounts = getBankAccounts;
@@ -41,7 +41,7 @@ const getBankAccountById = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Bank account id is required");
-    const bankAccount = await Financial_Account_1.BankAccountModel.findById(id).populate("warhouseId", "name");
+    const bankAccount = await Financial_Account_1.BankAccountModel.findById(id).populate("warehouseId", "name");
     if (!bankAccount)
         throw new Errors_1.NotFound("Bank account not found");
     (0, response_1.SuccessResponse)(res, { message: "Bank account retrieved successfully", bankAccount });
@@ -59,7 +59,7 @@ const deleteBankAccount = async (req, res) => {
 exports.deleteBankAccount = deleteBankAccount;
 const updateBankAccount = async (req, res) => {
     const { id } = req.params;
-    const { name, warhouseId, image, description, status, in_POS } = req.body;
+    const { name, warehouseId, image, description, status, in_POS } = req.body;
     if (!id)
         throw new BadRequest_1.BadRequest("Bank account id is required");
     const bankAccount = await Financial_Account_1.BankAccountModel.findById(id);
@@ -67,13 +67,13 @@ const updateBankAccount = async (req, res) => {
         throw new Errors_1.NotFound("Bank account not found");
     if (name)
         bankAccount.name = name;
-    if (warhouseId) {
-        const existwarhouse = await Warehouse_1.WarehouseModel.findById(warhouseId);
+    if (warehouseId) {
+        const existwarhouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
         if (!existwarhouse) {
             throw new Errors_1.NotFound("Warhouse not found");
         }
     }
-    bankAccount.warhouseId = warhouseId;
+    bankAccount.warehouseId = warehouseId;
     if (image) {
         bankAccount.image = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
     }
