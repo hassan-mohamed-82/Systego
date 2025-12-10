@@ -68,26 +68,13 @@ const getAllSelections = async (req, res) => {
     const customers = await customer_1.CustomerModel.find().select('name');
     const customerGroups = await customer_1.CustomerGroupModel.find().select('name');
     const currency = await Currency_1.CurrencyModel.find().select('name  ar_name');
-    const countriesWithCities = await Country_1.CountryModel.aggregate([
-        {
-            $lookup: {
-                from: "cities", // اسم الكوليكشن بتاع City في Mongo (غالبًا 'cities')
-                localField: "_id", // من Country
-                foreignField: "country_id", // في City
-                as: "cities",
-            },
-        },
-        {
-            $project: {
-                name: 1,
-                ar_name: 1,
-                "cities._id": 1,
-                "cities.name": 1,
-                "cities.ar_name": 1,
-            },
-        },
-    ]);
-    (0, response_1.SuccessResponse)(res, { message: "Selections list", countriesWithCities, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
+    const countries = await Country_1.CountryModel.find()
+        .select("name ar_name") // حقول البلد
+        .populate({
+        path: "cities",
+        select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
+    });
+    (0, response_1.SuccessResponse)(res, { message: "Selections list", countries, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
 // get featured product

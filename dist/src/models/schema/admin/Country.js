@@ -17,4 +17,14 @@ const countrySchema = new mongoose_1.Schema({
         default: false,
     }
 });
-exports.CountryModel = (0, mongoose_1.model)('Country', countrySchema);
+// ✅ virtual يلم كل الـ Cities اللي الـ country بتاعها = _id بتاع الـ Country ده
+countrySchema.virtual("cities", {
+    ref: "City", // اسم الموديل
+    localField: "_id", // في Country
+    foreignField: "country", // في CitySchema
+    justOne: false, // عايزينه Array
+});
+// لازم نفعّل الـ virtuals في toJSON / toObject عشان تظهر في الريسبونس
+countrySchema.set("toJSON", { virtuals: true });
+countrySchema.set("toObject", { virtuals: true });
+exports.CountryModel = (0, mongoose_1.model)("Country", countrySchema);
