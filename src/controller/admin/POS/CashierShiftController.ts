@@ -44,34 +44,35 @@ export const startcashierShift = async (req: Request, res: Response)=> {
 
 
 export const endShiftWithReport = async (req: Request, res: Response) => {
-  const { shiftId } = req.params;
   const { password } = req.body;
-  const userId = req.user?.id;        // من الـ JWT
+  const jwtUser = req.user;
+  if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
- const user = await UserModel.findById(userId).select("+password_hash +role +positionId");
+  const userId = jwtUser.id;
+
+  // 1) هات اليوزر وتأكد من الباسورد
+  const user = await UserModel.findById(userId).select("+password_hash +role +positionId");
   if (!user) throw new NotFound("User not found");
 
   const isMatch = await bcrypt.compare(password, user.password_hash);
   if (!isMatch) throw new BadRequest("Wrong password");
 
-
-  // 3) هات الشيفت المفتوح
+  // 2) هات آخر شيفت مفتوح للكاشير ده (من غير ما تبعت shiftId)
   const shift = await CashierShift.findOne({
-    _id: shiftId,
     cashier_id: user._id,
     status: "open",
-  });
+  }).sort({ start_time: -1 });
 
-  if (!shift) throw new NotFound("Open cashier shift not found");
+  if (!shift) throw new NotFound("No open cashier shift found");
 
   const endTime = new Date();
 
-  // 4) المبيعات خلال الشيفت ده (باستخدام الوقت)
+  // 3) المبيعات بتاعة الشيفت ده فعلياً (بإستخدام shift_id + cashier_id)
   const salesAgg = await SaleModel.aggregate([
     {
       $match: {
-        createdAt: { $gte: shift.start_time, $lte: endTime },
-        // لو عايز تربطها بفرع أو حاجة معينة زود شروط هنا
+        shift_id: shift._id,
+        cashier_id: user._id,
       },
     },
     {
@@ -83,51 +84,53 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     },
   ]);
 
-  const totalSales = salesAgg[0]?.totalAmount || 0;
+  const totalSales  = salesAgg[0]?.totalAmount || 0;
   const totalOrders = salesAgg[0]?.ordersCount || 0;
 
-  // 5) المصروفات خلال نفس الفترة
+  // 4) مصروفات نفس الشيفت
   const expenses = await ExpenseModel.find({
-    createdAt: { $gte: shift.start_time, $lte: endTime },
-    // لو حابب تربط بالـ financial_accountId أو غيره، زوّد شرط هنا
+    shift_id: shift._id,
+    cashier_id: user._id,
   }).lean();
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-
+  const totalExpenses = expenses.reduce((sum, e: any) => sum + e.amount, 0);
   const netCashInDrawer = totalSales - totalExpenses;
 
-  // 6) حدّث بيانات الشيفت
-  shift.end_time = endTime;
-  shift.status = "closed";
+  // 5) قفل الشيفت وتخزين الأرقام
+  shift.end_time          = endTime;
+  shift.status            = "closed";
   shift.total_sale_amount = totalSales;
-  shift.total_expenses = totalExpenses;
-  shift.net_cash_in_drawer = netCashInDrawer;
+  (shift as any).total_expenses     = totalExpenses;
+  (shift as any).net_cash_in_drawer = netCashInDrawer;
   await shift.save();
 
-  // 7) جهّز report شبه اللي في الصور
+  // 6) تجهيز الـ report
+  const vodafoneCashTotal = expenses
+    .filter((e: any) => e.name === "Vodafone Cash")
+    .reduce((sum, e: any) => sum + e.amount, 0);
+
   const report = {
     financialSummary: {
       cash: {
         label: "Cash",
-        amount: totalSales,          // مثال: 7677.34
+        amount: totalSales,
       },
-      // هنا بعرض إجمالي المصروفات كـ رقم سالب زي Vodafone Cash في الصورة
-      expensesLine: {
-        label: "Expenses",
-        amount: -totalExpenses,      // مثال: -200.00
+      vodafoneCash: {
+        label: "Vodafone Cash",
+        amount: -vodafoneCashTotal,
       },
-      netCashInDrawer,              // 7477.34
+      netCashInDrawer,
     },
     ordersSummary: {
-      totalOrders,                  // Orders: 1
+      totalOrders,
     },
     expenses: {
-      rows: expenses.map((e, idx) => ({
+      rows: expenses.map((e: any, idx: number) => ({
         index: idx + 1,
-        description: e.name,        // "Vodafone Cash"
-        amount: -e.amount,          // -200.00 في الجدول
+        description: e.name,
+        amount: -e.amount,
       })),
-      total: totalExpenses,         // 200.00
+      total: totalExpenses,
     },
   };
 
@@ -138,24 +141,6 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
   });
 };
 
-export const getCashierUsers = async (req: Request, res: Response ) => {
-  // 1️⃣ هات Position اللي اسمه Cashier
-  const cashierPosition = await PositionModel.findOne({ name: "Cashier" });
-
-  if (!cashierPosition) {
-    throw new NotFound("Cashier position not found");
-  }
-
-  // 2️⃣ هات كل Users اللي positionId بتاعهم = ID بتاع Cashier
-  const users = await UserModel.find({ positionId: cashierPosition._id })
-    .select("-password_hash");
-
-  // 3️⃣ رجّع الرد
-  SuccessResponse(res, {
-    message: "Cashier users fetched successfully",
-    users,
-  });
-};
 
 
 export const endshiftcashier = async (req: Request, res: Response) => {
@@ -183,5 +168,35 @@ export const endshiftcashier = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Cashier shift ended successfully",
     shift,
+  });
+};
+
+
+
+
+export const getCashierUsers = async (req: Request, res: Response ) => {
+  // 1️⃣ هات Position اللي اسمه Cashier
+  const cashierPosition = await PositionModel.findOne({ name: "Cashier" });
+
+  if (!cashierPosition) {
+    throw new NotFound("Cashier position not found");
+  }
+
+  // 2️⃣ هات كل Users اللي positionId بتاعهم = ID بتاع Cashier
+  const users = await UserModel.find({ positionId: cashierPosition._id })
+    .select("-password_hash");
+
+  // 3️⃣ رجّع الرد
+  SuccessResponse(res, {
+    message: "Cashier users fetched successfully",
+    users,
+  });
+};
+
+//logout for cashiershift without token invalidation
+export const logout = async (req: Request, res: Response) => {
+
+  return SuccessResponse(res, {
+    message: "Logged out successfully",
   });
 };
