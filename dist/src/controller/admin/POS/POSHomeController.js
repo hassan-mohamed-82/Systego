@@ -16,6 +16,8 @@ const Financial_Account_1 = require("../../../models/schema/admin/Financial_Acco
 const Currency_1 = require("../../../models/schema/admin/Currency");
 const pandels_1 = require("../../../models/schema/admin/pandels");
 const producthelper_1 = require("../../../utils/producthelper");
+const Country_1 = require("../../../models/schema/admin/Country");
+const City_1 = require("../../../models/schema/admin/City");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const category = await category_1.CategoryModel.find();
@@ -66,8 +68,10 @@ const getAllSelections = async (req, res) => {
     const paymentMethods = await payment_methods_1.PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await customer_1.CustomerModel.find().select('name');
     const customerGroups = await customer_1.CustomerGroupModel.find().select('name');
-    const currency = await Currency_1.CurrencyModel.find().select('name  ar-name');
-    (0, response_1.SuccessResponse)(res, { message: "Selections list", warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
+    const currency = await Currency_1.CurrencyModel.find().select('name  ar_name');
+    const country = await Country_1.CountryModel.find().select('name  ar_name');
+    const city = await City_1.CityModels.find().select('name  ar_name');
+    (0, response_1.SuccessResponse)(res, { message: "Selections list", country, city, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
 // get featured product

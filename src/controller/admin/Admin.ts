@@ -17,7 +17,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
 
   const { username, email, password, positionId, company_name, phone, image_base64,warehouse_id} = req.body;
 
-  if (!username || !email || !password || !positionId || !warehouse_id) {
+  if (!username || !email || !password || !positionId ) {
     throw new BadRequest("Username, email, password, positionId, and warehouse_id are required");
   }
  

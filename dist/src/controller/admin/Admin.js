@@ -18,7 +18,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const createUser = async (req, res, next) => {
     const currentUser = req.user;
     const { username, email, password, positionId, company_name, phone, image_base64, warehouse_id } = req.body;
-    if (!username || !email || !password || !positionId || !warehouse_id) {
+    if (!username || !email || !password || !positionId) {
         throw new BadRequest_1.BadRequest("Username, email, password, positionId, and warehouse_id are required");
     }
     const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);

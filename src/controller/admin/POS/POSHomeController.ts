@@ -17,6 +17,8 @@ import { CurrencyModel } from "../../../models/schema/admin/Currency";
 import { get } from "axios";
 import { PandelModel } from "../../../models/schema/admin/pandels";
 import {buildProductsWithVariations  } from "../../../utils/producthelper";
+import { CountryModel } from "../../../models/schema/admin/Country";
+import { CityModels } from "../../../models/schema/admin/City";
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
     const category = await CategoryModel.find()
@@ -73,8 +75,10 @@ export const getAllSelections = async (req: Request, res: Response) => {
     const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await CustomerModel.find().select('name');
     const customerGroups = await CustomerGroupModel.find().select('name');
-    const currency=await CurrencyModel.find().select('name  ar-name')
-    SuccessResponse(res, {message: "Selections list", warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
+    const currency=await CurrencyModel.find().select('name  ar_name');
+    const country =await CountryModel.find().select('name  ar_name');
+    const city =await CityModels.find().select('name  ar_name');
+    SuccessResponse(res, {message: "Selections list",country,city ,warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
 
