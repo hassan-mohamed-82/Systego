@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getActiveBundles = exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
+exports.getCashiers = exports.getActiveBundles = exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
 const category_1 = require("../../../models/schema/admin/category");
 const brand_1 = require("../../../models/schema/admin/brand");
 const coupons_1 = require("../../../models/schema/admin/coupons");
@@ -17,6 +17,7 @@ const Currency_1 = require("../../../models/schema/admin/Currency");
 const pandels_1 = require("../../../models/schema/admin/pandels");
 const producthelper_1 = require("../../../utils/producthelper");
 const Country_1 = require("../../../models/schema/admin/Country");
+const cashier_1 = require("../../../models/schema/admin/cashier");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const category = await category_1.CategoryModel.find();
@@ -130,3 +131,20 @@ const getActiveBundles = async (req, res) => {
     });
 };
 exports.getActiveBundles = getActiveBundles;
+const getCashiers = async (req, res) => {
+    const cashiers = await cashier_1.CashierModel.find()
+        .populate("warehouse_id", "name") // اسم المخزن
+        .populate({
+        path: "users",
+        select: "username email role status warehouseId", // الحقول اللي محتاجها من User
+    })
+        .populate({
+        path: "bankAccounts",
+        select: "name balance status in_POS warehouseId", // الحقول اللي محتاجها من BankAccount
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Cashiers with their users and bank accounts",
+        cashiers,
+    });
+};
+exports.getCashiers = getCashiers;

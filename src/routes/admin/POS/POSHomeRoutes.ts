@@ -1,5 +1,6 @@
 import express from 'express';
-import { getAllCategorys, getAllBrands, getProductsByCategory, getProductsByBrand, getAllSelections, getFeaturedProducts } from '../../../controller/admin/POS/POSHomeController';
+import { getAllCategorys, getAllBrands, getProductsByCategory,
+   getCashiers , getProductsByBrand, getAllSelections, getFeaturedProducts } from '../../../controller/admin/POS/POSHomeController';
 
 const router = express.Router();
 
@@ -7,6 +8,8 @@ const router = express.Router();
 router.get('/categories', getAllCategorys);
 
 router.get('/brands', getAllBrands);
+
+router.get('/cashiers', getCashiers);
 
 router.get('/categories/:categoryId/products', getProductsByCategory);
 

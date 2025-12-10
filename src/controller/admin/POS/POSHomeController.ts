@@ -19,6 +19,7 @@ import { PandelModel } from "../../../models/schema/admin/pandels";
 import {buildProductsWithVariations  } from "../../../utils/producthelper";
 import { CountryModel } from "../../../models/schema/admin/Country";
 import { CityModels } from "../../../models/schema/admin/City";
+import { CashierModel } from "../../../models/schema/admin/cashier";
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
     const category = await CategoryModel.find()
@@ -147,5 +148,27 @@ export const getActiveBundles = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Active bundles",
     bundles: bundlesWithPricing,
+  });
+};
+
+
+
+
+
+export const getCashiers = async (req: Request, res: Response) => {
+  const cashiers = await CashierModel.find()
+    .populate("warehouse_id", "name") // اسم المخزن
+    .populate({
+      path: "users",
+      select: "username email role status warehouseId", // الحقول اللي محتاجها من User
+    })
+    .populate({
+      path: "bankAccounts",
+      select: "name balance status in_POS warehouseId", // الحقول اللي محتاجها من BankAccount
+    });
+
+  SuccessResponse(res, {
+    message: "Cashiers with their users and bank accounts",
+    cashiers,
   });
 };

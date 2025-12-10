@@ -8,6 +8,7 @@ const POSHomeController_1 = require("../../../controller/admin/POS/POSHomeContro
 const router = express_1.default.Router();
 router.get('/categories', POSHomeController_1.getAllCategorys);
 router.get('/brands', POSHomeController_1.getAllBrands);
+router.get('/cashiers', POSHomeController_1.getCashiers);
 router.get('/categories/:categoryId/products', POSHomeController_1.getProductsByCategory);
 router.get('/brands/:brandId/products', POSHomeController_1.getProductsByBrand);
 router.get('/selections', POSHomeController_1.getAllSelections);
