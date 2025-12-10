@@ -16,6 +16,7 @@ exports.createUserSchema = joi_1.default.object({
     address: joi_1.default.string().optional(),
     vat_number: joi_1.default.string().optional(),
     state: joi_1.default.string().optional(),
+    warehouseId: joi_1.default.string().optional(),
     postal_code: joi_1.default.string().optional(),
     role: joi_1.default.string().valid("superadmin", "admin").optional(),
 });
@@ -29,6 +30,7 @@ exports.updateUserSchema = joi_1.default.object({
     image_base64: joi_1.default.string().optional(),
     address: joi_1.default.string().optional(),
     vat_number: joi_1.default.string().optional(),
+    warehouseId: joi_1.default.string().optional(),
     state: joi_1.default.string().optional(),
     postal_code: joi_1.default.string().optional(),
     role: joi_1.default.string().valid("superadmin", "admin").optional(),

@@ -2,7 +2,7 @@ import mongoose, { Schema } from "mongoose";
  
 const categorySchema =new Schema(
   {
-    name: { type: String, required: true, unique: true },
+    name: { type: String, required: true},
     ar_name: { type: String, required: true },
     image: { type: String },
     parentId: { type: Schema.Types.ObjectId, ref: "Category" },
