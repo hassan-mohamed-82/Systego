@@ -87,7 +87,7 @@ const getAllSelections = async (req, res) => {
             },
         },
     ]);
-    (0, response_1.SuccessResponse)(res, { message: "Selections list", warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
+    (0, response_1.SuccessResponse)(res, { message: "Selections list", countriesWithCities, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
 // get featured product

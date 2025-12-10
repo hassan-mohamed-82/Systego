@@ -95,7 +95,7 @@ export const getAllSelections = async (req: Request, res: Response) => {
       },
     },
   ]); 
-    SuccessResponse(res, {message: "Selections list", warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
+    SuccessResponse(res, {message: "Selections list",countriesWithCities ,warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
 
