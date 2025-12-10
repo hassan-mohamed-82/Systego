@@ -24,6 +24,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     const user = await UserModel.findOne({ email })
       .populate("positionId")
+      .select("+password_hash tokenVersion")   // 👈 نتأكد إن tokenVersion راجع
       .lean<AppUser>();
 
     if (!user) {
@@ -37,22 +38,26 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
 
     // ✅ نجيب الـ roles المرتبطة بالـ position
-    const roles = await RoleModel.find({ positionId: user.positionId?._id }).lean();
+    const roles = await RoleModel.find({
+      positionId: (user.positionId as any)?._id ?? user.positionId,
+    }).lean();
 
     let actions: any[] = [];
     if (roles && roles.length > 0) {
-      actions = await ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
+      actions = await ActionModel.find({
+        roleId: { $in: roles.map((r) => r._id) },
+      }).lean();
     }
 
-   
-
+    // ✅ نولد التوكن مع tokenVersion
     const token = generateToken({
       _id: user._id,
       username: user.username,
       role: user.role,
-      positionId: user.positionId?._id || null,
+      positionId: (user.positionId as any)?._id || user.positionId || null,
       roles: roles || [],
       actions: actions || [],
+      tokenVersion: (user as any).tokenVersion ?? 0, // 👈 دي الأهم
     });
 
     // ✅ نرجّع الاستجابة
@@ -66,8 +71,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         position: user.positionId || null,
         status: user.status,
         role: user.role,
-        roles: roles?.map(r => r.name) || [],
-        actions: actions?.map(a => a.name) || [],
+        roles: roles?.map((r) => r.name) || [],
+        actions: actions?.map((a) => a.name) || [],
       },
     });
   } catch (error) {
