@@ -17,13 +17,13 @@ const Action_1 = require("../../models/schema/admin/Action");
 const mongoose_1 = __importDefault(require("mongoose"));
 const createUser = async (req, res, next) => {
     const currentUser = req.user;
-    const { username, email, password, positionId, company_name, phone, image_base64, warehouse_id } = req.body;
+    const { username, email, password, positionId, company_name, phone, image_base64, warehouseId } = req.body;
     if (!username || !email || !password || !positionId) {
         throw new BadRequest_1.BadRequest("Username, email, password, positionId, and warehouse_id are required");
     }
-    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouseExists) {
-        throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
+        throw new BadRequest_1.BadRequest("Invalid warehouseId: Warehouse does not exist");
     }
     // ✅ التأكد من تكرار البيانات
     const existingUser = await User_1.UserModel.findOne({ $or: [{ email }, { username }] });
@@ -46,7 +46,7 @@ const createUser = async (req, res, next) => {
         company_name,
         phone,
         image_url,
-        warehouse_id
+        warehouseId
     }))).populate("positionId");
     (0, response_1.SuccessResponse)(res, {
         message: "User created successfully",
@@ -57,7 +57,7 @@ const createUser = async (req, res, next) => {
             positionId: newUser.positionId,
             status: newUser.status,
             image_url: newUser.image_url,
-            warehouse_id: newUser.warehouse_id
+            warehouse_id: newUser.warehouseId
         },
     });
 };
@@ -140,7 +140,7 @@ const getUserById = async (req, res, next) => {
 exports.getUserById = getUserById;
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
-    const { username, email, password, positionId, company_name, phone, status, image_base64, warehouse_id } = req.body;
+    const { username, email, password, positionId, company_name, phone, status, image_base64, warehouseId } = req.body;
     const user = await User_1.UserModel.findById(id);
     if (!user) {
         throw new Errors_1.NotFound("User not found");
@@ -157,12 +157,12 @@ const updateUser = async (req, res, next) => {
         user.phone = phone;
     if (status)
         user.status = status;
-    if (warehouse_id) {
-        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+    if (warehouseId) {
+        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
         if (!warehouseExists) {
             throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
         }
-        user.warehouse_id = warehouse_id;
+        user.warehouseId = warehouseId;
     }
     if (password) {
         const salt = await bcryptjs_1.default.genSalt(10);
@@ -180,7 +180,7 @@ const updateUser = async (req, res, next) => {
             email: user.email,
             positionId: user.positionId,
             status: user.status,
-            warehouse_id: user.warehouse_id,
+            warehouseId: user.warehouseId,
             image_url: user.image_url,
         },
     });

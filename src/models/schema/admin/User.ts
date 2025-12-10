@@ -18,7 +18,7 @@ const UserSchema = new Schema(
     vat_number: { type: String },
     state: { type: String },
     postal_code: { type: String },
-    warehouse_id: { type: Schema.Types.ObjectId, ref: "Warehouse" },
+    warehouseId: { type: Schema.Types.ObjectId, ref: "Warehouse" },
   },
   { timestamps: true }
 );
