@@ -22,7 +22,6 @@ const login = async (req, res, next) => {
         }
         const user = await User_1.UserModel.findOne({ email })
             .populate("positionId")
-            .select("+password_hash tokenVersion") // 👈 نتأكد إن tokenVersion راجع
             .lean();
         if (!user) {
             throw new NotFound_1.NotFound("User not found");
@@ -33,24 +32,18 @@ const login = async (req, res, next) => {
             throw new Errors_1.UnauthorizedError("Invalid email or password");
         }
         // ✅ نجيب الـ roles المرتبطة بالـ position
-        const roles = await roles_1.RoleModel.find({
-            positionId: user.positionId?._id ?? user.positionId,
-        }).lean();
+        const roles = await roles_1.RoleModel.find({ positionId: user.positionId?._id }).lean();
         let actions = [];
         if (roles && roles.length > 0) {
-            actions = await Action_1.ActionModel.find({
-                roleId: { $in: roles.map((r) => r._id) },
-            }).lean();
+            actions = await Action_1.ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
         }
-        // ✅ نولد التوكن مع tokenVersion
         const token = (0, auth_1.generateToken)({
             _id: user._id,
             username: user.username,
             role: user.role,
-            positionId: user.positionId?._id || user.positionId || null,
+            positionId: user.positionId?._id || null,
             roles: roles || [],
             actions: actions || [],
-            tokenVersion: user.tokenVersion ?? 0, // 👈 دي الأهم
         });
         // ✅ نرجّع الاستجابة
         (0, response_1.SuccessResponse)(res, {
@@ -63,8 +56,8 @@ const login = async (req, res, next) => {
                 position: user.positionId || null,
                 status: user.status,
                 role: user.role,
-                roles: roles?.map((r) => r.name) || [],
-                actions: actions?.map((a) => a.name) || [],
+                roles: roles?.map(r => r.name) || [],
+                actions: actions?.map(a => a.name) || [],
             },
         });
     }

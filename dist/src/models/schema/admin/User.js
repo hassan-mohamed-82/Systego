@@ -50,6 +50,5 @@ const UserSchema = new mongoose_1.Schema({
     state: { type: String },
     postal_code: { type: String },
     warehouse_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Warehouse" },
-    tokenVersion: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.UserModel = mongoose_1.default.model("User", UserSchema);
