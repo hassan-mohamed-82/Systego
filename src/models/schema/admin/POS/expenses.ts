@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
-import { CategoryMaterialModel } from "../Category_Material";
 const expenseSchema = new mongoose.Schema({
 name: { type: String, required: true },
 amount: { type: Number, required: true },
-Category_id: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
+Category_id: { type: mongoose.Schema.Types.ObjectId, ref: "ExpenseCategory", required: true },
  shift_id:   { type: mongoose.Schema.Types.ObjectId, ref: "CashierShift", required: true },
   cashier_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 note: { type: String },
