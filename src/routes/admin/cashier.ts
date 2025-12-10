@@ -1,13 +1,12 @@
-import mongoose from "mongoose";
+import { Router } from "express";
+import {createCashier,getCashiers,updateCashier,deleteCashier,} from "../../controller/admin/cashier";
+import { catchAsync } from "../../utils/catchAsync";
 
-const CashierSchema = new mongoose.Schema(
-    {
-        name: { type: String, required: true },
-        ar_name: { type: String, required: true },
-        warehouse_id: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", required: true },
-        status: { type: Boolean, default: true },
-    },
-    { timestamps: true }
-);
+const router = Router();
 
-export const CashierModel = mongoose.model("Cashier", CashierSchema);
+router.post("/", catchAsync(createCashier));
+router.get("/", catchAsync(getCashiers));
+router.put("/:id", catchAsync(updateCashier));
+router.delete("/:id", catchAsync(deleteCashier));
+
+export default router;
