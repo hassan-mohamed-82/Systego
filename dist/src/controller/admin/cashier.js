@@ -28,13 +28,17 @@ const deleteCashier = async (req, res) => {
 exports.deleteCashier = deleteCashier;
 const getCashiers = async (req, res) => {
     const cashiers = await cashier_1.CashierModel.find()
+        .populate("warehouse_id", "name") // اسم المخزن
         .populate({
         path: "users",
-        select: "username email role status warehouse_id", // الحقول اللي محتاجها بس
+        select: "username email role status warehouseId", // الحقول اللي محتاجها من User
     })
-        .populate("warehouse_id", "name"); // لو عايز اسم المخزن كمان
+        .populate({
+        path: "bankAccounts",
+        select: "name balance status in_POS warehouseId", // الحقول اللي محتاجها من BankAccount
+    });
     (0, response_1.SuccessResponse)(res, {
-        message: "Cashiers with their users",
+        message: "Cashiers with their users and bank accounts",
         cashiers,
     });
 };
