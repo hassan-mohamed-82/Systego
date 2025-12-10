@@ -8,7 +8,7 @@ const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const createPaymentMethod = async (req, res) => {
     const { name, discription, icon, type, ar_name } = req.body;
-    if (!name || !discription || !icon || !type || ar_name) {
+    if (!name || !discription || !type || ar_name) {
         throw new BadRequest_1.BadRequest("Please provide all the required fields including icon");
     }
     const existingPaymentMethod = await payment_methods_1.PaymentMethodModel.findOne({ name });

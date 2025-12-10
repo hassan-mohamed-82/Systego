@@ -8,7 +8,7 @@ import { saveBase64Image } from '../../utils/handleImages';
 export const createPaymentMethod = async (req: Request, res: Response) => {
   const { name, discription, icon,type,ar_name} = req.body;
 
-  if (!name || !discription || !icon || !type || ar_name) {
+  if (!name || !discription || !type || ar_name) {
     throw new BadRequest("Please provide all the required fields including icon");
   }
 

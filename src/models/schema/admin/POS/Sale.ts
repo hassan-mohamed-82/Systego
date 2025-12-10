@@ -18,7 +18,7 @@ const SaleSchema = new Schema(
     // currency_id: { type: Schema.Types.ObjectId, ref: 'Currency' },
     account_id:[ { type: Schema.Types.ObjectId, ref: 'BankAccount' }],
   //  payment_method: { type: Schema.Types.ObjectId, ref: 'PaymentMethod', required: true },
-    order_pending: { type: Number, enum: [0, 1], default: 0 }, // 0: pending, 1: completed, 2: partial
+    order_pending: { type: Number, enum: [0, 1], default: 0 }, // 0: pending, 1: completed
     order_tax: { type: Schema.Types.ObjectId, ref: 'Taxes' },
     order_discount: { type: Schema.Types.ObjectId, ref: 'Discount' },
     // shipping_cost: { type: Number, default: 0 },

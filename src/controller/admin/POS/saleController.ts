@@ -38,7 +38,7 @@ export const createSale = async (req: Request, res: Response) => {
     customer_id,
     warehouse_id,
     account_id,          // Array of BankAccount IDs أو ID واحد
-    order_pending = 0,   // 0: pending, 1: completed
+    order_pending = 1,   // 👈 0: pending, 1: completed (default = completed)
     order_tax,
     order_discount,
     grand_total,
@@ -55,7 +55,7 @@ export const createSale = async (req: Request, res: Response) => {
       : [account_id]
     : [];
 
-  // ✅ 0 = pending, 1 = completed
+  // ✅ دلوقتي 0 = pending, 1 = completed
   const isPending = order_pending === 0;
 
   // لو الطلب Completed لازم يكون فيه على الأقل حساب بنكي واحد
@@ -81,14 +81,13 @@ export const createSale = async (req: Request, res: Response) => {
   };
 
   // ========== Basic Validations ==========
-
   const warehouse = await WarehouseModel.findById(warehouse_id);
   if (!warehouse) throw new NotFound("Warehouse not found");
 
   const customer = await CustomerModel.findById(customer_id);
   if (!customer) throw new NotFound("Customer not found");
 
-  // ===== Validate Bank Accounts: لازم status = true && in_POS = true =====
+  // ===== Validate Bank Accounts =====
   if (accountIds.length > 0) {
     const bankAccounts = await BankAccountModel.find({
       _id: { $in: accountIds },
@@ -141,7 +140,6 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Validate Products ==========
-
   for (const item of products) {
     const productPrice = await findProductPrice(item);
 
@@ -156,7 +154,6 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Validate Bundles ==========
-
   const currentDate = new Date();
 
   for (const bundleItem of bundles) {
@@ -195,19 +192,16 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Create Sale ==========
-
   const newSale = new SaleModel({
     customer_id,
     warehouse_id,
     account_id: accountIds,
-    order_pending,
+    order_pending,          // 👈 هنخزّن القيمة زي ما هي
     order_tax,
     order_discount,
     grand_total,
     coupon_id,
     gift_card_id,
-
-    // 👇 ربط الفاتورة بالكاشير والشيفت
     cashier_id: cashierId,
     shift_id: openShift._id,
   });
@@ -215,12 +209,11 @@ export const createSale = async (req: Request, res: Response) => {
   const savedSale = await newSale.save();
   const saleId = savedSale._id;
 
-  // ========== Create Payment (لو مش pending) باستخدام account_id Array ==========
-
+  // ========== Create Payment (لو مش pending) ==========
   if (!isPending && accountIds.length > 0) {
     await PaymentModel.create({
       sale_id: saleId,
-      account_id: accountIds,   // Array كاملة زي الـ Schema بتاع Payment
+      account_id: accountIds,
       amount: grand_total,
       status: "completed",
       payment_proof: null,
@@ -228,7 +221,6 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Process Products ==========
-
   for (const item of products) {
     const productPrice = await findProductPrice(item);
 
@@ -252,7 +244,6 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Process Bundles ==========
-
   for (const bundleItem of bundles) {
     const bundle = await PandelModel.findById(
       bundleItem.bundle_id
@@ -279,7 +270,6 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Update Coupon (لو مش pending) ==========
-
   if (coupon_id && !isPending) {
     await CouponModel.findByIdAndUpdate(coupon_id, {
       $inc: { available: -1 },
@@ -287,7 +277,6 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Update Gift Card (لو مش pending) ==========
-
   if (gift_card_id && !isPending) {
     await GiftCardModel.findByIdAndUpdate(gift_card_id, {
       $inc: { amount: -grand_total },
@@ -295,13 +284,13 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ========== Response ==========
-
   SuccessResponse(res, {
     message: isPending
       ? "Sale created as pending - awaiting confirmation"
       : "Sale created successfully",
     sale: savedSale,
-    status: isPending ? "pending" : "confirmed",
+    // 👇 لو مش عايز الـ status خالص شيله
+    // status: isPending ? "pending" : "confirmed",
   });
 };
 
