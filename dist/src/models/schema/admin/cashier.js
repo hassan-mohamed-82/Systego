@@ -15,7 +15,7 @@ const CashierSchema = new mongoose_1.default.Schema({
 CashierSchema.virtual("users", {
     ref: "User", // اسم الموديل
     localField: "warehouse_id", // في Cashier
-    foreignField: "warehouse_id", // في User
+    foreignField: "warehouseId", // في User
     justOne: false, // لو عايزهم array
 });
 // لازم نفعّل الـ virtuals في toJSON / toObject
