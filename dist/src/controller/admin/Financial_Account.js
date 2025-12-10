@@ -8,7 +8,7 @@ const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createBankAccount = async (req, res) => {
-    const { name, warehouseId, image, description, status, in_POS } = req.body;
+    const { name, warehouseId, image, description, status, in_POS, balance } = req.body;
     const existingAccount = await Financial_Account_1.BankAccountModel.findOne({ name });
     if (existingAccount) {
         throw new BadRequest_1.BadRequest("Account name already exists");
@@ -28,6 +28,7 @@ const createBankAccount = async (req, res) => {
         description,
         status,
         in_POS,
+        balance
     });
     (0, response_1.SuccessResponse)(res, { message: "Bank account created successfully", bankAccount });
 };

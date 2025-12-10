@@ -8,7 +8,7 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 
 export const createBankAccount = async (req: Request, res: Response) => {
-  const { name, warehouseId, image, description, status, in_POS } = req.body;
+  const { name, warehouseId, image, description, status, in_POS,balance } = req.body;
 
   const existingAccount = await BankAccountModel.findOne({ name });
   if (existingAccount) {
@@ -30,6 +30,7 @@ let imageUrl = "";
     description,
     status,
     in_POS,
+    balance
   });
 
   SuccessResponse(res, { message: "Bank account created successfully", bankAccount });
