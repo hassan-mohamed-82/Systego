@@ -15,7 +15,6 @@ import { ActionModel } from "../../models/schema/admin/Action";
 
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
-  try {
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -30,32 +29,33 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       throw new NotFound("User not found");
     }
 
-    // ✅ تحقق من كلمة السر
     const isMatch = await bcrypt.compare(password, user.password_hash as string);
     if (!isMatch) {
       throw new UnauthorizedError("Invalid email or password");
     }
 
-    // ✅ نجيب الـ roles المرتبطة بالـ position
-    const roles = await RoleModel.find({ positionId: user.positionId?._id }).lean();
+    // roles المرتبطة بالـ position
+    const roles = await RoleModel.find({
+      positionId: (user.positionId as any)?._id,
+    }).lean();
 
     let actions: any[] = [];
     if (roles && roles.length > 0) {
-      actions = await ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
+      actions = await ActionModel.find({
+        roleId: { $in: roles.map(r => r._id) },
+      }).lean();
     }
-
-   
 
     const token = generateToken({
       _id: user._id,
       username: user.username,
       role: user.role,
-      positionId: user.positionId?._id || null,
+      positionId: (user.positionId as any)?._id || user.positionId,
       roles: roles || [],
       actions: actions || [],
+      warehouse_id: user.warehouse_id, // 👈 أهم سطر
     });
 
-    // ✅ نرجّع الاستجابة
     SuccessResponse(res, {
       message: "Login successful",
       token,
@@ -66,14 +66,14 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         position: user.positionId || null,
         status: user.status,
         role: user.role,
+        warehouse_id: user.warehouse_id ?? null,
         roles: roles?.map(r => r.name) || [],
         actions: actions?.map(a => a.name) || [],
       },
     });
-  } catch (error) {
-    next(error);
-  }
+ 
 };
+
 
 
 export const signup = async (req: Request, res: Response) => {

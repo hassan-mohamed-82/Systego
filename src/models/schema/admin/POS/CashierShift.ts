@@ -9,7 +9,7 @@ const CashierShiftSchema = new Schema({
   total_expenses:     { type: Number, default: 0 },
   net_cash_in_drawer: { type: Number, default: 0 },
 
-  cashier_id: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+  cashierman_id: { type: Schema.Types.ObjectId, ref: 'User', required: true }
 });
 
 export const CashierShift = mongoose.model("CashierShift", CashierShiftSchema);

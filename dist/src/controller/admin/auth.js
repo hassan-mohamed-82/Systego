@@ -15,55 +15,54 @@ const handleImages_1 = require("../../utils/handleImages");
 const roles_1 = require("../../models/schema/admin/roles");
 const Action_1 = require("../../models/schema/admin/Action");
 const login = async (req, res, next) => {
-    try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            throw new BadRequest_1.BadRequest("Email and password are required");
-        }
-        const user = await User_1.UserModel.findOne({ email })
-            .populate("positionId")
-            .lean();
-        if (!user) {
-            throw new NotFound_1.NotFound("User not found");
-        }
-        // ✅ تحقق من كلمة السر
-        const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
-        if (!isMatch) {
-            throw new Errors_1.UnauthorizedError("Invalid email or password");
-        }
-        // ✅ نجيب الـ roles المرتبطة بالـ position
-        const roles = await roles_1.RoleModel.find({ positionId: user.positionId?._id }).lean();
-        let actions = [];
-        if (roles && roles.length > 0) {
-            actions = await Action_1.ActionModel.find({ roleId: { $in: roles.map(r => r._id) } }).lean();
-        }
-        const token = (0, auth_1.generateToken)({
-            _id: user._id,
+    const { email, password } = req.body;
+    if (!email || !password) {
+        throw new BadRequest_1.BadRequest("Email and password are required");
+    }
+    const user = await User_1.UserModel.findOne({ email })
+        .populate("positionId")
+        .lean();
+    if (!user) {
+        throw new NotFound_1.NotFound("User not found");
+    }
+    const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
+    if (!isMatch) {
+        throw new Errors_1.UnauthorizedError("Invalid email or password");
+    }
+    // roles المرتبطة بالـ position
+    const roles = await roles_1.RoleModel.find({
+        positionId: user.positionId?._id,
+    }).lean();
+    let actions = [];
+    if (roles && roles.length > 0) {
+        actions = await Action_1.ActionModel.find({
+            roleId: { $in: roles.map(r => r._id) },
+        }).lean();
+    }
+    const token = (0, auth_1.generateToken)({
+        _id: user._id,
+        username: user.username,
+        role: user.role,
+        positionId: user.positionId?._id || user.positionId,
+        roles: roles || [],
+        actions: actions || [],
+        warehouse_id: user.warehouse_id, // 👈 أهم سطر
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Login successful",
+        token,
+        user: {
+            id: user._id,
             username: user.username,
+            email: user.email,
+            position: user.positionId || null,
+            status: user.status,
             role: user.role,
-            positionId: user.positionId?._id || null,
-            roles: roles || [],
-            actions: actions || [],
-        });
-        // ✅ نرجّع الاستجابة
-        (0, response_1.SuccessResponse)(res, {
-            message: "Login successful",
-            token,
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email,
-                position: user.positionId || null,
-                status: user.status,
-                role: user.role,
-                roles: roles?.map(r => r.name) || [],
-                actions: actions?.map(a => a.name) || [],
-            },
-        });
-    }
-    catch (error) {
-        next(error);
-    }
+            warehouse_id: user.warehouse_id ?? null,
+            roles: roles?.map(r => r.name) || [],
+            actions: actions?.map(a => a.name) || [],
+        },
+    });
 };
 exports.login = login;
 const signup = async (req, res) => {

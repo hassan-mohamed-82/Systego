@@ -13,7 +13,9 @@ const CashierSchema = new mongoose_1.default.Schema({
         ref: "Warehouse",
         required: true,
     },
-    status: { type: Boolean, default: true },
+    status: { type: Boolean, default: true }, // موجود ولا لأ في السيستم
+    cashier_active: { type: Boolean, default: false }, //حد مستخدمه ولا لا  
+    cashier_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Cashier', required: true },
 }, { timestamps: true });
 // ✅ users حسب الـ warehouse
 CashierSchema.virtual("users", {

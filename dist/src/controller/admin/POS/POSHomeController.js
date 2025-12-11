@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCashiers = exports.getActiveBundles = exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
+exports.selectCashier = exports.getCashiers = exports.getActiveBundles = exports.getFeaturedProducts = exports.getAllSelections = exports.getProductsByBrand = exports.getProductsByCategory = exports.getAllBrands = exports.getAllCategorys = void 0;
 const category_1 = require("../../../models/schema/admin/category");
 const brand_1 = require("../../../models/schema/admin/brand");
 const coupons_1 = require("../../../models/schema/admin/coupons");
@@ -18,6 +18,7 @@ const pandels_1 = require("../../../models/schema/admin/pandels");
 const producthelper_1 = require("../../../utils/producthelper");
 const Country_1 = require("../../../models/schema/admin/Country");
 const cashier_1 = require("../../../models/schema/admin/cashier");
+const BadRequest_1 = require("../../../Errors/BadRequest");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const category = await category_1.CategoryModel.find();
@@ -132,19 +133,68 @@ const getActiveBundles = async (req, res) => {
 };
 exports.getActiveBundles = getActiveBundles;
 const getCashiers = async (req, res) => {
-    const cashiers = await cashier_1.CashierModel.find()
-        .populate("warehouse_id", "name") // اسم المخزن
-        .populate({
-        path: "users",
-        select: "username email role status warehouseId", // الحقول اللي محتاجها من User
+    const warehouseId = req.user?.warehouse_id;
+    if (!warehouseId) {
+        throw new Errors_1.NotFound("Warehouse ID is required");
+    }
+    const cashiers = await cashier_1.CashierModel.find({
+        warehouse_id: warehouseId,
+        status: true, // لسه موجود في السيستم
+        cashier_active: false, // مش حد عامل بيه شيفت دلوقتي
     })
-        .populate({
-        path: "bankAccounts",
-        select: "name balance status in_POS warehouseId", // الحقول اللي محتاجها من BankAccount
-    });
+        .populate("warehouse_id", "name")
+        .lean();
+    // لو حابب ترجع برضو اللي في شيفت حاليًا:
+    const usedCashiers = await cashier_1.CashierModel.find({
+        warehouse_id: warehouseId,
+        status: true,
+        cashier_active: true,
+    })
+        .populate("warehouse_id", "name")
+        .lean();
     (0, response_1.SuccessResponse)(res, {
-        message: "Cashiers with their users and bank accounts",
+        // دول اللي هيظهروا في شاشة الـ Selection
         cashiers,
+        // دول لو حابب تستخدمهم في أي مكان تاني (مش ضروري)
+        hidden_cashiers: usedCashiers,
     });
 };
 exports.getCashiers = getCashiers;
+const selectCashier = async (req, res) => {
+    const warehouseId = req.user?.warehouse_id;
+    if (!warehouseId) {
+        throw new Errors_1.NotFound("Warehouse ID is required");
+    }
+    const { cashier_id } = req.body;
+    if (!cashier_id) {
+        throw new BadRequest_1.BadRequest("Cashier ID is required");
+    }
+    // مينفعش نختار غير كاشير مش شغال حاليًا
+    const cashier = (await cashier_1.CashierModel.findOneAndUpdate({
+        _id: cashier_id,
+        warehouse_id: warehouseId,
+        status: true,
+        cashier_active: false, // لو true يبقى في حد مستخدمه
+    })
+        .populate("warehouse_id", "name")
+        .populate({
+        path: "bankAccounts",
+        select: "name balance status in_POS warehouseId",
+    })); // 👈 هنا الكاست عشان TS مايزعلش من bankAccounts
+    if (!cashier) {
+        throw new Errors_1.NotFound("Cashier not found or already in use");
+    }
+    // الفينانشال أكاونت اللي هيشتغل عليه الكاشير
+    let financialAccount = null;
+    const bankAccounts = cashier.bankAccounts;
+    if (bankAccounts && bankAccounts.length) {
+        financialAccount =
+            bankAccounts.find(acc => acc.in_POS && acc.status) ?? bankAccounts[0];
+    }
+    (0, response_1.SuccessResponse)(res, {
+        message: "Cashier shift started",
+        cashier,
+        financialAccount,
+    });
+};
+exports.selectCashier = selectCashier;

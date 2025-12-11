@@ -3,14 +3,20 @@ import { Types } from "mongoose";
 
 export interface Action {
   _id: Types.ObjectId;
-  name: "add" | "update" | "delete" | "get"; 
-  role: Types.ObjectId; 
+  name: "add" | "update" | "delete" | "get";
+  role: Types.ObjectId; // أو roleId لو عندك في الاسكيمـا
 }
 
 export interface Role {
   _id: Types.ObjectId;
-  name: string; 
-  possitionId: Types.ObjectId; 
+  name: string;
+
+  // الاسم الصح من الداتابيز
+  positionId?: Types.ObjectId;
+
+  // الاسم الغلط القديم (خليه اختياري عشان ما يكسرش حاجة)
+  possitionId?: Types.ObjectId;
+
   actions?: Action[];
 }
 
@@ -31,6 +37,9 @@ export interface AppUser {
 
   role: "superadmin" | "admin";
 
+  // 👇 فرع / مخزن اليوزر
+  warehouse_id?: Types.ObjectId;
+
   company_name?: string;
   phone?: string;
   image_url?: string;
@@ -39,26 +48,28 @@ export interface AppUser {
   state?: string;
   postal_code?: string;
 
-  positionId: Position | Types.ObjectId; 
-  roles?: Role[];                      
+  positionId: Position | Types.ObjectId;
+  roles?: Role[];
   actions?: Action[];
 }
 
 export interface JwtUserPayload {
   id: string;
   name: string;
-  role:string;  
+  role: string;
   positionId: string;
   roles: string[];
   actions: string[];
 
+  // 👇 هنستخدمه في getCashiers
+  warehouse_id?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
-  user?: JwtUserPayload; 
+  user?: JwtUserPayload;
 }
 
-
+// augment للـ Express.Request عشان تقدر تقول req.user في أي مكان
 declare global {
   namespace Express {
     interface Request {
@@ -66,3 +77,5 @@ declare global {
     }
   }
 }
+
+export {};

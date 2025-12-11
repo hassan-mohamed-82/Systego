@@ -42,6 +42,6 @@ const CashierShiftSchema = new mongoose_1.Schema({
     total_sale_amount: { type: Number, default: 0 }, // إجمالي مبيعات الكاش
     total_expenses: { type: Number, default: 0 },
     net_cash_in_drawer: { type: Number, default: 0 },
-    cashier_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true }
+    cashierman_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true }
 });
 exports.CashierShift = mongoose_1.default.model("CashierShift", CashierShiftSchema);
