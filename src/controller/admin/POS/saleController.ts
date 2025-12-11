@@ -43,7 +43,7 @@ export const createSale = async (req: Request, res: Response) => {
   // 2) استقبل الداتا من الـ body
   const {
     customer_id,
-    // ✅ خلي الديفولت Pending
+    // default = pending
     order_pending = 0, // 0 = pending, 1 = completed
 
     coupon_id,
@@ -66,8 +66,10 @@ export const createSale = async (req: Request, res: Response) => {
     financials, // [{ account_id / id, amount }]
   } = req.body;
 
-  // حوّل لقيمة منطقية واضحة
-  const isPending = Number(order_pending) === 0;
+  // لو مفيش financials خالص اعتبره pending أوتوماتيك
+  const hasFinancials = Array.isArray(financials) && financials.length > 0;
+  const isPending = Number(order_pending) === 0 || !hasFinancials;
+  const normalizedOrderPending = isPending ? 0 : 1;
 
   // 3) تحقق من الـ warehouse
   const warehouse = await WarehouseModel.findById(warehouseId);
@@ -102,11 +104,13 @@ export const createSale = async (req: Request, res: Response) => {
   let paymentLines: FinancialLine[] = [];
 
   if (!isPending) {
-    if (!financials || !Array.isArray(financials) || financials.length === 0) {
+    const finArr = financials as any[];
+
+    if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
       throw new BadRequest("At least one payment line (financial) is required for non-pending sale");
     }
 
-    paymentLines = financials.map((f: any) => {
+    paymentLines = finArr.map((f: any) => {
       const accId = f.account_id || f.id;
       const amt = Number(f.amount);
 
@@ -204,14 +208,13 @@ export const createSale = async (req: Request, res: Response) => {
       throw new BadRequest("Gift card is expired");
     }
 
-    // هنا بنقارن مع إجمالي المدفوع من الـ financials (لو الفاتورة مش pending)
     const totalPaid = paymentLines.reduce((s, p) => s + p.amount, 0);
     if (totalPaid > 0 && giftCard.amount < totalPaid) {
       throw new BadRequest("Gift card does not have enough balance");
     }
   }
 
-  // 11) ستوك المنتجات (باستخدام ProductPrice / product_price_id)
+  // 11) ستوك المنتجات (باستخدام product_price_id)
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       const { product_price_id, quantity } = p;
@@ -279,12 +282,11 @@ export const createSale = async (req: Request, res: Response) => {
     warehouse_id: warehouseId,
 
     account_id: accountIdsForSale,
-    order_pending,
+    order_pending: normalizedOrderPending,
 
     coupon_id: coupon ? coupon._id : undefined,
     gift_card_id: giftCard ? giftCard._id : undefined,
 
-    // نخزن الضريبة والخصم في الحقول دي في الـ Schema
     order_tax: tax ? tax._id : undefined,
     order_discount: discountDoc ? discountDoc._id : undefined,
 
@@ -321,7 +323,7 @@ export const createSale = async (req: Request, res: Response) => {
         sale_id: sale._id,
         product_id,
         bundle_id: undefined,
-        product_price_id,   // ✅ ربط بالسعر/الفارييشن
+        product_price_id,
         quantity,
         price,
         subtotal,
@@ -343,7 +345,7 @@ export const createSale = async (req: Request, res: Response) => {
         sale_id: sale._id,
         product_id: undefined,
         bundle_id,
-        product_price_id: undefined, // الباندل مش محتاج ProductPrice واحد
+        product_price_id: undefined,
         quantity,
         price,
         subtotal,
@@ -358,7 +360,6 @@ export const createSale = async (req: Request, res: Response) => {
 
   // 17) لو مش Pending: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
   if (!isPending) {
-    // سجل الـ Payment
     await PaymentModel.create({
       sale_id: sale._id,
       financials: paymentLines.map((p) => ({
@@ -368,14 +369,12 @@ export const createSale = async (req: Request, res: Response) => {
       status: "completed",
     });
 
-    // تحديت رصيد الحسابات البنكية
     for (const line of paymentLines) {
       await BankAccountModel.findByIdAndUpdate(line.account_id, {
         $inc: { balance: line.amount },
       });
     }
 
-    // خصم ستوك المنتجات
     if (products && products.length > 0) {
       for (const p of products as any[]) {
         const { product_price_id, quantity } = p;
@@ -386,7 +385,6 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // خصم ستوك الباندلز (من المنتجات جوه الباندل)
     if (bundles && bundles.length > 0) {
       for (const b of bundles as any[]) {
         const { bundle_id, quantity } = b;
@@ -406,14 +404,12 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // تحديث الكوبون
     if (coupon) {
       await CouponModel.findByIdAndUpdate(coupon._id, {
         $inc: { available: -1 },
       });
     }
 
-    // تحديث الجيفت كارد
     if (giftCard && totalPaidFromLines > 0) {
       await GiftCardModel.findByIdAndUpdate(giftCard._id, {
         $inc: { amount: -totalPaidFromLines },
@@ -427,6 +423,7 @@ export const createSale = async (req: Request, res: Response) => {
     items: productSalesDocs,
   });
 };
+
 
 
 export const getSales = async (req: Request, res: Response)=> {
