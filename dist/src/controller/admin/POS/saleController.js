@@ -33,7 +33,7 @@ const createSale = async (req, res) => {
     }
     // 1) تأكد إن فيه شيفت مفتوح للكاشير ده
     const openShift = await CashierShift_1.CashierShift.findOne({
-        cashier_id: cashierId,
+        cashierman_id: jwtUser,
         status: "open",
     }).sort({ start_time: -1 });
     if (!openShift) {
