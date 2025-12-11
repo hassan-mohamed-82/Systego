@@ -47,7 +47,7 @@ const CashierShiftRoutes_1 = __importDefault(require("./POS/CashierShiftRoutes")
 const Booking_1 = __importDefault(require("./Booking"));
 const Popup_1 = __importDefault(require("./Popup"));
 const ReturnSaleRoutes_1 = __importDefault(require("./POS/ReturnSaleRoutes"));
-const Qztray_1 = __importDefault(require("./Qztray"));
+// import qztrayRouter from "./Qztray"
 const payments_1 = __importDefault(require("./payments"));
 const Offers_1 = __importDefault(require("./Offers"));
 const cashier_1 = __importDefault(require("./cashier"));
@@ -67,7 +67,7 @@ exports.route.use("/product", products_1.default);
 exports.route.use("/cashier", cashier_1.default);
 exports.route.use("/supplier", suppliers_1.default);
 exports.route.use("/recipe", Recipe_1.default);
-exports.route.use("/qztray", Qztray_1.default);
+// route.use("/qztray",qztrayRouter);
 exports.route.use("/warehouse", Warehouse_1.default);
 exports.route.use("/expensecategory", expensecategory_1.default);
 exports.route.use("/discount", discount_1.default);

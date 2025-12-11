@@ -41,7 +41,7 @@ import CashierShiftRouter from "./POS/CashierShiftRoutes"
 import BookingRouter from "./Booking"
 import PopupRouter from "./Popup"
 import ReturnRouter from "./POS/ReturnSaleRoutes"
-import qztrayRouter from "./Qztray"
+// import qztrayRouter from "./Qztray"
 import paymentRouter from "./payments"
 import OffersRouter from "./Offers"
 import CashierRouter from "./cashier"
@@ -62,7 +62,7 @@ route.use("/product",productRouter);
 route.use("/cashier",CashierRouter)
 route.use("/supplier",supplierRouter);
 route.use("/recipe",RecipeRouter);
-route.use("/qztray",qztrayRouter);
+// route.use("/qztray",qztrayRouter);
 route.use("/warehouse",WarehouseRouter)
 route.use("/expensecategory",ExpensecategoryRouter)
 route.use("/discount",discountRouter)
