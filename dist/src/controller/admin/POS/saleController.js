@@ -31,25 +31,24 @@ const createSale = async (req, res) => {
     if (!warehouseId) {
         throw new BadRequest_1.BadRequest("Warehouse is not assigned to this user");
     }
-    // 1) تأكد إن فيه شيفت مفتوح للكاشير ده
+    // 1) تأكد إن فيه شيفت مفتوح لليوزر ده
     const openShift = await CashierShift_1.CashierShift.findOne({
-        cashierman_id: cashierId, // ✅ هنا التعديل
+        cashierman_id: cashierId,
         status: "open",
     }).sort({ start_time: -1 });
     if (!openShift) {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
-    // 2) استقبل الداتا من البودي (بدون warehouse_id)
-    const { customer_id, // اختياري
-    order_pending = 1, // 0 = pending, 1 = completed
-    coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, note, financials, // Array of { account_id / id, amount }
+    // 2) استقبل الداتا من الـ body
+    const { customer_id, order_pending = 1, // 0 = pending, 1 = completed
+    coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, note, financials, // [{ account_id / id, amount }]
      } = req.body;
-    // 3) تحقق من الـ warehouse اللي من التوكين
+    // 3) تحقق من الـ warehouse
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
         throw new Errors_1.NotFound("Warehouse not found");
     }
-    // 4) لازم يبقى فيه على الأقل منتج أو باكدج
+    // 4) لازم منتج أو باكدج واحد على الأقل
     if ((!products || products.length === 0) && (!bundles || bundles.length === 0)) {
         throw new BadRequest_1.BadRequest("At least one product or bundle is required");
     }
@@ -74,7 +73,7 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("At least one payment line (financial) is required for non-pending sale");
         }
         paymentLines = financials.map((f) => {
-            const accId = f.account_id || f.id; // لو الفرونت بيبعت id بدل account_id
+            const accId = f.account_id || f.id;
             const amt = Number(f.amount);
             if (!accId || !mongoose_1.default.Types.ObjectId.isValid(accId)) {
                 throw new BadRequest_1.BadRequest("Invalid account_id in financials");
@@ -94,11 +93,11 @@ const createSale = async (req, res) => {
         if (paid_amount != null && Number(paid_amount) !== totalPaid) {
             throw new BadRequest_1.BadRequest("paid_amount does not match sum of financials");
         }
-        // تحقق من كل حساب بنكي في نفس الـ warehouse
+        // تأكد أن كل الحسابات في نفس الـ warehouse ومسموح بيها في الـ POS
         for (const line of paymentLines) {
             const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
                 _id: line.account_id,
-                warehouseId: warehouseId, // 👈 من التوكين
+                warehouseId: warehouseId,
                 status: true,
                 in_POS: true,
             });
@@ -107,7 +106,7 @@ const createSale = async (req, res) => {
             }
         }
     }
-    // 7) كوبون
+    // 7) كوبون (لو موجود)
     let coupon = null;
     if (coupon_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(coupon_id)) {
@@ -124,7 +123,7 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("Coupon is expired");
         }
     }
-    // 8) ضريبة
+    // 8) ضريبة (لو موجودة)
     let tax = null;
     if (tax_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(tax_id)) {
@@ -136,7 +135,7 @@ const createSale = async (req, res) => {
         if (!tax.status)
             throw new BadRequest_1.BadRequest("Tax is not active");
     }
-    // 9) خصم
+    // 9) خصم (لو موجود)
     let discountDoc = null;
     if (discount_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(discount_id)) {
@@ -148,7 +147,7 @@ const createSale = async (req, res) => {
         if (!discountDoc.status)
             throw new BadRequest_1.BadRequest("Discount is not active");
     }
-    // 10) جيفت كارد
+    // 10) جيفت كارد (لو موجود)
     let giftCard = null;
     if (gift_card_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(gift_card_id)) {
@@ -167,7 +166,7 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("Gift card does not have enough balance");
         }
     }
-    // 11) ستوك المنتجات
+    // 11) ستوك المنتجات (باستخدام ProductPrice)
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, quantity } = p;
@@ -214,13 +213,14 @@ const createSale = async (req, res) => {
         reference,
         date: new Date(),
         customer_id: customer ? customer._id : undefined,
-        warehouse_id: warehouseId, // من التوكين
+        warehouse_id: warehouseId,
         account_id: accountIdsForSale,
         order_pending,
         coupon_id: coupon ? coupon._id : undefined,
         gift_card_id: giftCard ? giftCard._id : undefined,
-        tax_id: tax ? tax._id : undefined,
-        discount_id: discountDoc ? discountDoc._id : undefined,
+        // لو عايز تخزن الضريبة/الخصم في الحقول order_tax / order_discount عدّل هنا
+        order_tax: tax ? tax._id : undefined,
+        order_discount: discountDoc ? discountDoc._id : undefined,
         shipping,
         tax_rate,
         tax_amount,
@@ -232,15 +232,16 @@ const createSale = async (req, res) => {
         cashier_id: cashierId,
         shift_id: openShift._id,
     });
-    // 15) ProductSales للمنتجات
+    // 15) ProductSales للمنتجات (من غير option_id)
     const productSalesDocs = [];
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, product_id, quantity, price, subtotal, options_id, isGift, } = p;
             const ps = await Sale_1.ProductSalesModel.create({
                 sale_id: sale._id,
-                product_id: product_id,
+                product_id,
                 bundle_id: undefined,
+                product_price_id, // ✅ ربط السطر بالفارييشن (ProductPrice)
                 quantity,
                 price,
                 subtotal,
@@ -259,6 +260,7 @@ const createSale = async (req, res) => {
                 sale_id: sale._id,
                 product_id: undefined,
                 bundle_id,
+                product_price_id: undefined, // الباندل مش محتاج ProductPrice واحد
                 quantity,
                 price,
                 subtotal,

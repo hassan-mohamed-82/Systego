@@ -30,9 +30,9 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("Warehouse is not assigned to this user");
   }
 
-  // 1) تأكد إن فيه شيفت مفتوح للكاشير ده
+  // 1) تأكد إن فيه شيفت مفتوح لليوزر ده
   const openShift = await CashierShift.findOne({
-    cashierman_id: cashierId,   // ✅ هنا التعديل
+    cashierman_id: cashierId,
     status: "open",
   }).sort({ start_time: -1 });
 
@@ -40,10 +40,10 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("You must open a cashier shift before creating a sale");
   }
 
-  // 2) استقبل الداتا من البودي (بدون warehouse_id)
+  // 2) استقبل الداتا من الـ body
   const {
-    customer_id,              // اختياري
-    order_pending = 1,        // 0 = pending, 1 = completed
+    customer_id,
+    order_pending = 1, // 0 = pending, 1 = completed
     coupon_id,
     gift_card_id,
     tax_id,
@@ -58,16 +58,16 @@ export const createSale = async (req: Request, res: Response) => {
     grand_total,
     paid_amount,
     note,
-    financials,               // Array of { account_id / id, amount }
+    financials, // [{ account_id / id, amount }]
   } = req.body;
 
-  // 3) تحقق من الـ warehouse اللي من التوكين
+  // 3) تحقق من الـ warehouse
   const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) {
     throw new NotFound("Warehouse not found");
   }
 
-  // 4) لازم يبقى فيه على الأقل منتج أو باكدج
+  // 4) لازم منتج أو باكدج واحد على الأقل
   if ((!products || products.length === 0) && (!bundles || bundles.length === 0)) {
     throw new BadRequest("At least one product or bundle is required");
   }
@@ -101,7 +101,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
 
     paymentLines = financials.map((f: any) => {
-      const accId = f.account_id || f.id; // لو الفرونت بيبعت id بدل account_id
+      const accId = f.account_id || f.id;
       const amt = Number(f.amount);
 
       if (!accId || !mongoose.Types.ObjectId.isValid(accId)) {
@@ -127,11 +127,11 @@ export const createSale = async (req: Request, res: Response) => {
       throw new BadRequest("paid_amount does not match sum of financials");
     }
 
-    // تحقق من كل حساب بنكي في نفس الـ warehouse
+    // تأكد أن كل الحسابات في نفس الـ warehouse ومسموح بيها في الـ POS
     for (const line of paymentLines) {
       const bankAccount = await BankAccountModel.findOne({
         _id: line.account_id,
-        warehouseId: warehouseId,     // 👈 من التوكين
+        warehouseId: warehouseId,
         status: true,
         in_POS: true,
       });
@@ -142,7 +142,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 7) كوبون
+  // 7) كوبون (لو موجود)
   let coupon: any = null;
   if (coupon_id) {
     if (!mongoose.Types.ObjectId.isValid(coupon_id)) {
@@ -159,7 +159,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 8) ضريبة
+  // 8) ضريبة (لو موجودة)
   let tax: any = null;
   if (tax_id) {
     if (!mongoose.Types.ObjectId.isValid(tax_id)) {
@@ -171,7 +171,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (!tax.status) throw new BadRequest("Tax is not active");
   }
 
-  // 9) خصم
+  // 9) خصم (لو موجود)
   let discountDoc: any = null;
   if (discount_id) {
     if (!mongoose.Types.ObjectId.isValid(discount_id)) {
@@ -183,7 +183,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (!discountDoc.status) throw new BadRequest("Discount is not active");
   }
 
-  // 10) جيفت كارد
+  // 10) جيفت كارد (لو موجود)
   let giftCard: any = null;
   if (gift_card_id) {
     if (!mongoose.Types.ObjectId.isValid(gift_card_id)) {
@@ -204,7 +204,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 11) ستوك المنتجات
+  // 11) ستوك المنتجات (باستخدام ProductPrice)
   if (products && products.length > 0) {
     for (const p of products) {
       const { product_price_id, quantity } = p;
@@ -268,13 +268,14 @@ export const createSale = async (req: Request, res: Response) => {
     reference,
     date: new Date(),
     customer_id: customer ? customer._id : undefined,
-    warehouse_id: warehouseId,           // من التوكين
+    warehouse_id: warehouseId,
     account_id: accountIdsForSale,
     order_pending,
     coupon_id: coupon ? coupon._id : undefined,
     gift_card_id: giftCard ? giftCard._id : undefined,
-    tax_id: tax ? tax._id : undefined,
-    discount_id: discountDoc ? discountDoc._id : undefined,
+    // لو عايز تخزن الضريبة/الخصم في الحقول order_tax / order_discount عدّل هنا
+    order_tax: tax ? tax._id : undefined,
+    order_discount: discountDoc ? discountDoc._id : undefined,
     shipping,
     tax_rate,
     tax_amount,
@@ -287,7 +288,7 @@ export const createSale = async (req: Request, res: Response) => {
     shift_id: openShift._id,
   });
 
-  // 15) ProductSales للمنتجات
+  // 15) ProductSales للمنتجات (من غير option_id)
   const productSalesDocs: any[] = [];
 
   if (products && products.length > 0) {
@@ -304,8 +305,9 @@ export const createSale = async (req: Request, res: Response) => {
 
       const ps = await ProductSalesModel.create({
         sale_id: sale._id,
-        product_id: product_id,
+        product_id,
         bundle_id: undefined,
+        product_price_id,   // ✅ ربط السطر بالفارييشن (ProductPrice)
         quantity,
         price,
         subtotal,
@@ -327,6 +329,7 @@ export const createSale = async (req: Request, res: Response) => {
         sale_id: sale._id,
         product_id: undefined,
         bundle_id,
+        product_price_id: undefined, // الباندل مش محتاج ProductPrice واحد
         quantity,
         price,
         subtotal,
@@ -404,7 +407,6 @@ export const createSale = async (req: Request, res: Response) => {
     items: productSalesDocs,
   });
 };
-
 
 
 export const getSales = async (req: Request, res: Response)=> {

@@ -89,7 +89,7 @@ const productSalesSchema = new mongoose_1.Schema({
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
-    options_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "Option" }],
+    product_price_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "ProductPrice" },
     isGift: { type: Boolean, default: false },
     isBundle: { type: Boolean, default: false },
 }, { timestamps: true });
