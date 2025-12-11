@@ -32,8 +32,7 @@ export const createSale = async (req: Request, res: Response) => {
 
   // 1) تأكد إن فيه شيفت مفتوح للكاشير ده
   const openShift = await CashierShift.findOne({
-    cashierman_id: jwtUser,
-
+    cashierman_id: cashierId,   // ✅ هنا التعديل
     status: "open",
   }).sort({ start_time: -1 });
 
@@ -269,7 +268,7 @@ export const createSale = async (req: Request, res: Response) => {
     reference,
     date: new Date(),
     customer_id: customer ? customer._id : undefined,
-    warehouse_id: warehouseId,           // 👈 من التوكين
+    warehouse_id: warehouseId,           // من التوكين
     account_id: accountIdsForSale,
     order_pending,
     coupon_id: coupon ? coupon._id : undefined,
@@ -342,7 +341,6 @@ export const createSale = async (req: Request, res: Response) => {
 
   // 17) لو مش Pending: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
   if (!isPending) {
-    // Payment واحد فيه financials[]
     await PaymentModel.create({
       sale_id: sale._id,
       financials: paymentLines.map((p) => ({
@@ -352,14 +350,12 @@ export const createSale = async (req: Request, res: Response) => {
       status: "completed",
     });
 
-    // زوّد رصيد كل حساب بالمبلغ الخاص بيه
     for (const line of paymentLines) {
       await BankAccountModel.findByIdAndUpdate(line.account_id, {
         $inc: { balance: line.amount },
       });
     }
 
-    // ستوك المنتجات
     if (products && products.length > 0) {
       for (const p of products) {
         const { product_price_id, quantity } = p;
@@ -370,7 +366,6 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // ستوك منتجات الباندلز
     if (bundles && bundles.length > 0) {
       for (const b of bundles) {
         const { bundle_id, quantity } = b;
@@ -390,14 +385,12 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // كوبون
     if (coupon) {
       await CouponModel.findByIdAndUpdate(coupon._id, {
         $inc: { available: -1 },
       });
     }
 
-    // جيفت كارد
     if (giftCard && totalPaidFromLines > 0) {
       await GiftCardModel.findByIdAndUpdate(giftCard._id, {
         $inc: { amount: -totalPaidFromLines },

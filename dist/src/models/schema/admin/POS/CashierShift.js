@@ -34,14 +34,27 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CashierShift = void 0;
+// models/schema/admin/POS/CashierShift.ts
 const mongoose_1 = __importStar(require("mongoose"));
 const CashierShiftSchema = new mongoose_1.Schema({
     start_time: { type: Date },
     end_time: { type: Date },
-    status: { type: String, enum: ['open', 'closed'], default: 'open' },
-    total_sale_amount: { type: Number, default: 0 }, // إجمالي مبيعات الكاش
+    status: { type: String, enum: ["open", "closed"], default: "open" },
+    // أرقام الشيفت
+    total_sale_amount: { type: Number, default: 0 },
     total_expenses: { type: Number, default: 0 },
     net_cash_in_drawer: { type: Number, default: 0 },
-    cashierman_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true }
-});
+    // اليوزر اللي شغّال على السيستم (من الـ JWT)
+    cashierman_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    // الكاشير اللي متحدد من شاشة الاختيار (CashierModel)
+    cashier_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Cashier",
+        required: true,
+    },
+}, { timestamps: true });
 exports.CashierShift = mongoose_1.default.model("CashierShift", CashierShiftSchema);
