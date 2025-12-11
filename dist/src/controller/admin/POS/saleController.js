@@ -352,7 +352,7 @@ const getAllSales = async (req, res) => {
 };
 exports.getAllSales = getAllSales;
 const getsalePending = async (req, res) => {
-    const sales = await Sale_1.SaleModel.find({ order_pending: 1 })
+    const sales = await Sale_1.SaleModel.find({ order_pending: 0 })
         .populate('customer_id', 'name email phone_number')
         .populate('warehouse_id', 'name location')
         .populate('currency_id', 'code symbol')
@@ -365,7 +365,7 @@ const getsalePending = async (req, res) => {
 };
 exports.getsalePending = getsalePending;
 const getsaleunPending = async (req, res) => {
-    const sales = await Sale_1.SaleModel.find({ order_pending: 0 })
+    const sales = await Sale_1.SaleModel.find({ order_pending: 1 })
         .populate('customer_id', 'name email phone_number')
         .populate('warehouse_id', 'name location')
         .populate('currency_id', 'code symbol')
