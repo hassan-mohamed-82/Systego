@@ -34,14 +34,21 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentModel = void 0;
+// models/schema/admin/POS/payment.ts (أو المسار عندك)
 const mongoose_1 = __importStar(require("mongoose"));
 const PaymentSchema = new mongoose_1.Schema({
     sale_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Sale", required: true },
-    // ✅ account_id كـ Array of BankAccount IDs
-    account_id: [
-        { type: mongoose_1.Schema.Types.ObjectId, ref: "BankAccount", required: true }
+    // ✅ كل سطر دفع: حساب + مبلغ
+    financials: [
+        {
+            account_id: {
+                type: mongoose_1.Schema.Types.ObjectId,
+                ref: "BankAccount",
+                required: true,
+            },
+            amount: { type: Number, required: true },
+        },
     ],
-    amount: { type: Number, required: true },
     status: {
         type: String,
         enum: ["pending", "completed"],
