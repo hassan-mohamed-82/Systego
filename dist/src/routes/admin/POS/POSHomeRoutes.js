@@ -10,6 +10,7 @@ router.get('/categories', POSHomeController_1.getAllCategorys);
 router.get('/brands', POSHomeController_1.getAllBrands);
 router.get('/cashiers', POSHomeController_1.getCashiers);
 router.post('/cashiers/select', POSHomeController_1.selectCashier);
+router.get('/categories/:categoryId/products', POSHomeController_1.getProductsByCategory);
 router.get('/brands/:brandId/products', POSHomeController_1.getProductsByBrand);
 router.get('/selections', POSHomeController_1.getAllSelections);
 router.get('/featured', POSHomeController_1.getFeaturedProducts);

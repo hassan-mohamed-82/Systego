@@ -15,6 +15,7 @@ router.get('/cashiers', getCashiers);
 
 router.post('/cashiers/select', selectCashier);
 
+router.get('/categories/:categoryId/products', getProductsByCategory);
 router.get('/brands/:brandId/products', getProductsByBrand);
 
 router.get('/selections', getAllSelections);
