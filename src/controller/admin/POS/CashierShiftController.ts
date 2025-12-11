@@ -224,6 +224,7 @@ export const endshiftcashier = async (req: Request, res: Response) => {
   });
 };
 
+
 export const getCashierUsers = async (req: Request, res: Response ) => {
   // 1️⃣ هات Position اللي اسمه Cashier
   const cashierPosition = await PositionModel.findOne({ name: "Cashier" });

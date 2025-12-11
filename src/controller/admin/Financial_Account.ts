@@ -61,24 +61,56 @@ export const deleteBankAccount = async (req: Request, res: Response) => {
 export const updateBankAccount = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { name, warehouseId, image, description, status, in_POS } = req.body;
+
   if (!id) throw new BadRequest("Bank account id is required");
 
   const bankAccount = await BankAccountModel.findById(id);
   if (!bankAccount) throw new NotFound("Bank account not found");
-  if (name) bankAccount.name = name;
-  if (warehouseId) {
-    const existwarhouse = await WarehouseModel.findById(warehouseId);
-    if (!existwarhouse) {
-      throw new NotFound("Warhouse not found");
-    } }
-    bankAccount.warehouseId = warehouseId;
-  if (image) {
-    bankAccount.image = await saveBase64Image(image, Date.now().toString(), req, "category");
-  }
-  if (description) bankAccount.description = description;
-  if (status) bankAccount.status = status;
-  if (in_POS) bankAccount.in_POS = in_POS;
-  await bankAccount.save();
-  SuccessResponse(res, { message: "Bank account updated successfully", bankAccount });
-}
 
+  // name
+  if (typeof name === "string") {
+    bankAccount.name = name;
+  }
+
+  // warehouse
+  if (warehouseId) {
+    const existWarehouse = await WarehouseModel.findById(warehouseId);
+    if (!existWarehouse) {
+      throw new NotFound("Warehouse not found");
+    }
+    // لو السكيمة عندك اسمها warhouseId خليه كده
+    bankAccount.warehouseId = warehouseId;
+    // لو صححتها لـ warehouseId خليه:
+    // bankAccount.warehouseId = warehouseId;
+  }
+
+  // image (base64)
+  if (image) {
+    bankAccount.image = await saveBase64Image(
+      image,
+      Date.now().toString(),
+      req,
+      "category"
+    );
+  }
+
+  // description
+  if (typeof description === "string") {
+    bankAccount.description = description;
+  }
+
+  // ✅ booleans
+  if (typeof status === "boolean") {
+    bankAccount.status = status;
+  }
+  if (typeof in_POS === "boolean") {
+    bankAccount.in_POS = in_POS;
+  }
+
+  await bankAccount.save({ validateBeforeSave: false });
+
+  SuccessResponse(res, {
+    message: "Bank account updated successfully",
+    bankAccount,
+  });
+};

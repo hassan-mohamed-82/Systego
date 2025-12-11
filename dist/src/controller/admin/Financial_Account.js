@@ -66,25 +66,40 @@ const updateBankAccount = async (req, res) => {
     const bankAccount = await Financial_Account_1.BankAccountModel.findById(id);
     if (!bankAccount)
         throw new Errors_1.NotFound("Bank account not found");
-    if (name)
+    // name
+    if (typeof name === "string") {
         bankAccount.name = name;
-    if (warehouseId) {
-        const existwarhouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
-        if (!existwarhouse) {
-            throw new Errors_1.NotFound("Warhouse not found");
-        }
     }
-    bankAccount.warehouseId = warehouseId;
+    // warehouse
+    if (warehouseId) {
+        const existWarehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
+        if (!existWarehouse) {
+            throw new Errors_1.NotFound("Warehouse not found");
+        }
+        // لو السكيمة عندك اسمها warhouseId خليه كده
+        bankAccount.warehouseId = warehouseId;
+        // لو صححتها لـ warehouseId خليه:
+        // bankAccount.warehouseId = warehouseId;
+    }
+    // image (base64)
     if (image) {
         bankAccount.image = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
     }
-    if (description)
+    // description
+    if (typeof description === "string") {
         bankAccount.description = description;
-    if (status)
+    }
+    // ✅ booleans
+    if (typeof status === "boolean") {
         bankAccount.status = status;
-    if (in_POS)
+    }
+    if (typeof in_POS === "boolean") {
         bankAccount.in_POS = in_POS;
-    await bankAccount.save();
-    (0, response_1.SuccessResponse)(res, { message: "Bank account updated successfully", bankAccount });
+    }
+    await bankAccount.save({ validateBeforeSave: false });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Bank account updated successfully",
+        bankAccount,
+    });
 };
 exports.updateBankAccount = updateBankAccount;
