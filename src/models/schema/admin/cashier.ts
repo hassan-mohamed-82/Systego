@@ -26,7 +26,6 @@ const CashierSchema = new mongoose.Schema(
     status: { type: Boolean, default: true },        // موجود ولا لأ في السيستم
     cashier_active: { type: Boolean, default: false }, //حد مستخدمه ولا لا  
 
-      cashier_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'Cashier', required: true },
 
   },
   { timestamps: true }
