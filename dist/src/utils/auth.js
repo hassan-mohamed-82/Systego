@@ -14,16 +14,9 @@ const generateToken = (user) => {
         name: user.username,
         role: user.role,
         positionId: user.positionId?.toString(),
-        roles: Array.isArray(user.roles)
-            ? user.roles.map((role) => role.name)
-            : [],
-        actions: Array.isArray(user.actions)
-            ? user.actions.map((action) => action.name)
-            : [],
-        // 👈 الجديد
-        warehouse_id: user.warehouse_id
-            ? user.warehouse_id.toString()
-            : undefined,
+        roles: Array.isArray(user.roles) ? user.roles.map((role) => role.name) : [],
+        actions: Array.isArray(user.actions) ? user.actions.map((action) => action.name) : [],
+        warehouse_id: user.warehouse_id ? user.warehouse_id.toString() : undefined,
     }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
 exports.generateToken = generateToken;
@@ -37,10 +30,10 @@ const verifyToken = (token) => {
             positionId: decoded.positionId,
             roles: decoded.roles ?? [],
             actions: decoded.actions ?? [],
-            warehouse_id: decoded.warehouse_id, // 👈
+            warehouse_id: decoded.warehouse_id,
         };
     }
-    catch (error) {
+    catch {
         throw new Errors_1.UnauthorizedError("Invalid token");
     }
 };

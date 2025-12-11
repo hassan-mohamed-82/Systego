@@ -15,63 +15,62 @@ import { ActionModel } from "../../models/schema/admin/Action";
 
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    if (!email || !password) {
-      throw new BadRequest("Email and password are required");
-    }
+  if (!email || !password) {
+    throw new BadRequest("Email and password are required");
+  }
 
-    const user = await UserModel.findOne({ email })
-      .populate("positionId")
-      .lean<AppUser>();
+  const user = await UserModel.findOne({ email })
+    .populate("positionId")
+    .lean<AppUser>();   // ✅ تمام هنا لأن password_hash مش معمول له select: false
 
-    if (!user) {
-      throw new NotFound("User not found");
-    }
+  if (!user) {
+    throw new NotFound("User not found");
+  }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash as string);
-    if (!isMatch) {
-      throw new UnauthorizedError("Invalid email or password");
-    }
+  const isMatch = await bcrypt.compare(password, user.password_hash as string);
+  if (!isMatch) {
+    throw new UnauthorizedError("Invalid email or password");
+  }
 
-    // roles المرتبطة بالـ position
-    const roles = await RoleModel.find({
-      positionId: (user.positionId as any)?._id,
+  // roles المرتبطة بالـ position
+  const roles = await RoleModel.find({
+    positionId: (user.positionId as any)?._id,
+  }).lean();
+
+  let actions: any[] = [];
+  if (roles && roles.length > 0) {
+    actions = await ActionModel.find({
+      roleId: { $in: roles.map(r => r._id) },
     }).lean();
+  }
 
-    let actions: any[] = [];
-    if (roles && roles.length > 0) {
-      actions = await ActionModel.find({
-        roleId: { $in: roles.map(r => r._id) },
-      }).lean();
-    }
+  const token = generateToken({
+    _id: user._id,
+    username: user.username,
+    role: user.role,
+    positionId: (user.positionId as any)?._id || user.positionId,
+    roles: roles || [],
+    actions: actions || [],
+    warehouse_id: user.warehouse_id, // 👈 كده هيتحط في الـ JWT
+  });
 
-    const token = generateToken({
-      _id: user._id,
+  SuccessResponse(res, {
+    message: "Login successful",
+    token,
+    user: {
+      id: user._id,
       username: user.username,
+      email: user.email,
+      position: user.positionId || null,
+      status: user.status,
       role: user.role,
-      positionId: (user.positionId as any)?._id || user.positionId,
-      roles: roles || [],
-      actions: actions || [],
-      warehouse_id: user.warehouse_id, // 👈 أهم سطر
-    });
-
-    SuccessResponse(res, {
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        position: user.positionId || null,
-        status: user.status,
-        role: user.role,
-        warehouse_id: user.warehouse_id ?? null,
-        roles: roles?.map(r => r.name) || [],
-        actions: actions?.map(a => a.name) || [],
-      },
-    });
- 
+      warehouse_id: user.warehouse_id ?? null,   // 👈 هتستخدمها في الفرونت لو حبيت
+      roles: roles?.map(r => r.name) || [],
+      actions: actions?.map(a => a.name) || [],
+    },
+  });
 };
 
 

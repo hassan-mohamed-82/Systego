@@ -170,21 +170,9 @@ export const getCashiers = async (req: Request, res: Response) => {
     .populate("warehouse_id", "name")
     .lean();
 
-  // لو حابب ترجع برضو اللي في شيفت حاليًا:
-  const usedCashiers = await CashierModel.find({
-    warehouse_id: warehouseId,
-    status: true,
-    cashier_active: true,
-  })
-    .populate("warehouse_id", "name")
-    .lean();
-
+ 
   SuccessResponse(res, {
-    // دول اللي هيظهروا في شاشة الـ Selection
     cashiers,
-
-    // دول لو حابب تستخدمهم في أي مكان تاني (مش ضروري)
-    hidden_cashiers: usedCashiers,
   });
 };
 

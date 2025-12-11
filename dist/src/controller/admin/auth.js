@@ -21,7 +21,7 @@ const login = async (req, res, next) => {
     }
     const user = await User_1.UserModel.findOne({ email })
         .populate("positionId")
-        .lean();
+        .lean(); // ✅ تمام هنا لأن password_hash مش معمول له select: false
     if (!user) {
         throw new NotFound_1.NotFound("User not found");
     }
@@ -46,7 +46,7 @@ const login = async (req, res, next) => {
         positionId: user.positionId?._id || user.positionId,
         roles: roles || [],
         actions: actions || [],
-        warehouse_id: user.warehouse_id, // 👈 أهم سطر
+        warehouse_id: user.warehouse_id, // 👈 كده هيتحط في الـ JWT
     });
     (0, response_1.SuccessResponse)(res, {
         message: "Login successful",
@@ -58,7 +58,7 @@ const login = async (req, res, next) => {
             position: user.positionId || null,
             status: user.status,
             role: user.role,
-            warehouse_id: user.warehouse_id ?? null,
+            warehouse_id: user.warehouse_id ?? null, // 👈 هتستخدمها في الفرونت لو حبيت
             roles: roles?.map(r => r.name) || [],
             actions: actions?.map(a => a.name) || [],
         },
