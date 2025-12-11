@@ -25,7 +25,12 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("Unauthorized: user not found in token");
   }
 
-  // 1) تأكد إن فيه شيفت مفتوح للكاشير
+  const warehouseId = jwtWarehouseId;
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
+
+  // 1) تأكد إن فيه شيفت مفتوح للكاشير ده
   const openShift = await CashierShift.findOne({
     cashier_id: cashierId,
     status: "open",
@@ -35,10 +40,9 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("You must open a cashier shift before creating a sale");
   }
 
-  // 2) استقبل الداتا من البودي
+  // 2) استقبل الداتا من البودي (بدون warehouse_id)
   const {
     customer_id,              // اختياري
-    warehouse_id,
     order_pending = 1,        // 0 = pending, 1 = completed
     coupon_id,
     gift_card_id,
@@ -52,24 +56,13 @@ export const createSale = async (req: Request, res: Response) => {
     discount = 0,
     total,
     grand_total,
-    paid_amount,              // اختياري (لو حابب تستخدمه في check إضافي)
+    paid_amount,
     note,
-    financials,               // 👈 أهم حاجة دلوقتي: Array of { account_id / id, amount }
+    financials,               // Array of { account_id / id, amount }
   } = req.body;
 
-  // 3) تحقق من warehouse
-  if (!warehouse_id) {
-    throw new BadRequest("Warehouse is required");
-  }
-
-  if (
-    jwtWarehouseId &&
-    jwtWarehouseId.toString() !== warehouse_id.toString()
-  ) {
-    throw new BadRequest("You are not allowed to create a sale in this warehouse");
-  }
-
-  const warehouse = await WarehouseModel.findById(warehouse_id);
+  // 3) تحقق من الـ warehouse اللي من التوكين
+  const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) {
     throw new NotFound("Warehouse not found");
   }
@@ -100,7 +93,6 @@ export const createSale = async (req: Request, res: Response) => {
 
   // 6) تجهيز / تحقق الـ financials (Split Payments)
   type FinancialLine = { account_id: string; amount: number };
-
   let paymentLines: FinancialLine[] = [];
 
   if (!isPending) {
@@ -127,21 +119,19 @@ export const createSale = async (req: Request, res: Response) => {
 
     const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
 
-    // ممكن تربطها بـ grand_total أو بـ paid_amount: اختار اللي يناسبك
     if (Number(totalPaid.toFixed(2)) !== Number(Number(grand_total).toFixed(2))) {
       throw new BadRequest("Sum of payments (financials) must equal grand_total");
     }
 
-    // optional: لو عندك paid_amount من الفرونت
     if (paid_amount != null && Number(paid_amount) !== totalPaid) {
       throw new BadRequest("paid_amount does not match sum of financials");
     }
 
-    // تحقق من كل حساب بنكي
+    // تحقق من كل حساب بنكي في نفس الـ warehouse
     for (const line of paymentLines) {
       const bankAccount = await BankAccountModel.findOne({
         _id: line.account_id,
-        warehouseId: warehouse_id,
+        warehouseId: warehouseId,     // 👈 من التوكين
         status: true,
         in_POS: true,
       });
@@ -152,9 +142,8 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 7) تحقق من الكوبون (لو مبعوت)
+  // 7) كوبون
   let coupon: any = null;
-
   if (coupon_id) {
     if (!mongoose.Types.ObjectId.isValid(coupon_id)) {
       throw new BadRequest("Invalid coupon id");
@@ -170,7 +159,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 8) الضريبة
+  // 8) ضريبة
   let tax: any = null;
   if (tax_id) {
     if (!mongoose.Types.ObjectId.isValid(tax_id)) {
@@ -182,7 +171,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (!tax.status) throw new BadRequest("Tax is not active");
   }
 
-  // 9) الخصم
+  // 9) خصم
   let discountDoc: any = null;
   if (discount_id) {
     if (!mongoose.Types.ObjectId.isValid(discount_id)) {
@@ -194,7 +183,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (!discountDoc.status) throw new BadRequest("Discount is not active");
   }
 
-  // 10) الجيفت كارد
+  // 10) جيفت كارد
   let giftCard: any = null;
   if (gift_card_id) {
     if (!mongoose.Types.ObjectId.isValid(gift_card_id)) {
@@ -268,7 +257,6 @@ export const createSale = async (req: Request, res: Response) => {
   // 13) reference
   const reference = `SALE-${Date.now()}`;
 
-  // accounts المستخدمة في الفاتورة (unique)
   const accountIdsForSale = !isPending
     ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
     : [];
@@ -280,8 +268,8 @@ export const createSale = async (req: Request, res: Response) => {
     reference,
     date: new Date(),
     customer_id: customer ? customer._id : undefined,
-    warehouse_id,
-    account_id: accountIdsForSale,   // Array of BankAccount IDs
+    warehouse_id: warehouseId,           // 👈 من التوكين
+    account_id: accountIdsForSale,
     order_pending,
     coupon_id: coupon ? coupon._id : undefined,
     gift_card_id: giftCard ? giftCard._id : undefined,
@@ -353,7 +341,7 @@ export const createSale = async (req: Request, res: Response) => {
 
   // 17) لو مش Pending: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
   if (!isPending) {
-    // ✅ Payment واحد فيه financials[]
+    // Payment واحد فيه financials[]
     await PaymentModel.create({
       sale_id: sale._id,
       financials: paymentLines.map((p) => ({
@@ -363,14 +351,14 @@ export const createSale = async (req: Request, res: Response) => {
       status: "completed",
     });
 
-    // ✅ زوّد رصيد كل حساب بالمبلغ الخاص بيه
+    // زوّد رصيد كل حساب بالمبلغ الخاص بيه
     for (const line of paymentLines) {
       await BankAccountModel.findByIdAndUpdate(line.account_id, {
         $inc: { balance: line.amount },
       });
     }
 
-    // ✅ قلّل ستوك المنتجات
+    // ستوك المنتجات
     if (products && products.length > 0) {
       for (const p of products) {
         const { product_price_id, quantity } = p;
@@ -381,7 +369,7 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // ✅ قلّل ستوك منتجات الباندلز
+    // ستوك منتجات الباندلز
     if (bundles && bundles.length > 0) {
       for (const b of bundles) {
         const { bundle_id, quantity } = b;
@@ -401,14 +389,14 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // ✅ كوبون
+    // كوبون
     if (coupon) {
       await CouponModel.findByIdAndUpdate(coupon._id, {
         $inc: { available: -1 },
       });
     }
 
-    // ✅ جيفت كارد
+    // جيفت كارد
     if (giftCard && totalPaidFromLines > 0) {
       await GiftCardModel.findByIdAndUpdate(giftCard._id, {
         $inc: { amount: -totalPaidFromLines },

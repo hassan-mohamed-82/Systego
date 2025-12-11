@@ -27,7 +27,11 @@ const createSale = async (req, res) => {
     if (!cashierId) {
         throw new BadRequest_1.BadRequest("Unauthorized: user not found in token");
     }
-    // 1) تأكد إن فيه شيفت مفتوح للكاشير
+    const warehouseId = jwtWarehouseId;
+    if (!warehouseId) {
+        throw new BadRequest_1.BadRequest("Warehouse is not assigned to this user");
+    }
+    // 1) تأكد إن فيه شيفت مفتوح للكاشير ده
     const openShift = await CashierShift_1.CashierShift.findOne({
         cashier_id: cashierId,
         status: "open",
@@ -35,21 +39,13 @@ const createSale = async (req, res) => {
     if (!openShift) {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
-    // 2) استقبل الداتا من البودي
+    // 2) استقبل الداتا من البودي (بدون warehouse_id)
     const { customer_id, // اختياري
-    warehouse_id, order_pending = 1, // 0 = pending, 1 = completed
-    coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, // اختياري (لو حابب تستخدمه في check إضافي)
-    note, financials, // 👈 أهم حاجة دلوقتي: Array of { account_id / id, amount }
+    order_pending = 1, // 0 = pending, 1 = completed
+    coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, note, financials, // Array of { account_id / id, amount }
      } = req.body;
-    // 3) تحقق من warehouse
-    if (!warehouse_id) {
-        throw new BadRequest_1.BadRequest("Warehouse is required");
-    }
-    if (jwtWarehouseId &&
-        jwtWarehouseId.toString() !== warehouse_id.toString()) {
-        throw new BadRequest_1.BadRequest("You are not allowed to create a sale in this warehouse");
-    }
-    const warehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+    // 3) تحقق من الـ warehouse اللي من التوكين
+    const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
         throw new Errors_1.NotFound("Warehouse not found");
     }
@@ -92,19 +88,17 @@ const createSale = async (req, res) => {
             };
         });
         const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
-        // ممكن تربطها بـ grand_total أو بـ paid_amount: اختار اللي يناسبك
         if (Number(totalPaid.toFixed(2)) !== Number(Number(grand_total).toFixed(2))) {
             throw new BadRequest_1.BadRequest("Sum of payments (financials) must equal grand_total");
         }
-        // optional: لو عندك paid_amount من الفرونت
         if (paid_amount != null && Number(paid_amount) !== totalPaid) {
             throw new BadRequest_1.BadRequest("paid_amount does not match sum of financials");
         }
-        // تحقق من كل حساب بنكي
+        // تحقق من كل حساب بنكي في نفس الـ warehouse
         for (const line of paymentLines) {
             const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
                 _id: line.account_id,
-                warehouseId: warehouse_id,
+                warehouseId: warehouseId, // 👈 من التوكين
                 status: true,
                 in_POS: true,
             });
@@ -113,7 +107,7 @@ const createSale = async (req, res) => {
             }
         }
     }
-    // 7) تحقق من الكوبون (لو مبعوت)
+    // 7) كوبون
     let coupon = null;
     if (coupon_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(coupon_id)) {
@@ -130,7 +124,7 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("Coupon is expired");
         }
     }
-    // 8) الضريبة
+    // 8) ضريبة
     let tax = null;
     if (tax_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(tax_id)) {
@@ -142,7 +136,7 @@ const createSale = async (req, res) => {
         if (!tax.status)
             throw new BadRequest_1.BadRequest("Tax is not active");
     }
-    // 9) الخصم
+    // 9) خصم
     let discountDoc = null;
     if (discount_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(discount_id)) {
@@ -154,7 +148,7 @@ const createSale = async (req, res) => {
         if (!discountDoc.status)
             throw new BadRequest_1.BadRequest("Discount is not active");
     }
-    // 10) الجيفت كارد
+    // 10) جيفت كارد
     let giftCard = null;
     if (gift_card_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(gift_card_id)) {
@@ -211,7 +205,6 @@ const createSale = async (req, res) => {
     }
     // 13) reference
     const reference = `SALE-${Date.now()}`;
-    // accounts المستخدمة في الفاتورة (unique)
     const accountIdsForSale = !isPending
         ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
         : [];
@@ -221,8 +214,8 @@ const createSale = async (req, res) => {
         reference,
         date: new Date(),
         customer_id: customer ? customer._id : undefined,
-        warehouse_id,
-        account_id: accountIdsForSale, // Array of BankAccount IDs
+        warehouse_id: warehouseId, // 👈 من التوكين
+        account_id: accountIdsForSale,
         order_pending,
         coupon_id: coupon ? coupon._id : undefined,
         gift_card_id: giftCard ? giftCard._id : undefined,
@@ -278,7 +271,7 @@ const createSale = async (req, res) => {
     }
     // 17) لو مش Pending: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
     if (!isPending) {
-        // ✅ Payment واحد فيه financials[]
+        // Payment واحد فيه financials[]
         await payment_1.PaymentModel.create({
             sale_id: sale._id,
             financials: paymentLines.map((p) => ({
@@ -287,13 +280,13 @@ const createSale = async (req, res) => {
             })),
             status: "completed",
         });
-        // ✅ زوّد رصيد كل حساب بالمبلغ الخاص بيه
+        // زوّد رصيد كل حساب بالمبلغ الخاص بيه
         for (const line of paymentLines) {
             await Financial_Account_1.BankAccountModel.findByIdAndUpdate(line.account_id, {
                 $inc: { balance: line.amount },
             });
         }
-        // ✅ قلّل ستوك المنتجات
+        // ستوك المنتجات
         if (products && products.length > 0) {
             for (const p of products) {
                 const { product_price_id, quantity } = p;
@@ -302,7 +295,7 @@ const createSale = async (req, res) => {
                 });
             }
         }
-        // ✅ قلّل ستوك منتجات الباندلز
+        // ستوك منتجات الباندلز
         if (bundles && bundles.length > 0) {
             for (const b of bundles) {
                 const { bundle_id, quantity } = b;
@@ -318,13 +311,13 @@ const createSale = async (req, res) => {
                 }
             }
         }
-        // ✅ كوبون
+        // كوبون
         if (coupon) {
             await coupons_1.CouponModel.findByIdAndUpdate(coupon._id, {
                 $inc: { available: -1 },
             });
         }
-        // ✅ جيفت كارد
+        // جيفت كارد
         if (giftCard && totalPaidFromLines > 0) {
             await giftCard_1.GiftCardModel.findByIdAndUpdate(giftCard._id, {
                 $inc: { amount: -totalPaidFromLines },
