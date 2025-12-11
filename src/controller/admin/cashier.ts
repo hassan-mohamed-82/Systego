@@ -6,13 +6,13 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { UserModel } from "../../models/schema/admin/User";
 
 export const createCashier = async (req: Request, res: Response) => {
-  const { name,ar_name,warehouse_id,status } = req.body;
+  const { name,ar_name,warehouse_id,status ,cashier_active} = req.body;
     if (!name || !ar_name || !warehouse_id) {
         throw new BadRequest(" name, ar_name and warehouse_id are required");
     }
     const existingCashier = await CashierModel.findOne({ name,warehouse_id });
     if (existingCashier) throw new BadRequest("Cashier already exists in this warehouse");
-    const cashier = await CashierModel.create({ name, ar_name,warehouse_id,status });
+    const cashier = await CashierModel.create({ name, ar_name,warehouse_id,status,cashier_active });
     SuccessResponse(res, { message: "Cashier created successfully", cashier });
 }
 
