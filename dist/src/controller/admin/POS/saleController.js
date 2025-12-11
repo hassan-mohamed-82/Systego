@@ -21,6 +21,10 @@ const createSale = async (req, res) => {
     if (!jwtUser)
         throw new Errors_1.UnauthorizedError("Unauthorized");
     const cashierId = jwtUser.id;
+    const warehouseId = jwtUser.warehouse_id; // من التوكن
+    if (!warehouseId) {
+        throw new BadRequest_1.BadRequest("User warehouse is not set");
+    }
     // ✅ 0) تأكد إن فيه شيفت مفتوح للكاشير ده
     const openShift = await CashierShift_1.CashierShift.findOne({
         cashier_id: cashierId,
@@ -30,19 +34,22 @@ const createSale = async (req, res) => {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
     const { customer_id, warehouse_id, account_id, // Array of BankAccount IDs أو ID واحد
-    order_pending = 1, // 👈 0: pending, 1: completed (default = completed)
+    order_pending = 1, // 0: pending, 1: completed (default = completed)
     order_tax, order_discount, grand_total, coupon_id, products = [], bundles = [], gift_card_id, } = req.body;
-    // نخلي account_id دايمًا Array عشان يمشي مع الـ Schema
+    // نخلي account_id دايمًا Array
     const accountIds = account_id
         ? Array.isArray(account_id)
             ? account_id
             : [account_id]
         : [];
-    // ✅ دلوقتي 0 = pending, 1 = completed
-    const isPending = order_pending === 0;
+    const isPending = order_pending === 0; // 0 = pending, 1 = completed
     // لو الطلب Completed لازم يكون فيه على الأقل حساب بنكي واحد
     if (!isPending && accountIds.length === 0) {
         throw new BadRequest_1.BadRequest("At least one bank account (account_id) is required for completed sales");
+    }
+    // لو Completed وعايز حساب واحد بس (مفيش تقسيم مبالغ)
+    if (!isPending && accountIds.length > 1) {
+        throw new BadRequest_1.BadRequest("Only one bank account can be selected for completed sales");
     }
     // Helper function to find product price
     const findProductPrice = async (item) => {
@@ -62,15 +69,16 @@ const createSale = async (req, res) => {
     const customer = await customer_1.CustomerModel.findById(customer_id);
     if (!customer)
         throw new Errors_1.NotFound("Customer not found");
-    // ===== Validate Bank Accounts =====
+    // ===== Validate Bank Accounts (خاصة بنفس الـ warehouse و in_POS) =====
     if (accountIds.length > 0) {
         const bankAccounts = await Financial_Account_1.BankAccountModel.find({
             _id: { $in: accountIds },
             status: true,
             in_POS: true,
+            warehouseId: warehouseId, // لازم تكون لحسابات نفس المخزن بتاع الكاشير
         });
         if (bankAccounts.length !== accountIds.length) {
-            throw new BadRequest_1.BadRequest("One or more bank accounts are inactive or not allowed in POS");
+            throw new BadRequest_1.BadRequest("One or more bank accounts are inactive, not allowed in POS, or do not belong to this warehouse");
         }
     }
     // Coupon validation
@@ -156,7 +164,7 @@ const createSale = async (req, res) => {
         customer_id,
         warehouse_id,
         account_id: accountIds,
-        order_pending, // 👈 هنخزّن القيمة زي ما هي
+        order_pending,
         order_tax,
         order_discount,
         grand_total,
@@ -167,15 +175,28 @@ const createSale = async (req, res) => {
     });
     const savedSale = await newSale.save();
     const saleId = savedSale._id;
-    // ========== Create Payment (لو مش pending) ==========
+    // ========== لو مش pending: Payment + زيادة رصيد الحساب ==========
+    let updatedAccount = null;
     if (!isPending && accountIds.length > 0) {
+        const accountId = accountIds[0];
+        // Payment record
         await payment_1.PaymentModel.create({
             sale_id: saleId,
-            account_id: accountIds,
+            account_id: [accountId],
             amount: grand_total,
             status: "completed",
             payment_proof: null,
         });
+        // زيادة رصيد الحساب
+        updatedAccount = await Financial_Account_1.BankAccountModel.findOneAndUpdate({
+            _id: accountId,
+            status: true,
+            in_POS: true,
+            warehouseId: warehouseId,
+        }, { $inc: { balance: grand_total } }, { new: true });
+        if (!updatedAccount) {
+            throw new BadRequest_1.BadRequest("Bank account not found or not allowed for this warehouse");
+        }
     }
     // ========== Process Products ==========
     for (const item of products) {
@@ -230,8 +251,13 @@ const createSale = async (req, res) => {
             ? "Sale created as pending - awaiting confirmation"
             : "Sale created successfully",
         sale: savedSale,
-        // 👇 لو مش عايز الـ status خالص شيله
-        // status: isPending ? "pending" : "confirmed",
+        account: updatedAccount
+            ? {
+                _id: updatedAccount._id,
+                name: updatedAccount.name,
+                balance: updatedAccount.balance,
+            }
+            : undefined,
     });
 };
 exports.createSale = createSale;

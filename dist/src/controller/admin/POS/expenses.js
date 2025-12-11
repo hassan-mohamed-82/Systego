@@ -16,29 +16,33 @@ const createExpense = async (req, res) => {
     if (!name || amount == null || !Category_id || !financial_accountId) {
         throw new BadRequest_1.BadRequest("Please provide all required fields");
     }
+    if (amount <= 0) {
+        throw new BadRequest_1.BadRequest("Amount must be greater than 0");
+    }
     // ✅ 1) هات الشيفت المفتوح للكاشير ده
     const openShift = await CashierShift_1.CashierShift.findOne({
         cashier_id: userId,
         status: "open",
     }).sort({ start_time: -1 });
     if (!openShift) {
-        // نفس منطق createSale: ممنوع تعمل مصروف من غير شيفت
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating an expense");
     }
     // ✅ 2) تأكيد الكاتجوري
     const category = await expensecategory_1.ExpenseCategoryModel.findById(Category_id);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    // ✅ 3) تأكيد الحساب المالي
-    const account = await Financial_Account_1.BankAccountModel.findById(financial_accountId);
-    if (!account)
-        throw new Errors_1.NotFound("Financial account not found");
-    // لو عندك في السكيمة fields زي status / in_POS ممكن تشيك عليهم برضو:
-    if (account.status === false) {
-        throw new BadRequest_1.BadRequest("Financial account is inactive");
-    }
-    if (account.in_POS === false) {
-        throw new BadRequest_1.BadRequest("This financial account is not allowed in POS");
+    // ✅ 3) حاول تخصم من الحساب المالي لو الـ balance يكفي
+    // نستخدم findOneAndUpdate بشرط balance >= amount
+    const updatedAccount = await Financial_Account_1.BankAccountModel.findOneAndUpdate({
+        _id: financial_accountId,
+        status: true,
+        in_POS: true,
+        balance: { $gte: amount }, // 👈 لازم يكون الرصيد كافي
+    }, { $inc: { balance: -amount } }, // 👈 خصم المبلغ
+    { new: true });
+    if (!updatedAccount) {
+        // يا إما الحساب مش لاقيه / مش active / مش in_POS / أو الرصيد مش كافي
+        throw new BadRequest_1.BadRequest("Insufficient balance or financial account is not allowed in POS");
     }
     // ✅ 4) إنشاء الـ Expense مربوط فعلياً بالشيفت المفتوح
     const expense = await expenses_1.ExpenseModel.create({
@@ -47,12 +51,13 @@ const createExpense = async (req, res) => {
         Category_id,
         note,
         financial_accountId,
-        shift_id: openShift._id, // مهم جداً
+        shift_id: openShift._id,
         cashier_id: userId,
     });
     (0, response_1.SuccessResponse)(res, {
         message: "Expense created successfully",
         expense,
+        account_balance: updatedAccount.balance, // لو حابب تشوف الرصيد بعد الخصم
     });
 };
 exports.createExpense = createExpense;

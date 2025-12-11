@@ -18,6 +18,9 @@ export const createExpense = async (req: Request, res: Response) => {
   if (!name || amount == null || !Category_id || !financial_accountId) {
     throw new BadRequest("Please provide all required fields");
   }
+  if (amount <= 0) {
+    throw new BadRequest("Amount must be greater than 0");
+  }
 
   // ✅ 1) هات الشيفت المفتوح للكاشير ده
   const openShift = await CashierShift.findOne({
@@ -26,7 +29,6 @@ export const createExpense = async (req: Request, res: Response) => {
   }).sort({ start_time: -1 });
 
   if (!openShift) {
-    // نفس منطق createSale: ممنوع تعمل مصروف من غير شيفت
     throw new BadRequest(
       "You must open a cashier shift before creating an expense"
     );
@@ -36,16 +38,24 @@ export const createExpense = async (req: Request, res: Response) => {
   const category = await ExpenseCategoryModel.findById(Category_id);
   if (!category) throw new NotFound("Category not found");
 
-  // ✅ 3) تأكيد الحساب المالي
-  const account = await BankAccountModel.findById(financial_accountId);
-  if (!account) throw new NotFound("Financial account not found");
+  // ✅ 3) حاول تخصم من الحساب المالي لو الـ balance يكفي
+  // نستخدم findOneAndUpdate بشرط balance >= amount
+  const updatedAccount = await BankAccountModel.findOneAndUpdate(
+    {
+      _id: financial_accountId,
+      status: true,
+      in_POS: true,
+      balance: { $gte: amount },          // 👈 لازم يكون الرصيد كافي
+    },
+    { $inc: { balance: -amount } },       // 👈 خصم المبلغ
+    { new: true }
+  );
 
-  // لو عندك في السكيمة fields زي status / in_POS ممكن تشيك عليهم برضو:
-  if (account.status === false) {
-    throw new BadRequest("Financial account is inactive");
-  }
-  if (account.in_POS === false) {
-    throw new BadRequest("This financial account is not allowed in POS");
+  if (!updatedAccount) {
+    // يا إما الحساب مش لاقيه / مش active / مش in_POS / أو الرصيد مش كافي
+    throw new BadRequest(
+      "Insufficient balance or financial account is not allowed in POS"
+    );
   }
 
   // ✅ 4) إنشاء الـ Expense مربوط فعلياً بالشيفت المفتوح
@@ -55,13 +65,14 @@ export const createExpense = async (req: Request, res: Response) => {
     Category_id,
     note,
     financial_accountId,
-    shift_id: openShift._id, // مهم جداً
+    shift_id: openShift._id,
     cashier_id: userId,
   });
 
   SuccessResponse(res, {
     message: "Expense created successfully",
     expense,
+    account_balance: updatedAccount.balance, // لو حابب تشوف الرصيد بعد الخصم
   });
 };
 

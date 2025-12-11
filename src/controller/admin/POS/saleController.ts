@@ -22,7 +22,12 @@ export const createSale = async (req: Request, res: Response) => {
   const jwtUser = req.user;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
-  const cashierId = jwtUser.id;
+  const cashierId   = jwtUser.id;
+  const warehouseId = jwtUser.warehouse_id; // من التوكن
+
+  if (!warehouseId) {
+    throw new BadRequest("User warehouse is not set");
+  }
 
   // ✅ 0) تأكد إن فيه شيفت مفتوح للكاشير ده
   const openShift = await CashierShift.findOne({
@@ -38,7 +43,7 @@ export const createSale = async (req: Request, res: Response) => {
     customer_id,
     warehouse_id,
     account_id,          // Array of BankAccount IDs أو ID واحد
-    order_pending = 1,   // 👈 0: pending, 1: completed (default = completed)
+    order_pending = 1,   // 0: pending, 1: completed (default = completed)
     order_tax,
     order_discount,
     grand_total,
@@ -48,20 +53,26 @@ export const createSale = async (req: Request, res: Response) => {
     gift_card_id,
   } = req.body;
 
-  // نخلي account_id دايمًا Array عشان يمشي مع الـ Schema
+  // نخلي account_id دايمًا Array
   const accountIds: string[] = account_id
     ? Array.isArray(account_id)
       ? account_id
       : [account_id]
     : [];
 
-  // ✅ دلوقتي 0 = pending, 1 = completed
-  const isPending = order_pending === 0;
+  const isPending = order_pending === 0; // 0 = pending, 1 = completed
 
   // لو الطلب Completed لازم يكون فيه على الأقل حساب بنكي واحد
   if (!isPending && accountIds.length === 0) {
     throw new BadRequest(
       "At least one bank account (account_id) is required for completed sales"
+    );
+  }
+
+  // لو Completed وعايز حساب واحد بس (مفيش تقسيم مبالغ)
+  if (!isPending && accountIds.length > 1) {
+    throw new BadRequest(
+      "Only one bank account can be selected for completed sales"
     );
   }
 
@@ -87,17 +98,18 @@ export const createSale = async (req: Request, res: Response) => {
   const customer = await CustomerModel.findById(customer_id);
   if (!customer) throw new NotFound("Customer not found");
 
-  // ===== Validate Bank Accounts =====
+  // ===== Validate Bank Accounts (خاصة بنفس الـ warehouse و in_POS) =====
   if (accountIds.length > 0) {
     const bankAccounts = await BankAccountModel.find({
       _id: { $in: accountIds },
       status: true,
       in_POS: true,
+      warehouseId: warehouseId, // لازم تكون لحسابات نفس المخزن بتاع الكاشير
     });
 
     if (bankAccounts.length !== accountIds.length) {
       throw new BadRequest(
-        "One or more bank accounts are inactive or not allowed in POS"
+        "One or more bank accounts are inactive, not allowed in POS, or do not belong to this warehouse"
       );
     }
   }
@@ -196,7 +208,7 @@ export const createSale = async (req: Request, res: Response) => {
     customer_id,
     warehouse_id,
     account_id: accountIds,
-    order_pending,          // 👈 هنخزّن القيمة زي ما هي
+    order_pending,
     order_tax,
     order_discount,
     grand_total,
@@ -209,15 +221,38 @@ export const createSale = async (req: Request, res: Response) => {
   const savedSale = await newSale.save();
   const saleId = savedSale._id;
 
-  // ========== Create Payment (لو مش pending) ==========
+  // ========== لو مش pending: Payment + زيادة رصيد الحساب ==========
+  let updatedAccount: any = null;
+
   if (!isPending && accountIds.length > 0) {
+    const accountId = accountIds[0];
+
+    // Payment record
     await PaymentModel.create({
       sale_id: saleId,
-      account_id: accountIds,
+      account_id: [accountId],
       amount: grand_total,
       status: "completed",
       payment_proof: null,
     });
+
+    // زيادة رصيد الحساب
+    updatedAccount = await BankAccountModel.findOneAndUpdate(
+      {
+        _id: accountId,
+        status: true,
+        in_POS: true,
+        warehouseId: warehouseId,
+      },
+      { $inc: { balance: grand_total } },
+      { new: true }
+    );
+
+    if (!updatedAccount) {
+      throw new BadRequest(
+        "Bank account not found or not allowed for this warehouse"
+      );
+    }
   }
 
   // ========== Process Products ==========
@@ -289,10 +324,16 @@ export const createSale = async (req: Request, res: Response) => {
       ? "Sale created as pending - awaiting confirmation"
       : "Sale created successfully",
     sale: savedSale,
-    // 👇 لو مش عايز الـ status خالص شيله
-    // status: isPending ? "pending" : "confirmed",
+    account: updatedAccount
+      ? {
+          _id: updatedAccount._id,
+          name: updatedAccount.name,
+          balance: updatedAccount.balance,
+        }
+      : undefined,
   });
 };
+
 
 export const getSales = async (req: Request, res: Response)=> {
     const sales = await SaleModel.find()

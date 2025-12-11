@@ -71,12 +71,12 @@ export const getAllSelections = async (req: Request, res: Response) => {
     const warehouses = await WarehouseModel.find().select('name');
     const accounts = await BankAccountModel.find({in_POS: true, status: true}).select('name balance warhouseId');
     const taxes = await TaxesModel.find().select('name status amount type'); 
-    const discounts = await DiscountModel.find().select('name');
-    const coupons = await CouponModel.find().select('coupon_code');
+    const discounts = await DiscountModel.find().select('name status amount type');
+    const coupons = await CouponModel.find().select('coupon_code amount type minimum_amount quantity available expired_date');
     const giftCards = await GiftCardModel.find().select('code amount');
     const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
-    const customers = await CustomerModel.find().select('name');
-    const customerGroups = await CustomerGroupModel.find().select('name');
+    const customers = await CustomerModel.find().select('name phone_number email address');
+    const customerGroups = await CustomerGroupModel.find().select('name ');
     const currency=await CurrencyModel.find().select('name  ar_name');
  const countries = await CountryModel.find()
   .select("name ar_name")                  // حقول البلد
