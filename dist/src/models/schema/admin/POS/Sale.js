@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductSalesModel = exports.SaleModel = void 0;
+// models/Sale.ts
 const mongoose_1 = __importStar(require("mongoose"));
 const SaleSchema = new mongoose_1.Schema({
     reference: {
@@ -46,7 +47,6 @@ const SaleSchema = new mongoose_1.Schema({
             return `SALE-${datePart}-${randomPart}`;
         },
     },
-    // 👇 زي ما هو
     customer_id: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Customer",
@@ -57,20 +57,18 @@ const SaleSchema = new mongoose_1.Schema({
         ref: "Warehouse",
         required: true,
     },
-    account_id: [
-        { type: mongoose_1.Schema.Types.ObjectId, ref: "BankAccount" },
-    ],
+    account_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "BankAccount" }],
+    // 0 = completed, 1 = pending
     order_pending: {
         type: Number,
-        enum: [0, 1], // 0: pending, 1: completed
-        default: 0,
+        enum: [0, 1],
+        default: 1, // أول ما تتعمل تبقى Pending
     },
     order_tax: { type: mongoose_1.Schema.Types.ObjectId, ref: "Taxes" },
     order_discount: { type: mongoose_1.Schema.Types.ObjectId, ref: "Discount" },
     grand_total: { type: Number, required: true },
     coupon_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Coupon" },
     gift_card_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "GiftCard" },
-    // 👇 مهمين عشان الشيفت و التقارير
     cashier_id: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "User",
@@ -81,6 +79,15 @@ const SaleSchema = new mongoose_1.Schema({
         ref: "CashierShift",
         required: true,
     },
+    // باقي الفيلدز اللي انت بتستخدمها في createSale
+    shipping: { type: Number, default: 0 },
+    tax_rate: { type: Number, default: 0 },
+    tax_amount: { type: Number, default: 0 },
+    discount: { type: Number, default: 0 },
+    total: { type: Number, default: 0 },
+    paid_amount: { type: Number, default: 0 },
+    note: { type: String, default: "" },
+    date: { type: Date, default: Date.now },
 }, { timestamps: true });
 const productSalesSchema = new mongoose_1.Schema({
     sale_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Sale", required: true },
@@ -92,6 +99,7 @@ const productSalesSchema = new mongoose_1.Schema({
     product_price_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "ProductPrice" },
     isGift: { type: Boolean, default: false },
     isBundle: { type: Boolean, default: false },
+    options_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "Option" }],
 }, { timestamps: true });
 // Validation للـ product/bundle
 productSalesSchema.pre("save", function (next) {

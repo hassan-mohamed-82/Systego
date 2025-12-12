@@ -1,3 +1,4 @@
+// models/Sale.ts
 import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
@@ -13,7 +14,6 @@ const SaleSchema = new Schema(
       },
     },
 
-    // 👇 زي ما هو
     customer_id: {
       type: Schema.Types.ObjectId,
       ref: "Customer",
@@ -26,23 +26,21 @@ const SaleSchema = new Schema(
       required: true,
     },
 
-    account_id: [
-      { type: Schema.Types.ObjectId, ref: "BankAccount" },
-    ],
+    account_id: [{ type: Schema.Types.ObjectId, ref: "BankAccount" }],
 
+    // 0 = completed, 1 = pending
     order_pending: {
       type: Number,
-      enum: [0, 1],          // 0: pending, 1: completed
-      default: 0,
+      enum: [0, 1],
+      default: 1, // أول ما تتعمل تبقى Pending
     },
 
-    order_tax:      { type: Schema.Types.ObjectId, ref: "Taxes" },
+    order_tax: { type: Schema.Types.ObjectId, ref: "Taxes" },
     order_discount: { type: Schema.Types.ObjectId, ref: "Discount" },
-    grand_total:    { type: Number, required: true },
-    coupon_id:      { type: Schema.Types.ObjectId, ref: "Coupon" },
-    gift_card_id:   { type: Schema.Types.ObjectId, ref: "GiftCard" },
+    grand_total: { type: Number, required: true },
+    coupon_id: { type: Schema.Types.ObjectId, ref: "Coupon" },
+    gift_card_id: { type: Schema.Types.ObjectId, ref: "GiftCard" },
 
-    // 👇 مهمين عشان الشيفت و التقارير
     cashier_id: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -53,21 +51,33 @@ const SaleSchema = new Schema(
       ref: "CashierShift",
       required: true,
     },
+
+    // باقي الفيلدز اللي انت بتستخدمها في createSale
+    shipping: { type: Number, default: 0 },
+    tax_rate: { type: Number, default: 0 },
+    tax_amount: { type: Number, default: 0 },
+    discount: { type: Number, default: 0 },
+    total: { type: Number, default: 0 },
+    paid_amount: { type: Number, default: 0 },
+    note: { type: String, default: "" },
+
+    date: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
 const productSalesSchema = new Schema(
   {
-    sale_id:    { type: Schema.Types.ObjectId, ref: "Sale", required: true },
+    sale_id: { type: Schema.Types.ObjectId, ref: "Sale", required: true },
     product_id: { type: Schema.Types.ObjectId, ref: "Product" },
-    bundle_id:  { type: Schema.Types.ObjectId, ref: "Pandel" },
-    quantity:   { type: Number, required: true, min: 1 },
-    price:      { type: Number, required: true, min: 0 },
-    subtotal:   { type: Number, required: true, min: 0 },
+    bundle_id: { type: Schema.Types.ObjectId, ref: "Pandel" },
+    quantity: { type: Number, required: true, min: 1 },
+    price: { type: Number, required: true, min: 0 },
+    subtotal: { type: Number, required: true, min: 0 },
     product_price_id: { type: Schema.Types.ObjectId, ref: "ProductPrice" },
-    isGift:     { type: Boolean, default: false },
-    isBundle:   { type: Boolean, default: false },
+    isGift: { type: Boolean, default: false },
+    isBundle: { type: Boolean, default: false },
+    options_id: [{ type: Schema.Types.ObjectId, ref: "Option" }],
   },
   { timestamps: true }
 );

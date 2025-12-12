@@ -43,8 +43,9 @@ export const createSale = async (req: Request, res: Response) => {
   // 2) استقبل الداتا من الـ body
   const {
     customer_id,
-    // default = pending
-    order_pending = 0, // 0 = pending, 1 = completed
+
+    // 0 = completed, 1 = pending
+    order_pending = 1,
 
     coupon_id,
     gift_card_id,
@@ -68,8 +69,10 @@ export const createSale = async (req: Request, res: Response) => {
 
   // لو مفيش financials خالص اعتبره pending أوتوماتيك
   const hasFinancials = Array.isArray(financials) && financials.length > 0;
-  const isPending = Number(order_pending) === 0 || !hasFinancials;
-  const normalizedOrderPending = isPending ? 0 : 1;
+
+  // دلوقتي: 1 = pending
+  const isPending = Number(order_pending) === 1 || !hasFinancials;
+  const normalizedOrderPending = isPending ? 1 : 0;
 
   // 3) تحقق من الـ warehouse
   const warehouse = await WarehouseModel.findById(warehouseId);
@@ -99,7 +102,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 6) تجهيز / تحقق الـ financials (Split Payments) – بس لو الفاتورة مش Pending
+  // 6) تجهيز / تحقق الـ financials – بس لو الفاتورة Completed
   type FinancialLine = { account_id: string; amount: number };
   let paymentLines: FinancialLine[] = [];
 
@@ -107,7 +110,7 @@ export const createSale = async (req: Request, res: Response) => {
     const finArr = financials as any[];
 
     if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
-      throw new BadRequest("At least one payment line (financial) is required for non-pending sale");
+      throw new BadRequest("At least one payment line (financial) is required for completed sale");
     }
 
     paymentLines = finArr.map((f: any) => {
@@ -214,7 +217,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 11) ستوك المنتجات (باستخدام product_price_id)
+  // 11) ستوك المنتجات
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       const { product_price_id, quantity } = p;
@@ -282,7 +285,7 @@ export const createSale = async (req: Request, res: Response) => {
     warehouse_id: warehouseId,
 
     account_id: accountIdsForSale,
-    order_pending: normalizedOrderPending,
+    order_pending: normalizedOrderPending, // 1 = pending, 0 = completed
 
     coupon_id: coupon ? coupon._id : undefined,
     gift_card_id: giftCard ? giftCard._id : undefined,
@@ -358,7 +361,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 17) لو مش Pending: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
+  // 17) لو Completed: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
   if (!isPending) {
     await PaymentModel.create({
       sale_id: sale._id,
@@ -424,8 +427,6 @@ export const createSale = async (req: Request, res: Response) => {
   });
 };
 
-
-
 export const getSales = async (req: Request, res: Response)=> {
     const sales = await SaleModel.find()
         .populate('customer_id', 'name email phone_number')
@@ -447,7 +448,21 @@ export const getAllSales = async (req: Request, res: Response) => {
 }
 
 
-export const getsalePending= async (req: Request, res: Response) => {
+export const getsalePending = async (req: Request, res: Response) => {
+  const sales = await SaleModel.find({ order_pending: 1 }) // 1 = pending
+    .populate("customer_id", "name email phone_number")
+    .populate("warehouse_id", "name location")
+    .populate("order_tax", "name rate")
+    .populate("order_discount", "name rate")
+    .populate("coupon_id", "code discount_amount")
+    .populate("gift_card_id", "code amount")
+    .lean();
+
+  return SuccessResponse(res, { sales });
+};
+
+
+export const getsaleunPending= async (req: Request, res: Response) => {
     const sales = await SaleModel.find({ order_pending: 0 })
     .populate('customer_id', 'name email phone_number')
     .populate('warehouse_id', 'name location')
@@ -460,16 +475,73 @@ export const getsalePending= async (req: Request, res: Response) => {
 }
 
 
-export const getsaleunPending= async (req: Request, res: Response) => {
-    const sales = await SaleModel.find({ order_pending: 1 })
-    .populate('customer_id', 'name email phone_number')
-    .populate('warehouse_id', 'name location')
-    .populate('order_tax', 'name rate')
-    .populate('order_discount', 'name rate')
-    .populate('coupon_id', 'code discount_amount')
-    .populate('gift_card_id', 'code amount')
-    .lean();
-    SuccessResponse(res, { sales });
-}
+export const getSalePendingById = async (req: Request, res: Response) => {
+  const { sale_id } = req.params;
 
+  if (!mongoose.Types.ObjectId.isValid(sale_id)) {
+    throw new BadRequest("Invalid sale id");
+  }
 
+  const sale: any = await SaleModel.findOne({
+    _id: sale_id,
+    order_pending: 1, // 1 = pending
+  }).lean();
+
+  if (!sale) {
+    throw new NotFound("Pending sale not found");
+  }
+
+  const items = await ProductSalesModel.find({ sale_id: sale._id }).lean();
+
+  const products: any[] = [];
+  const bundles: any[] = [];
+
+  for (const item of items) {
+    if (item.isBundle) {
+      bundles.push({
+        bundle_id: item.bundle_id,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal,
+        isGift: !!item.isGift,
+      });
+    } else {
+      products.push({
+        product_id: item.product_id,
+        product_price_id: item.product_price_id,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.subtotal,
+        isGift: !!item.isGift,
+        options_id: (item as any).options_id || [],
+      });
+    }
+  }
+
+  const payloadForCreateSale = {
+    customer_id: sale.customer_id,
+    order_pending: 1, // من الفرونت تقدر تغيّرها 1 أو 0
+    coupon_id: sale.coupon_id,
+    gift_card_id: sale.gift_card_id,
+    tax_id: sale.order_tax,
+    discount_id: sale.order_discount,
+
+    shipping: sale.shipping || 0,
+    tax_rate: sale.tax_rate || 0,
+    tax_amount: sale.tax_amount || 0,
+    discount: sale.discount || 0,
+    total: sale.total || sale.grand_total,
+    grand_total: sale.grand_total,
+    note: sale.note || "",
+
+    products,
+    bundles,
+  };
+
+  return SuccessResponse(res, {
+    sale,
+    products,
+    bundles,
+    payloadForCreateSale,
+  });
+};
