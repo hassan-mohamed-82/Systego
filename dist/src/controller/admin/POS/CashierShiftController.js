@@ -166,19 +166,22 @@ const endShiftWithReport = async (req, res) => {
 };
 exports.endShiftWithReport = endShiftWithReport;
 const endshiftcashier = async (req, res) => {
-    const cashierman_id = req.user?.id; // اليوزر من الـ JWT
-    const warehouseId = req.user?.warehouse_id;
+    const jwtUser = req.user;
+    if (!jwtUser)
+        throw new Errors_1.UnauthorizedError("Unauthorized");
+    const cashierman_id = jwtUser.id; // User من الـ JWT
+    const warehouseId = jwtUser.warehouse_id;
     if (!cashierman_id) {
         throw new Errors_1.NotFound("Cashier user not found in token");
     }
     if (!warehouseId) {
         throw new Errors_1.NotFound("Warehouse ID is required");
     }
-    // 🔎 هات الشيفت المفتوح لليوزر ده
+    // 🔎 هات آخر شيفت مفتوح لليوزر ده (زي endShiftWithReport)
     const shift = await CashierShift_1.CashierShift.findOne({
         cashierman_id,
         status: "open",
-    });
+    }).sort({ start_time: -1 });
     if (!shift) {
         throw new Errors_1.NotFound("Cashier shift not found");
     }
@@ -187,10 +190,10 @@ const endshiftcashier = async (req, res) => {
     }
     // الكاشير (CashierModel) اللي كان مستخدم في الشيفت
     const cashier_id = shift.cashier_id;
-    // ✅ نقفل الشيفت
+    // ✅ نقفل الشيفت (لو عندك داتا قديمة ناقصة cashier_id استخدم الاختيار اللي تحت)
     shift.end_time = new Date();
     shift.status = "closed";
-    await shift.save();
+    await shift.save(); // أو الخيار B تحت
     // ✅ نرجع الكاشير متاح تاني في نفس الـ warehouse
     if (cashier_id) {
         await cashier_1.CashierModel.updateOne({

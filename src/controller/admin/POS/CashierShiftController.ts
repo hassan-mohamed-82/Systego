@@ -192,8 +192,11 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
 
 
 export const endshiftcashier = async (req: Request, res: Response) => {
-  const cashierman_id = req.user?.id;               // اليوزر من الـ JWT
-  const warehouseId   = (req.user as any)?.warehouse_id;
+  const jwtUser = req.user as any;
+  if (!jwtUser) throw new UnauthorizedError("Unauthorized");
+
+  const cashierman_id = jwtUser.id;               // User من الـ JWT
+  const warehouseId   = jwtUser.warehouse_id;
 
   if (!cashierman_id) {
     throw new NotFound("Cashier user not found in token");
@@ -202,11 +205,11 @@ export const endshiftcashier = async (req: Request, res: Response) => {
     throw new NotFound("Warehouse ID is required");
   }
 
-  // 🔎 هات الشيفت المفتوح لليوزر ده
+  // 🔎 هات آخر شيفت مفتوح لليوزر ده (زي endShiftWithReport)
   const shift = await CashierShift.findOne({
     cashierman_id,
     status: "open",
-  });
+  }).sort({ start_time: -1 });
 
   if (!shift) {
     throw new NotFound("Cashier shift not found");
@@ -219,10 +222,10 @@ export const endshiftcashier = async (req: Request, res: Response) => {
   // الكاشير (CashierModel) اللي كان مستخدم في الشيفت
   const cashier_id = shift.cashier_id;
 
-  // ✅ نقفل الشيفت
+  // ✅ نقفل الشيفت (لو عندك داتا قديمة ناقصة cashier_id استخدم الاختيار اللي تحت)
   shift.end_time = new Date();
   shift.status   = "closed";
-  await shift.save();
+  await shift.save(); // أو الخيار B تحت
 
   // ✅ نرجع الكاشير متاح تاني في نفس الـ warehouse
   if (cashier_id) {
@@ -242,6 +245,7 @@ export const endshiftcashier = async (req: Request, res: Response) => {
     shift,
   });
 };
+
 
 
 export const getCashierUsers = async (req: Request, res: Response ) => {

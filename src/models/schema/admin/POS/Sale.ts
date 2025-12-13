@@ -3,24 +3,18 @@ import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
   {
-    reference: {
+   reference: {
   type: String,
   trim: true,
-  unique: true,      // عشان ما يتكررش في الداتابيز
+  unique: true,
   maxlength: 8,
   default: function () {
     const now = new Date();
-
-    // MMDD
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day   = String(now.getDate()).padStart(2, "0");
-    const datePart = `${month}${day}`; // 4 أرقام
-
-    // 4 أرقام عشوائية من 1000 لـ 9999
-    const randomPart = Math.floor(1000 + Math.random() * 9000); // 4 أرقام
-
-    // الناتج: 8 أرقام مثلاً 12134827
-    return `${datePart}${randomPart}`;
+    const datePart = `${month}${day}`;
+    const randomPart = Math.floor(1000 + Math.random() * 9000);
+    return `${datePart}${randomPart}`; // مثال: 12134827
   },
 
     },

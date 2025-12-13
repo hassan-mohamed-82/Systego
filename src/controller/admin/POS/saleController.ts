@@ -224,7 +224,6 @@ export const createSale = async (req: Request, res: Response) => {
       const { product_price_id, product_id, quantity } = p;
 
       if (product_price_id) {
-        // منتج له variation
         if (!mongoose.Types.ObjectId.isValid(product_price_id)) {
           throw new BadRequest("Invalid product_price_id");
         }
@@ -240,7 +239,6 @@ export const createSale = async (req: Request, res: Response) => {
           );
         }
       } else {
-        // منتج عادي من غير variations → إعتمادًا على ProductModel.quantity
         if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
           throw new BadRequest("Invalid product_id for non-variation product");
         }
@@ -287,25 +285,21 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 13) reference
-  const reference = `SALE-${Date.now()}`;
-
   const accountIdsForSale = !isPending
     ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
     : [];
 
   const totalPaidFromLines = paymentLines.reduce((s, p) => s + p.amount, 0);
 
-  // 14) إنشاء الفاتورة
+  // 14) إنشاء الفاتورة (من غير reference – السكيمة هتولده)
   const sale = await SaleModel.create({
-    reference,
     date: new Date(),
 
     customer_id: customer ? customer._id : undefined,
     warehouse_id: warehouseId,
 
     account_id: accountIdsForSale,
-    order_pending: normalizedOrderPending, // 1 = pending, 0 = completed
+    order_pending: normalizedOrderPending,
 
     coupon_id: coupon ? coupon._id : undefined,
     gift_card_id: giftCard ? giftCard._id : undefined,
@@ -344,9 +338,9 @@ export const createSale = async (req: Request, res: Response) => {
 
       const ps = await ProductSalesModel.create({
         sale_id: sale._id,
-        product_id,             // لو منتج عادي
+        product_id,
         bundle_id: undefined,
-        product_price_id,       // لو variation
+        product_price_id,
         quantity,
         price,
         subtotal,
@@ -392,25 +386,21 @@ export const createSale = async (req: Request, res: Response) => {
       status: "completed",
     });
 
-    // تحديث أرصدة حسابات البنوك
     for (const line of paymentLines) {
       await BankAccountModel.findByIdAndUpdate(line.account_id, {
         $inc: { balance: line.amount },
       });
     }
 
-    // إنقاص ستوك المنتجات (variation أو عادي)
     if (products && products.length > 0) {
       for (const p of products as any[]) {
         const { product_price_id, product_id, quantity } = p;
 
         if (product_price_id) {
-          // منتج له variation
           await ProductPriceModel.findByIdAndUpdate(product_price_id, {
             $inc: { quantity: -quantity },
           });
         } else {
-          // منتج عادي من غير variation
           if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
             throw new BadRequest("Invalid product_id for non-variation product");
           }
@@ -422,7 +412,6 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // إنقاص ستوك المنتجات داخل الباندلز (لسه معتمدين على ProductPrice)
     if (bundles && bundles.length > 0) {
       for (const b of bundles as any[]) {
         const { bundle_id, quantity } = b;
@@ -442,14 +431,12 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // إنقاص الكوبون
     if (coupon) {
       await CouponModel.findByIdAndUpdate(coupon._id, {
         $inc: { available: -1 },
       });
     }
 
-    // إنقاص رصيد الجيفت كارد
     if (giftCard && totalPaidFromLines > 0) {
       await GiftCardModel.findByIdAndUpdate(giftCard._id, {
         $inc: { amount: -totalPaidFromLines },
