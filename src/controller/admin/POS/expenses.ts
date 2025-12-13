@@ -24,7 +24,7 @@ export const createExpense = async (req: Request, res: Response) => {
 
   // ✅ 1) هات الشيفت المفتوح للكاشير ده
   const openShift = await CashierShift.findOne({
-    cashier_id: userId,
+    cashierman_id: userId,
     status: "open",
   }).sort({ start_time: -1 });
 

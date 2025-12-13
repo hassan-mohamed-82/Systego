@@ -20,6 +20,7 @@ const Financial_Account_1 = require("../../../models/schema/admin/Financial_Acco
 const pandels_1 = require("../../../models/schema/admin/pandels");
 const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
 const mongoose_1 = __importDefault(require("mongoose"));
+const products_1 = require("../../../models/schema/admin/products");
 const createSale = async (req, res) => {
     const jwtUser = req.user;
     const cashierId = jwtUser?.id;
@@ -41,7 +42,7 @@ const createSale = async (req, res) => {
     // 2) استقبل الداتا من الـ body
     const { customer_id, 
     // 0 = completed, 1 = pending
-    order_pending = 1, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, note, financials, // [{ account_id / id, amount }]
+    order_pending = 0, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, note, financials, // [{ account_id / id, amount }]
      } = req.body;
     // لو مفيش financials خالص اعتبره pending أوتوماتيك
     const hasFinancials = Array.isArray(financials) && financials.length > 0;
@@ -171,19 +172,35 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("Gift card does not have enough balance");
         }
     }
-    // 11) ستوك المنتجات
+    // 11) ستوك المنتجات (يدعم منتجات بـ variation أو من غير)
     if (products && products.length > 0) {
         for (const p of products) {
-            const { product_price_id, quantity } = p;
-            if (!mongoose_1.default.Types.ObjectId.isValid(product_price_id)) {
-                throw new BadRequest_1.BadRequest("Invalid product_price_id");
+            const { product_price_id, product_id, quantity } = p;
+            if (product_price_id) {
+                // منتج له variation
+                if (!mongoose_1.default.Types.ObjectId.isValid(product_price_id)) {
+                    throw new BadRequest_1.BadRequest("Invalid product_price_id");
+                }
+                const priceDoc = await product_price_1.ProductPriceModel.findById(product_price_id);
+                if (!priceDoc) {
+                    throw new Errors_1.NotFound("Product price (variation) not found");
+                }
+                if (priceDoc.quantity < quantity) {
+                    throw new BadRequest_1.BadRequest(`Not enough stock for product variation ${priceDoc._id}, available: ${priceDoc.quantity}, required: ${quantity}`);
+                }
             }
-            const priceDoc = await product_price_1.ProductPriceModel.findById(product_price_id);
-            if (!priceDoc) {
-                throw new Errors_1.NotFound("Product price not found");
-            }
-            if (priceDoc.quantity < quantity) {
-                throw new BadRequest_1.BadRequest(`Not enough stock for product ${priceDoc._id}, available: ${priceDoc.quantity}, required: ${quantity}`);
+            else {
+                // منتج عادي من غير variations → إعتمادًا على ProductModel.quantity
+                if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
+                    throw new BadRequest_1.BadRequest("Invalid product_id for non-variation product");
+                }
+                const productDoc = await products_1.ProductModel.findById(product_id);
+                if (!productDoc) {
+                    throw new Errors_1.NotFound("Product not found");
+                }
+                if (productDoc.quantity < quantity) {
+                    throw new BadRequest_1.BadRequest(`Not enough stock for product ${productDoc._id}, available: ${productDoc.quantity}, required: ${quantity}`);
+                }
             }
         }
     }
@@ -243,9 +260,9 @@ const createSale = async (req, res) => {
             const { product_price_id, product_id, quantity, price, subtotal, options_id, isGift, } = p;
             const ps = await Sale_1.ProductSalesModel.create({
                 sale_id: sale._id,
-                product_id,
+                product_id, // لو منتج عادي
                 bundle_id: undefined,
-                product_price_id,
+                product_price_id, // لو variation
                 quantity,
                 price,
                 subtotal,
@@ -285,19 +302,34 @@ const createSale = async (req, res) => {
             })),
             status: "completed",
         });
+        // تحديث أرصدة حسابات البنوك
         for (const line of paymentLines) {
             await Financial_Account_1.BankAccountModel.findByIdAndUpdate(line.account_id, {
                 $inc: { balance: line.amount },
             });
         }
+        // إنقاص ستوك المنتجات (variation أو عادي)
         if (products && products.length > 0) {
             for (const p of products) {
-                const { product_price_id, quantity } = p;
-                await product_price_1.ProductPriceModel.findByIdAndUpdate(product_price_id, {
-                    $inc: { quantity: -quantity },
-                });
+                const { product_price_id, product_id, quantity } = p;
+                if (product_price_id) {
+                    // منتج له variation
+                    await product_price_1.ProductPriceModel.findByIdAndUpdate(product_price_id, {
+                        $inc: { quantity: -quantity },
+                    });
+                }
+                else {
+                    // منتج عادي من غير variation
+                    if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
+                        throw new BadRequest_1.BadRequest("Invalid product_id for non-variation product");
+                    }
+                    await products_1.ProductModel.findByIdAndUpdate(product_id, {
+                        $inc: { quantity: -quantity },
+                    });
+                }
             }
         }
+        // إنقاص ستوك المنتجات داخل الباندلز (لسه معتمدين على ProductPrice)
         if (bundles && bundles.length > 0) {
             for (const b of bundles) {
                 const { bundle_id, quantity } = b;
@@ -313,11 +345,13 @@ const createSale = async (req, res) => {
                 }
             }
         }
+        // إنقاص الكوبون
         if (coupon) {
             await coupons_1.CouponModel.findByIdAndUpdate(coupon._id, {
                 $inc: { available: -1 },
             });
         }
+        // إنقاص رصيد الجيفت كارد
         if (giftCard && totalPaidFromLines > 0) {
             await giftCard_1.GiftCardModel.findByIdAndUpdate(giftCard._id, {
                 $inc: { amount: -totalPaidFromLines },
@@ -352,6 +386,7 @@ const getAllSales = async (req, res) => {
 };
 exports.getAllSales = getAllSales;
 const getsalePending = async (req, res) => {
+    // 1) هات كل الـ sales الـ pending
     const sales = await Sale_1.SaleModel.find({ order_pending: 1 }) // 1 = pending
         .populate("customer_id", "name email phone_number")
         .populate("warehouse_id", "name location")
@@ -360,19 +395,67 @@ const getsalePending = async (req, res) => {
         .populate("coupon_id", "code discount_amount")
         .populate("gift_card_id", "code amount")
         .lean();
-    return (0, response_1.SuccessResponse)(res, { sales });
+    if (!sales.length) {
+        return (0, response_1.SuccessResponse)(res, { sales: [] });
+    }
+    // 2) كل الـ IDs بتاعة الـ sales
+    const saleIds = sales.map((s) => s._id);
+    // 3) هات كل الـ items (ProductSales) اللي تابعة للـ sales دي
+    const items = await Sale_1.ProductSalesModel.find({
+        sale_id: { $in: saleIds },
+    })
+        .populate("product_id", "name ar_name image price") // تفاصيل المنتج
+        .populate("product_price_id", "price code") // تفاصيل الـ variation (لو موجود)
+        .populate("bundle_id", "name price") // لو هو bundle
+        .lean();
+    // 4) جمّع الـ items حسب sale_id
+    const itemsBySaleId = {};
+    for (const item of items) {
+        const key = item.sale_id.toString();
+        if (!itemsBySaleId[key])
+            itemsBySaleId[key] = [];
+        itemsBySaleId[key].push(item);
+    }
+    // 5) رجّع الـ sales ومعاها items
+    const salesWithItems = sales.map((s) => ({
+        ...s,
+        items: itemsBySaleId[s._id.toString()] || [],
+    }));
+    return (0, response_1.SuccessResponse)(res, { sales: salesWithItems });
 };
 exports.getsalePending = getsalePending;
 const getsaleunPending = async (req, res) => {
-    const sales = await Sale_1.SaleModel.find({ order_pending: 0 })
-        .populate('customer_id', 'name email phone_number')
-        .populate('warehouse_id', 'name location')
-        .populate('order_tax', 'name rate')
-        .populate('order_discount', 'name rate')
-        .populate('coupon_id', 'code discount_amount')
-        .populate('gift_card_id', 'code amount')
+    const sales = await Sale_1.SaleModel.find({ order_pending: 0 }) // 0 = completed
+        .populate("customer_id", "name email phone_number")
+        .populate("warehouse_id", "name location")
+        .populate("order_tax", "name rate")
+        .populate("order_discount", "name rate")
+        .populate("coupon_id", "code discount_amount")
+        .populate("gift_card_id", "code amount")
         .lean();
-    (0, response_1.SuccessResponse)(res, { sales });
+    if (!sales.length) {
+        return (0, response_1.SuccessResponse)(res, { sales: [] });
+    }
+    const saleIds = sales.map((s) => s._id);
+    const items = await Sale_1.ProductSalesModel.find({
+        sale_id: { $in: saleIds },
+    })
+        .populate("product_id", "name ar_name image price")
+        .populate("product_price_id", "price code")
+        .populate("bundle_id", "name price")
+        .lean();
+    const itemsBySaleId = {};
+    for (const item of items) {
+        const key = item.sale_id.toString();
+        if (!itemsBySaleId[key])
+            itemsBySaleId[key] = [];
+        itemsBySaleId[key].push(item);
+    }
+    const salesWithItems = sales.map((s) => ({
+        ...s,
+        items: itemsBySaleId[s._id.toString()] || [],
+    }));
+    return (0, response_1.SuccessResponse)(res, { sales: salesWithItems });
 };
 exports.getsaleunPending = getsaleunPending;
 const getSalePendingById = async (req, res) => {

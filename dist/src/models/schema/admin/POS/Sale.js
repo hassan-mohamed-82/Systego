@@ -39,12 +39,19 @@ const mongoose_1 = __importStar(require("mongoose"));
 const SaleSchema = new mongoose_1.Schema({
     reference: {
         type: String,
-        maxlength: 100,
         trim: true,
+        unique: true, // عشان ما يتكررش في الداتابيز
+        maxlength: 8,
         default: function () {
-            const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
-            const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-            return `SALE-${datePart}-${randomPart}`;
+            const now = new Date();
+            // MMDD
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            const datePart = `${month}${day}`; // 4 أرقام
+            // 4 أرقام عشوائية من 1000 لـ 9999
+            const randomPart = Math.floor(1000 + Math.random() * 9000); // 4 أرقام
+            // الناتج: 8 أرقام مثلاً 12134827
+            return `${datePart}${randomPart}`;
         },
     },
     customer_id: {
