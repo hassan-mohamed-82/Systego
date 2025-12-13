@@ -3,12 +3,14 @@ import {createcategory,getCategories,getCategoryById,updateCategory,deleteCatego
 import { validate } from "../../middlewares/validation";
 import { createCategoryMaterialSchema, updateCategoryMaterialSchema } from "../../validation/admin/Category_Material";
 import { catchAsync } from "../../utils/catchAsync";
+import {authorizePermissions} from "../../middlewares/haspremission"
+
 const router = Router();
 
-router.post("/", validate(createCategoryMaterialSchema), catchAsync(createcategory));
-router.get("/", catchAsync(getCategories));
-router.get("/:id", catchAsync(getCategoryById));
-router.put("/:id", validate(updateCategoryMaterialSchema), catchAsync(updateCategory));
-router.delete("/:id", catchAsync(deleteCategory));
+router.post("/",authorizePermissions("Category_Material","Add"), validate(createCategoryMaterialSchema), catchAsync(createcategory));
+router.get("/",authorizePermissions("Category_Material","View"), catchAsync(getCategories));
+router.get("/:id",authorizePermissions("Category_Material","View"), catchAsync(getCategoryById));
+router.put("/:id",authorizePermissions("Category_Material","Edit"), validate(updateCategoryMaterialSchema), catchAsync(updateCategory));
+router.delete("/:id",authorizePermissions("Category_Material","Delete"), catchAsync(deleteCategory));
 
 export default router;

@@ -7,11 +7,13 @@ import{
 
 import { validate } from "../../middlewares/validation";
 import { createPointSchema,updatePointSchema } from "../../validation/admin/points";
+import {authorizePermissions} from "../../middlewares/haspremission"
+
 const router=Router();
 
-router.post("/",validate(createPointSchema),catchAsync(createpoint));
-router.get("/",catchAsync(getpoints));
-router.get("/:id",catchAsync(getpoint));
-router.put("/:id",validate(updatePointSchema),catchAsync(updatepoint));
-router.delete("/:id",catchAsync(deletepoint));
+router.post("/",authorizePermissions("point","Add"),validate(createPointSchema),catchAsync(createpoint));
+router.get("/",authorizePermissions("point","View"),catchAsync(getpoints));
+router.get("/:id",authorizePermissions("point","View"),catchAsync(getpoint));
+router.put("/:id",authorizePermissions("point","Edit"),validate(updatePointSchema),catchAsync(updatepoint));
+router.delete("/:id",authorizePermissions("point","Delete"),catchAsync(deletepoint));
 export default router;

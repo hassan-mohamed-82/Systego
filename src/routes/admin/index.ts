@@ -49,11 +49,11 @@ import ExpensecategoryRouter from "./expensecategory" //Rputer
 import PaymobRouter from "./Paymob"
 import notificationRoutrt from "./notifications"
 import { authenticated } from "../../middlewares/authenticated";
-import { authorize } from "../../middlewares/authorized";
+import { authorizeRoles } from "../../middlewares/authorized";
 export const route = Router();
 
 route.use("/auth", authRouter); 
-route.use(authenticated,authorize("admin","superadmin"));
+route.use(authenticated, authorizeRoles("admin","superadmin"));
 route.use("/brand", brandRouter);
 route.use("/admin", AdminRouter);
 route.use("/permission",permissionRouter);

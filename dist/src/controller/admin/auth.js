@@ -12,16 +12,12 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
-const roles_1 = require("../../models/schema/admin/roles");
-const Action_1 = require("../../models/schema/admin/Action");
 const login = async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) {
         throw new BadRequest_1.BadRequest("Email and password are required");
     }
-    const user = await User_1.UserModel.findOne({ email })
-        .populate("positionId")
-        .lean(); // ✅ تمام هنا لأن password_hash مش معمول له select: false
+    const user = await User_1.UserModel.findOne({ email }).lean();
     if (!user) {
         throw new NotFound_1.NotFound("User not found");
     }
@@ -29,25 +25,26 @@ const login = async (req, res, next) => {
     if (!isMatch) {
         throw new Errors_1.UnauthorizedError("Invalid email or password");
     }
-    // roles المرتبطة بالـ position
-    const roles = await roles_1.RoleModel.find({
-        positionId: user.positionId?._id,
-    }).lean();
-    let actions = [];
-    if (roles && roles.length > 0) {
-        actions = await Action_1.ActionModel.find({
-            roleId: { $in: roles.map(r => r._id) },
-        }).lean();
-    }
+    // 🔹 تحويل permissions من شكل DB:
+    // { module, actions: { _id, action }[] }
+    // إلى شكل الـ Type:
+    // { module, actions: { id, action }[] }
+    const mappedPermissions = (user.permissions || []).map((p) => ({
+        module: p.module,
+        actions: (p.actions || []).map((a) => ({
+            id: a._id.toString(),
+            action: a.action,
+        })),
+    }));
+    // 🔹 إنشاء التوكن بالـ permissions المـحوَّلة
     const token = (0, auth_1.generateToken)({
         _id: user._id,
         username: user.username,
         role: user.role,
-        positionId: user.positionId?._id || user.positionId,
-        roles: roles || [],
-        actions: actions || [],
-        warehouse_id: user.warehouse_id, // 👈 كده هيتحط في الـ JWT
+        warehouseId: user.warehouseId,
+        permissions: mappedPermissions,
     });
+    // 🔹 نفس الشيء في الـ response
     (0, response_1.SuccessResponse)(res, {
         message: "Login successful",
         token,
@@ -55,12 +52,10 @@ const login = async (req, res, next) => {
             id: user._id,
             username: user.username,
             email: user.email,
-            position: user.positionId || null,
             status: user.status,
             role: user.role,
-            warehouse_id: user.warehouse_id ?? null, // 👈 هتستخدمها في الفرونت لو حبيت
-            roles: roles?.map(r => r.name) || [],
-            actions: actions?.map(a => a.name) || [],
+            warehouse_id: user.warehouseId ? user.warehouseId.toString() : null,
+            permissions: mappedPermissions,
         },
     });
 };

@@ -6,11 +6,13 @@ import{
 
 import { validate } from "../../middlewares/validation";
 import { createPopupSchema,updatePopupSchema } from "../../validation/admin/Popup";
+import {authorizePermissions} from "../../middlewares/haspremission"
+
 const router=Router();
 
-router.post("/",validate(createPopupSchema),catchAsync(createPopup));
-router.get("/",catchAsync(getPopup));
-router.get("/:id",catchAsync(getPopupById));
-router.put("/:id",validate(updatePopupSchema),catchAsync(updatePopup));
-router.delete("/:id",catchAsync(deletePopup));
+router.post("/",authorizePermissions("popup","Add"),validate(createPopupSchema),catchAsync(createPopup));
+router.get("/",authorizePermissions("popup","View"),catchAsync(getPopup));
+router.get("/:id",authorizePermissions("popup","View"),catchAsync(getPopupById));
+router.put("/:id",authorizePermissions("popup","Edit"),validate(updatePopupSchema),catchAsync(updatePopup));
+router.delete("/:id",authorizePermissions("popup","Delete"),catchAsync(deletePopup));
 export default router;

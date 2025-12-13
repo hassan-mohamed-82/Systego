@@ -6,11 +6,13 @@ import {validate} from"../../middlewares/validation";
 import {createZoneSchema,updateZoneSchema} from "../../validation/admin/Zone"
 import { catchAsync } from "../../utils/catchAsync";
 import { authenticated } from "../../middlewares/authenticated";
+import {authorizePermissions}from "../../middlewares/haspremission"
 
 const route = Router();
-route.post("/" ,validate(createZoneSchema) ,catchAsync(createzone));
-route.get("/",catchAsync(getZones));
-route.get("/:id" ,catchAsync(getZoneById));
-route.put("/:id" ,validate(updateZoneSchema), catchAsync(updateZone));
-route.delete("/:id",catchAsync(deleteZone));
+
+route.post("/" ,authorizePermissions("zone","Add"),validate(createZoneSchema), catchAsync(createzone));
+route.get("/",authorizePermissions("zone","View"),catchAsync(getZones));
+route.get("/:id",authorizePermissions("zone","View"),catchAsync(getZoneById));
+route.put("/:id" ,authorizePermissions("zone","Edit"),validate(updateZoneSchema), catchAsync(updateZone));
+route.delete("/:id",authorizePermissions("zone","Delete"),catchAsync(deleteZone));
 export default route;

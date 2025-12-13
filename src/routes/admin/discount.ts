@@ -7,13 +7,14 @@ import {
     getDiscountById
 } from "../../controller/admin/discount";
 import { catchAsync } from "../../utils/catchAsync";
+import {authorizePermissions} from "../../middlewares/haspremission"
 
 const router = Router();
 
-router.post("/", catchAsync(createDiscount));
-router.get("/", catchAsync(getAllDiscounts));
-router.get("/:id", catchAsync(getDiscountById));
-router.put("/:id", catchAsync(updateDiscount));
-router.delete("/:id", catchAsync(deleteDiscount));
+router.post("/",authorizePermissions("discount","Add"), catchAsync(createDiscount));
+router.get("/",authorizePermissions("discount","View"), catchAsync(getAllDiscounts));
+router.get("/:id",authorizePermissions("discount","View"), catchAsync(getDiscountById));
+router.put("/:id",  authorizePermissions("discount","Edit"), catchAsync(updateDiscount));
+router.delete("/:id",authorizePermissions("discount","Delete"), catchAsync(deleteDiscount));
 
 export default router;

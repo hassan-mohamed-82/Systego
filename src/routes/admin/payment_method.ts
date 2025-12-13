@@ -9,25 +9,28 @@ import {
 import { catchAsync } from '../../utils/catchAsync';
 import { validate } from '../../middlewares/validation';
 import { CreatePaymentMethodSchema, UpdatePaymentMethodSchema } from '../../validation/admin/payment_method';
+import {authorizePermissions} from "../../middlewares/haspremission"
 
 const router = Router();
 
 router.post(
   '/',
+  authorizePermissions("payment_method","Add"),
   validate(CreatePaymentMethodSchema),
   catchAsync(createPaymentMethod)
 );
 
-router.get('/', catchAsync(getAllPaymentMethods));
+router.get('/',authorizePermissions("payment_method","View"), catchAsync(getAllPaymentMethods));
 
-router.get('/:id', catchAsync(getPaymentMethodById));
+router.get('/:id',authorizePermissions("payment_method","View"), catchAsync(getPaymentMethodById));
 
 router.put(
   '/:id',
+  authorizePermissions("payment_method","Edit"),
   validate(UpdatePaymentMethodSchema),
   catchAsync(updatePaymentMethod)
 );
 
-router.delete('/:id', catchAsync(deletePaymentMethod));
+router.delete('/:id',authorizePermissions("payment_method","Delete"), catchAsync(deletePaymentMethod));
 
 export default router;

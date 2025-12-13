@@ -4,20 +4,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyToken = exports.generateToken = void 0;
+// src/utils/jwt.ts  (أو نفس مكان الملف القديم)
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const Errors_1 = require("../Errors");
 dotenv_1.default.config();
 const generateToken = (user) => {
-    return jsonwebtoken_1.default.sign({
-        id: user._id?.toString(),
+    const payload = {
+        id: user._id.toString(),
         name: user.username,
         role: user.role,
-        positionId: user.positionId?.toString(),
-        roles: Array.isArray(user.roles) ? user.roles.map((role) => role.name) : [],
-        actions: Array.isArray(user.actions) ? user.actions.map((action) => action.name) : [],
-        warehouse_id: user.warehouse_id ? user.warehouse_id.toString() : undefined,
-    }, process.env.JWT_SECRET, { expiresIn: "7d" });
+        warehouse_id: user.warehouseId ? user.warehouseId.toString() : undefined,
+        permissions: user.permissions || [],
+    };
+    return jsonwebtoken_1.default.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: "7d",
+    });
 };
 exports.generateToken = generateToken;
 const verifyToken = (token) => {
@@ -27,10 +29,8 @@ const verifyToken = (token) => {
             id: decoded.id,
             name: decoded.name,
             role: decoded.role,
-            positionId: decoded.positionId,
-            roles: decoded.roles ?? [],
-            actions: decoded.actions ?? [],
             warehouse_id: decoded.warehouse_id,
+            permissions: (decoded.permissions || []),
         };
     }
     catch {

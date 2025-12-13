@@ -5,14 +5,15 @@ import {
 import { catchAsync } from "../../utils/catchAsync";
 import { validate } from "../../middlewares/validation";
 import { createVariationSchema, updateVariationSchema } from "../../validation/admin/Variation";
+import {authorizePermissions} from "../../middlewares/haspremission"
 const router = Router();
 
-router.post("/",validate(createVariationSchema),catchAsync( createVariationWithOptions));
-router.get("/", catchAsync(getAllVariations));
-router.get("/:id", catchAsync(getOneVariation)); 
-router.put("/:id",validate(updateVariationSchema) ,catchAsync(updateVariationWithOptions));
-router.delete("/:id", catchAsync(deleteVariationWithOptions));
-router.delete("/option/:id", catchAsync(deleteOption));
+router.post("/",authorizePermissions("variation","Add"),validate(createVariationSchema),catchAsync( createVariationWithOptions));
+router.get("/",authorizePermissions("variation","View"), catchAsync(getAllVariations));
+router.get("/:id",authorizePermissions("variation","View"), catchAsync(getOneVariation)); 
+router.put("/:id", authorizePermissions("variation","Edit"),validate(updateVariationSchema) ,catchAsync(updateVariationWithOptions));
+router.delete("/:id",authorizePermissions("variation","Delete"), catchAsync(deleteVariationWithOptions));
+router.delete("/option/:id",authorizePermissions("variation","Delete"), catchAsync(deleteOption));
 
 
 export default router;

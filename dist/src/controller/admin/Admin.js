@@ -10,137 +10,92 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const Errors_1 = require("../../Errors");
-const position_1 = require("../../models/schema/admin/position");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
-const roles_1 = require("../../models/schema/admin/roles");
-const Action_1 = require("../../models/schema/admin/Action");
 const mongoose_1 = __importDefault(require("mongoose"));
 const createUser = async (req, res, next) => {
-    const currentUser = req.user;
-    const { username, email, password, positionId, company_name, phone, image_base64, warehouseId } = req.body;
-    if (!username || !email || !password || !positionId) {
-        throw new BadRequest_1.BadRequest("Username, email, password, positionId, and warehouse_id are required");
+    const { username, email, password, company_name, phone, image_base64, warehouseId, role = "admin", } = req.body;
+    if (!username || !email || !password || !warehouseId) {
+        throw new BadRequest_1.BadRequest("Username, email, password and warehouseId are required");
+    }
+    if (!mongoose_1.default.Types.ObjectId.isValid(warehouseId)) {
+        throw new BadRequest_1.BadRequest("Invalid warehouseId");
     }
     const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouseExists) {
         throw new BadRequest_1.BadRequest("Invalid warehouseId: Warehouse does not exist");
     }
-    // ✅ التأكد من تكرار البيانات
     const existingUser = await User_1.UserModel.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
         throw new BadRequest_1.BadRequest("User with this email or username already exists");
     }
-    // ✅ تشفير الباسورد
     const salt = await bcryptjs_1.default.genSalt(10);
     const password_hash = await bcryptjs_1.default.hash(password, salt);
     let image_url;
     if (image_base64) {
         image_url = await (0, handleImages_1.saveBase64Image)(image_base64, username, req, "users");
     }
-    // ✅ إنشاء المستخدم
-    const newUser = await (await (User_1.UserModel.create({
+    const userDoc = await User_1.UserModel.create({
         username,
         email,
         password_hash,
-        positionId,
         company_name,
         phone,
         image_url,
-        warehouseId
-    }))).populate("positionId");
+        warehouseId,
+        role,
+        // permissions: []  // تسيبها فاضية، وهتتعدل من CRUD الـ permissions
+    });
     (0, response_1.SuccessResponse)(res, {
         message: "User created successfully",
         user: {
-            id: newUser._id,
-            username: newUser.username,
-            email: newUser.email,
-            positionId: newUser.positionId,
-            status: newUser.status,
-            image_url: newUser.image_url,
-            warehouse_id: newUser.warehouseId
+            id: userDoc._id,
+            username: userDoc.username,
+            email: userDoc.email,
+            role: userDoc.role,
+            status: userDoc.status,
+            company_name: userDoc.company_name,
+            phone: userDoc.phone,
+            image_url: userDoc.image_url,
+            warehouseId: userDoc.warehouseId,
         },
     });
 };
 exports.createUser = createUser;
 const getAllUsers = async (req, res, next) => {
-    // 🧍‍♂️ 1️⃣ هات المستخدمين
-    const users = await User_1.UserModel.find().select("-password_hash").populate("warehouse_id", "name");
+    const users = await User_1.UserModel.find()
+        .select("-password_hash -__v")
+        .populate("warehouseId", "name");
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
     }
-    // 🧩 2️⃣ هات كل الـ Positions
-    const positions = await position_1.PositionModel.find();
-    // 🧠 3️⃣ جهز شكل البيانات المطلوب
-    const formattedPositions = [];
-    for (const position of positions) {
-        const roles = await roles_1.RoleModel.find({ positionId: position._id });
-        const formattedRoles = [];
-        for (const role of roles) {
-            const actions = await Action_1.ActionModel.find({ roleId: role._id });
-            formattedRoles.push({
-                _id: role._id,
-                name: role.name,
-                actions: actions.map((action) => action.name),
-            });
-        }
-        formattedPositions.push({
-            _id: position._id,
-            name: position.name,
-            roles: formattedRoles,
-        });
-    }
-    // ✅ 4️⃣ رجّع الرد بالشكل اللي إنت عايزه
     (0, response_1.SuccessResponse)(res, {
-        message: "get all users successfully",
+        message: "Get all users successfully",
         users,
-        positions: formattedPositions,
     });
 };
 exports.getAllUsers = getAllUsers;
 const getUserById = async (req, res, next) => {
     const { id } = req.params;
-    // ✅ 1️⃣ تحقق من صحة الـ id
     if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
         throw new BadRequest_1.BadRequest("Invalid or missing user ID");
     }
-    // 🧍‍♂️ 2️⃣ هات المستخدم بدون كلمة السر
-    const user = await User_1.UserModel.findById(id).select("-password_hash -__v").populate("warehouse_id", "name");
+    const user = await User_1.UserModel.findById(id)
+        .select("-password_hash -__v")
+        .populate("warehouseId", "name");
     if (!user)
         throw new Errors_1.NotFound("User not found");
-    // 🧩 3️⃣ هات الـ position الخاص بالمستخدم (لو عنده)
-    let positionData = null;
-    if (user.positionId) {
-        const position = await position_1.PositionModel.findById(user.positionId);
-        if (position) {
-            // 🧠 4️⃣ هات الـ roles الخاصة بالـ position
-            const roles = await roles_1.RoleModel.find({ positionId: position._id });
-            const formattedRoles = [];
-            for (const role of roles) {
-                const actions = await Action_1.ActionModel.find({ roleId: role._id });
-                formattedRoles.push({
-                    _id: role._id,
-                    name: role.name,
-                    actions: actions.map((a) => a.name),
-                });
-            }
-            positionData = {
-                _id: position._id,
-                name: position.name,
-                roles: formattedRoles,
-            };
-        }
-    }
-    // ✅ 5️⃣ رجّع الرد النهائي
     (0, response_1.SuccessResponse)(res, {
         message: "User retrieved successfully",
         user,
-        position: positionData,
     });
 };
 exports.getUserById = getUserById;
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
-    const { username, email, password, positionId, company_name, phone, status, image_base64, warehouseId } = req.body;
+    const { username, email, password, company_name, phone, status, image_base64, warehouseId, role, } = req.body;
+    if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("Invalid user id");
+    }
     const user = await User_1.UserModel.findById(id);
     if (!user) {
         throw new Errors_1.NotFound("User not found");
@@ -149,8 +104,6 @@ const updateUser = async (req, res, next) => {
         user.username = username;
     if (email)
         user.email = email;
-    if (positionId)
-        user.positionId = positionId;
     if (company_name)
         user.company_name = company_name;
     if (phone)
@@ -158,11 +111,17 @@ const updateUser = async (req, res, next) => {
     if (status)
         user.status = status;
     if (warehouseId) {
+        if (!mongoose_1.default.Types.ObjectId.isValid(warehouseId)) {
+            throw new BadRequest_1.BadRequest("Invalid warehouseId");
+        }
         const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
         if (!warehouseExists) {
-            throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
+            throw new BadRequest_1.BadRequest("Invalid warehouseId: Warehouse does not exist");
         }
         user.warehouseId = warehouseId;
+    }
+    if (role && ["superadmin", "admin"].includes(role)) {
+        user.role = role;
     }
     if (password) {
         const salt = await bcryptjs_1.default.genSalt(10);
@@ -178,18 +137,20 @@ const updateUser = async (req, res, next) => {
             id: user._id,
             username: user.username,
             email: user.email,
-            positionId: user.positionId,
+            role: user.role,
             status: user.status,
-            warehouseId: user.warehouseId,
+            company_name: user.company_name,
+            phone: user.phone,
             image_url: user.image_url,
+            warehouseId: user.warehouseId,
         },
     });
 };
 exports.updateUser = updateUser;
 const deleteUser = async (req, res, next) => {
     const { id } = req.params;
-    if (!id) {
-        throw new BadRequest_1.BadRequest("User id is required");
+    if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("User id is required or invalid");
     }
     const user = await User_1.UserModel.findByIdAndDelete(id);
     if (!user) {
@@ -203,7 +164,7 @@ exports.deleteUser = deleteUser;
 const selection = async (req, res, next) => {
     const warehouse = await Warehouse_1.WarehouseModel.find().select("_id name");
     (0, response_1.SuccessResponse)(res, {
-        message: "get all users successfully",
+        message: "Get warehouses successfully",
         warehouse,
     });
 };

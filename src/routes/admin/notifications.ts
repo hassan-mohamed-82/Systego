@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import {getAllNotifications,getNotificationById } from "../../controller/admin/Notfication";
+import {authorizePermissions} from "../../middlewares/haspremission"
 
 const router = Router();
 
-router.get("/",catchAsync(getAllNotifications));
-router.get("/:id",catchAsync(getNotificationById));
+router.get("/",authorizePermissions("notification","View"),catchAsync(getAllNotifications));
+router.get("/:id",authorizePermissions("notification","View"),catchAsync(getNotificationById));
 export default router;

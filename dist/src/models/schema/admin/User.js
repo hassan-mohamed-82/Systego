@@ -34,16 +34,55 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserModel = void 0;
+// src/models/schema/admin/User.ts
 const mongoose_1 = __importStar(require("mongoose"));
+const constant_1 = require("../../../types/constant");
+// كل أكشن هيبقى Subdocument بـ _id + action
+const PermissionActionSchema = new mongoose_1.Schema({
+    action: {
+        type: String,
+        enum: constant_1.ACTION_NAMES, // ["view","add","edit","delete"]
+        required: true,
+    },
+}, { _id: true } // هنا بيولد _id لكل أكشن
+);
+const PermissionSchema = new mongoose_1.Schema({
+    module: {
+        type: String,
+        enum: constant_1.MODULES,
+        required: true,
+    },
+    actions: {
+        type: [PermissionActionSchema],
+        default: [],
+    },
+}, { _id: false });
 const UserSchema = new mongoose_1.Schema({
     username: { type: String, required: true, unique: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        lowercase: true,
+        trim: true,
+    },
     password_hash: { type: String, required: true },
     company_name: { type: String },
     phone: { type: String },
-    role: { type: String, enum: ["superadmin", "admin"], default: "admin" },
-    positionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position" },
-    status: { type: String, default: "active", enum: ["active", "inactive"] },
+    role: {
+        type: String,
+        enum: ["superadmin", "admin"],
+        default: "admin",
+    },
+    permissions: {
+        type: [PermissionSchema],
+        default: [],
+    },
+    status: {
+        type: String,
+        default: "active",
+        enum: ["active", "inactive"],
+    },
     image_url: { type: String },
     address: { type: String },
     vat_number: { type: String },

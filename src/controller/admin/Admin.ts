@@ -12,27 +12,36 @@ import { RoleModel } from "../../models/schema/admin/roles";
 import { ActionModel } from "../../models/schema/admin/Action";
 import mongoose from "mongoose";
 
+
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
-  const currentUser = req.user;
+  const {
+    username,
+    email,
+    password,
+    company_name,
+    phone,
+    image_base64,
+    warehouseId,
+    role = "admin",
+  } = req.body;
 
-  const { username, email, password, positionId, company_name, phone, image_base64,warehouseId} = req.body;
-
-  if (!username || !email || !password || !positionId ) {
-    throw new BadRequest("Username, email, password, positionId, and warehouse_id are required");
+  if (!username || !email || !password || !warehouseId) {
+    throw new BadRequest("Username, email, password and warehouseId are required");
   }
- 
+
+  if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
+    throw new BadRequest("Invalid warehouseId");
+  }
   const warehouseExists = await WarehouseModel.findById(warehouseId);
   if (!warehouseExists) {
     throw new BadRequest("Invalid warehouseId: Warehouse does not exist");
   }
 
-  // ✅ التأكد من تكرار البيانات
   const existingUser = await UserModel.findOne({ $or: [{ email }, { username }] });
   if (existingUser) {
     throw new BadRequest("User with this email or username already exists");
   }
 
-  // ✅ تشفير الباسورد
   const salt = await bcrypt.genSalt(10);
   const password_hash = await bcrypt.hash(password, salt);
 
@@ -41,127 +50,85 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     image_url = await saveBase64Image(image_base64, username, req, "users");
   }
 
-  // ✅ إنشاء المستخدم
-  const newUser = await (await (UserModel.create({
-      username,
-      email,
-      password_hash,
-      positionId,
-      company_name,
-      phone,
-      image_url,
-      warehouseId
-  }))).populate("positionId");
+  const userDoc = await UserModel.create({
+    username,
+    email,
+    password_hash,
+    company_name,
+    phone,
+    image_url,
+    warehouseId,
+    role,
+    // permissions: []  // تسيبها فاضية، وهتتعدل من CRUD الـ permissions
+  });
 
   SuccessResponse(res, {
     message: "User created successfully",
     user: {
-      id: newUser._id,
-      username: newUser.username,
-      email: newUser.email,
-      positionId: newUser.positionId,
-      status: newUser.status,
-      image_url: newUser.image_url,
-      warehouse_id: newUser.warehouseId
+      id: userDoc._id,
+      username: userDoc.username,
+      email: userDoc.email,
+      role: userDoc.role,
+      status: userDoc.status,
+      company_name: userDoc.company_name,
+      phone: userDoc.phone,
+      image_url: userDoc.image_url,
+      warehouseId: userDoc.warehouseId,
     },
   });
 };
 
-
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
-  // 🧍‍♂️ 1️⃣ هات المستخدمين
-  const users = await UserModel.find().select("-password_hash").populate("warehouse_id","name");
+  const users = await UserModel.find()
+    .select("-password_hash -__v")
+    .populate("warehouseId", "name");
+
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
   }
 
-  // 🧩 2️⃣ هات كل الـ Positions
-  const positions = await PositionModel.find();
-
-  // 🧠 3️⃣ جهز شكل البيانات المطلوب
-  const formattedPositions = [];
-
-  for (const position of positions) {
-    const roles = await RoleModel.find({ positionId: position._id });
-
-    const formattedRoles = [];
-    for (const role of roles) {
-      const actions = await ActionModel.find({ roleId: role._id });
-
-      formattedRoles.push({
-        _id: role._id,
-        name: role.name,
-        actions: actions.map((action) => action.name),
-      });
-    }
-
-    formattedPositions.push({
-      _id: position._id,
-      name: position.name,
-      roles: formattedRoles,
-    });
-  }
-
-  // ✅ 4️⃣ رجّع الرد بالشكل اللي إنت عايزه
   SuccessResponse(res, {
-    message: "get all users successfully",
+    message: "Get all users successfully",
     users,
-    positions: formattedPositions,
   });
 };
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
 
-  // ✅ 1️⃣ تحقق من صحة الـ id
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
     throw new BadRequest("Invalid or missing user ID");
   }
 
-  // 🧍‍♂️ 2️⃣ هات المستخدم بدون كلمة السر
-  const user = await UserModel.findById(id).select("-password_hash -__v").populate("warehouse_id","name");
+  const user = await UserModel.findById(id)
+    .select("-password_hash -__v")
+    .populate("warehouseId", "name");
+
   if (!user) throw new NotFound("User not found");
 
-  // 🧩 3️⃣ هات الـ position الخاص بالمستخدم (لو عنده)
-  let positionData = null;
-  if (user.positionId) {
-    const position = await PositionModel.findById(user.positionId);
-    if (position) {
-      // 🧠 4️⃣ هات الـ roles الخاصة بالـ position
-      const roles = await RoleModel.find({ positionId: position._id });
-
-      const formattedRoles = [];
-      for (const role of roles) {
-        const actions = await ActionModel.find({ roleId: role._id });
-        formattedRoles.push({
-          _id: role._id,
-          name: role.name,
-          actions: actions.map((a) => a.name),
-        });
-      }
-
-      positionData = {
-        _id: position._id,
-        name: position.name,
-        roles: formattedRoles,
-      };
-    }
-  }
-
-  // ✅ 5️⃣ رجّع الرد النهائي
   SuccessResponse(res, {
     message: "User retrieved successfully",
     user,
-    position: positionData,
   });
 };
 
-
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
- 
-
   const { id } = req.params;
-  const { username, email, password, positionId, company_name, phone, status, image_base64, warehouseId } = req.body;
+  const {
+    username,
+    email,
+    password,
+    company_name,
+    phone,
+    status,
+    image_base64,
+    warehouseId,
+    role,
+  } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("Invalid user id");
+  }
 
   const user = await UserModel.findById(id);
   if (!user) {
@@ -170,16 +137,23 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
   if (username) user.username = username;
   if (email) user.email = email;
-  if (positionId) user.positionId = positionId;
   if (company_name) user.company_name = company_name;
   if (phone) user.phone = phone;
   if (status) user.status = status;
+
   if (warehouseId) {
+    if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
+      throw new BadRequest("Invalid warehouseId");
+    }
     const warehouseExists = await WarehouseModel.findById(warehouseId);
     if (!warehouseExists) {
-      throw new BadRequest("Invalid warehouse_id: Warehouse does not exist");
+      throw new BadRequest("Invalid warehouseId: Warehouse does not exist");
     }
     user.warehouseId = warehouseId;
+  }
+
+  if (role && ["superadmin", "admin"].includes(role)) {
+    user.role = role;
   }
 
   if (password) {
@@ -199,21 +173,21 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
       id: user._id,
       username: user.username,
       email: user.email,
-      positionId: user.positionId,
+      role: user.role,
       status: user.status,
-      warehouseId: user.warehouseId,
+      company_name: user.company_name,
+      phone: user.phone,
       image_url: user.image_url,
+      warehouseId: user.warehouseId,
     },
   });
 };
 
-
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
-
   const { id } = req.params;
 
-  if (!id) {
-    throw new BadRequest("User id is required");
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("User id is required or invalid");
   }
 
   const user = await UserModel.findByIdAndDelete(id);
@@ -223,16 +197,14 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
 
   SuccessResponse(res, {
     message: "User deleted successfully",
-  
   });
-}; 
-
+};
 
 export const selection = async (req: Request, res: Response, next: NextFunction) => {
-  const warehouse= await WarehouseModel.find().select("_id name");
-   
+  const warehouse = await WarehouseModel.find().select("_id name");
+
   SuccessResponse(res, {
-    message: "get all users successfully",
+    message: "Get warehouses successfully",
     warehouse,
   });
 };

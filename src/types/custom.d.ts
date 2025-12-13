@@ -1,44 +1,32 @@
+// src/types/custom.ts
 import { Request } from "express";
 import { Types } from "mongoose";
+import { ModuleName, ActionName } from "../constants/permissions";
 
-export interface Action {
-  _id: Types.ObjectId;
-  name: "add" | "update" | "delete" | "get";
-  role: Types.ObjectId; // أو roleId لو عندك في الاسكيمـا
+export interface PermissionAction {
+  id: string;          // جاي من _id بتاع Subdocument
+  action: ActionName;  // "view" | "add" | "edit" | "delete"
 }
 
-export interface Role {
-  _id: Types.ObjectId;
-  name: string;
-
-  // الاسم الصح من الداتابيز
-  positionId?: Types.ObjectId;
-
-  // الاسم الغلط القديم (خليه اختياري عشان ما يكسرش حاجة)
-  possitionId?: Types.ObjectId;
-
-  actions?: Action[];
+/** Permission per module */
+export interface UserPermission {
+  module: ModuleName;
+  actions: PermissionAction[];
 }
 
-export interface Position {
-  _id: Types.ObjectId;
-  name: string;
-  roles?: Role[];
-}
-
+/** شكل اليوزر في Mongo */
 export interface AppUser {
-  password_hash: string;
   _id?: Types.ObjectId;
   id?: string;
 
   username: string;
   email: string;
+  password_hash: string;
   status: "active" | "inactive";
 
   role: "superadmin" | "admin";
 
-  // 👇 فرع / مخزن اليوزر
-  warehouse_id?: Types.ObjectId;
+  warehouseId?: Types.ObjectId;
 
   company_name?: string;
   phone?: string;
@@ -48,20 +36,18 @@ export interface AppUser {
   state?: string;
   postal_code?: string;
 
-  positionId: Position | Types.ObjectId;
-  roles?: Role[];
-  actions?: Action[];
+  permissions?: {
+    module: ModuleName;
+    actions: { _id: Types.ObjectId; action: ActionName }[];
+  }[];
 }
 
+/** اللي جوه الـ JWT */
 export interface JwtUserPayload {
   id: string;
   name: string;
-  role: string;
-  positionId: string;
-  roles: string[];
-  actions: string[];
-
-  // 👇 هنستخدمه في getCashiers
+  role: "superadmin" | "admin";
+  permissions: UserPermission[];
   warehouse_id?: string;
 }
 
@@ -69,7 +55,6 @@ export interface AuthenticatedRequest extends Request {
   user?: JwtUserPayload;
 }
 
-// augment للـ Express.Request عشان تقدر تقول req.user في أي مكان
 declare global {
   namespace Express {
     interface Request {

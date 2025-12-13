@@ -5,14 +5,14 @@ import {
     endshiftcashier,
     logout
 } from '../../../controller/admin/POS/CashierShiftController';
-import { authorize } from '../../../middlewares/authorized';
 
+import {authorizePermissions} from "../../../middlewares/haspremission"
 const router = express.Router();
 
 
-router.post('/start', startcashierShift);
-router.post('/logout', logout);
-router.put('/end', endshiftcashier);
-router.put('/end/report', endShiftWithReport);
+router.post('/start',authorizePermissions("POS","Add"),authorizePermissions("cashier_shift","Add"), startcashierShift);
+router.post('/logout',authorizePermissions("POS","Add"), logout);
+router.put('/end',authorizePermissions("POS","Edit"),authorizePermissions("cashier_shift","Edit"), endshiftcashier);
+router.put('/end/report',authorizePermissions("POS","Edit"),authorizePermissions("cashier_shift_report","Edit"),endShiftWithReport);
 
 export default router;

@@ -1,115 +1,122 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deletePosition = exports.updatePosition = exports.getPositionById = exports.getAllPositions = exports.createPositionWithRolesAndActions = void 0;
+exports.deleteUserPermissionAction = exports.getUserPermissions = exports.updateUserPermissions = void 0;
 const response_1 = require("../../utils/response");
-const position_1 = require("../../models/schema/admin/position");
-const roles_1 = require("../../models/schema/admin/roles");
-const Action_1 = require("../../models/schema/admin/Action");
 const BadRequest_1 = require("../../Errors/BadRequest");
-const createPositionWithRolesAndActions = async (req, res) => {
-    const { name, roles } = req.body;
-    if (!name || !roles) {
-        throw new BadRequest_1.BadRequest("Position name and roles are required");
+const Errors_1 = require("../../Errors");
+const mongoose_1 = __importDefault(require("mongoose"));
+const constant_1 = require("../../types/constant");
+const User_1 = require("../../models/schema/admin/User");
+/** PUT /admin/users/:id/permissions */
+const updateUserPermissions = async (req, res) => {
+    const { id } = req.params;
+    const { permissions } = req.body;
+    if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("Invalid user id");
     }
-    const position = await position_1.PositionModel.create({ name });
-    const createdRoles = [];
-    for (const role of roles) {
-        const newRole = await roles_1.RoleModel.create({
-            positionId: position._id,
-            name: role.name,
-        });
-        const createdActions = [];
-        if (role.actions && role.actions.length > 0) {
-            for (const actionName of role.actions) {
-                const action = await Action_1.ActionModel.create({
-                    roleId: newRole._id,
-                    name: actionName,
-                });
-                createdActions.push(action);
-            }
-        }
-        createdRoles.push({ ...newRole.toObject(), actions: createdActions });
+    if (!Array.isArray(permissions)) {
+        throw new BadRequest_1.BadRequest("permissions must be an array");
     }
+    const user = await User_1.UserModel.findById(id);
+    if (!user)
+        throw new Errors_1.NotFound("User not found");
+    // نعمل normalize للموديولات والأكشنز
+    const cleaned = permissions
+        .filter((p) => p.module && constant_1.MODULES.includes(p.module))
+        .map((p) => {
+        const normalizedActions = Array.isArray(p.actions)
+            ? p.actions
+                .map((a) => {
+                // ممكن يجي string أو object
+                if (typeof a === "string")
+                    return a;
+                if (a && typeof a.action === "string")
+                    return a.action;
+                return null;
+            })
+                .filter((a) => !!a && constant_1.ACTION_NAMES.includes(a))
+            : [];
+        // اللي هيتخزن في Mongo: [{ action: "View" }, ...]
+        return {
+            module: p.module,
+            actions: normalizedActions.map((a) => ({ action: a })),
+        };
+    });
+    user.permissions = cleaned;
+    await user.save();
     (0, response_1.SuccessResponse)(res, {
-        message: "Position, Roles, and Actions created successfully",
-        position: {
-            ...position.toObject(),
-            roles: createdRoles,
+        message: "Permissions updated successfully",
+        permissions: user.permissions,
+    });
+};
+exports.updateUserPermissions = updateUserPermissions;
+/** GET /admin/users/:id/permissions */
+const getUserPermissions = async (req, res) => {
+    const { id } = req.params;
+    if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("Invalid user id");
+    }
+    const user = await User_1.UserModel.findById(id).select("permissions username email");
+    if (!user)
+        throw new Errors_1.NotFound("User not found");
+    const userPerms = user.permissions || [];
+    const permissions = constant_1.MODULES.map((mod) => {
+        const found = userPerms.find((p) => p.module === mod);
+        return {
+            module: mod,
+            actions: (found?.actions || []).map((a) => ({
+                id: a._id.toString(),
+                action: a.action,
+            })),
+        };
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Permissions fetched successfully",
+        user: {
+            id: user._id,
+            username: user.username,
+            email: user.email,
+        },
+        permissions,
+    });
+};
+exports.getUserPermissions = getUserPermissions;
+const deleteUserPermissionAction = async (req, res) => {
+    const { userId, module, actionId } = req.params;
+    // 1) تحقق من الـ IDs
+    if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
+        throw new BadRequest_1.BadRequest("Invalid user id");
+    }
+    if (!mongoose_1.default.Types.ObjectId.isValid(actionId)) {
+        throw new BadRequest_1.BadRequest("Invalid action id");
+    }
+    // 2) تأكد إن الموديول صحيح
+    if (!constant_1.MODULES.includes(module)) {
+        throw new BadRequest_1.BadRequest("Invalid module name");
+    }
+    // 3) تأكد إن اليوزر موجود
+    const user = await User_1.UserModel.findById(userId);
+    if (!user)
+        throw new Errors_1.NotFound("User not found");
+    const actionObjectId = new mongoose_1.default.Types.ObjectId(actionId);
+    // 4) احذف الـ action من الموديول المطلوب
+    const result = await User_1.UserModel.updateOne({ _id: userId, "permissions.module": module }, {
+        $pull: {
+            "permissions.$.actions": { _id: actionObjectId },
         },
     });
-};
-exports.createPositionWithRolesAndActions = createPositionWithRolesAndActions;
-const getAllPositions = async (req, res, next) => {
-    const positions = await position_1.PositionModel.find().lean();
-    const result = [];
-    for (const pos of positions) {
-        const roles = await roles_1.RoleModel.find({ possitionId: pos._id }).lean();
-        const rolesWithActions = [];
-        for (const role of roles) {
-            const actions = await Action_1.ActionModel.find({ roleId: role._id }).lean();
-            rolesWithActions.push({ ...role, actions });
-        }
-        result.push({ ...pos, roles: rolesWithActions });
+    // لو مفيش ولا دوكيومنت اتعدل → احتمال الـ actionId مش موجود
+    if (result.modifiedCount === 0) {
+        throw new Errors_1.NotFound("Permission action not found for this module");
     }
+    // 5) رجّع الـ permissions بعد التحديث
+    const updatedUser = await User_1.UserModel.findById(userId).select("permissions");
     (0, response_1.SuccessResponse)(res, {
-        message: "Get all positions successfully",
-        positions: result,
+        message: "Action permission removed successfully",
+        permissions: updatedUser?.permissions || [],
     });
 };
-exports.getAllPositions = getAllPositions;
-const getPositionById = async (req, res, next) => {
-    const { id } = req.params;
-    const position = await position_1.PositionModel.findById(id).lean();
-    if (!position)
-        throw new BadRequest_1.BadRequest("Position not found");
-    const roles = await roles_1.RoleModel.find({ possitionId: position._id }).lean();
-    const rolesWithActions = [];
-    for (const role of roles) {
-        const actions = await Action_1.ActionModel.find({ roleId: role._id }).lean();
-        rolesWithActions.push({ ...role, actions });
-    }
-    (0, response_1.SuccessResponse)(res, {
-        message: "Get position successfully",
-        position: { ...position, roles: rolesWithActions },
-    });
-};
-exports.getPositionById = getPositionById;
-const updatePosition = async (req, res, next) => {
-    const { id } = req.params;
-    const { name, roles } = req.body;
-    const position = await position_1.PositionModel.findById(id);
-    if (!position)
-        throw new BadRequest_1.BadRequest("Position not found");
-    if (name)
-        position.name = name;
-    await position.save();
-    if (roles) {
-        for (const role of roles) {
-            let roleDoc = await roles_1.RoleModel.findOne({ possitionId: id, name: role.name });
-            if (!roleDoc) {
-                roleDoc = await roles_1.RoleModel.create({ possitionId: id, name: role.name });
-            }
-            if (role.actions) {
-                await Action_1.ActionModel.deleteMany({ roleId: roleDoc._id }); // clear old actions
-                for (const actionName of role.actions) {
-                    await Action_1.ActionModel.create({ roleId: roleDoc._id, name: actionName });
-                }
-            }
-        }
-    }
-    (0, response_1.SuccessResponse)(res, { message: "Position updated successfully" });
-};
-exports.updatePosition = updatePosition;
-const deletePosition = async (req, res, next) => {
-    const { id } = req.params;
-    const position = await position_1.PositionModel.findByIdAndDelete(id);
-    if (!position)
-        throw new BadRequest_1.BadRequest("Position not found");
-    const roles = await roles_1.RoleModel.find({ possitionId: id });
-    for (const role of roles) {
-        await Action_1.ActionModel.deleteMany({ roleId: role._id });
-    }
-    await roles_1.RoleModel.deleteMany({ possitionId: id });
-    (0, response_1.SuccessResponse)(res, { message: "Position and related Roles & Actions deleted successfully" });
-};
-exports.deletePosition = deletePosition;
+exports.deleteUserPermissionAction = deleteUserPermissionAction;

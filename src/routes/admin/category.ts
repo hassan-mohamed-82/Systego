@@ -4,13 +4,14 @@ import {createcategory,getCategoryById,getCategories,updateCategory,deleteCatego
 import {validate} from"../../middlewares/validation";
 import {createCategorySchema,updateCategorySchema} from "../../validation/admin/category"
 import { catchAsync } from "../../utils/catchAsync";
+import {authorizePermissions} from "../../middlewares/haspremission"
 
 const route = Router();
 
-route.post("/" ,validate(createCategorySchema), catchAsync(createcategory));
-route.get("/",catchAsync(getCategories));
-route.get("/:id" ,catchAsync(getCategoryById));
-route.put("/:id" ,validate(updateCategorySchema), catchAsync(updateCategory));
-route.delete("/:id",catchAsync(deleteCategory));
+route.post("/" ,authorizePermissions("category","Add"),validate(createCategorySchema), catchAsync(createcategory));
+route.get("/",authorizePermissions("category","View"),catchAsync(getCategories));
+route.get("/:id" ,authorizePermissions("category","View"),catchAsync(getCategoryById));
+route.put("/:id" ,authorizePermissions("category","Edit"),validate(updateCategorySchema), catchAsync(updateCategory));
+route.delete("/:id",authorizePermissions("category","Delete"),catchAsync(deleteCategory));
 
 export default route;

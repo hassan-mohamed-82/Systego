@@ -5,12 +5,13 @@ import {validate} from"../../middlewares/validation";
 import {createPurchaseSchema, updatePurchaseSchema} from "../../validation/admin/Purchase"
 import { catchAsync } from "../../utils/catchAsync";
 import { authenticated } from "../../middlewares/authenticated";
+import {authorizePermissions} from "../../middlewares/haspremission"
 
 const route = Router();
 
-route.post("/" ,validate(createPurchaseSchema), catchAsync(createPurchase));
-route.get("/",catchAsync(getPurchase));
-route.get("/:id" ,catchAsync(getOnePurchase));
-route.put("/:id" ,validate(updatePurchaseSchema), catchAsync(updatePurchase));
+route.post("/" ,authorizePermissions("purchase","Add"),validate(createPurchaseSchema), catchAsync(createPurchase));
+route.get("/",authorizePermissions("purchase","View"),catchAsync(getPurchase));
+route.get("/:id" ,authorizePermissions("purchase","View"),catchAsync(getOnePurchase));
+route.put("/:id" ,authorizePermissions("purchase","Edit"),validate(updatePurchaseSchema), catchAsync(updatePurchase));
 
 export default route;

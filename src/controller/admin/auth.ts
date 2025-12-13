@@ -6,7 +6,7 @@ import { ConflictError, UnauthorizedError } from "../../Errors";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { SuccessResponse } from "../../utils/response";
-import { AppUser } from "../../types/custom";
+import { AppUser, UserPermission } from "../../types/custom";
 import { sendEmail } from "../../utils/sendEmails";
 import { randomInt } from "crypto";
 import { saveBase64Image } from "../../utils/handleImages"
@@ -21,9 +21,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new BadRequest("Email and password are required");
   }
 
-  const user = await UserModel.findOne({ email })
-    .populate("positionId")
-    .lean<AppUser>();   // ✅ تمام هنا لأن password_hash مش معمول له select: false
+  const user = await UserModel.findOne({ email }).lean<AppUser>();
 
   if (!user) {
     throw new NotFound("User not found");
@@ -34,28 +32,29 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // roles المرتبطة بالـ position
-  const roles = await RoleModel.find({
-    positionId: (user.positionId as any)?._id,
-  }).lean();
+  // 🔹 تحويل permissions من شكل DB:
+  // { module, actions: { _id, action }[] }
+  // إلى شكل الـ Type:
+  // { module, actions: { id, action }[] }
+  const mappedPermissions: UserPermission[] =
+    (user.permissions || []).map((p) => ({
+      module: p.module,
+      actions: (p.actions || []).map((a) => ({
+        id: a._id.toString(),
+        action: a.action,
+      })),
+    }));
 
-  let actions: any[] = [];
-  if (roles && roles.length > 0) {
-    actions = await ActionModel.find({
-      roleId: { $in: roles.map(r => r._id) },
-    }).lean();
-  }
-
+  // 🔹 إنشاء التوكن بالـ permissions المـحوَّلة
   const token = generateToken({
-    _id: user._id,
+    _id: user._id!,
     username: user.username,
     role: user.role,
-    positionId: (user.positionId as any)?._id || user.positionId,
-    roles: roles || [],
-    actions: actions || [],
-    warehouse_id: user.warehouse_id, // 👈 كده هيتحط في الـ JWT
+    warehouseId: user.warehouseId,
+    permissions: mappedPermissions,
   });
 
+  // 🔹 نفس الشيء في الـ response
   SuccessResponse(res, {
     message: "Login successful",
     token,
@@ -63,16 +62,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       id: user._id,
       username: user.username,
       email: user.email,
-      position: user.positionId || null,
       status: user.status,
       role: user.role,
-      warehouse_id: user.warehouse_id ?? null,   // 👈 هتستخدمها في الفرونت لو حبيت
-      roles: roles?.map(r => r.name) || [],
-      actions: actions?.map(a => a.name) || [],
+      warehouse_id: user.warehouseId ? user.warehouseId.toString() : null,
+      permissions: mappedPermissions,
     },
   });
 };
-
 
 
 export const signup = async (req: Request, res: Response) => {
