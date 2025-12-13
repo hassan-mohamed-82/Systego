@@ -9,6 +9,8 @@ const productSchema = new mongoose.Schema(
     categoryId: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     brandId: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
     unit: { type: String },
+        code: { type: String, unique: true, sparse: true },
+
     price: { type: Number, required: true },
     quantity: { type: Number, required: true },
     description: { type: String },

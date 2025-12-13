@@ -17,7 +17,8 @@ const createProduct = async (req, res) => {
     const { name, ar_name, image, categoryId, brandId, unit, price, // السعر الأساسي (لو مفيش variations)
     quantity, // الكمية الأساسية (لو مفيش variations)
     ar_description, description, exp_ability, date_of_expiery, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, // variations
-    gallery_product, is_featured, } = req.body;
+    gallery_product, is_featured, code, // 👈 كود المنتج الأساسي (لو مفيش variations)
+     } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
     if (!ar_name)
@@ -26,13 +27,22 @@ const createProduct = async (req, res) => {
         throw new BadRequest_1.BadRequest("Arabic description is required");
     // 🎯 هل في variations ولا لأ؟
     const hasVariations = Array.isArray(prices) && prices.length > 0;
-    // لو مفيش variations لازم price + quantity
+    // لو مفيش variations لازم price + quantity + code
     if (!hasVariations) {
         if (price === undefined || price === null) {
             throw new BadRequest_1.BadRequest("Product price is required when there are no variations");
         }
         if (quantity === undefined || quantity === null) {
             throw new BadRequest_1.BadRequest("Product quantity is required when there are no variations");
+        }
+        // ✅ لازم يكون فيه كود للمنتج لو مفيش variations
+        if (!code) {
+            throw new BadRequest_1.BadRequest("Product code is required when there are no variations");
+        }
+        // (اختياري بس مفيد) تأكد إن الكود مش مستخدم في منتج تاني
+        const existingProductWithCode = await products_1.ProductModel.findOne({ code });
+        if (existingProductWithCode) {
+            throw new BadRequest_1.BadRequest("Product code already exists");
         }
     }
     // categoryId لازم تبقى array فيها واحد على الأقل
@@ -100,6 +110,7 @@ const createProduct = async (req, res) => {
         categoryId,
         brandId,
         unit,
+        code, // 👈 حفظ كود المنتج
         price: basePrice, // هيتعدل لو فيه variations
         quantity: baseQuantity, // هيتعدل لو فيه variations
         description,

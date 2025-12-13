@@ -10,7 +10,6 @@ import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
 import { CategoryModel } from "../../models/schema/admin/category";
 import { BrandModel } from "../../models/schema/admin/brand";
 import { VariationModel } from "../../models/schema/admin/Variation";
-
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 export const createProduct = async (req: Request, res: Response) => {
@@ -39,6 +38,7 @@ export const createProduct = async (req: Request, res: Response) => {
     prices,           // variations
     gallery_product,
     is_featured,
+    code,             // 👈 كود المنتج الأساسي (لو مفيش variations)
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -48,13 +48,30 @@ export const createProduct = async (req: Request, res: Response) => {
   // 🎯 هل في variations ولا لأ؟
   const hasVariations = Array.isArray(prices) && prices.length > 0;
 
-  // لو مفيش variations لازم price + quantity
+  // لو مفيش variations لازم price + quantity + code
   if (!hasVariations) {
     if (price === undefined || price === null) {
-      throw new BadRequest("Product price is required when there are no variations");
+      throw new BadRequest(
+        "Product price is required when there are no variations"
+      );
     }
     if (quantity === undefined || quantity === null) {
-      throw new BadRequest("Product quantity is required when there are no variations");
+      throw new BadRequest(
+        "Product quantity is required when there are no variations"
+      );
+    }
+
+    // ✅ لازم يكون فيه كود للمنتج لو مفيش variations
+    if (!code) {
+      throw new BadRequest(
+        "Product code is required when there are no variations"
+      );
+    }
+
+    // (اختياري بس مفيد) تأكد إن الكود مش مستخدم في منتج تاني
+    const existingProductWithCode = await ProductModel.findOne({ code });
+    if (existingProductWithCode) {
+      throw new BadRequest("Product code already exists");
     }
   }
 
@@ -144,8 +161,9 @@ export const createProduct = async (req: Request, res: Response) => {
     categoryId,
     brandId,
     unit,
-    price: basePrice,            // هيتعدل لو فيه variations
-    quantity: baseQuantity,      // هيتعدل لو فيه variations
+    code,                     // 👈 حفظ كود المنتج
+    price: basePrice,         // هيتعدل لو فيه variations
+    quantity: baseQuantity,   // هيتعدل لو فيه variations
     description,
     exp_ability,
     date_of_expiery,

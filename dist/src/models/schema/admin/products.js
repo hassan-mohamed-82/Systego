@@ -13,6 +13,7 @@ const productSchema = new mongoose_1.default.Schema({
     categoryId: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Category" }],
     brandId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Brand" },
     unit: { type: String },
+    code: { type: String, unique: true, sparse: true },
     price: { type: Number, required: true },
     quantity: { type: Number, required: true },
     description: { type: String },
