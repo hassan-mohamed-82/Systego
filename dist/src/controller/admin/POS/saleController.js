@@ -48,11 +48,7 @@ const createSale = async (req, res) => {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
     // 2) استقبل الداتا من الـ body
-    const { customer_id, 
-    // 0 = completed, 1 = pending (الدفولت Pending)
-    order_pending = 1, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, // الفرونت بيحسبها ويرسلها
-    note, financials, // [{ account_id / id, amount }]
-     } = req.body;
+    const { customer_id, order_pending = 1, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, note, financials, } = req.body;
     // 3) تحقق من الـ warehouse
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
@@ -100,12 +96,10 @@ const createSale = async (req, res) => {
             };
         });
         const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
-        // لازم يساوي الجراند توتال
         if (Number(totalPaid.toFixed(2)) !==
             Number(Number(grand_total).toFixed(2))) {
             throw new BadRequest_1.BadRequest("Sum of payments (financials) must equal grand_total");
         }
-        // تأكد أن كل الحسابات في نفس الـ warehouse ومسموح بيها في الـ POS
         for (const line of paymentLines) {
             const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
                 _id: line.account_id,
@@ -173,7 +167,6 @@ const createSale = async (req, res) => {
         if (giftCard.expired_date && giftCard.expired_date < new Date()) {
             throw new BadRequest_1.BadRequest("Gift card is expired");
         }
-        // لو الفاتورة Completed وهنستخدم الجيفت كارد لازم يكون الرصيد كافي
         if (!isPending) {
             const totalPaid = paymentLines.reduce((s, p) => s + p.amount, 0);
             if (totalPaid > 0 && giftCard.amount < totalPaid) {
@@ -181,12 +174,11 @@ const createSale = async (req, res) => {
             }
         }
     }
-    // 11) ستوك المنتجات (يدعم منتجات بـ variation أو من غير)
+    // 11) ستوك المنتجات
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, product_id, quantity } = p;
             if (product_price_id) {
-                // منتج له variation
                 if (!mongoose_1.default.Types.ObjectId.isValid(product_price_id)) {
                     throw new BadRequest_1.BadRequest("Invalid product_price_id");
                 }
@@ -199,7 +191,6 @@ const createSale = async (req, res) => {
                 }
             }
             else {
-                // منتج عادي من غير variations
                 if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
                     throw new BadRequest_1.BadRequest("Invalid product_id for non-variation product");
                 }
@@ -237,15 +228,15 @@ const createSale = async (req, res) => {
         ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
         : [];
     const totalPaidFromLines = paymentLines.reduce((s, p) => s + p.amount, 0);
-    const totalForDb = Number(grand_total); // حالياً بنخلي total = grand_total
+    const totalForDb = Number(grand_total);
     const paidAmountForDb = !isPending ? totalPaidFromLines : 0;
-    // 13) إنشاء الفاتورة (من غير reference – السكيمة هتولده)
+    // 13) إنشاء الفاتورة
     const sale = await Sale_1.SaleModel.create({
         date: new Date(),
         customer_id: customer ? customer._id : undefined,
         warehouse_id: warehouseId,
         account_id: accountIdsForSale,
-        order_pending: normalizedOrderPending, // 1 = pending, 0 = completed
+        order_pending: normalizedOrderPending,
         coupon_id: coupon ? coupon._id : undefined,
         gift_card_id: giftCard ? giftCard._id : undefined,
         order_tax: tax ? tax._id : undefined,
@@ -267,9 +258,9 @@ const createSale = async (req, res) => {
             const { product_price_id, product_id, quantity, price, subtotal, options_id, isGift, } = p;
             await Sale_1.ProductSalesModel.create({
                 sale_id: sale._id,
-                product_id, // لو منتج عادي
+                product_id,
                 bundle_id: undefined,
-                product_price_id, // لو variation
+                product_price_id,
                 quantity,
                 price,
                 subtotal,
@@ -299,7 +290,6 @@ const createSale = async (req, res) => {
     }
     // 16) لو Completed: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
     if (!isPending) {
-        // payments
         await payment_1.PaymentModel.create({
             sale_id: sale._id,
             financials: paymentLines.map((p) => ({
@@ -308,13 +298,11 @@ const createSale = async (req, res) => {
             })),
             status: "completed",
         });
-        // تحديث أرصدة حسابات البنوك
         for (const line of paymentLines) {
             await Financial_Account_1.BankAccountModel.findByIdAndUpdate(line.account_id, {
                 $inc: { balance: line.amount },
             });
         }
-        // إنقاص ستوك المنتجات
         if (products && products.length > 0) {
             for (const p of products) {
                 const { product_price_id, product_id, quantity } = p;
@@ -333,7 +321,6 @@ const createSale = async (req, res) => {
                 }
             }
         }
-        // إنقاص ستوك الباندلز
         if (bundles && bundles.length > 0) {
             for (const b of bundles) {
                 const { bundle_id, quantity } = b;
@@ -349,13 +336,11 @@ const createSale = async (req, res) => {
                 }
             }
         }
-        // إنقاص الكوبون
         if (coupon) {
             await coupons_1.CouponModel.findByIdAndUpdate(coupon._id, {
                 $inc: { available: -1 },
             });
         }
-        // إنقاص رصيد الجيفت كارد
         if (giftCard && totalPaidFromLines > 0) {
             await giftCard_1.GiftCardModel.findByIdAndUpdate(giftCard._id, {
                 $inc: { amount: -totalPaidFromLines },
@@ -366,15 +351,26 @@ const createSale = async (req, res) => {
     const fullSale = await Sale_1.SaleModel.findById(sale._id)
         .populate("customer_id", "name email phone_number")
         .populate("warehouse_id", "name location")
-        .populate("order_tax", "name rate")
-        .populate("order_discount", "name rate")
+        .populate("order_tax", "name rate type")
+        .populate("order_discount", "name rate type")
         .populate("coupon_id", "code discount_amount")
         .populate("gift_card_id", "code amount")
+        .populate("cashier_id", "name email")
+        .populate("shift_id", "start_time status")
+        .populate("account_id", "name type balance")
         .lean();
     const fullItems = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
         .populate("product_id", "name ar_name image price")
-        .populate("product_price_id", "price code")
+        .populate({
+        path: "product_price_id",
+        select: "price code quantity options",
+        populate: {
+            path: "options",
+            select: "name ar_name price",
+        },
+    })
         .populate("bundle_id", "name price")
+        .populate("options_id", "name ar_name price")
         .lean();
     return (0, response_1.SuccessResponse)(res, {
         message: "Sale created successfully",
