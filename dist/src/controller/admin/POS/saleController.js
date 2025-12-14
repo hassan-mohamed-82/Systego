@@ -484,9 +484,9 @@ const getShiftCompletedSalesFa = async (req, res) => {
     const jwtUser = req.user;
     if (!jwtUser)
         throw new Errors_1.UnauthorizedError("Unauthorized");
-    const fakePassword = process.env.FAKE_SHIFT_REPORT_PASSWORD;
+    const fakePassword = process.env.SHIFT_REPORT_PASSWORD;
     if (!fakePassword) {
-        throw new BadRequest_1.BadRequest("Fake shift report password is not configured");
+        throw new BadRequest_1.BadRequest(" password is not configured");
     }
     if (password !== fakePassword) {
         throw new BadRequest_1.BadRequest("Wrong password");
@@ -549,7 +549,7 @@ const getShiftCompletedSalesFa = async (req, res) => {
     const shuffled = [...salesWithItems].sort(() => 0.5 - Math.random());
     const sampledSales = shuffled.slice(0, sampleCount);
     return (0, response_1.SuccessResponse)(res, {
-        message: "Fake shift completed sales (20% only)",
+        message: "Completed sales for current shift",
         shift,
         total_sales_in_shift: totalCount,
         sampled_percentage: 20,
