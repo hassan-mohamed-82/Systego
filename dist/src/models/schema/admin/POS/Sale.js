@@ -51,10 +51,6 @@ const SaleSchema = new mongoose_1.Schema({
             return `${datePart}${randomPart}`; // مثال: 12134827
         },
     },
-    name: {
-        type: String,
-        required: true,
-    },
     customer_id: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Customer",
