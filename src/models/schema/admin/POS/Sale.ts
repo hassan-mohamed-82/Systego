@@ -18,7 +18,10 @@ const SaleSchema = new Schema(
   },
 
     },
-
+    name: {
+      type: String,
+      required: true,
+    },
     customer_id: {
       type: Schema.Types.ObjectId,
       ref: "Customer",

@@ -23,6 +23,12 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const products_1 = require("../../../models/schema/admin/products");
 const User_1 = require("../../../models/schema/admin/User");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+// ثابت مؤقت لبيانات المكان – تقدر تعدله براحتك
+const STORE_INFO = {
+    name: "SYSTEGO", // اسم المكان
+    phone: "01000000000", // رقم التليفون
+    address: "Cairo, Egypt", // العنوان
+};
 const createSale = async (req, res) => {
     const jwtUser = req.user;
     const cashierId = jwtUser?.id;
@@ -43,29 +49,25 @@ const createSale = async (req, res) => {
     }
     // 2) استقبل الداتا من الـ body
     const { customer_id, 
-    // 0 = completed, 1 = pending
-    order_pending = 1, // 👈 نخلي الديفولت Pending أحسن
-    coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, note, financials, // [{ account_id / id, amount }]
+    // 0 = completed, 1 = pending (الدفولت Pending)
+    order_pending = 1, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, // الفرونت بيحسبها ويرسلها
+    note, financials, // [{ account_id / id, amount }]
      } = req.body;
-    // تحقق من قيمة order_pending
-    const pendingFlag = Number(order_pending);
-    if (![0, 1].includes(pendingFlag)) {
-        throw new BadRequest_1.BadRequest("order_pending must be 0 (completed) or 1 (pending)");
-    }
-    const isPending = pendingFlag === 1;
-    const normalizedOrderPending = isPending ? 1 : 0;
     // 3) تحقق من الـ warehouse
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
         throw new Errors_1.NotFound("Warehouse not found");
     }
     // 4) لازم منتج أو باكدج واحد على الأقل
-    if ((!products || products.length === 0) && (!bundles || bundles.length === 0)) {
+    if ((!products || products.length === 0) &&
+        (!bundles || bundles.length === 0)) {
         throw new BadRequest_1.BadRequest("At least one product or bundle is required");
     }
-    if (!grand_total || grand_total <= 0) {
+    if (!grand_total || Number(grand_total) <= 0) {
         throw new BadRequest_1.BadRequest("Grand total must be greater than 0");
     }
+    const normalizedOrderPending = Number(order_pending) === 0 ? 0 : 1;
+    const isPending = normalizedOrderPending === 1;
     // 5) customer اختياري
     let customer = null;
     if (customer_id) {
@@ -78,10 +80,8 @@ const createSale = async (req, res) => {
         }
     }
     let paymentLines = [];
-    let totalPaidFromLines = 0;
     if (!isPending) {
         const finArr = financials;
-        // ✅ لو الأوردر Completed ومفيش financials → Error صريح
         if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
             throw new BadRequest_1.BadRequest("Financials are required for completed sale (order_pending = 0)");
         }
@@ -99,8 +99,9 @@ const createSale = async (req, res) => {
                 amount: amt,
             };
         });
-        totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
-        if (Number(totalPaidFromLines.toFixed(2)) !==
+        const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
+        // لازم يساوي الجراند توتال
+        if (Number(totalPaid.toFixed(2)) !==
             Number(Number(grand_total).toFixed(2))) {
             throw new BadRequest_1.BadRequest("Sum of payments (financials) must equal grand_total");
         }
@@ -108,7 +109,7 @@ const createSale = async (req, res) => {
         for (const line of paymentLines) {
             const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
                 _id: line.account_id,
-                warehouseId: warehouseId, // لو عندك الحقل اسمه warehouse_id عدله هنا
+                warehouseId: warehouseId,
                 status: true,
                 in_POS: true,
             });
@@ -172,15 +173,20 @@ const createSale = async (req, res) => {
         if (giftCard.expired_date && giftCard.expired_date < new Date()) {
             throw new BadRequest_1.BadRequest("Gift card is expired");
         }
-        if (!isPending && totalPaidFromLines > 0 && giftCard.amount < totalPaidFromLines) {
-            throw new BadRequest_1.BadRequest("Gift card does not have enough balance");
+        // لو الفاتورة Completed وهنستخدم الجيفت كارد لازم يكون الرصيد كافي
+        if (!isPending) {
+            const totalPaid = paymentLines.reduce((s, p) => s + p.amount, 0);
+            if (totalPaid > 0 && giftCard.amount < totalPaid) {
+                throw new BadRequest_1.BadRequest("Gift card does not have enough balance");
+            }
         }
     }
-    // 11) ستوك المنتجات (بـ variation أو من غير)
+    // 11) ستوك المنتجات (يدعم منتجات بـ variation أو من غير)
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, product_id, quantity } = p;
             if (product_price_id) {
+                // منتج له variation
                 if (!mongoose_1.default.Types.ObjectId.isValid(product_price_id)) {
                     throw new BadRequest_1.BadRequest("Invalid product_price_id");
                 }
@@ -193,6 +199,7 @@ const createSale = async (req, res) => {
                 }
             }
             else {
+                // منتج عادي من غير variations
                 if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
                     throw new BadRequest_1.BadRequest("Invalid product_id for non-variation product");
                 }
@@ -229,13 +236,16 @@ const createSale = async (req, res) => {
     const accountIdsForSale = !isPending
         ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
         : [];
-    // 14) إنشاء الفاتورة
+    const totalPaidFromLines = paymentLines.reduce((s, p) => s + p.amount, 0);
+    const totalForDb = Number(grand_total); // حالياً بنخلي total = grand_total
+    const paidAmountForDb = !isPending ? totalPaidFromLines : 0;
+    // 13) إنشاء الفاتورة (من غير reference – السكيمة هتولده)
     const sale = await Sale_1.SaleModel.create({
         date: new Date(),
         customer_id: customer ? customer._id : undefined,
         warehouse_id: warehouseId,
         account_id: accountIdsForSale,
-        order_pending: normalizedOrderPending,
+        order_pending: normalizedOrderPending, // 1 = pending, 0 = completed
         coupon_id: coupon ? coupon._id : undefined,
         gift_card_id: giftCard ? giftCard._id : undefined,
         order_tax: tax ? tax._id : undefined,
@@ -244,23 +254,22 @@ const createSale = async (req, res) => {
         tax_rate,
         tax_amount,
         discount,
-        total: grand_total, // 👈 كل الأرقام على grand_total
+        total: totalForDb,
         grand_total,
-        paid_amount: !isPending ? grand_total : 0,
+        paid_amount: paidAmountForDb,
         note,
         cashier_id: cashierId,
         shift_id: openShift._id,
     });
-    // 15) ProductSales للمنتجات
-    const productSalesDocs = [];
+    // 14) ProductSales للمنتجات
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, product_id, quantity, price, subtotal, options_id, isGift, } = p;
-            const ps = await Sale_1.ProductSalesModel.create({
+            await Sale_1.ProductSalesModel.create({
                 sale_id: sale._id,
-                product_id,
+                product_id, // لو منتج عادي
                 bundle_id: undefined,
-                product_price_id,
+                product_price_id, // لو variation
                 quantity,
                 price,
                 subtotal,
@@ -268,14 +277,13 @@ const createSale = async (req, res) => {
                 isGift: !!isGift,
                 isBundle: false,
             });
-            productSalesDocs.push(ps);
         }
     }
-    // 16) ProductSales للباندلز
+    // 15) ProductSales للباندلز
     if (bundles && bundles.length > 0) {
         for (const b of bundles) {
             const { bundle_id, quantity, price, subtotal, isGift } = b;
-            const ps = await Sale_1.ProductSalesModel.create({
+            await Sale_1.ProductSalesModel.create({
                 sale_id: sale._id,
                 product_id: undefined,
                 bundle_id,
@@ -287,11 +295,11 @@ const createSale = async (req, res) => {
                 isGift: !!isGift,
                 isBundle: true,
             });
-            productSalesDocs.push(ps);
         }
     }
-    // 17) لو Completed: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
+    // 16) لو Completed: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
     if (!isPending) {
+        // payments
         await payment_1.PaymentModel.create({
             sale_id: sale._id,
             financials: paymentLines.map((p) => ({
@@ -300,11 +308,13 @@ const createSale = async (req, res) => {
             })),
             status: "completed",
         });
+        // تحديث أرصدة حسابات البنوك
         for (const line of paymentLines) {
             await Financial_Account_1.BankAccountModel.findByIdAndUpdate(line.account_id, {
                 $inc: { balance: line.amount },
             });
         }
+        // إنقاص ستوك المنتجات
         if (products && products.length > 0) {
             for (const p of products) {
                 const { product_price_id, product_id, quantity } = p;
@@ -314,12 +324,16 @@ const createSale = async (req, res) => {
                     });
                 }
                 else {
+                    if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
+                        throw new BadRequest_1.BadRequest("Invalid product_id for non-variation product");
+                    }
                     await products_1.ProductModel.findByIdAndUpdate(product_id, {
                         $inc: { quantity: -quantity },
                     });
                 }
             }
         }
+        // إنقاص ستوك الباندلز
         if (bundles && bundles.length > 0) {
             for (const b of bundles) {
                 const { bundle_id, quantity } = b;
@@ -335,21 +349,38 @@ const createSale = async (req, res) => {
                 }
             }
         }
+        // إنقاص الكوبون
         if (coupon) {
             await coupons_1.CouponModel.findByIdAndUpdate(coupon._id, {
                 $inc: { available: -1 },
             });
         }
+        // إنقاص رصيد الجيفت كارد
         if (giftCard && totalPaidFromLines > 0) {
             await giftCard_1.GiftCardModel.findByIdAndUpdate(giftCard._id, {
                 $inc: { amount: -totalPaidFromLines },
             });
         }
     }
+    // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
+    const fullSale = await Sale_1.SaleModel.findById(sale._id)
+        .populate("customer_id", "name email phone_number")
+        .populate("warehouse_id", "name location")
+        .populate("order_tax", "name rate")
+        .populate("order_discount", "name rate")
+        .populate("coupon_id", "code discount_amount")
+        .populate("gift_card_id", "code amount")
+        .lean();
+    const fullItems = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
+        .populate("product_id", "name ar_name image price")
+        .populate("product_price_id", "price code")
+        .populate("bundle_id", "name price")
+        .lean();
     return (0, response_1.SuccessResponse)(res, {
         message: "Sale created successfully",
-        sale,
-        items: productSalesDocs,
+        store: STORE_INFO,
+        sale: fullSale,
+        items: fullItems,
     });
 };
 exports.createSale = createSale;

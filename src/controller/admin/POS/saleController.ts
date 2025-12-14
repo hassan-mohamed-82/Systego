@@ -20,6 +20,13 @@ import { UserModel } from '../../../models/schema/admin/User';
 import bcrypt from "bcryptjs";
 
 
+// ثابت مؤقت لبيانات المكان – تقدر تعدله براحتك
+const STORE_INFO = {
+  name: "SYSTEGO",            // اسم المكان
+  phone: "01000000000",        // رقم التليفون
+  address: "Cairo, Egypt",     // العنوان
+};
+
 export const createSale = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   const cashierId = jwtUser?.id;
@@ -47,30 +54,26 @@ export const createSale = async (req: Request, res: Response) => {
   const {
     customer_id,
 
-    // 0 = completed, 1 = pending
-    order_pending = 1,   // 👈 نخلي الديفولت Pending أحسن
+    // 0 = completed, 1 = pending (الدفولت Pending)
+    order_pending = 1,
+
     coupon_id,
     gift_card_id,
     tax_id,
     discount_id,
+
     products,
     bundles,
+
     shipping = 0,
     tax_rate = 0,
     tax_amount = 0,
     discount = 0,
-    grand_total,
+    grand_total,   // الفرونت بيحسبها ويرسلها
     note,
-    financials, // [{ account_id / id, amount }]
-  } = req.body;
 
-  // تحقق من قيمة order_pending
-  const pendingFlag = Number(order_pending);
-  if (![0, 1].includes(pendingFlag)) {
-    throw new BadRequest("order_pending must be 0 (completed) or 1 (pending)");
-  }
-  const isPending = pendingFlag === 1;
-  const normalizedOrderPending = isPending ? 1 : 0;
+    financials,    // [{ account_id / id, amount }]
+  } = req.body;
 
   // 3) تحقق من الـ warehouse
   const warehouse = await WarehouseModel.findById(warehouseId);
@@ -79,13 +82,19 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // 4) لازم منتج أو باكدج واحد على الأقل
-  if ((!products || products.length === 0) && (!bundles || bundles.length === 0)) {
+  if (
+    (!products || products.length === 0) &&
+    (!bundles || bundles.length === 0)
+  ) {
     throw new BadRequest("At least one product or bundle is required");
   }
 
-  if (!grand_total || grand_total <= 0) {
+  if (!grand_total || Number(grand_total) <= 0) {
     throw new BadRequest("Grand total must be greater than 0");
   }
+
+  const normalizedOrderPending = Number(order_pending) === 0 ? 0 : 1;
+  const isPending = normalizedOrderPending === 1;
 
   // 5) customer اختياري
   let customer: any = null;
@@ -103,12 +112,10 @@ export const createSale = async (req: Request, res: Response) => {
   // 6) تجهيز / تحقق الـ financials – بس لو الفاتورة Completed
   type FinancialLine = { account_id: string; amount: number };
   let paymentLines: FinancialLine[] = [];
-  let totalPaidFromLines = 0;
 
   if (!isPending) {
     const finArr = financials as any[];
 
-    // ✅ لو الأوردر Completed ومفيش financials → Error صريح
     if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
       throw new BadRequest(
         "Financials are required for completed sale (order_pending = 0)"
@@ -132,10 +139,11 @@ export const createSale = async (req: Request, res: Response) => {
       };
     });
 
-    totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
+    const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
 
+    // لازم يساوي الجراند توتال
     if (
-      Number(totalPaidFromLines.toFixed(2)) !==
+      Number(totalPaid.toFixed(2)) !==
       Number(Number(grand_total).toFixed(2))
     ) {
       throw new BadRequest("Sum of payments (financials) must equal grand_total");
@@ -145,7 +153,7 @@ export const createSale = async (req: Request, res: Response) => {
     for (const line of paymentLines) {
       const bankAccount = await BankAccountModel.findOne({
         _id: line.account_id,
-        warehouseId: warehouseId,   // لو عندك الحقل اسمه warehouse_id عدله هنا
+        warehouseId: warehouseId,
         status: true,
         in_POS: true,
       });
@@ -214,17 +222,22 @@ export const createSale = async (req: Request, res: Response) => {
       throw new BadRequest("Gift card is expired");
     }
 
-    if (!isPending && totalPaidFromLines > 0 && giftCard.amount < totalPaidFromLines) {
-      throw new BadRequest("Gift card does not have enough balance");
+    // لو الفاتورة Completed وهنستخدم الجيفت كارد لازم يكون الرصيد كافي
+    if (!isPending) {
+      const totalPaid = paymentLines.reduce((s, p) => s + p.amount, 0);
+      if (totalPaid > 0 && giftCard.amount < totalPaid) {
+        throw new BadRequest("Gift card does not have enough balance");
+      }
     }
   }
 
-  // 11) ستوك المنتجات (بـ variation أو من غير)
+  // 11) ستوك المنتجات (يدعم منتجات بـ variation أو من غير)
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       const { product_price_id, product_id, quantity } = p;
 
       if (product_price_id) {
+        // منتج له variation
         if (!mongoose.Types.ObjectId.isValid(product_price_id)) {
           throw new BadRequest("Invalid product_price_id");
         }
@@ -240,6 +253,7 @@ export const createSale = async (req: Request, res: Response) => {
           );
         }
       } else {
+        // منتج عادي من غير variations
         if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
           throw new BadRequest("Invalid product_id for non-variation product");
         }
@@ -292,7 +306,12 @@ export const createSale = async (req: Request, res: Response) => {
     ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
     : [];
 
-  // 14) إنشاء الفاتورة
+  const totalPaidFromLines = paymentLines.reduce((s, p) => s + p.amount, 0);
+
+  const totalForDb = Number(grand_total); // حالياً بنخلي total = grand_total
+  const paidAmountForDb = !isPending ? totalPaidFromLines : 0;
+
+  // 13) إنشاء الفاتورة (من غير reference – السكيمة هتولده)
   const sale = await SaleModel.create({
     date: new Date(),
 
@@ -300,7 +319,7 @@ export const createSale = async (req: Request, res: Response) => {
     warehouse_id: warehouseId,
 
     account_id: accountIdsForSale,
-    order_pending: normalizedOrderPending,
+    order_pending: normalizedOrderPending, // 1 = pending, 0 = completed
 
     coupon_id: coupon ? coupon._id : undefined,
     gift_card_id: giftCard ? giftCard._id : undefined,
@@ -312,19 +331,17 @@ export const createSale = async (req: Request, res: Response) => {
     tax_rate,
     tax_amount,
     discount,
-
-    total: grand_total,                // 👈 كل الأرقام على grand_total
+    total: totalForDb,
     grand_total,
-    paid_amount: !isPending ? grand_total : 0,
 
+    paid_amount: paidAmountForDb,
     note,
+
     cashier_id: cashierId,
     shift_id: openShift._id,
   });
 
-  // 15) ProductSales للمنتجات
-  const productSalesDocs: any[] = [];
-
+  // 14) ProductSales للمنتجات
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       const {
@@ -337,11 +354,11 @@ export const createSale = async (req: Request, res: Response) => {
         isGift,
       } = p;
 
-      const ps = await ProductSalesModel.create({
+      await ProductSalesModel.create({
         sale_id: sale._id,
-        product_id,
+        product_id,             // لو منتج عادي
         bundle_id: undefined,
-        product_price_id,
+        product_price_id,       // لو variation
         quantity,
         price,
         subtotal,
@@ -349,17 +366,15 @@ export const createSale = async (req: Request, res: Response) => {
         isGift: !!isGift,
         isBundle: false,
       });
-
-      productSalesDocs.push(ps);
     }
   }
 
-  // 16) ProductSales للباندلز
+  // 15) ProductSales للباندلز
   if (bundles && bundles.length > 0) {
     for (const b of bundles as any[]) {
       const { bundle_id, quantity, price, subtotal, isGift } = b;
 
-      const ps = await ProductSalesModel.create({
+      await ProductSalesModel.create({
         sale_id: sale._id,
         product_id: undefined,
         bundle_id,
@@ -371,13 +386,12 @@ export const createSale = async (req: Request, res: Response) => {
         isGift: !!isGift,
         isBundle: true,
       });
-
-      productSalesDocs.push(ps);
     }
   }
 
-  // 17) لو Completed: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
+  // 16) لو Completed: Payments + تحديث الحسابات + ستوك + كوبون + جيفت كارد
   if (!isPending) {
+    // payments
     await PaymentModel.create({
       sale_id: sale._id,
       financials: paymentLines.map((p) => ({
@@ -387,12 +401,14 @@ export const createSale = async (req: Request, res: Response) => {
       status: "completed",
     });
 
+    // تحديث أرصدة حسابات البنوك
     for (const line of paymentLines) {
       await BankAccountModel.findByIdAndUpdate(line.account_id, {
         $inc: { balance: line.amount },
       });
     }
 
+    // إنقاص ستوك المنتجات
     if (products && products.length > 0) {
       for (const p of products as any[]) {
         const { product_price_id, product_id, quantity } = p;
@@ -402,6 +418,10 @@ export const createSale = async (req: Request, res: Response) => {
             $inc: { quantity: -quantity },
           });
         } else {
+          if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
+            throw new BadRequest("Invalid product_id for non-variation product");
+          }
+
           await ProductModel.findByIdAndUpdate(product_id, {
             $inc: { quantity: -quantity },
           });
@@ -409,6 +429,7 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
+    // إنقاص ستوك الباندلز
     if (bundles && bundles.length > 0) {
       for (const b of bundles as any[]) {
         const { bundle_id, quantity } = b;
@@ -430,12 +451,14 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
+    // إنقاص الكوبون
     if (coupon) {
       await CouponModel.findByIdAndUpdate(coupon._id, {
         $inc: { available: -1 },
       });
     }
 
+    // إنقاص رصيد الجيفت كارد
     if (giftCard && totalPaidFromLines > 0) {
       await GiftCardModel.findByIdAndUpdate(giftCard._id, {
         $inc: { amount: -totalPaidFromLines },
@@ -443,10 +466,27 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
+  const fullSale = await SaleModel.findById(sale._id)
+    .populate("customer_id", "name email phone_number")
+    .populate("warehouse_id", "name location")
+    .populate("order_tax", "name rate")
+    .populate("order_discount", "name rate")
+    .populate("coupon_id", "code discount_amount")
+    .populate("gift_card_id", "code amount")
+    .lean();
+
+  const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
+    .populate("product_id", "name ar_name image price")
+    .populate("product_price_id", "price code")
+    .populate("bundle_id", "name price")
+    .lean();
+
   return SuccessResponse(res, {
     message: "Sale created successfully",
-    sale,
-    items: productSalesDocs,
+    store: STORE_INFO,
+    sale: fullSale,
+    items: fullItems,
   });
 };
 
