@@ -57,7 +57,6 @@ const getCashierShiftDetails = async (req, res) => {
         .populate("gift_card_id", "code amount")
         .lean();
     const saleIds = sales.map((s) => s._id);
-    // 3) كل الـ items (ProductSales) لكل الـ sales دي
     let salesWithItems = sales;
     if (saleIds.length > 0) {
         const items = await Sale_1.ProductSalesModel.find({

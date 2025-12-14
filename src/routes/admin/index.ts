@@ -5,6 +5,7 @@ import AdminRouter from "./Admin";
 import CategoryRouter from "./category";
 import permissionRouter from './permission';
 import productRouter from './products';
+import CashierShiftRouteer from "./cashiershifts" 
 import supplierRouter from './suppliers';
 import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
@@ -70,6 +71,7 @@ route.use("/courier",CouriersRouter)
 route.use("/payment_method",paymentMethodRouter)
 route.use("/expense",expensesRouter)
 route.use("/pandel",pandelRouter)
+route.use("/cashiershift",CashierShiftRouteer)
 route.use("/coupon",CouponsRouter)
 route.use("/department",DepartmentRouter)
 route.use("/adjustment",AdjustmentRouter)

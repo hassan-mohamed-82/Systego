@@ -62,7 +62,6 @@ export const getCashierShiftDetails = async (req: Request, res: Response) => {
 
   const saleIds = sales.map((s) => s._id);
 
-  // 3) كل الـ items (ProductSales) لكل الـ sales دي
   let salesWithItems = sales;
   if (saleIds.length > 0) {
     const items = await ProductSalesModel.find({
