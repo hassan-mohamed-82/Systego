@@ -6,23 +6,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.signData = exports.getCert = void 0;
 const crypto_1 = __importDefault(require("crypto"));
 const Qztray_1 = require("../../utils/Qztray");
-// GET /qz/cert
+// GET /api/admin/qztray/cert
 const getCert = (req, res) => {
-    res.type('text/plain').send(Qztray_1.QZ_CERT);
+    try {
+        res.type('text/plain').send(Qztray_1.QZ_CERT);
+    }
+    catch (err) {
+        console.error('QZ cert error:', err);
+        res.status(500).send('Certificate error');
+    }
 };
 exports.getCert = getCert;
-// POST /qz/sign
+// POST /api/admin/qztray/sign
 const signData = (req, res) => {
-    // لو POST هتيجي من body.data
-    // لو GET هتيجي من query.data أو query.request
-    const dataFromBody = req.body?.data;
-    const dataFromQuery = (req.query.data || req.query.request);
-    const data = dataFromBody || dataFromQuery;
-    if (!data) {
-        return res.status(400).send('Missing data');
+    // Support both POST body and GET query
+    const data = req.body?.data || req.query?.data || req.query?.request;
+    if (!data || typeof data !== 'string') {
+        return res.status(400).json({ error: 'Missing or invalid data parameter' });
     }
     try {
-        const signer = crypto_1.default.createSign('sha512'); // متوافق مع qz.security.setSignatureAlgorithm("SHA512")
+        const signer = crypto_1.default.createSign('SHA512');
         signer.update(data);
         signer.end();
         const signature = signer.sign(Qztray_1.QZ_PRIVATE_KEY, 'base64');
@@ -30,7 +33,7 @@ const signData = (req, res) => {
     }
     catch (err) {
         console.error('QZ sign error:', err);
-        res.status(500).send('sign error');
+        res.status(500).send('Signature error');
     }
 };
 exports.signData = signData;
