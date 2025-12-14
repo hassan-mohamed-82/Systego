@@ -348,6 +348,7 @@ const createSale = async (req, res) => {
         }
     }
     // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
+    // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
     const fullSale = await Sale_1.SaleModel.findById(sale._id)
         .populate("customer_id", "name email phone_number")
         .populate("warehouse_id", "name location")
@@ -361,22 +362,29 @@ const createSale = async (req, res) => {
         .lean();
     const fullItems = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
         .populate("product_id", "name ar_name image price")
-        .populate({
-        path: "product_price_id",
-        select: "price code quantity options",
-        populate: {
-            path: "options",
-            select: "name ar_name price",
-        },
-    })
+        .populate("product_price_id", "price code quantity gallery")
         .populate("bundle_id", "name price")
         .populate("options_id", "name ar_name price")
         .lean();
+    // جيب الـ options لكل product_price_id
+    const itemsWithOptions = await Promise.all(fullItems.map(async (item) => {
+        if (item.product_price_id && item.product_price_id._id) {
+            // جيب الـ options من الـ ProductPriceOption table
+            const priceOptions = await product_price_1.ProductPriceOptionModel.find({
+                product_price_id: item.product_price_id._id,
+            })
+                .populate("option_id", "name ar_name price")
+                .lean();
+            // استخرج الـ options فقط
+            item.product_price_id.options = priceOptions.map((po) => po.option_id);
+        }
+        return item;
+    }));
     return (0, response_1.SuccessResponse)(res, {
         message: "Sale created successfully",
         store: STORE_INFO,
         sale: fullSale,
-        items: fullItems,
+        items: itemsWithOptions,
     });
 };
 exports.createSale = createSale;

@@ -7,7 +7,7 @@ import { SuccessResponse } from '../../../utils/response';
 import { CouponModel } from '../../../models/schema/admin/coupons';
 import { TaxesModel } from '../../../models/schema/admin/Taxes';
 import { DiscountModel } from '../../../models/schema/admin/Discount';
-import { ProductPriceModel } from '../../../models/schema/admin/product_price';
+import { ProductPriceModel, ProductPriceOptionModel } from '../../../models/schema/admin/product_price';
 import { PaymentModel } from '../../../models/schema/admin/POS/payment';
 import { BadRequest } from '../../../Errors/BadRequest';
 import { GiftCardModel } from '../../../models/schema/admin/POS/giftCard';
@@ -442,38 +442,53 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
-  const fullSale = await SaleModel.findById(sale._id)
-    .populate("customer_id", "name email phone_number")
-    .populate("warehouse_id", "name location")
-    .populate("order_tax", "name rate type")
-    .populate("order_discount", "name rate type")
-    .populate("coupon_id", "code discount_amount")
-    .populate("gift_card_id", "code amount")
-    .populate("cashier_id", "name email")
-    .populate("shift_id", "start_time status")
-    .populate("account_id", "name type balance")
-    .lean();
+  // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
+const fullSale = await SaleModel.findById(sale._id)
+  .populate("customer_id", "name email phone_number")
+  .populate("warehouse_id", "name location")
+  .populate("order_tax", "name rate type")
+  .populate("order_discount", "name rate type")
+  .populate("coupon_id", "code discount_amount")
+  .populate("gift_card_id", "code amount")
+  .populate("cashier_id", "name email")
+  .populate("shift_id", "start_time status")
+  .populate("account_id", "name type balance")
+  .lean();
 
-  const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
-    .populate("product_id", "name ar_name image price")
-    .populate({
-      path: "product_price_id",
-      select: "price code quantity options",
-      populate: {
-        path: "options",
-        select: "name ar_name price",
-      },
-    })
-    .populate("bundle_id", "name price")
-    .populate("options_id", "name ar_name price")
-    .lean();
+const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
+  .populate("product_id", "name ar_name image price")
+  .populate("product_price_id", "price code quantity gallery")
+  .populate("bundle_id", "name price")
+  .populate("options_id", "name ar_name price")
+  .lean();
 
-  return SuccessResponse(res, {
-    message: "Sale created successfully",
-    store: STORE_INFO,
-    sale: fullSale,
-    items: fullItems,
-  });
+// جيب الـ options لكل product_price_id
+const itemsWithOptions = await Promise.all(
+  fullItems.map(async (item: any) => {
+    if (item.product_price_id && item.product_price_id._id) {
+      // جيب الـ options من الـ ProductPriceOption table
+      const priceOptions = await ProductPriceOptionModel.find({
+        product_price_id: item.product_price_id._id,
+      })
+        .populate("option_id", "name ar_name price")
+        .lean();
+
+      // استخرج الـ options فقط
+      item.product_price_id.options = priceOptions.map(
+        (po: any) => po.option_id
+      );
+    }
+    return item;
+  })
+);
+
+return SuccessResponse(res, {
+  message: "Sale created successfully",
+  store: STORE_INFO,
+  sale: fullSale,
+  items: itemsWithOptions,
+});
+
 };
 
 
