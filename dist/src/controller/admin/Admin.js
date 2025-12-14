@@ -12,19 +12,25 @@ const handleImages_1 = require("../../utils/handleImages");
 const Errors_1 = require("../../Errors");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const mongoose_1 = __importDefault(require("mongoose"));
+// =========================
+// Create User
+// =========================
 const createUser = async (req, res, next) => {
-    const { username, email, password, company_name, phone, image_base64, warehouseId, role = "admin", } = req.body;
-    if (!username || !email || !password || !warehouseId) {
-        throw new BadRequest_1.BadRequest("Username, email, password and warehouseId are required");
+    const { username, email, password, company_name, phone, image_base64, warehouse_id, // 👈 من البودي
+    role = "admin", } = req.body;
+    if (!username || !email || !password || !warehouse_id) {
+        throw new BadRequest_1.BadRequest("Username, email, password and warehouse_id are required");
     }
-    if (!mongoose_1.default.Types.ObjectId.isValid(warehouseId)) {
-        throw new BadRequest_1.BadRequest("Invalid warehouseId");
+    if (!mongoose_1.default.Types.ObjectId.isValid(warehouse_id)) {
+        throw new BadRequest_1.BadRequest("Invalid warehouse_id");
     }
-    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
+    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     if (!warehouseExists) {
-        throw new BadRequest_1.BadRequest("Invalid warehouseId: Warehouse does not exist");
+        throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
     }
-    const existingUser = await User_1.UserModel.findOne({ $or: [{ email }, { username }] });
+    const existingUser = await User_1.UserModel.findOne({
+        $or: [{ email }, { username }],
+    });
     if (existingUser) {
         throw new BadRequest_1.BadRequest("User with this email or username already exists");
     }
@@ -41,9 +47,8 @@ const createUser = async (req, res, next) => {
         company_name,
         phone,
         image_url,
-        warehouseId,
+        warehouse_id, // 👈 تخزين في الفيلد الجديد
         role,
-        // permissions: []  // تسيبها فاضية، وهتتعدل من CRUD الـ permissions
     });
     (0, response_1.SuccessResponse)(res, {
         message: "User created successfully",
@@ -56,15 +61,18 @@ const createUser = async (req, res, next) => {
             company_name: userDoc.company_name,
             phone: userDoc.phone,
             image_url: userDoc.image_url,
-            warehouseId: userDoc.warehouseId,
+            warehouse_id: userDoc.warehouse_id,
         },
     });
 };
 exports.createUser = createUser;
+// =========================
+// Get All Users
+// =========================
 const getAllUsers = async (req, res, next) => {
     const users = await User_1.UserModel.find()
         .select("-password_hash -__v")
-        .populate("warehouseId", "name");
+        .populate("warehouse_id", "name"); // 👈 تعديل هنا
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
     }
@@ -74,6 +82,9 @@ const getAllUsers = async (req, res, next) => {
     });
 };
 exports.getAllUsers = getAllUsers;
+// =========================
+// Get User By Id
+// =========================
 const getUserById = async (req, res, next) => {
     const { id } = req.params;
     if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
@@ -81,7 +92,7 @@ const getUserById = async (req, res, next) => {
     }
     const user = await User_1.UserModel.findById(id)
         .select("-password_hash -__v")
-        .populate("warehouseId", "name");
+        .populate("warehouse_id", "name"); // 👈 تعديل هنا
     if (!user)
         throw new Errors_1.NotFound("User not found");
     (0, response_1.SuccessResponse)(res, {
@@ -90,9 +101,13 @@ const getUserById = async (req, res, next) => {
     });
 };
 exports.getUserById = getUserById;
+// =========================
+// Update User
+// =========================
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
-    const { username, email, password, company_name, phone, status, image_base64, warehouseId, role, } = req.body;
+    const { username, email, password, company_name, phone, status, image_base64, warehouse_id, // 👈 من البودي
+    role, } = req.body;
     if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
         throw new BadRequest_1.BadRequest("Invalid user id");
     }
@@ -110,15 +125,15 @@ const updateUser = async (req, res, next) => {
         user.phone = phone;
     if (status)
         user.status = status;
-    if (warehouseId) {
-        if (!mongoose_1.default.Types.ObjectId.isValid(warehouseId)) {
-            throw new BadRequest_1.BadRequest("Invalid warehouseId");
+    if (warehouse_id) {
+        if (!mongoose_1.default.Types.ObjectId.isValid(warehouse_id)) {
+            throw new BadRequest_1.BadRequest("Invalid warehouse_id");
         }
-        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
+        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
         if (!warehouseExists) {
-            throw new BadRequest_1.BadRequest("Invalid warehouseId: Warehouse does not exist");
+            throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
         }
-        user.warehouseId = warehouseId;
+        user.warehouse_id = warehouse_id; // 👈 تخزين
     }
     if (role && ["superadmin", "admin"].includes(role)) {
         user.role = role;
@@ -142,11 +157,14 @@ const updateUser = async (req, res, next) => {
             company_name: user.company_name,
             phone: user.phone,
             image_url: user.image_url,
-            warehouseId: user.warehouseId,
+            warehouse_id: user.warehouse_id,
         },
     });
 };
 exports.updateUser = updateUser;
+// =========================
+// Delete User
+// =========================
 const deleteUser = async (req, res, next) => {
     const { id } = req.params;
     if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
@@ -161,6 +179,9 @@ const deleteUser = async (req, res, next) => {
     });
 };
 exports.deleteUser = deleteUser;
+// =========================
+// Selection (warehouses list)
+// =========================
 const selection = async (req, res, next) => {
     const warehouse = await Warehouse_1.WarehouseModel.find().select("_id name");
     (0, response_1.SuccessResponse)(res, {

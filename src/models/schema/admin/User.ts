@@ -67,7 +67,7 @@ const UserSchema = new Schema(
     state: { type: String },
     postal_code: { type: String },
 
-    warehouseId: { type: Schema.Types.ObjectId, ref: "Warehouse" },
+warehouse_id: { type: Schema.Types.ObjectId, ref: "Warehouse" },
   },
   { timestamps: true }
 );

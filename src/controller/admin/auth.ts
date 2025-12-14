@@ -32,10 +32,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // 🔹 تحويل permissions من شكل DB:
-  // { module, actions: { _id, action }[] }
-  // إلى شكل الـ Type:
-  // { module, actions: { id, action }[] }
+  // تحويل permissions لشكل مرتب
   const mappedPermissions: UserPermission[] =
     (user.permissions || []).map((p) => ({
       module: p.module,
@@ -45,16 +42,15 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       })),
     }));
 
-  // 🔹 إنشاء التوكن بالـ permissions المـحوَّلة
+  // ✅ استخدم warehouse_id من الداتا
   const token = generateToken({
     _id: user._id!,
     username: user.username,
     role: user.role,
-    warehouseId: user.warehouseId,
+    warehouse_id: (user as any).warehouse_id || null,
     permissions: mappedPermissions,
   });
 
-  // 🔹 نفس الشيء في الـ response
   SuccessResponse(res, {
     message: "Login successful",
     token,
@@ -64,13 +60,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       email: user.email,
       status: user.status,
       role: user.role,
-      warehouse_id: user.warehouseId ? user.warehouseId.toString() : null,
+      warehouse_id: (user as any).warehouse_id
+        ? (user as any).warehouse_id.toString()
+        : null,
       permissions: mappedPermissions,
     },
   });
 };
-
-
 export const signup = async (req: Request, res: Response) => {
   const data = req.body;
 

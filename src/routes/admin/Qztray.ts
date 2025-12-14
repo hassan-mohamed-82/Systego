@@ -5,6 +5,6 @@ import { getCert, signData } from '../../controller/admin/Qztray';
 const router = Router();
 
 router.get('/cert', getCert);
-router.get('/sign', signData);
+router.post('/sign', signData);
 
 export default router;
