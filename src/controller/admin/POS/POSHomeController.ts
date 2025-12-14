@@ -189,17 +189,14 @@ export const selectCashier = async (req: Request, res: Response) => {
     throw new BadRequest("Cashier ID is required");
   }
 
-  // ✅ نختار كاشير مش شغال حاليًا في نفس الـ warehouse
-  const cashier = await CashierModel.findOneAndUpdate(
-    {
-      _id: cashier_id,
-      warehouse_id: warehouseId,
-      status: true,
-      cashier_active: false, // لو true يبقى مستخدم في شيفت تاني
-    },
-    { $set: { cashier_active: true } }, // نفعّله
-    { new: true }
-  )
+  // ✅ نجيب كاشير مش شغال حاليًا في نفس الـ warehouse
+  //   بس من غير ما نعدّل cashier_active هنا
+  const cashier = await CashierModel.findOne({
+    _id: cashier_id,
+    warehouse_id: warehouseId,
+    status: true,
+    cashier_active: false, // نتأكد إنه مش مستخدم في شيفت تاني
+  })
     .populate("warehouse_id", "name")
     .lean();
 
@@ -211,7 +208,7 @@ export const selectCashier = async (req: Request, res: Response) => {
   //    - شغّالة (status = true)
   //    - ظاهرة في الـ POS (in_POS = true)
   const financialAccounts = await BankAccountModel.find({
-    warehouseId: warehouseId, // 👈 من السكيمة: warehouseId
+    warehouseId: warehouseId, // من السكيمة: warehouseId
     status: true,
     in_POS: true,
   })
@@ -221,6 +218,6 @@ export const selectCashier = async (req: Request, res: Response) => {
   return SuccessResponse(res, {
     message: "Cashier selected successfully",
     cashier,
-    financialAccounts, // 👈 دي اللي تظهر عندك في شاشة الـ POS
+    financialAccounts, // دي اللي تظهر في شاشة الـ POS
   });
 };
