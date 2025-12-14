@@ -16,8 +16,8 @@ import { PandelModel } from '../../../models/schema/admin/pandels';
 import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
 import mongoose from 'mongoose';
 import { ProductModel } from '../../../models/schema/admin/products';
-import bcrypt from 'bcryptjs/umd/types';
 import { UserModel } from '../../../models/schema/admin/User';
+import bcrypt from "bcryptjs";
 
 
 export const createSale = async (req: Request, res: Response) => {

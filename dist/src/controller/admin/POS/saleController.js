@@ -21,8 +21,8 @@ const pandels_1 = require("../../../models/schema/admin/pandels");
 const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
 const mongoose_1 = __importDefault(require("mongoose"));
 const products_1 = require("../../../models/schema/admin/products");
-const types_1 = __importDefault(require("bcryptjs/umd/types"));
 const User_1 = require("../../../models/schema/admin/User");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const createSale = async (req, res) => {
     const jwtUser = req.user;
     const cashierId = jwtUser?.id;
@@ -424,7 +424,7 @@ const getShiftCompletedSales = async (req, res) => {
     const user = await User_1.UserModel.findById(userId).select("+password_hash +role");
     if (!user)
         throw new Errors_1.NotFound("User not found");
-    const isMatch = await types_1.default.compare(password, user.password_hash);
+    const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
     if (!isMatch)
         throw new BadRequest_1.BadRequest("Wrong password");
     // 2) آخر شيفت مفتوح لليوزر ده
