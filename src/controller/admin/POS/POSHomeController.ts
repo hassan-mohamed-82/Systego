@@ -178,7 +178,8 @@ export const getCashiers = async (req: Request, res: Response) => {
 
 
 export const selectCashier = async (req: Request, res: Response) => {
-  const warehouseId = req.user?.warehouse_id;
+  const warehouseId = (req.user as any)?.warehouse_id; // من الـ JWT
+
   if (!warehouseId) {
     throw new NotFound("Warehouse ID is required");
   }
@@ -188,38 +189,38 @@ export const selectCashier = async (req: Request, res: Response) => {
     throw new BadRequest("Cashier ID is required");
   }
 
-  // مينفعش نختار غير كاشير مش شغال حاليًا
-  const cashier = (await CashierModel.findOneAndUpdate(
+  // ✅ نختار كاشير مش شغال حاليًا في نفس الـ warehouse
+  const cashier = await CashierModel.findOneAndUpdate(
     {
       _id: cashier_id,
       warehouse_id: warehouseId,
       status: true,
-      cashier_active: false, // لو true يبقى في حد مستخدمه
-    }
-   
+      cashier_active: false, // لو true يبقى مستخدم في شيفت تاني
+    },
+    { $set: { cashier_active: true } }, // نفعّله
+    { new: true }
   )
     .populate("warehouse_id", "name")
-    .populate({
-      path: "bankAccounts",
-      select: "name balance status in_POS warehouseId",
-    })) as any; // 👈 هنا الكاست عشان TS مايزعلش من bankAccounts
+    .lean();
 
   if (!cashier) {
     throw new NotFound("Cashier not found or already in use");
   }
 
-  // الفينانشال أكاونت اللي هيشتغل عليه الكاشير
-  let financialAccount: any = null;
-  const bankAccounts = cashier.bankAccounts as any[] | undefined;
+  // ✅ كل الفايننشيال أكاونتس بتاعة نفس الـ warehouse:
+  //    - شغّالة (status = true)
+  //    - ظاهرة في الـ POS (in_POS = true)
+  const financialAccounts = await BankAccountModel.find({
+    warehouseId: warehouseId, // 👈 من السكيمة: warehouseId
+    status: true,
+    in_POS: true,
+  })
+    .select("_id name image balance description status in_POS warehouseId")
+    .lean();
 
-  if (bankAccounts && bankAccounts.length) {
-    financialAccount =
-      bankAccounts.find(acc => acc.in_POS && acc.status) ?? bankAccounts[0];
-  }
-
-  SuccessResponse(res, {
-    message: "Cashier shift started",
+  return SuccessResponse(res, {
+    message: "Cashier selected successfully",
     cashier,
-    financialAccount,
+    financialAccounts, // 👈 دي اللي تظهر عندك في شاشة الـ POS
   });
 };

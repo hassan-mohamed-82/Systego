@@ -150,7 +150,7 @@ const getCashiers = async (req, res) => {
 };
 exports.getCashiers = getCashiers;
 const selectCashier = async (req, res) => {
-    const warehouseId = req.user?.warehouse_id;
+    const warehouseId = req.user?.warehouse_id; // من الـ JWT
     if (!warehouseId) {
         throw new Errors_1.NotFound("Warehouse ID is required");
     }
@@ -158,32 +158,33 @@ const selectCashier = async (req, res) => {
     if (!cashier_id) {
         throw new BadRequest_1.BadRequest("Cashier ID is required");
     }
-    // مينفعش نختار غير كاشير مش شغال حاليًا
-    const cashier = (await cashier_1.CashierModel.findOneAndUpdate({
+    // ✅ نختار كاشير مش شغال حاليًا في نفس الـ warehouse
+    const cashier = await cashier_1.CashierModel.findOneAndUpdate({
         _id: cashier_id,
         warehouse_id: warehouseId,
         status: true,
-        cashier_active: false, // لو true يبقى في حد مستخدمه
-    })
+        cashier_active: false, // لو true يبقى مستخدم في شيفت تاني
+    }, { $set: { cashier_active: true } }, // نفعّله
+    { new: true })
         .populate("warehouse_id", "name")
-        .populate({
-        path: "bankAccounts",
-        select: "name balance status in_POS warehouseId",
-    })); // 👈 هنا الكاست عشان TS مايزعلش من bankAccounts
+        .lean();
     if (!cashier) {
         throw new Errors_1.NotFound("Cashier not found or already in use");
     }
-    // الفينانشال أكاونت اللي هيشتغل عليه الكاشير
-    let financialAccount = null;
-    const bankAccounts = cashier.bankAccounts;
-    if (bankAccounts && bankAccounts.length) {
-        financialAccount =
-            bankAccounts.find(acc => acc.in_POS && acc.status) ?? bankAccounts[0];
-    }
-    (0, response_1.SuccessResponse)(res, {
-        message: "Cashier shift started",
+    // ✅ كل الفايننشيال أكاونتس بتاعة نفس الـ warehouse:
+    //    - شغّالة (status = true)
+    //    - ظاهرة في الـ POS (in_POS = true)
+    const financialAccounts = await Financial_Account_1.BankAccountModel.find({
+        warehouseId: warehouseId, // 👈 من السكيمة: warehouseId
+        status: true,
+        in_POS: true,
+    })
+        .select("_id name image balance description status in_POS warehouseId")
+        .lean();
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Cashier selected successfully",
         cashier,
-        financialAccount,
+        financialAccounts, // 👈 دي اللي تظهر عندك في شاشة الـ POS
     });
 };
 exports.selectCashier = selectCashier;
