@@ -9,6 +9,9 @@ import { PositionModel } from '../../../models/schema/admin/position';
 import bcrypt from "bcryptjs";
 import { ExpenseModel } from '../../../models/schema/admin/POS/expenses';
 import { CashierModel } from '../../../models/schema/admin/cashier';
+import mongoose from 'mongoose';
+import { PaymentModel } from '../../../models/schema/admin/POS/payment';
+import { BankAccountModel } from '../../../models/schema/admin/Financial_Account';
 
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 
@@ -76,7 +79,7 @@ export const startcashierShift = async (req: Request, res: Response) => {
 };
 
 export const endShiftWithReport = async (req: Request, res: Response) => {
-  const { password } = req.body;
+const { password } = req.body;
   const jwtUser = req.user;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
@@ -100,10 +103,63 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
 
   if (!shift) throw new NotFound("No open cashier shift found");
 
-  const endTime = new Date();
+  // 3) المبيعات المكتملة في الشيفت ده
+  const completedSales = await SaleModel.find({
+    shift_id: shift._id,
+    cashier_id: user._id,
+    order_pending: 0, // بس الـ completed
+  })
+    .select("_id grand_total")
+    .lean();
 
-  // 3) المبيعات بتاعة الشيفت ده (shift_id + cashier_id=اليوزر)
-  const salesAgg = await SaleModel.aggregate([
+  const totalSales  = completedSales.reduce(
+    (sum, s: any) => sum + (s.grand_total || 0),
+    0
+  );
+  const totalOrders = completedSales.length;
+  const saleIds     = completedSales.map((s: any) => s._id);
+
+  // 4) إجمالي المدفوعات من PaymentModel مجمعة حسب الحساب المالي
+  interface PaymentsAggRow {
+    _id: mongoose.Types.ObjectId;
+    totalAmount: number;
+  }
+
+  let paymentsByAccount: Record<string, number> = {};
+
+  if (saleIds.length > 0) {
+    const paymentsAgg: PaymentsAggRow[] = await PaymentModel.aggregate([
+      {
+        $match: {
+          sale_id: { $in: saleIds },
+          status: "completed",
+        },
+      },
+      { $unwind: "$financials" },
+      {
+        $group: {
+          _id: "$financials.account_id",
+          totalAmount: { $sum: "$financials.amount" },
+        },
+      },
+    ]);
+
+    paymentsByAccount = paymentsAgg.reduce(
+      (acc: Record<string, number>, row: PaymentsAggRow) => {
+        acc[row._id.toString()] = row.totalAmount;
+        return acc;
+      },
+      {}
+    );
+  }
+
+  // 5) مصروفات الشيفت مجمعة حسب الحساب المالي
+  interface ExpensesAggRow {
+    _id: mongoose.Types.ObjectId;
+    totalAmount: number;
+  }
+
+  const expensesAgg: ExpensesAggRow[] = await ExpenseModel.aggregate([
     {
       $match: {
         shift_id: shift._id,
@@ -112,79 +168,107 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     },
     {
       $group: {
-        _id: null,
-        totalAmount: { $sum: "$grand_total" },
-        ordersCount: { $sum: 1 },
+        _id: "$financial_accountId",
+        totalAmount: { $sum: "$amount" },
       },
     },
   ]);
 
-  const totalSales  = salesAgg[0]?.totalAmount || 0;
-  const totalOrders = salesAgg[0]?.ordersCount || 0;
+  const expensesByAccount = expensesAgg.reduce(
+    (acc: Record<string, number>, row: ExpensesAggRow) => {
+      if (!row._id) return acc;
+      acc[row._id.toString()] = row.totalAmount;
+      return acc;
+    },
+    {}
+  );
 
-  // 4) مصروفات الشيفت
+  const totalExpenses = Object.values(expensesByAccount).reduce(
+    (sum, v) => sum + v,
+    0
+  );
+
+  const netCashInDrawer = totalSales - totalExpenses;
+
+  // 6) هات بيانات الحسابات المالية اللي اتستخدمت في المبيعات أو المصروفات
+  const allAccountIds = Array.from(
+    new Set([
+      ...Object.keys(paymentsByAccount),
+      ...Object.keys(expensesByAccount),
+    ])
+  ).filter((id) => !!id);
+
+  const accountObjectIds = allAccountIds.map(
+    (id) => new mongoose.Types.ObjectId(id)
+  );
+
+  const accounts = await BankAccountModel.find({
+    _id: { $in: accountObjectIds },
+  })
+    .select("name type")
+    .lean();
+
+  const accountsMap = new Map(
+    accounts.map((a: any) => [a._id.toString(), a])
+  );
+
+  // 7) بناء الـ summary ديناميك لكل حساب مالي
+  const accountRows = allAccountIds.map((id) => {
+    const acc = accountsMap.get(id);
+    const salesAmount    = paymentsByAccount[id] || 0;
+    const expensesAmount = expensesByAccount[id] || 0;
+
+    return {
+      account_id: id,
+      name: acc?.name || "Unknown account",
+      salesAmount,
+      expensesAmount,
+      net: salesAmount - expensesAmount,
+    };
+  });
+
+  // 8) مصروفات مفصلة (لو محتاج تبينها تحت)
   const expenses = await ExpenseModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
-  }).lean();
+  })
+    .populate("financial_accountId", "name")
+    .lean();
 
-  const totalExpenses = expenses.reduce((sum, e: any) => sum + e.amount, 0);
-  const netCashInDrawer = totalSales - totalExpenses;
+  const expensesRows = expenses.map((e: any, idx: number) => ({
+    index: idx + 1,
+    description: e.name,
+    amount: -e.amount,
+    account: e.financial_accountId
+      ? {
+          id: e.financial_accountId._id,
+          name: e.financial_accountId.name,
+        }
+      : null,
+  }));
 
-  // 5) قفل الشيفت وتخزين الأرقام
-  shift.end_time          = endTime;
-  shift.status            = "closed";
-  shift.total_sale_amount = totalSales;
-  shift.total_expenses    = totalExpenses;
-  shift.net_cash_in_drawer = netCashInDrawer;
-  await shift.save();
-
-  // 5-مكرر) رجّع الكاشير متاح تاني (لو مربوط بكاشير)
-  const cashier_id = shift.cashier_id;
-  if (cashier_id) {
-    await CashierModel.updateOne(
-      {
-        _id: cashier_id,
-        warehouse_id: warehouseId,
-        status: true,
-        cashier_active: true,
-      },
-      { $set: { cashier_active: false } }
-    );
-  }
-
-  // 6) تجهيز الـ report
-  const vodafoneCashTotal = expenses
-    .filter((e: any) => e.name === "Vodafone Cash")
-    .reduce((sum, e: any) => sum + e.amount, 0);
+  // 👈 مفيش قفل شيفت هنا (لا status, لا end_time, لا cashier_active)
 
   const report = {
     financialSummary: {
-      cash: {
-        label: "Cash",
-        amount: totalSales,
+      totals: {
+        totalSales,
+        totalExpenses,
+        netCashInDrawer,
       },
-      vodafoneCash: {
-        label: "Vodafone Cash",
-        amount: -vodafoneCashTotal,
-      },
-      netCashInDrawer,
+      accounts: accountRows, // Vodafone Cash, Instapay, Cash ... حسب الداتا
     },
     ordersSummary: {
       totalOrders,
     },
     expenses: {
-      rows: expenses.map((e: any, idx: number) => ({
-        index: idx + 1,
-        description: e.name,
-        amount: -e.amount,
-      })),
+      rows: expensesRows,
       total: totalExpenses,
     },
   };
 
-  SuccessResponse(res, {
-    message: "Cashier shift ended successfully",
+  return SuccessResponse(res, {
+    message: "Shift report preview (shift is still open)",
     shift,
     report,
   });
