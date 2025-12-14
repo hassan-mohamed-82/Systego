@@ -48,33 +48,28 @@ export const createSale = async (req: Request, res: Response) => {
     customer_id,
 
     // 0 = completed, 1 = pending
-    order_pending = 0,
-
+    order_pending = 1,   // 👈 نخلي الديفولت Pending أحسن
     coupon_id,
     gift_card_id,
     tax_id,
     discount_id,
-
     products,
     bundles,
-
     shipping = 0,
     tax_rate = 0,
     tax_amount = 0,
     discount = 0,
-    total,
     grand_total,
-    paid_amount,
     note,
-
     financials, // [{ account_id / id, amount }]
   } = req.body;
 
-  // لو مفيش financials خالص اعتبره pending أوتوماتيك
-  const hasFinancials = Array.isArray(financials) && financials.length > 0;
-
-  // دلوقتي: 1 = pending
-  const isPending = Number(order_pending) === 1 || !hasFinancials;
+  // تحقق من قيمة order_pending
+  const pendingFlag = Number(order_pending);
+  if (![0, 1].includes(pendingFlag)) {
+    throw new BadRequest("order_pending must be 0 (completed) or 1 (pending)");
+  }
+  const isPending = pendingFlag === 1;
   const normalizedOrderPending = isPending ? 1 : 0;
 
   // 3) تحقق من الـ warehouse
@@ -108,12 +103,16 @@ export const createSale = async (req: Request, res: Response) => {
   // 6) تجهيز / تحقق الـ financials – بس لو الفاتورة Completed
   type FinancialLine = { account_id: string; amount: number };
   let paymentLines: FinancialLine[] = [];
+  let totalPaidFromLines = 0;
 
   if (!isPending) {
     const finArr = financials as any[];
 
+    // ✅ لو الأوردر Completed ومفيش financials → Error صريح
     if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
-      throw new BadRequest("At least one payment line (financial) is required for completed sale");
+      throw new BadRequest(
+        "Financials are required for completed sale (order_pending = 0)"
+      );
     }
 
     paymentLines = finArr.map((f: any) => {
@@ -133,27 +132,28 @@ export const createSale = async (req: Request, res: Response) => {
       };
     });
 
-    const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
+    totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
 
-    if (Number(totalPaid.toFixed(2)) !== Number(Number(grand_total).toFixed(2))) {
+    if (
+      Number(totalPaidFromLines.toFixed(2)) !==
+      Number(Number(grand_total).toFixed(2))
+    ) {
       throw new BadRequest("Sum of payments (financials) must equal grand_total");
-    }
-
-    if (paid_amount != null && Number(paid_amount) !== totalPaid) {
-      throw new BadRequest("paid_amount does not match sum of financials");
     }
 
     // تأكد أن كل الحسابات في نفس الـ warehouse ومسموح بيها في الـ POS
     for (const line of paymentLines) {
       const bankAccount = await BankAccountModel.findOne({
         _id: line.account_id,
-        warehouseId: warehouseId,
+        warehouseId: warehouseId,   // لو عندك الحقل اسمه warehouse_id عدله هنا
         status: true,
         in_POS: true,
       });
 
       if (!bankAccount) {
-        throw new BadRequest("One of the financial accounts is not valid or not allowed in POS");
+        throw new BadRequest(
+          "One of the financial accounts is not valid or not allowed in POS"
+        );
       }
     }
   }
@@ -214,13 +214,12 @@ export const createSale = async (req: Request, res: Response) => {
       throw new BadRequest("Gift card is expired");
     }
 
-    const totalPaid = paymentLines.reduce((s, p) => s + p.amount, 0);
-    if (totalPaid > 0 && giftCard.amount < totalPaid) {
+    if (!isPending && totalPaidFromLines > 0 && giftCard.amount < totalPaidFromLines) {
       throw new BadRequest("Gift card does not have enough balance");
     }
   }
 
-  // 11) ستوك المنتجات (يدعم منتجات بـ variation أو من غير)
+  // 11) ستوك المنتجات (بـ variation أو من غير)
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       const { product_price_id, product_id, quantity } = p;
@@ -268,7 +267,9 @@ export const createSale = async (req: Request, res: Response) => {
         throw new BadRequest("Invalid bundle id");
       }
 
-      const bundleDoc: any = await PandelModel.findById(bundle_id).populate("productsId");
+      const bundleDoc: any = await PandelModel.findById(bundle_id).populate(
+        "productsId"
+      );
       if (!bundleDoc) {
         throw new NotFound("Bundle not found");
       }
@@ -291,9 +292,7 @@ export const createSale = async (req: Request, res: Response) => {
     ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
     : [];
 
-  const totalPaidFromLines = paymentLines.reduce((s, p) => s + p.amount, 0);
-
-  // 14) إنشاء الفاتورة (من غير reference – السكيمة هتولده)
+  // 14) إنشاء الفاتورة
   const sale = await SaleModel.create({
     date: new Date(),
 
@@ -313,12 +312,12 @@ export const createSale = async (req: Request, res: Response) => {
     tax_rate,
     tax_amount,
     discount,
-    total,
+
+    total: grand_total,                // 👈 كل الأرقام على grand_total
     grand_total,
+    paid_amount: !isPending ? grand_total : 0,
 
-    paid_amount: !isPending ? totalPaidFromLines : 0,
     note,
-
     cashier_id: cashierId,
     shift_id: openShift._id,
   });
@@ -403,10 +402,6 @@ export const createSale = async (req: Request, res: Response) => {
             $inc: { quantity: -quantity },
           });
         } else {
-          if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
-            throw new BadRequest("Invalid product_id for non-variation product");
-          }
-
           await ProductModel.findByIdAndUpdate(product_id, {
             $inc: { quantity: -quantity },
           });
@@ -418,7 +413,9 @@ export const createSale = async (req: Request, res: Response) => {
       for (const b of bundles as any[]) {
         const { bundle_id, quantity } = b;
 
-        const bundleDoc: any = await PandelModel.findById(bundle_id).populate("productsId");
+        const bundleDoc: any = await PandelModel.findById(bundle_id).populate(
+          "productsId"
+        );
         if (!bundleDoc) continue;
 
         const bundleProducts = (bundleDoc.productsId || []) as any[];

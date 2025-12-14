@@ -44,12 +44,15 @@ const createSale = async (req, res) => {
     // 2) استقبل الداتا من الـ body
     const { customer_id, 
     // 0 = completed, 1 = pending
-    order_pending = 0, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, total, grand_total, paid_amount, note, financials, // [{ account_id / id, amount }]
+    order_pending = 1, // 👈 نخلي الديفولت Pending أحسن
+    coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, note, financials, // [{ account_id / id, amount }]
      } = req.body;
-    // لو مفيش financials خالص اعتبره pending أوتوماتيك
-    const hasFinancials = Array.isArray(financials) && financials.length > 0;
-    // دلوقتي: 1 = pending
-    const isPending = Number(order_pending) === 1 || !hasFinancials;
+    // تحقق من قيمة order_pending
+    const pendingFlag = Number(order_pending);
+    if (![0, 1].includes(pendingFlag)) {
+        throw new BadRequest_1.BadRequest("order_pending must be 0 (completed) or 1 (pending)");
+    }
+    const isPending = pendingFlag === 1;
     const normalizedOrderPending = isPending ? 1 : 0;
     // 3) تحقق من الـ warehouse
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
@@ -75,10 +78,12 @@ const createSale = async (req, res) => {
         }
     }
     let paymentLines = [];
+    let totalPaidFromLines = 0;
     if (!isPending) {
         const finArr = financials;
+        // ✅ لو الأوردر Completed ومفيش financials → Error صريح
         if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
-            throw new BadRequest_1.BadRequest("At least one payment line (financial) is required for completed sale");
+            throw new BadRequest_1.BadRequest("Financials are required for completed sale (order_pending = 0)");
         }
         paymentLines = finArr.map((f) => {
             const accId = f.account_id || f.id;
@@ -94,18 +99,16 @@ const createSale = async (req, res) => {
                 amount: amt,
             };
         });
-        const totalPaid = paymentLines.reduce((sum, p) => sum + p.amount, 0);
-        if (Number(totalPaid.toFixed(2)) !== Number(Number(grand_total).toFixed(2))) {
+        totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
+        if (Number(totalPaidFromLines.toFixed(2)) !==
+            Number(Number(grand_total).toFixed(2))) {
             throw new BadRequest_1.BadRequest("Sum of payments (financials) must equal grand_total");
-        }
-        if (paid_amount != null && Number(paid_amount) !== totalPaid) {
-            throw new BadRequest_1.BadRequest("paid_amount does not match sum of financials");
         }
         // تأكد أن كل الحسابات في نفس الـ warehouse ومسموح بيها في الـ POS
         for (const line of paymentLines) {
             const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
                 _id: line.account_id,
-                warehouseId: warehouseId,
+                warehouseId: warehouseId, // لو عندك الحقل اسمه warehouse_id عدله هنا
                 status: true,
                 in_POS: true,
             });
@@ -169,12 +172,11 @@ const createSale = async (req, res) => {
         if (giftCard.expired_date && giftCard.expired_date < new Date()) {
             throw new BadRequest_1.BadRequest("Gift card is expired");
         }
-        const totalPaid = paymentLines.reduce((s, p) => s + p.amount, 0);
-        if (totalPaid > 0 && giftCard.amount < totalPaid) {
+        if (!isPending && totalPaidFromLines > 0 && giftCard.amount < totalPaidFromLines) {
             throw new BadRequest_1.BadRequest("Gift card does not have enough balance");
         }
     }
-    // 11) ستوك المنتجات (يدعم منتجات بـ variation أو من غير)
+    // 11) ستوك المنتجات (بـ variation أو من غير)
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, product_id, quantity } = p;
@@ -227,8 +229,7 @@ const createSale = async (req, res) => {
     const accountIdsForSale = !isPending
         ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
         : [];
-    const totalPaidFromLines = paymentLines.reduce((s, p) => s + p.amount, 0);
-    // 14) إنشاء الفاتورة (من غير reference – السكيمة هتولده)
+    // 14) إنشاء الفاتورة
     const sale = await Sale_1.SaleModel.create({
         date: new Date(),
         customer_id: customer ? customer._id : undefined,
@@ -243,9 +244,9 @@ const createSale = async (req, res) => {
         tax_rate,
         tax_amount,
         discount,
-        total,
+        total: grand_total, // 👈 كل الأرقام على grand_total
         grand_total,
-        paid_amount: !isPending ? totalPaidFromLines : 0,
+        paid_amount: !isPending ? grand_total : 0,
         note,
         cashier_id: cashierId,
         shift_id: openShift._id,
@@ -313,9 +314,6 @@ const createSale = async (req, res) => {
                     });
                 }
                 else {
-                    if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
-                        throw new BadRequest_1.BadRequest("Invalid product_id for non-variation product");
-                    }
                     await products_1.ProductModel.findByIdAndUpdate(product_id, {
                         $inc: { quantity: -quantity },
                     });
