@@ -23,11 +23,10 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const products_1 = require("../../../models/schema/admin/products");
 const User_1 = require("../../../models/schema/admin/User");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-// ثابت مؤقت لبيانات المكان – تقدر تعدله براحتك
 const STORE_INFO = {
-    name: "SYSTEGO", // اسم المكان
-    phone: "01000000000", // رقم التليفون
-    address: "Cairo, Egypt", // العنوان
+    name: "SYSTEGO",
+    phone: "01134567",
+    address: "Cairo, Egypt",
 };
 const createSale = async (req, res) => {
     const jwtUser = req.user;
@@ -48,7 +47,9 @@ const createSale = async (req, res) => {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
     // 2) استقبل الداتا من الـ body
-    const { customer_id, order_pending = 1, coupon_id, gift_card_id, tax_id, discount_id, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, note, financials, } = req.body;
+    const { customer_id, order_pending = 1, coupon_id, gift_card_id, order_tax, // ✅ تم التغيير
+    order_discount, // ✅ تم التغيير
+    products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, note, financials, } = req.body;
     // 3) تحقق من الـ warehouse
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
@@ -121,33 +122,31 @@ const createSale = async (req, res) => {
         coupon = await coupons_1.CouponModel.findById(coupon_id);
         if (!coupon)
             throw new Errors_1.NotFound("Coupon not found");
-        if (!coupon.status)
-            throw new BadRequest_1.BadRequest("Coupon is not active");
         if (coupon.available <= 0)
             throw new BadRequest_1.BadRequest("Coupon is out of stock");
         if (coupon.expired_date && coupon.expired_date < new Date()) {
             throw new BadRequest_1.BadRequest("Coupon is expired");
         }
     }
-    // 8) ضريبة (لو موجودة)
+    // 8) ضريبة (لو موجودة) ✅ تم التغيير
     let tax = null;
-    if (tax_id) {
-        if (!mongoose_1.default.Types.ObjectId.isValid(tax_id)) {
-            throw new BadRequest_1.BadRequest("Invalid tax id");
+    if (order_tax) {
+        if (!mongoose_1.default.Types.ObjectId.isValid(order_tax)) {
+            throw new BadRequest_1.BadRequest("Invalid order_tax id");
         }
-        tax = await Taxes_1.TaxesModel.findById(tax_id);
+        tax = await Taxes_1.TaxesModel.findById(order_tax);
         if (!tax)
             throw new Errors_1.NotFound("Tax not found");
         if (!tax.status)
             throw new BadRequest_1.BadRequest("Tax is not active");
     }
-    // 9) خصم (لو موجود)
+    // 9) خصم (لو موجود) ✅ تم التغيير
     let discountDoc = null;
-    if (discount_id) {
-        if (!mongoose_1.default.Types.ObjectId.isValid(discount_id)) {
-            throw new BadRequest_1.BadRequest("Invalid discount id");
+    if (order_discount) {
+        if (!mongoose_1.default.Types.ObjectId.isValid(order_discount)) {
+            throw new BadRequest_1.BadRequest("Invalid order_discount id");
         }
-        discountDoc = await Discount_1.DiscountModel.findById(discount_id);
+        discountDoc = await Discount_1.DiscountModel.findById(order_discount);
         if (!discountDoc)
             throw new Errors_1.NotFound("Discount not found");
         if (!discountDoc.status)
@@ -348,43 +347,44 @@ const createSale = async (req, res) => {
         }
     }
     // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
-    // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
     const fullSale = await Sale_1.SaleModel.findById(sale._id)
         .populate("customer_id", "name email phone_number")
         .populate("warehouse_id", "name location")
-        .populate("order_tax", "name rate type")
-        .populate("order_discount", "name rate type")
-        .populate("coupon_id", "code discount_amount")
-        .populate("gift_card_id", "code amount")
+        .populate({
+        path: "order_tax",
+        model: "Taxes",
+        select: "name amount type status",
+    })
+        .populate({
+        path: "order_discount",
+        model: "Discount",
+        select: "name amount type status",
+    })
+        .populate({
+        path: "coupon_id",
+        model: "Coupon",
+        select: "coupon_code amount type minimum_amount quantity available expired_date",
+    })
+        .populate({
+        path: "gift_card_id",
+        model: "GiftCard",
+        select: "code amount expired_date",
+    })
         .populate("cashier_id", "name email")
         .populate("shift_id", "start_time status")
         .populate("account_id", "name type balance")
         .lean();
     const fullItems = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
         .populate("product_id", "name ar_name image price")
-        .populate("product_price_id", "price code quantity gallery")
+        .populate("product_price_id", "price code quantity")
         .populate("bundle_id", "name price")
         .populate("options_id", "name ar_name price")
         .lean();
-    // جيب الـ options لكل product_price_id
-    const itemsWithOptions = await Promise.all(fullItems.map(async (item) => {
-        if (item.product_price_id && item.product_price_id._id) {
-            // جيب الـ options من الـ ProductPriceOption table
-            const priceOptions = await product_price_1.ProductPriceOptionModel.find({
-                product_price_id: item.product_price_id._id,
-            })
-                .populate("option_id", "name ar_name price")
-                .lean();
-            // استخرج الـ options فقط
-            item.product_price_id.options = priceOptions.map((po) => po.option_id);
-        }
-        return item;
-    }));
     return (0, response_1.SuccessResponse)(res, {
         message: "Sale created successfully",
         store: STORE_INFO,
         sale: fullSale,
-        items: itemsWithOptions,
+        items: fullItems,
     });
 };
 exports.createSale = createSale;
@@ -396,7 +396,6 @@ const getSales = async (req, res) => {
         .populate('order_discount', 'name rate')
         .populate('coupon_id', 'code discount_amount')
         .populate('gift_card_id', 'code amount')
-        //.populate('payment_method', 'name')
         .lean();
     (0, response_1.SuccessResponse)(res, { sales });
 };

@@ -20,11 +20,10 @@ import { UserModel } from '../../../models/schema/admin/User';
 import bcrypt from "bcryptjs";
 
 
-// ثابت مؤقت لبيانات المكان – تقدر تعدله براحتك
 const STORE_INFO = {
-  name: "SYSTEGO",            // اسم المكان
-  phone: "01000000000",        // رقم التليفون
-  address: "Cairo, Egypt",     // العنوان
+  name: "SYSTEGO",
+  phone: "01134567",
+  address: "Cairo, Egypt",
 };
 
 export const createSale = async (req: Request, res: Response) => {
@@ -56,8 +55,8 @@ export const createSale = async (req: Request, res: Response) => {
     order_pending = 1,
     coupon_id,
     gift_card_id,
-    tax_id,
-    discount_id,
+    order_tax,      // ✅ تم التغيير
+    order_discount, // ✅ تم التغيير
     products,
     bundles,
     shipping = 0,
@@ -167,7 +166,6 @@ export const createSale = async (req: Request, res: Response) => {
 
     coupon = await CouponModel.findById(coupon_id);
     if (!coupon) throw new NotFound("Coupon not found");
-    if (!coupon.status) throw new BadRequest("Coupon is not active");
     if (coupon.available <= 0) throw new BadRequest("Coupon is out of stock");
 
     if (coupon.expired_date && coupon.expired_date < new Date()) {
@@ -175,26 +173,26 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // 8) ضريبة (لو موجودة)
+  // 8) ضريبة (لو موجودة) ✅ تم التغيير
   let tax: any = null;
-  if (tax_id) {
-    if (!mongoose.Types.ObjectId.isValid(tax_id)) {
-      throw new BadRequest("Invalid tax id");
+  if (order_tax) {
+    if (!mongoose.Types.ObjectId.isValid(order_tax)) {
+      throw new BadRequest("Invalid order_tax id");
     }
 
-    tax = await TaxesModel.findById(tax_id);
+    tax = await TaxesModel.findById(order_tax);
     if (!tax) throw new NotFound("Tax not found");
     if (!tax.status) throw new BadRequest("Tax is not active");
   }
 
-  // 9) خصم (لو موجود)
+  // 9) خصم (لو موجود) ✅ تم التغيير
   let discountDoc: any = null;
-  if (discount_id) {
-    if (!mongoose.Types.ObjectId.isValid(discount_id)) {
-      throw new BadRequest("Invalid discount id");
+  if (order_discount) {
+    if (!mongoose.Types.ObjectId.isValid(order_discount)) {
+      throw new BadRequest("Invalid order_discount id");
     }
 
-    discountDoc = await DiscountModel.findById(discount_id);
+    discountDoc = await DiscountModel.findById(order_discount);
     if (!discountDoc) throw new NotFound("Discount not found");
     if (!discountDoc.status) throw new BadRequest("Discount is not active");
   }
@@ -442,53 +440,47 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
-  // 17) رجّع الأوردر كامل (populated) + الآيتمز كاملة + بيانات المكان
-const fullSale = await SaleModel.findById(sale._id)
-  .populate("customer_id", "name email phone_number")
-  .populate("warehouse_id", "name location")
-  .populate("order_tax", "name rate type")
-  .populate("order_discount", "name rate type")
-  .populate("coupon_id", "code discount_amount")
-  .populate("gift_card_id", "code amount")
-  .populate("cashier_id", "name email")
-  .populate("shift_id", "start_time status")
-  .populate("account_id", "name type balance")
-  .lean();
+  const fullSale = await SaleModel.findById(sale._id)
+    .populate("customer_id", "name email phone_number")
+    .populate("warehouse_id", "name location")
+    .populate({
+      path: "order_tax",
+      model: "Taxes",
+      select: "name amount type status",
+    })
+    .populate({
+      path: "order_discount",
+      model: "Discount",
+      select: "name amount type status",
+    })
+    .populate({
+      path: "coupon_id",
+      model: "Coupon",
+      select: "coupon_code amount type minimum_amount quantity available expired_date",
+    })
+    .populate({
+      path: "gift_card_id",
+      model: "GiftCard",
+      select: "code amount expired_date",
+    })
+    .populate("cashier_id", "name email")
+    .populate("shift_id", "start_time status")
+    .populate("account_id", "name type balance")
+    .lean();
 
-const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
-  .populate("product_id", "name ar_name image price")
-  .populate("product_price_id", "price code quantity gallery")
-  .populate("bundle_id", "name price")
-  .populate("options_id", "name ar_name price")
-  .lean();
+  const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
+    .populate("product_id", "name ar_name image price")
+    .populate("product_price_id", "price code quantity")
+    .populate("bundle_id", "name price")
+    .populate("options_id", "name ar_name price")
+    .lean();
 
-// جيب الـ options لكل product_price_id
-const itemsWithOptions = await Promise.all(
-  fullItems.map(async (item: any) => {
-    if (item.product_price_id && item.product_price_id._id) {
-      // جيب الـ options من الـ ProductPriceOption table
-      const priceOptions = await ProductPriceOptionModel.find({
-        product_price_id: item.product_price_id._id,
-      })
-        .populate("option_id", "name ar_name price")
-        .lean();
-
-      // استخرج الـ options فقط
-      item.product_price_id.options = priceOptions.map(
-        (po: any) => po.option_id
-      );
-    }
-    return item;
-  })
-);
-
-return SuccessResponse(res, {
-  message: "Sale created successfully",
-  store: STORE_INFO,
-  sale: fullSale,
-  items: itemsWithOptions,
-});
-
+  return SuccessResponse(res, {
+    message: "Sale created successfully",
+    store: STORE_INFO,
+    sale: fullSale,
+    items: fullItems,
+  });
 };
 
 
@@ -500,7 +492,6 @@ export const getSales = async (req: Request, res: Response)=> {
         .populate('order_discount', 'name rate')
         .populate('coupon_id', 'code discount_amount')
         .populate('gift_card_id', 'code amount')
-        //.populate('payment_method', 'name')
         .lean();
     SuccessResponse(res, { sales });
 }
