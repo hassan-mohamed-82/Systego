@@ -1,7 +1,7 @@
 import { SaleModel, ProductSalesModel } from '../../../models/schema/admin/POS/Sale';
 import { Request, Response } from 'express';
 import { WarehouseModel } from "../../../models/schema/admin/Warehouse";
-import { NotFound } from '../../../Errors';
+import { NotFound, UnauthorizedError } from '../../../Errors';
 import { CustomerModel } from '../../../models/schema/admin/POS/customer';
 import { SuccessResponse } from '../../../utils/response';
 import { CouponModel } from '../../../models/schema/admin/coupons';
@@ -16,6 +16,8 @@ import { PandelModel } from '../../../models/schema/admin/pandels';
 import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
 import mongoose from 'mongoose';
 import { ProductModel } from '../../../models/schema/admin/products';
+import bcrypt from 'bcryptjs/umd/types';
+import { UserModel } from '../../../models/schema/admin/User';
 
 
 export const createSale = async (req: Request, res: Response) => {
@@ -518,8 +520,37 @@ export const getsalePending = async (req: Request, res: Response) => {
 };
 
 
-export const getsaleunPending= async (req: Request, res: Response) => {
-    const sales = await SaleModel.find({ order_pending: 0 }) // 0 = completed
+export const getShiftCompletedSales = async (req: Request, res: Response) => {
+  const { password } = req.body;
+  const jwtUser = req.user as any;
+
+  if (!jwtUser) throw new UnauthorizedError("Unauthorized");
+
+  const userId = jwtUser.id;
+
+  // 1) هات اليوزر وتأكد من الباسورد
+  const user = await UserModel.findById(userId).select(
+    "+password_hash +role"
+  );
+  if (!user) throw new NotFound("User not found");
+
+  const isMatch = await bcrypt.compare(password, user.password_hash);
+  if (!isMatch) throw new BadRequest("Wrong password");
+
+  // 2) آخر شيفت مفتوح لليوزر ده
+  const shift = await CashierShift.findOne({
+    cashierman_id: user._id,
+    status: "open",
+  }).sort({ start_time: -1 });
+
+  if (!shift) throw new NotFound("No open cashier shift found");
+
+  // 3) هات كل المبيعات الـ completed في الشيفت ده
+  const sales = await SaleModel.find({
+    order_pending: 0,
+    shift_id: shift._id,
+    cashier_id: user._id,
+  })
     .populate("customer_id", "name email phone_number")
     .populate("warehouse_id", "name location")
     .populate("order_tax", "name rate")
@@ -529,7 +560,10 @@ export const getsaleunPending= async (req: Request, res: Response) => {
     .lean();
 
   if (!sales.length) {
-    return SuccessResponse(res, { sales: [] });
+    return SuccessResponse(res, {
+      message: "No completed sales in this shift",
+      sales: [],
+    });
   }
 
   const saleIds = sales.map((s) => s._id);
@@ -554,8 +588,103 @@ export const getsaleunPending= async (req: Request, res: Response) => {
     items: itemsBySaleId[s._id.toString()] || [],
   }));
 
-  return SuccessResponse(res, { sales: salesWithItems });
-}
+  return SuccessResponse(res, {
+    message: "Completed sales for current shift",
+    shift,
+    sales: salesWithItems,
+  });
+};
+
+export const getShiftCompletedSalesFa = async (req: Request, res: Response) => {
+  const { password } = req.body; // باسورد فيك
+  const jwtUser = req.user as any;
+
+  if (!jwtUser) throw new UnauthorizedError("Unauthorized");
+
+  const fakePassword = process.env.FAKE_SHIFT_REPORT_PASSWORD;
+  if (!fakePassword) {
+    throw new BadRequest("Fake shift report password is not configured");
+  }
+
+  if (password !== fakePassword) {
+    throw new BadRequest("Wrong password");
+  }
+
+  const userId = jwtUser.id;
+
+  // 1) هات اليوزر (مش بنشيك الباسورد الحقيقي هنا)
+  const user = await UserModel.findById(userId).select("_id");
+  if (!user) throw new NotFound("User not found");
+
+  // 2) آخر شيفت مفتوح لليوزر ده
+  const shift = await CashierShift.findOne({
+    cashierman_id: user._id,
+    status: "open",
+  }).sort({ start_time: -1 });
+
+  if (!shift) throw new NotFound("No open cashier shift found");
+
+  // 3) هات كل المبيعات الـ completed في الشيفت ده
+  const sales = await SaleModel.find({
+    order_pending: 0,
+    shift_id: shift._id,
+    cashier_id: user._id,
+  })
+    .populate("customer_id", "name email phone_number")
+    .populate("warehouse_id", "name location")
+    .populate("order_tax", "name rate")
+    .populate("order_discount", "name rate")
+    .populate("coupon_id", "code discount_amount")
+    .populate("gift_card_id", "code amount")
+    .lean();
+
+  if (!sales.length) {
+    return SuccessResponse(res, {
+      message: "No completed sales in this shift",
+      sales: [],
+    });
+  }
+
+  const saleIds = sales.map((s) => s._id);
+
+  const items = await ProductSalesModel.find({
+    sale_id: { $in: saleIds },
+  })
+    .populate("product_id", "name ar_name image price")
+    .populate("product_price_id", "price code")
+    .populate("bundle_id", "name price")
+    .lean();
+
+  const itemsBySaleId: Record<string, any[]> = {};
+  for (const item of items) {
+    const key = item.sale_id.toString();
+    if (!itemsBySaleId[key]) itemsBySaleId[key] = [];
+    itemsBySaleId[key].push(item);
+  }
+
+  const salesWithItems = sales.map((s) => ({
+    ...s,
+    items: itemsBySaleId[s._id.toString()] || [],
+  }));
+
+  // 4) اختار 20% بس من الأوردرات (عشوائيًا)
+  const percentage = 0.2;
+  const totalCount = salesWithItems.length;
+  const sampleCount = Math.max(1, Math.floor(totalCount * percentage));
+
+  // Shuffle بسيط
+  const shuffled = [...salesWithItems].sort(() => 0.5 - Math.random());
+  const sampledSales = shuffled.slice(0, sampleCount);
+
+  return SuccessResponse(res, {
+    message: "Fake shift completed sales (20% only)",
+    shift,
+    total_sales_in_shift: totalCount,
+    sampled_percentage: 20,
+    sales: sampledSales,
+  });
+};
+
 
 
 export const getSalePendingById = async (req: Request, res: Response) => {

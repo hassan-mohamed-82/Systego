@@ -1,5 +1,5 @@
 import express from 'express';
-import { createSale, getSalePendingById, getSales, getsalePending,getsaleunPending } from '../../../controller/admin/POS/saleController';
+import { createSale, getSalePendingById, getSales, getsalePending,getShiftCompletedSales,getShiftCompletedSalesFa } from '../../../controller/admin/POS/saleController';
 import { catchAsync } from '../../../utils/catchAsync';
 import { authorizePermissions } from '../../../middlewares/haspremission';
 const router = express.Router();
@@ -7,7 +7,8 @@ const router = express.Router();
 router.post('/sales',authorizePermissions("POS","Add"), catchAsync(createSale));
 router.get('/sales',authorizePermissions("POS","View"), catchAsync(getSales));
 router.get('/sales/pending',authorizePermissions("POS","View"), catchAsync(getsalePending));
-router.get('/sales/complete',authorizePermissions("POS","View"), catchAsync(getsaleunPending));
+router.get('/sales/complete',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSales));
+router.get('/sales/complete-',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSalesFa));
 router.get("/sales/pending/:sale_id",authorizePermissions("POS","View"), getSalePendingById);
 
 

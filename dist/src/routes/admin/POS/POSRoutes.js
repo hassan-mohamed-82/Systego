@@ -11,6 +11,7 @@ const router = express_1.default.Router();
 router.post('/sales', (0, haspremission_1.authorizePermissions)("POS", "Add"), (0, catchAsync_1.catchAsync)(saleController_1.createSale));
 router.get('/sales', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getSales));
 router.get('/sales/pending', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getsalePending));
-router.get('/sales/complete', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getsaleunPending));
+router.get('/sales/complete', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getShiftCompletedSales));
+router.get('/sales/complete-', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getShiftCompletedSalesFa));
 router.get("/sales/pending/:sale_id", (0, haspremission_1.authorizePermissions)("POS", "View"), saleController_1.getSalePendingById);
 exports.default = router;
