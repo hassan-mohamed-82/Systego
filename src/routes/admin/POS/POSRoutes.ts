@@ -7,8 +7,8 @@ const router = express.Router();
 router.post('/sales',authorizePermissions("POS","Add"), catchAsync(createSale));
 router.get('/sales',authorizePermissions("POS","View"), catchAsync(getSales));
 router.get('/sales/pending',authorizePermissions("POS","View"), catchAsync(getsalePending));
-router.get('/sales/complete',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSales));
-router.get('/sales/complete-',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSalesFa));
+router.post('/sales/complete',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSales));
+router.post('/sales/complete-',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSalesFa));
 router.get("/sales/pending/:sale_id",authorizePermissions("POS","View"), getSalePendingById);
 
 
