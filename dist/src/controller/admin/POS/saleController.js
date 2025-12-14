@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSalePendingById = exports.getShiftCompletedSalesFa = exports.getShiftCompletedSales = exports.getsalePending = exports.getAllSales = exports.getSales = exports.createSale = void 0;
+exports.getSalePendingById = exports.getShiftCompletedSales = exports.getsalePending = exports.getAllSales = exports.getSales = exports.createSale = void 0;
 const Sale_1 = require("../../../models/schema/admin/POS/Sale");
 const Warehouse_1 = require("../../../models/schema/admin/Warehouse");
 const Errors_1 = require("../../../Errors");
@@ -418,13 +418,23 @@ const getShiftCompletedSales = async (req, res) => {
     if (!jwtUser)
         throw new Errors_1.UnauthorizedError("Unauthorized");
     const userId = jwtUser.id;
-    // 1) هات اليوزر وتأكد من الباسورد
+    // 1) هات اليوزر (مع الباسورد عشان نقدر نشيك الحقيقي)
     const user = await User_1.UserModel.findById(userId).select("+password_hash +role");
     if (!user)
         throw new Errors_1.NotFound("User not found");
-    const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
-    if (!isMatch)
+    const fakePassword = process.env.SHIFT_REPORT_PASSWORD;
+    let mode = null;
+    // 👇 الأول: جرّب الباسورد الحقيقي
+    if (password && (await bcryptjs_1.default.compare(password, user.password_hash))) {
+        mode = "real";
+    }
+    else if (fakePassword && password === fakePassword) {
+        // تاني: جرّب الباسورد الفيك من الـ env
+        mode = "fake";
+    }
+    if (!mode) {
         throw new BadRequest_1.BadRequest("Wrong password");
+    }
     // 2) آخر شيفت مفتوح لليوزر ده
     const shift = await CashierShift_1.CashierShift.findOne({
         cashierman_id: user._id,
@@ -432,7 +442,7 @@ const getShiftCompletedSales = async (req, res) => {
     }).sort({ start_time: -1 });
     if (!shift)
         throw new Errors_1.NotFound("No open cashier shift found");
-    // 3) هات كل المبيعات الـ completed في الشيفت ده
+    // 3) كل المبيعات الـ completed في الشيفت ده
     const sales = await Sale_1.SaleModel.find({
         order_pending: 0,
         shift_id: shift._id,
@@ -448,6 +458,8 @@ const getShiftCompletedSales = async (req, res) => {
     if (!sales.length) {
         return (0, response_1.SuccessResponse)(res, {
             message: "No completed sales in this shift",
+            mode,
+            shift,
             sales: [],
         });
     }
@@ -470,6 +482,22 @@ const getShiftCompletedSales = async (req, res) => {
         ...s,
         items: itemsBySaleId[s._id.toString()] || [],
     }));
+    // 4) لو mode = fake → رجّع 20% بس من الأوردرات
+    if (mode === "fake") {
+        const percentage = 0.2;
+        const totalCount = salesWithItems.length;
+        const sampleCount = Math.max(1, Math.floor(totalCount * percentage));
+        const shuffled = [...salesWithItems].sort(() => 0.5 - Math.random());
+        const sampledSales = shuffled.slice(0, sampleCount);
+        return (0, response_1.SuccessResponse)(res, {
+            message: "Completed sales sample for current shift",
+            shift,
+            total_sales_in_shift: totalCount,
+            sampled_percentage: 20,
+            sales: sampledSales,
+        });
+    }
+    // 5) لو mode = real → رجّع كل الأوردرات
     return (0, response_1.SuccessResponse)(res, {
         message: "Completed sales for current shift",
         shift,
@@ -477,84 +505,6 @@ const getShiftCompletedSales = async (req, res) => {
     });
 };
 exports.getShiftCompletedSales = getShiftCompletedSales;
-const getShiftCompletedSalesFa = async (req, res) => {
-    const { password } = req.body; // باسورد فيك
-    const jwtUser = req.user;
-    if (!jwtUser)
-        throw new Errors_1.UnauthorizedError("Unauthorized");
-    const fakePassword = process.env.SHIFT_REPORT_PASSWORD;
-    if (!fakePassword) {
-        throw new BadRequest_1.BadRequest(" password is not configured");
-    }
-    if (password !== fakePassword) {
-        throw new BadRequest_1.BadRequest("Wrong password");
-    }
-    const userId = jwtUser.id;
-    // 1) هات اليوزر (مش بنشيك الباسورد الحقيقي هنا)
-    const user = await User_1.UserModel.findById(userId).select("_id");
-    if (!user)
-        throw new Errors_1.NotFound("User not found");
-    // 2) آخر شيفت مفتوح لليوزر ده
-    const shift = await CashierShift_1.CashierShift.findOne({
-        cashierman_id: user._id,
-        status: "open",
-    }).sort({ start_time: -1 });
-    if (!shift)
-        throw new Errors_1.NotFound("No open cashier shift found");
-    // 3) هات كل المبيعات الـ completed في الشيفت ده
-    const sales = await Sale_1.SaleModel.find({
-        order_pending: 0,
-        shift_id: shift._id,
-        cashier_id: user._id,
-    })
-        .populate("customer_id", "name email phone_number")
-        .populate("warehouse_id", "name location")
-        .populate("order_tax", "name rate")
-        .populate("order_discount", "name rate")
-        .populate("coupon_id", "code discount_amount")
-        .populate("gift_card_id", "code amount")
-        .lean();
-    if (!sales.length) {
-        return (0, response_1.SuccessResponse)(res, {
-            message: "No completed sales in this shift",
-            sales: [],
-        });
-    }
-    const saleIds = sales.map((s) => s._id);
-    const items = await Sale_1.ProductSalesModel.find({
-        sale_id: { $in: saleIds },
-    })
-        .populate("product_id", "name ar_name image price")
-        .populate("product_price_id", "price code")
-        .populate("bundle_id", "name price")
-        .lean();
-    const itemsBySaleId = {};
-    for (const item of items) {
-        const key = item.sale_id.toString();
-        if (!itemsBySaleId[key])
-            itemsBySaleId[key] = [];
-        itemsBySaleId[key].push(item);
-    }
-    const salesWithItems = sales.map((s) => ({
-        ...s,
-        items: itemsBySaleId[s._id.toString()] || [],
-    }));
-    // 4) اختار 20% بس من الأوردرات (عشوائيًا)
-    const percentage = 0.2;
-    const totalCount = salesWithItems.length;
-    const sampleCount = Math.max(1, Math.floor(totalCount * percentage));
-    // Shuffle بسيط
-    const shuffled = [...salesWithItems].sort(() => 0.5 - Math.random());
-    const sampledSales = shuffled.slice(0, sampleCount);
-    return (0, response_1.SuccessResponse)(res, {
-        message: "Completed sales for current shift",
-        shift,
-        total_sales_in_shift: totalCount,
-        sampled_percentage: 20,
-        sales: sampledSales,
-    });
-};
-exports.getShiftCompletedSalesFa = getShiftCompletedSalesFa;
 const getSalePendingById = async (req, res) => {
     const { sale_id } = req.params;
     if (!mongoose_1.default.Types.ObjectId.isValid(sale_id)) {
