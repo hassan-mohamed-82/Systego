@@ -27,6 +27,7 @@ export const createProduct = async (req: Request, res: Response) => {
     exp_ability,
     minimum_quantity_sale,
     low_stock,
+    cost,
     whole_price,
     start_quantaty,
     taxesId,
@@ -118,6 +119,7 @@ export const createProduct = async (req: Request, res: Response) => {
     price: basePrice,
     quantity: baseQuantity,
     description,
+    cost,
     exp_ability,
     minimum_quantity_sale,
     low_stock,
@@ -146,6 +148,8 @@ export const createProduct = async (req: Request, res: Response) => {
 
       const variantPrice = Number(p.price);
       const variantQty = Number(p.quantity || 0);
+      const variantCost = Number(p.cost || 0);
+      const variantStartQty = Number(p.strat_quantaty || 0);
 
       let priceGalleryUrls: string[] = [];
       if (p.gallery && Array.isArray(p.gallery)) {
@@ -163,6 +167,8 @@ export const createProduct = async (req: Request, res: Response) => {
         code: p.code,
         gallery: priceGalleryUrls,
         quantity: variantQty,
+        cost: variantCost,
+        strat_quantaty: variantStartQty,
       });
 
       totalQuantity += variantQty;
@@ -258,6 +264,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     categoryId,
     brandId,
     unit,
+    cost,
     price,
     description,
     ar_description,
@@ -307,6 +314,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.low_stock = low_stock ?? product.low_stock;
   product.whole_price = whole_price ?? product.whole_price;
   product.start_quantaty = start_quantaty ?? product.start_quantaty;
+  product.cost = cost ?? product.cost;
   product.taxesId = taxesId ?? product.taxesId;
   product.product_has_imei = product_has_imei ?? product.product_has_imei;
   product.different_price = different_price ?? product.different_price;
@@ -324,7 +332,13 @@ export const updateProduct = async (req: Request, res: Response) => {
       if (p._id) {
         productPrice = await ProductPriceModel.findByIdAndUpdate(
           p._id,
-          { price: p.price, code: p.code, quantity: p.quantity || 0 },
+          {
+            price: p.price,
+            code: p.code,
+            quantity: p.quantity || 0,
+            cost: p.cost || 0,
+            strat_quantaty: p.strat_quantaty || 0,
+          },
           { new: true }
         );
       } else {
@@ -342,6 +356,8 @@ export const updateProduct = async (req: Request, res: Response) => {
           price: p.price,
           code: p.code,
           quantity: p.quantity || 0,
+          cost: p.cost || 0,
+          strat_quantaty: p.strat_quantaty || 0,
           gallery: galleryUrls,
         });
       }
@@ -436,6 +452,8 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
         code: price.code,
         gallery: price.gallery,
         quantity: price.quantity,
+        cost: price.cost,
+        strat_quantaty: price.strat_quantaty,
         createdAt: price.createdAt,
         updatedAt: price.updatedAt,
         __v: price.__v,
@@ -469,7 +487,6 @@ export const getProductByCode = async (req: Request, res: Response) => {
   if (!product) throw new NotFound("Product not found");
 
   const variations = await VariationModel.find().populate("options").lean();
-
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
 
@@ -522,7 +539,6 @@ export const generateBarcodeImageController = async (req: Request, res: Response
   if (!productCode) throw new BadRequest("Product price does not have a code yet");
 
   const imageLink = await generateBarcodeImage(productCode, productCode);
-
   const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
 
   SuccessResponse(res, {

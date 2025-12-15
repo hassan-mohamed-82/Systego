@@ -7,6 +7,8 @@ const productPriceSchema = new mongoose.Schema(
     code: { type: String , required: true, unique: true },
     gallery: [{ type: String }], // صور 
     quantity: { type: Number, default: 0 }, // كمية المنتج في هذا السعر
+    strat_quantaty: { type: Number, default: 0 },
+    cost: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

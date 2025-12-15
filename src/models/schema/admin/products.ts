@@ -20,6 +20,7 @@ const productSchema = new mongoose.Schema(
     low_stock: { type: Number },
     whole_price: { type: Number },
     start_quantaty: { type: Number },
+    cost: { type: Number, },
     taxesId: { type: mongoose.Schema.Types.ObjectId, ref: "Taxes" },
     product_has_imei: { type: Boolean, default: false },
     different_price: { type: Boolean, default: false }, 

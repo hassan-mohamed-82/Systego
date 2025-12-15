@@ -14,7 +14,7 @@ const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createProduct = async (req, res) => {
-    const { name, ar_name, image, categoryId, brandId, unit, price, quantity, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, } = req.body;
+    const { name, ar_name, image, categoryId, brandId, unit, price, quantity, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, cost, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Product name is required");
     if (!ar_name)
@@ -85,6 +85,7 @@ const createProduct = async (req, res) => {
         price: basePrice,
         quantity: baseQuantity,
         description,
+        cost,
         exp_ability,
         minimum_quantity_sale,
         low_stock,
@@ -110,6 +111,8 @@ const createProduct = async (req, res) => {
             }
             const variantPrice = Number(p.price);
             const variantQty = Number(p.quantity || 0);
+            const variantCost = Number(p.cost || 0);
+            const variantStartQty = Number(p.strat_quantaty || 0);
             let priceGalleryUrls = [];
             if (p.gallery && Array.isArray(p.gallery)) {
                 for (const g of p.gallery) {
@@ -125,6 +128,8 @@ const createProduct = async (req, res) => {
                 code: p.code,
                 gallery: priceGalleryUrls,
                 quantity: variantQty,
+                cost: variantCost,
+                strat_quantaty: variantStartQty,
             });
             totalQuantity += variantQty;
             if (minVariantPrice === null || variantPrice < minVariantPrice) {
@@ -193,7 +198,7 @@ const getProduct = async (req, res) => {
 exports.getProduct = getProduct;
 const updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { name, ar_name, image, categoryId, brandId, unit, price, description, ar_description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, is_featured, } = req.body;
+    const { name, ar_name, image, categoryId, brandId, unit, cost, price, description, ar_description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, is_featured, } = req.body;
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
@@ -223,6 +228,7 @@ const updateProduct = async (req, res) => {
     product.low_stock = low_stock ?? product.low_stock;
     product.whole_price = whole_price ?? product.whole_price;
     product.start_quantaty = start_quantaty ?? product.start_quantaty;
+    product.cost = cost ?? product.cost;
     product.taxesId = taxesId ?? product.taxesId;
     product.product_has_imei = product_has_imei ?? product.product_has_imei;
     product.different_price = different_price ?? product.different_price;
@@ -235,7 +241,13 @@ const updateProduct = async (req, res) => {
         for (const p of prices) {
             let productPrice;
             if (p._id) {
-                productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, { price: p.price, code: p.code, quantity: p.quantity || 0 }, { new: true });
+                productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, {
+                    price: p.price,
+                    code: p.code,
+                    quantity: p.quantity || 0,
+                    cost: p.cost || 0,
+                    strat_quantaty: p.strat_quantaty || 0,
+                }, { new: true });
             }
             else {
                 let galleryUrls = [];
@@ -252,6 +264,8 @@ const updateProduct = async (req, res) => {
                     price: p.price,
                     code: p.code,
                     quantity: p.quantity || 0,
+                    cost: p.cost || 0,
+                    strat_quantaty: p.strat_quantaty || 0,
                     gallery: galleryUrls,
                 });
             }
@@ -328,6 +342,8 @@ const getOneProduct = async (req, res) => {
             code: price.code,
             gallery: price.gallery,
             quantity: price.quantity,
+            cost: price.cost,
+            strat_quantaty: price.strat_quantaty,
             createdAt: price.createdAt,
             updatedAt: price.updatedAt,
             __v: price.__v,
