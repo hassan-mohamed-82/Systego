@@ -22,8 +22,7 @@ const NotFound_1 = require("../../Errors/NotFound");
 const handleImages_1 = require("../../utils/handleImages");
 const Materials_1 = require("../../models/schema/admin/Materials");
 const createPurchase = async (req, res) => {
-    const { date, warehouse_id, supplier_id, receipt_img, currency_id, payment_status, exchange_rate, subtotal, shiping_cost, discount, tax_id, purchase_items = [], purchase_materials = [], // ✅ جديد
-    financials, purchase_due_payment, } = req.body;
+    const { date, warehouse_id, supplier_id, receipt_img, currency_id, payment_status, exchange_rate, subtotal, shiping_cost, discount, tax_id, purchase_items = [], purchase_materials = [], financials, purchase_due_payment, } = req.body;
     // ========== Validations ==========
     const existingWarehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     if (!existingWarehouse)
@@ -70,6 +69,23 @@ const createPurchase = async (req, res) => {
                 category_id = productDoc?.categoryId;
             }
         }
+        // جلب المنتج للتحقق من exp_ability
+        const product = await products_1.ProductModel.findById(product_id);
+        if (!product)
+            throw new NotFound_1.NotFound(`Product not found: ${product_id}`);
+        // التحقق من تاريخ الانتهاء لو المنتج بيدعم الصلاحية
+        if (product.exp_ability) {
+            if (!p.date_of_expiery) {
+                throw new BadRequest_1.BadRequest(`Expiry date is required for product: ${product.name}`);
+            }
+            const expiryDate = new Date(p.date_of_expiery);
+            const today = new Date();
+            expiryDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+            if (expiryDate < today) {
+                throw new BadRequest_1.BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
+            }
+        }
         const existingPurchaseItem = await purchase_item_1.PurchaseItemModel.findOne({ warehouse_id, product_id });
         if (!existingPurchaseItem && warehouse) {
             warehouse.number_of_products += 1;
@@ -87,17 +103,15 @@ const createPurchase = async (req, res) => {
             tax: p.tax,
             subtotal: p.subtotal,
             item_type: "product",
+            date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
         });
         // Update product quantity
-        const product = await products_1.ProductModel.findById(product_id);
-        if (product) {
-            product.quantity += p.quantity ?? 0;
-            await product.save();
-            const category = await category_1.CategoryModel.findById(product.categoryId);
-            if (category) {
-                category.product_quantity += p.quantity ?? 0;
-                await category.save();
-            }
+        product.quantity += p.quantity ?? 0;
+        await product.save();
+        const category = await category_1.CategoryModel.findById(product.categoryId);
+        if (category) {
+            category.product_quantity += p.quantity ?? 0;
+            await category.save();
         }
         // Update warehouse
         if (warehouse) {
@@ -130,12 +144,11 @@ const createPurchase = async (req, res) => {
             }
         }
     }
-    // ========== Process Materials ========== ✅ جديد
+    // ========== Process Materials ==========
     for (const m of purchase_materials) {
         const material = await Materials_1.MaterialModel.findById(m.material_id);
         if (!material)
             throw new NotFound_1.NotFound(`Material not found: ${m.material_id}`);
-        // Create purchase item
         await purchase_item_1.PurchaseItemModel.create({
             date: m.date || date,
             warehouse_id: warehouse_id,
@@ -149,10 +162,8 @@ const createPurchase = async (req, res) => {
             subtotal: m.subtotal,
             item_type: "material",
         });
-        // Update material quantity only
         material.quantity += m.quantity ?? 0;
         await material.save();
-        // Update warehouse
         if (warehouse) {
             warehouse.stock_Quantity += m.quantity ?? 0;
             await warehouse.save();
@@ -200,8 +211,8 @@ const getPurchase = async (req, res) => {
         suppliers_1.SupplierModel.find().select("_id username").lean(),
         Taxes_1.TaxesModel.find({ status: true }).select("_id name").lean(),
         Financial_Account_1.BankAccountModel.find().select("_id name").lean(),
-        products_1.ProductModel.find().select("_id name").lean(),
-        Materials_1.MaterialModel.find().select("_id name ar_name unit quantity").lean(), // ✅ جديد
+        products_1.ProductModel.find().select("_id name exp_ability").lean(),
+        Materials_1.MaterialModel.find().select("_id name ar_name unit quantity").lean(),
         Variation_1.VariationModel.find({ status: true })
             .select("_id name")
             .populate({ path: "options", select: "_id name", match: { status: true } })
@@ -248,7 +259,17 @@ const updatePurchase = async (req, res) => {
             if (p._id) {
                 const purchaseItem = await purchase_item_1.PurchaseItemModel.findById(p._id);
                 if (purchaseItem && purchaseItem.item_type === "product") {
-                    const product = (await products_1.ProductModel.findById(purchaseItem.product_id));
+                    const product = await products_1.ProductModel.findById(purchaseItem.product_id);
+                    // التحقق من تاريخ الانتهاء لو المنتج بيدعم الصلاحية
+                    if (product?.exp_ability && p.date_of_expiery) {
+                        const expiryDate = new Date(p.date_of_expiery);
+                        const today = new Date();
+                        expiryDate.setHours(0, 0, 0, 0);
+                        today.setHours(0, 0, 0, 0);
+                        if (expiryDate < today) {
+                            throw new BadRequest_1.BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
+                        }
+                    }
                     if (product && p.quantity !== undefined) {
                         const diff = p.quantity - purchaseItem.quantity;
                         product.quantity += diff;
@@ -272,16 +293,16 @@ const updatePurchase = async (req, res) => {
                     purchaseItem.unit_cost = p.unit_cost ?? purchaseItem.unit_cost;
                     purchaseItem.tax = p.tax ?? purchaseItem.tax;
                     purchaseItem.subtotal = p.subtotal ?? purchaseItem.subtotal;
+                    purchaseItem.date_of_expiery = p.date_of_expiery ?? purchaseItem.date_of_expiery;
                     await purchaseItem.save();
                 }
             }
         }
     }
-    // ========== Update Materials ========== ✅ جديد
+    // ========== Update Materials ==========
     if (purchase_materials && Array.isArray(purchase_materials)) {
         for (const m of purchase_materials) {
             if (m._id) {
-                // Update existing
                 const purchaseItem = await purchase_item_1.PurchaseItemModel.findById(m._id);
                 if (purchaseItem && purchaseItem.item_type === "material") {
                     const material = await Materials_1.MaterialModel.findById(purchaseItem.material_id);
@@ -299,7 +320,6 @@ const updatePurchase = async (req, res) => {
                 }
             }
             else {
-                // Create new
                 const material = await Materials_1.MaterialModel.findById(m.material_id);
                 if (!material)
                     throw new NotFound_1.NotFound(`Material not found: ${m.material_id}`);
@@ -327,15 +347,19 @@ exports.updatePurchase = updatePurchase;
 const getOnePurchase = async (req, res) => {
     const { id } = req.params;
     const baseUrl = req.protocol + "://" + req.get("host");
-    const purchase = await Purchase_1.PurchaseModel.findById(id) // 
-        .select('_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img')
+    const purchase = await Purchase_1.PurchaseModel.findById(id)
+        .select("_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img")
         .populate({ path: "warehouse_id", select: "_id name" })
         .populate({ path: "supplier_id", select: "_id username phone_number" })
         .populate({ path: "currency_id", select: "_id name" })
         .populate({ path: "tax_id", select: "_id name" })
-        .populate({ path: "items", populate: "options" }) // جاي من الـ virtual
-        .populate({ path: "invoices", select: "_id amount date", populate: { path: "financial_id", select: "_id name" } }) // جاي من الـ virtual
-        .populate({ path: "duePayments", select: "_id amount date" }) // جاي من الـ virtual 
+        .populate({ path: "items", populate: "options" })
+        .populate({
+        path: "invoices",
+        select: "_id amount date",
+        populate: { path: "financial_id", select: "_id name" },
+    })
+        .populate({ path: "duePayments", select: "_id amount date" })
         .lean({ virtuals: true });
     if (!purchase)
         throw new NotFound_1.NotFound("Purchase not found");

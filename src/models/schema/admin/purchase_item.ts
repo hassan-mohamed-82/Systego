@@ -6,6 +6,7 @@ const PurchaseItemSchema = new Schema(
     product_id: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
     material_id: { type: mongoose.Schema.Types.ObjectId, ref: "Material" }, // ✅ جديد
     category_id: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
+    date_of_expiery: { type: Date }, // ✅ جديد
     purchase_id: { type: mongoose.Schema.Types.ObjectId, ref: "Purchase" },
     warehouse_id: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse" },
     quantity: { type: Number, required: true },

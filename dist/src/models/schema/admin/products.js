@@ -18,7 +18,7 @@ const productSchema = new mongoose_1.default.Schema({
     quantity: { type: Number, required: true },
     description: { type: String },
     exp_ability: { type: Boolean, default: false },
-    date_of_expiery: { type: Date },
+    // date_of_expiery: { type: Date },
     minimum_quantity_sale: { type: Number, default: 1 },
     low_stock: { type: Number },
     whole_price: { type: Number },

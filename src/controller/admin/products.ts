@@ -20,12 +20,11 @@ export const createProduct = async (req: Request, res: Response) => {
     categoryId,
     brandId,
     unit,
-    price,            // السعر الأساسي (لو مفيش variations)
-    quantity,         // الكمية الأساسية (لو مفيش variations)
+    price,
+    quantity,
     ar_description,
     description,
     exp_ability,
-    date_of_expiery,
     minimum_quantity_sale,
     low_stock,
     whole_price,
@@ -35,52 +34,39 @@ export const createProduct = async (req: Request, res: Response) => {
     different_price,
     show_quantity,
     maximum_to_show,
-    prices,           // variations
+    prices,
     gallery_product,
     is_featured,
-    code,             // 👈 كود المنتج الأساسي (لو مفيش variations)
+    code,
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
   if (!ar_name) throw new BadRequest("Arabic name is required");
   if (!ar_description) throw new BadRequest("Arabic description is required");
 
-  // 🎯 هل في variations ولا لأ؟
   const hasVariations = Array.isArray(prices) && prices.length > 0;
 
-  // لو مفيش variations لازم price + quantity + code
   if (!hasVariations) {
     if (price === undefined || price === null) {
-      throw new BadRequest(
-        "Product price is required when there are no variations"
-      );
+      throw new BadRequest("Product price is required when there are no variations");
     }
     if (quantity === undefined || quantity === null) {
-      throw new BadRequest(
-        "Product quantity is required when there are no variations"
-      );
+      throw new BadRequest("Product quantity is required when there are no variations");
     }
-
-    // ✅ لازم يكون فيه كود للمنتج لو مفيش variations
     if (!code) {
-      throw new BadRequest(
-        "Product code is required when there are no variations"
-      );
+      throw new BadRequest("Product code is required when there are no variations");
     }
 
-    // (اختياري بس مفيد) تأكد إن الكود مش مستخدم في منتج تاني
     const existingProductWithCode = await ProductModel.findOne({ code });
     if (existingProductWithCode) {
       throw new BadRequest("Product code already exists");
     }
   }
 
-  // categoryId لازم تبقى array فيها واحد على الأقل
   if (!Array.isArray(categoryId) || categoryId.length === 0) {
     throw new BadRequest("At least one categoryId is required");
   }
 
-  // تأكد إن كل الـ categories موجودة
   const existitcategories = await CategoryModel.find({
     _id: { $in: categoryId },
   });
@@ -88,71 +74,38 @@ export const createProduct = async (req: Request, res: Response) => {
     throw new BadRequest("One or more categories not found");
   }
 
-  // تأكد من الـ brand
   if (brandId) {
     const existitbrand = await BrandModel.findById(brandId);
     if (!existitbrand) throw new BadRequest("Brand not found");
   }
 
-  // زوّد عدّاد المنتجات في كل كاتيجوري
   for (const cat of existitcategories) {
     cat.product_quantity += 1;
     await cat.save();
   }
 
-  // 🖼️ الصورة الرئيسية
   let imageUrl: string | undefined;
   if (image) {
-    imageUrl = await saveBase64Image(
-      image,
-      Date.now().toString(),
-      req,
-      "products"
-    );
+    imageUrl = await saveBase64Image(image, Date.now().toString(), req, "products");
   }
 
-  // 🖼️ صور الجاليري للمنتج
   let galleryUrls: string[] = [];
   if (gallery_product && Array.isArray(gallery_product)) {
     for (const g of gallery_product) {
       if (typeof g === "string") {
-        const imgUrl = await saveBase64Image(
-          g,
-          Date.now().toString(),
-          req,
-          "products"
-        );
+        const imgUrl = await saveBase64Image(g, Date.now().toString(), req, "products");
         galleryUrls.push(imgUrl);
       }
     }
   }
 
-  // علاقات الـ expiry
-  if (exp_ability && !date_of_expiery) {
-    throw new BadRequest("Expiry date is required when exp_ability is true");
-  }
-
-  if (date_of_expiery) {
-    const expiryDate = new Date(date_of_expiery);
-    const today = new Date();
-    expiryDate.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-    if (expiryDate < today) {
-      throw new BadRequest("Expiry date cannot be before today");
-    }
-  }
-
   if (show_quantity && !maximum_to_show) {
-    throw new BadRequest(
-      "Maximum to show is required when show_quantity is true"
-    );
+    throw new BadRequest("Maximum to show is required when show_quantity is true");
   }
 
-  // ✅ قيم مبدئية عشان السكيمة بتطلب price / quantity required
   const basePrice = hasVariations ? 0 : Number(price);
   const baseQuantity = hasVariations ? 0 : Number(quantity || 0);
 
-  // إنشاء المنتج الأساسي
   const product = await ProductModel.create({
     name,
     ar_name,
@@ -161,12 +114,11 @@ export const createProduct = async (req: Request, res: Response) => {
     categoryId,
     brandId,
     unit,
-    code,                     // 👈 حفظ كود المنتج
-    price: basePrice,         // هيتعدل لو فيه variations
-    quantity: baseQuantity,   // هيتعدل لو فيه variations
+    code,
+    price: basePrice,
+    quantity: baseQuantity,
     description,
     exp_ability,
-    date_of_expiery,
     minimum_quantity_sale,
     low_stock,
     whole_price,
@@ -180,10 +132,6 @@ export const createProduct = async (req: Request, res: Response) => {
     is_featured,
   });
 
-  // ======================================================
-  // ✅ لو فيه variations: ننشئ ProductPrice + Options
-  //    ونحسب أقل سعر + مجموع الكميات
-  // ======================================================
   if (hasVariations) {
     let totalQuantity = 0;
     let minVariantPrice: number | null = null;
@@ -199,17 +147,11 @@ export const createProduct = async (req: Request, res: Response) => {
       const variantPrice = Number(p.price);
       const variantQty = Number(p.quantity || 0);
 
-      // 🖼️ صور الجاليري لكل variation
       let priceGalleryUrls: string[] = [];
       if (p.gallery && Array.isArray(p.gallery)) {
         for (const g of p.gallery) {
           if (typeof g === "string") {
-            const gUrl = await saveBase64Image(
-              g,
-              Date.now().toString(),
-              req,
-              "product_gallery"
-            );
+            const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
             priceGalleryUrls.push(gUrl);
           }
         }
@@ -229,7 +171,6 @@ export const createProduct = async (req: Request, res: Response) => {
         minVariantPrice = variantPrice;
       }
 
-      // Options لو موجودة
       if (p.options && Array.isArray(p.options)) {
         for (const opt of p.options) {
           await ProductPriceOptionModel.create({
@@ -240,9 +181,8 @@ export const createProduct = async (req: Request, res: Response) => {
       }
     }
 
-    // بعد إنشاء كل الـ variations:
-    product.quantity = totalQuantity;              // مجموع الكميات
-    product.price = minVariantPrice ?? 0;          // أقل سعر
+    product.quantity = totalQuantity;
+    product.price = minVariantPrice ?? 0;
     await product.save();
   }
 
@@ -252,40 +192,31 @@ export const createProduct = async (req: Request, res: Response) => {
   });
 };
 
-
-// ✅ READ (with populate)
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
-  // 🟢 1️⃣ جلب كل المنتجات
   const products = await ProductModel.find()
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
 
-  // 🟢 2️⃣ جلب كل الـ variations مرة واحدة فقط
   const variations = await VariationModel.find().lean();
 
-  // 🟢 3️⃣ تجهيز الاستعلامات بشكل متوازي لكل منتج
   const formattedProducts = await Promise.all(
     products.map(async (product) => {
-      // 🔹 جلب الأسعار الخاصة بالمنتج
       const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
-      // 🔹 تجهيز الأسعار + options في توازي
       const formattedPrices = await Promise.all(
         prices.map(async (price) => {
           const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
             .populate({
               path: "option_id",
-              select: "_id name variationId", // ✅ عشان نتأكد إن variationId متجاب
+              select: "_id name variationId",
             })
             .lean();
 
-          // 🔹 تجميع الخيارات حسب الـ variation
           const groupedOptions: Record<string, any[]> = {};
 
           for (const po of options) {
-            // ✅ تعريف option بشكل صريح بعد الـ populate
             const option = po.option_id as any;
             if (!option?._id) continue;
 
@@ -315,10 +246,8 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
     })
   );
 
-  // 🟢 4️⃣ إرسال الريسبونس النهائي
   SuccessResponse(res, { products: formattedProducts });
 };
-
 
 export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -333,7 +262,6 @@ export const updateProduct = async (req: Request, res: Response) => {
     description,
     ar_description,
     exp_ability,
-    date_of_expiery,
     minimum_quantity_sale,
     low_stock,
     whole_price,
@@ -345,30 +273,16 @@ export const updateProduct = async (req: Request, res: Response) => {
     maximum_to_show,
     prices,
     gallery,
-    is_featured
+    is_featured,
   } = req.body;
 
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
-  // ✅ تحقق من أن تاريخ الانتهاء اليوم أو بعد اليوم
-  if (date_of_expiery) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(date_of_expiery);
-    expiry.setHours(0, 0, 0, 0);
-
-    if (expiry < today) {
-      return res.status(400).json({ message: "Expiry date cannot be in the past" });
-    }
-  }
-
-  // ✅ تحديث الصورة (يدعم base64 مع أو بدون prefix)
   if (image) {
     product.image = await saveBase64Image(image, Date.now().toString(), req, "products");
   }
 
-  // ✅ تحديث الجاليري (يدعم base64 مع أو بدون prefix)
   if (gallery && Array.isArray(gallery)) {
     let galleryUrles: string[] = [];
     for (const g of gallery) {
@@ -380,7 +294,6 @@ export const updateProduct = async (req: Request, res: Response) => {
     product.gallery_product = galleryUrles;
   }
 
-  // ✅ تحديث باقي الحقول
   product.name = name ?? product.name;
   product.ar_name = ar_name ?? product.ar_name;
   product.categoryId = categoryId ?? product.categoryId;
@@ -390,7 +303,6 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.description = description ?? product.description;
   product.ar_description = ar_description ?? product.ar_description;
   product.exp_ability = exp_ability ?? product.exp_ability;
-  product.date_of_expiery = date_of_expiery ?? product.date_of_expiery;
   product.minimum_quantity_sale = minimum_quantity_sale ?? product.minimum_quantity_sale;
   product.low_stock = low_stock ?? product.low_stock;
   product.whole_price = whole_price ?? product.whole_price;
@@ -404,21 +316,18 @@ export const updateProduct = async (req: Request, res: Response) => {
 
   await product.save();
 
-  // ✅ تحديث / إنشاء / حذف الأسعار والخيارات
   let totalQuantity = 0;
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
       let productPrice;
 
       if (p._id) {
-        // تحديث سعر موجود
         productPrice = await ProductPriceModel.findByIdAndUpdate(
           p._id,
           { price: p.price, code: p.code, quantity: p.quantity || 0 },
           { new: true }
         );
       } else {
-        // إنشاء سعر جديد
         let galleryUrls: string[] = [];
         if (p.gallery && Array.isArray(p.gallery)) {
           for (const g of p.gallery) {
@@ -439,7 +348,6 @@ export const updateProduct = async (req: Request, res: Response) => {
 
       totalQuantity += p.quantity || 0;
 
-      // ✅ تحديث الخيارات
       if (productPrice && p.options && Array.isArray(p.options)) {
         await ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
         for (const opt of p.options) {
@@ -452,14 +360,12 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ تحديث كمية المنتج النهائية
   product.quantity = totalQuantity;
   await product.save();
 
   SuccessResponse(res, { message: "Product updated successfully", product });
 };
 
-// ✅ DELETE
 export const deleteProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -478,7 +384,6 @@ export const deleteProduct = async (req: Request, res: Response) => {
 export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
-  // 🟢 1️⃣ جلب المنتج الأساسي
   const product = await ProductModel.findById(id)
     .populate("categoryId")
     .populate("brandId")
@@ -487,30 +392,25 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
 
   if (!product) throw new NotFound("Product not found");
 
-  // 🟢 2️⃣ جلب كل الـ variations مرة واحدة فقط
   const variations = await VariationModel.find().lean();
 
-  // 🟢 3️⃣ جلب الأسعار الخاصة بالمنتج
   const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
-  // 🟢 4️⃣ تجهيز الأسعار + الخيارات المرتبطة بها
   const formattedPrices = await Promise.all(
     prices.map(async (price) => {
       const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
         .populate({
           path: "option_id",
-          select: "_id name variationId", // ✅ لازم يكون الحقل في الـ Option schema
+          select: "_id name variationId",
         })
         .lean();
 
-      // 🔹 تجميع الخيارات حسب الـ variation
       const groupedOptions: Record<string, any[]> = {};
 
       for (const po of options) {
         const option = po.option_id as any;
         if (!option?._id) continue;
 
-        // 🔹 ربط الخيار بالـ variation
         const variation = variations.find(
           (v) => v._id.toString() === option.variationId?.toString()
         );
@@ -524,13 +424,11 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
         }
       }
 
-      // 🔹 تحويلها إلى مصفوفة نهائية
       const variationsArray = Object.keys(groupedOptions).map((varName) => ({
         name: varName,
         options: groupedOptions[varName],
       }));
 
-      // ✅ ترتيب النتيجة النهائية
       return {
         _id: price._id,
         productId: price.productId,
@@ -546,10 +444,8 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
     })
   );
 
-  // 🟢 5️⃣ دمج الأسعار داخل المنتج
   (product as any).prices = formattedPrices;
 
-  // 🟢 6️⃣ إرسال الريسبونس النهائي
   SuccessResponse(res, {
     product,
     message: "Product fetched successfully",
@@ -561,11 +457,9 @@ export const getProductByCode = async (req: Request, res: Response) => {
 
   if (!code) throw new BadRequest("Code is required");
 
-  // 1️⃣ ابحث عن السعر اللي بالكود ده
   const productPrice = await ProductPriceModel.findOne({ code }).lean();
   if (!productPrice) throw new NotFound("No product found for this code");
 
-  // 2️⃣ ابحث عن المنتج المرتبط بالسعر ده
   const product = await ProductModel.findById(productPrice.productId)
     .populate("categoryId")
     .populate("brandId")
@@ -574,19 +468,15 @@ export const getProductByCode = async (req: Request, res: Response) => {
 
   if (!product) throw new NotFound("Product not found");
 
-  // 3️⃣ جيب كل الـ variations مع options
   const variations = await VariationModel.find().populate("options").lean();
 
-  // 4️⃣ جيب الكاتيجوريز و البراندز
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
 
-  // 5️⃣ جيب الخيارات المرتبطة بالسعر ده
   const options = await ProductPriceOptionModel.find({ product_price_id: productPrice._id })
     .populate("option_id")
     .lean();
 
-  // 6️⃣ جمّع الخيارات حسب الـ variation
   const groupedOptions: Record<string, any[]> = {};
 
   options.forEach((po: any) => {
@@ -608,13 +498,11 @@ export const getProductByCode = async (req: Request, res: Response) => {
     options: groupedOptions[varName],
   }));
 
-  // 7️⃣ أضف السعر داخل المنتج
   (product as any).price = {
     ...productPrice,
     variations: variationsArray,
   };
 
-  // 8️⃣ رجّع كل البيانات
   SuccessResponse(res, {
     product,
     categories,
@@ -623,39 +511,29 @@ export const getProductByCode = async (req: Request, res: Response) => {
   });
 };
 
-
-
-
 export const generateBarcodeImageController = async (req: Request, res: Response) => {
-  
-    const { product_price_id } = req.params; // 👈 غيرنا الاسم ليكون واضح أكثر
-    if (!product_price_id) throw new BadRequest("Product price ID is required");
+  const { product_price_id } = req.params;
+  if (!product_price_id) throw new BadRequest("Product price ID is required");
 
-    const productPrice = await ProductPriceModel.findById(product_price_id);
-    if (!productPrice) throw new NotFound("Product price not found");
+  const productPrice = await ProductPriceModel.findById(product_price_id);
+  if (!productPrice) throw new NotFound("Product price not found");
 
-    // 🟢 ناخد الكود الخاص بالسعر
-    const productCode = productPrice.code;
-    if (!productCode) throw new BadRequest("Product price does not have a code yet");
+  const productCode = productPrice.code;
+  if (!productCode) throw new BadRequest("Product price does not have a code yet");
 
-    // 🟢 نولّد صورة الباركود
-    const imageLink = await generateBarcodeImage(productCode, productCode);
+  const imageLink = await generateBarcodeImage(productCode, productCode);
 
-    // 🟢 نكوّن لينك كامل يوصل للعميل
-    const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
+  const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
 
-    SuccessResponse(res, {
-      image: fullImageUrl,
-      code: productCode,
-    });
-  
+  SuccessResponse(res, {
+    image: fullImageUrl,
+    code: productCode,
+  });
 };
-
 
 export const generateProductCode = async (req: Request, res: Response) => {
   let newCode = generateEAN13Barcode();
 
-  // التأكد من عدم التكرار
   while (await ProductPriceModel.findOne({ code: newCode })) {
     newCode = generateEAN13Barcode();
   }
@@ -663,16 +541,11 @@ export const generateProductCode = async (req: Request, res: Response) => {
   SuccessResponse(res, { code: newCode });
 };
 
-
-
 export const modelsforselect = async (req: Request, res: Response) => {
-
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
   const variations = await VariationModel.find().lean().populate("options");
   const warehouses = await WarehouseModel.find().lean();
-  
+
   SuccessResponse(res, { categories, brands, variations, warehouses });
-
-
 };

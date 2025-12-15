@@ -23,7 +23,6 @@ import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
 import { any } from "joi";
 import { MaterialModel } from "../../models/schema/admin/Materials";
 
-
 export const createPurchase = async (req: Request, res: Response) => {
   const {
     date,
@@ -38,7 +37,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     discount,
     tax_id,
     purchase_items = [],
-    purchase_materials = [], // ✅ جديد
+    purchase_materials = [],
     financials,
     purchase_due_payment,
   } = req.body;
@@ -98,6 +97,26 @@ export const createPurchase = async (req: Request, res: Response) => {
       }
     }
 
+    // جلب المنتج للتحقق من exp_ability
+    const product = await ProductModel.findById(product_id);
+    if (!product) throw new NotFound(`Product not found: ${product_id}`);
+
+    // التحقق من تاريخ الانتهاء لو المنتج بيدعم الصلاحية
+    if (product.exp_ability) {
+      if (!p.date_of_expiery) {
+        throw new BadRequest(`Expiry date is required for product: ${product.name}`);
+      }
+
+      const expiryDate = new Date(p.date_of_expiery);
+      const today = new Date();
+      expiryDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+
+      if (expiryDate < today) {
+        throw new BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
+      }
+    }
+
     const existingPurchaseItem = await PurchaseItemModel.findOne({ warehouse_id, product_id });
     if (!existingPurchaseItem && warehouse) {
       warehouse.number_of_products += 1;
@@ -116,19 +135,17 @@ export const createPurchase = async (req: Request, res: Response) => {
       tax: p.tax,
       subtotal: p.subtotal,
       item_type: "product",
+      date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
     });
 
     // Update product quantity
-    const product = await ProductModel.findById(product_id);
-    if (product) {
-      product.quantity += p.quantity ?? 0;
-      await product.save();
+    product.quantity += p.quantity ?? 0;
+    await product.save();
 
-      const category = await CategoryModel.findById(product.categoryId);
-      if (category) {
-        category.product_quantity += p.quantity ?? 0;
-        await category.save();
-      }
+    const category = await CategoryModel.findById(product.categoryId);
+    if (category) {
+      category.product_quantity += p.quantity ?? 0;
+      await category.save();
     }
 
     // Update warehouse
@@ -165,13 +182,12 @@ export const createPurchase = async (req: Request, res: Response) => {
     }
   }
 
-  // ========== Process Materials ========== ✅ جديد
+  // ========== Process Materials ==========
 
   for (const m of purchase_materials) {
     const material = await MaterialModel.findById(m.material_id);
     if (!material) throw new NotFound(`Material not found: ${m.material_id}`);
 
-    // Create purchase item
     await PurchaseItemModel.create({
       date: m.date || date,
       warehouse_id: warehouse_id,
@@ -186,11 +202,9 @@ export const createPurchase = async (req: Request, res: Response) => {
       item_type: "material",
     });
 
-    // Update material quantity only
     material.quantity += m.quantity ?? 0;
     await material.save();
 
-    // Update warehouse
     if (warehouse) {
       warehouse.stock_Quantity += m.quantity ?? 0;
       await warehouse.save();
@@ -230,7 +244,6 @@ export const createPurchase = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Purchase created successfully", purchase });
 };
 
- 
 export const getPurchase = async (req: Request, res: Response): Promise<void> => {
   const [
     purchases,
@@ -256,8 +269,8 @@ export const getPurchase = async (req: Request, res: Response): Promise<void> =>
     SupplierModel.find().select("_id username").lean(),
     TaxesModel.find({ status: true }).select("_id name").lean(),
     BankAccountModel.find().select("_id name").lean(),
-    ProductModel.find().select("_id name").lean(),
-    MaterialModel.find().select("_id name ar_name unit quantity").lean(), // ✅ جديد
+    ProductModel.find().select("_id name exp_ability").lean(),
+    MaterialModel.find().select("_id name ar_name unit quantity").lean(),
     VariationModel.find({ status: true })
       .select("_id name")
       .populate({ path: "options", select: "_id name", match: { status: true } })
@@ -276,7 +289,6 @@ export const getPurchase = async (req: Request, res: Response): Promise<void> =>
     variations,
   });
 };
-
 
 export const updatePurchase = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -321,7 +333,19 @@ export const updatePurchase = async (req: Request, res: Response) => {
       if (p._id) {
         const purchaseItem = await PurchaseItemModel.findById(p._id);
         if (purchaseItem && purchaseItem.item_type === "product") {
-          const product = (await ProductModel.findById(purchaseItem.product_id)) as any;
+          const product = await ProductModel.findById(purchaseItem.product_id);
+
+          // التحقق من تاريخ الانتهاء لو المنتج بيدعم الصلاحية
+          if (product?.exp_ability && p.date_of_expiery) {
+            const expiryDate = new Date(p.date_of_expiery);
+            const today = new Date();
+            expiryDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
+
+            if (expiryDate < today) {
+              throw new BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
+            }
+          }
 
           if (product && p.quantity !== undefined) {
             const diff = p.quantity - purchaseItem.quantity;
@@ -350,18 +374,18 @@ export const updatePurchase = async (req: Request, res: Response) => {
           purchaseItem.unit_cost = p.unit_cost ?? purchaseItem.unit_cost;
           purchaseItem.tax = p.tax ?? purchaseItem.tax;
           purchaseItem.subtotal = p.subtotal ?? purchaseItem.subtotal;
+          purchaseItem.date_of_expiery = p.date_of_expiery ?? purchaseItem.date_of_expiery;
           await purchaseItem.save();
         }
       }
     }
   }
 
-  // ========== Update Materials ========== ✅ جديد
+  // ========== Update Materials ==========
 
   if (purchase_materials && Array.isArray(purchase_materials)) {
     for (const m of purchase_materials) {
       if (m._id) {
-        // Update existing
         const purchaseItem = await PurchaseItemModel.findById(m._id);
         if (purchaseItem && purchaseItem.item_type === "material") {
           const material = await MaterialModel.findById(purchaseItem.material_id);
@@ -380,7 +404,6 @@ export const updatePurchase = async (req: Request, res: Response) => {
           await purchaseItem.save();
         }
       } else {
-        // Create new
         const material = await MaterialModel.findById(m.material_id);
         if (!material) throw new NotFound(`Material not found: ${m.material_id}`);
 
@@ -407,27 +430,30 @@ export const updatePurchase = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Purchase updated successfully", purchase });
 };
 
-
 export const getOnePurchase = async (req: Request, res: Response) => {
   const { id } = req.params;
   const baseUrl = req.protocol + "://" + req.get("host");
-  const purchase = await PurchaseModel.findById(id)// 
-    .select('_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img')
+
+  const purchase = await PurchaseModel.findById(id)
+    .select("_id date shiping_cost discount payment_status exchange_rate subtotal receipt_img")
     .populate({ path: "warehouse_id", select: "_id name" })
     .populate({ path: "supplier_id", select: "_id username phone_number" })
     .populate({ path: "currency_id", select: "_id name" })
     .populate({ path: "tax_id", select: "_id name" })
-    .populate({path :"items", populate: "options"}) // جاي من الـ virtual
-    .populate({path :"invoices", select: "_id amount date", populate: {path: "financial_id", select: "_id name"}}) // جاي من الـ virtual
-    .populate({path :"duePayments", select: "_id amount date"}) // جاي من الـ virtual 
+    .populate({ path: "items", populate: "options" })
+    .populate({
+      path: "invoices",
+      select: "_id amount date",
+      populate: { path: "financial_id", select: "_id name" },
+    })
+    .populate({ path: "duePayments", select: "_id amount date" })
     .lean({ virtuals: true });
 
-
   if (!purchase) throw new NotFound("Purchase not found");
-   
+
   if (purchase?.receipt_img) {
     purchase.receipt_img = `${baseUrl}/${purchase.receipt_img}`;
   }
 
-  SuccessResponse(res, {purchase });
+  SuccessResponse(res, { purchase });
 };
