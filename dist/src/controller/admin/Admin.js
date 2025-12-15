@@ -72,7 +72,7 @@ exports.createUser = createUser;
 const getAllUsers = async (req, res, next) => {
     const users = await User_1.UserModel.find()
         .select("-password_hash -__v")
-        .populate("warehouseId", "name"); // 👈 تعديل هنا
+        .populate("warehouse_id", "name"); // 👈 تعديل هنا
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
     }
@@ -92,7 +92,7 @@ const getUserById = async (req, res, next) => {
     }
     const user = await User_1.UserModel.findById(id)
         .select("-password_hash -__v")
-        .populate("warehouseId", "name"); // 👈 تعديل هنا
+        .populate("warehouse_id", "name"); // 👈 تعديل هنا
     if (!user)
         throw new Errors_1.NotFound("User not found");
     (0, response_1.SuccessResponse)(res, {

@@ -98,7 +98,7 @@ export const getAllUsers = async (
 ) => {
   const users = await UserModel.find()
     .select("-password_hash -__v")
-    .populate("warehouseId", "name"); // 👈 تعديل هنا
+    .populate("warehouse_id", "name"); // 👈 تعديل هنا
 
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
@@ -126,7 +126,7 @@ export const getUserById = async (
 
   const user = await UserModel.findById(id)
     .select("-password_hash -__v")
-    .populate("warehouseId", "name"); // 👈 تعديل هنا
+    .populate("warehouse_id", "name"); // 👈 تعديل هنا
 
   if (!user) throw new NotFound("User not found");
 
