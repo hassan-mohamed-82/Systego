@@ -11,6 +11,7 @@ import { CategoryModel } from "../../models/schema/admin/category";
 import { BrandModel } from "../../models/schema/admin/brand";
 import { VariationModel } from "../../models/schema/admin/Variation";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
+import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -565,3 +566,7 @@ export const modelsforselect = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { categories, brands, variations, warehouses });
 };
+
+
+
+

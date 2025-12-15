@@ -11,6 +11,13 @@ const currencySchema = new Schema({
         type: String,
         required: true,
     },
+    amount: {
+        type: Number,
+    },
+    isdefault: {
+        type: Boolean,
+        default: false
+    }
 }, { timestamps: true } );
 
 export const CurrencyModel = mongoose.model("Currency", currencySchema);

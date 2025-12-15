@@ -69,7 +69,7 @@ const getAllSelections = async (req, res) => {
     const paymentMethods = await payment_methods_1.PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await customer_1.CustomerModel.find().select('name phone_number email address');
     const customerGroups = await customer_1.CustomerGroupModel.find().select('name ');
-    const currency = await Currency_1.CurrencyModel.find().select('name  ar_name');
+    const currency = await Currency_1.CurrencyModel.find({ isdefault: true }).select('name  ar_name,amount');
     const countries = await Country_1.CountryModel.find()
         .select("name ar_name") // حقول البلد
         .populate({

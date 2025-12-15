@@ -6,20 +6,18 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const createCurrency = async (req, res) => {
-    const { name, ar_name } = req.body;
+    const { name, ar_name, amount, isdefault } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Currency name is required");
     const existingCurrency = await Currency_1.CurrencyModel.findOne({ name });
     if (existingCurrency)
         throw new BadRequest_1.BadRequest("Currency already exists");
-    const currency = await Currency_1.CurrencyModel.create({ name, ar_name });
+    const currency = await Currency_1.CurrencyModel.create({ name, ar_name, amount, isdefault });
     (0, response_1.SuccessResponse)(res, { message: "Currency created successfully", currency });
 };
 exports.createCurrency = createCurrency;
 const getCurrencies = async (req, res) => {
     const currencies = await Currency_1.CurrencyModel.find();
-    if (!currencies || currencies.length === 0)
-        throw new Errors_1.NotFound("No currencies found");
     (0, response_1.SuccessResponse)(res, { message: "Get currencies successfully", currencies });
 };
 exports.getCurrencies = getCurrencies;
@@ -50,6 +48,11 @@ const updateCurrency = async (req, res) => {
     const currency = await Currency_1.CurrencyModel.findByIdAndUpdate(id, req.body, { new: true });
     if (!currency)
         throw new Errors_1.NotFound("Currency not found");
+    if (currency.isdefault === true) {
+        await Currency_1.CurrencyModel.updateMany({ _id: { $ne: id } }, // كل العملات ما عدا دي
+        { isdefault: false } // خليها false
+        );
+    }
     (0, response_1.SuccessResponse)(res, { message: "Currency updated successfully", currency });
 };
 exports.updateCurrency = updateCurrency;
