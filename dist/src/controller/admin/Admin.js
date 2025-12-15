@@ -16,15 +16,15 @@ const mongoose_1 = __importDefault(require("mongoose"));
 // Create User
 // =========================
 const createUser = async (req, res, next) => {
-    const { username, email, password, company_name, phone, image_base64, warehouse_id, // 👈 من البودي
+    const { username, email, password, company_name, phone, image_base64, warehouseId, // 👈 من البودي
     role = "admin", } = req.body;
-    if (!username || !email || !password || !warehouse_id) {
+    if (!username || !email || !password || !warehouseId) {
         throw new BadRequest_1.BadRequest("Username, email, password and warehouse_id are required");
     }
-    if (!mongoose_1.default.Types.ObjectId.isValid(warehouse_id)) {
+    if (!mongoose_1.default.Types.ObjectId.isValid(warehouseId)) {
         throw new BadRequest_1.BadRequest("Invalid warehouse_id");
     }
-    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+    const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouseExists) {
         throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
     }
@@ -47,7 +47,7 @@ const createUser = async (req, res, next) => {
         company_name,
         phone,
         image_url,
-        warehouse_id, // 👈 تخزين في الفيلد الجديد
+        warehouseId, // 👈 تخزين في الفيلد الجديد
         role,
     });
     (0, response_1.SuccessResponse)(res, {
@@ -72,7 +72,7 @@ exports.createUser = createUser;
 const getAllUsers = async (req, res, next) => {
     const users = await User_1.UserModel.find()
         .select("-password_hash -__v")
-        .populate("warehouse_id", "name"); // 👈 تعديل هنا
+        .populate("warehouseId", "name"); // 👈 تعديل هنا
     if (!users || users.length === 0) {
         throw new Errors_1.NotFound("No users found");
     }
@@ -92,7 +92,7 @@ const getUserById = async (req, res, next) => {
     }
     const user = await User_1.UserModel.findById(id)
         .select("-password_hash -__v")
-        .populate("warehouse_id", "name"); // 👈 تعديل هنا
+        .populate("warehouseId", "name"); // 👈 تعديل هنا
     if (!user)
         throw new Errors_1.NotFound("User not found");
     (0, response_1.SuccessResponse)(res, {
@@ -106,7 +106,7 @@ exports.getUserById = getUserById;
 // =========================
 const updateUser = async (req, res, next) => {
     const { id } = req.params;
-    const { username, email, password, company_name, phone, status, image_base64, warehouse_id, // 👈 من البودي
+    const { username, email, password, company_name, phone, status, image_base64, warehouseId, // 👈 من البودي
     role, } = req.body;
     if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
         throw new BadRequest_1.BadRequest("Invalid user id");
@@ -125,15 +125,15 @@ const updateUser = async (req, res, next) => {
         user.phone = phone;
     if (status)
         user.status = status;
-    if (warehouse_id) {
-        if (!mongoose_1.default.Types.ObjectId.isValid(warehouse_id)) {
+    if (warehouseId) {
+        if (!mongoose_1.default.Types.ObjectId.isValid(warehouseId)) {
             throw new BadRequest_1.BadRequest("Invalid warehouse_id");
         }
-        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouse_id);
+        const warehouseExists = await Warehouse_1.WarehouseModel.findById(warehouseId);
         if (!warehouseExists) {
             throw new BadRequest_1.BadRequest("Invalid warehouse_id: Warehouse does not exist");
         }
-        user.warehouse_id = warehouse_id; // 👈 تخزين
+        user.warehouseId = warehouseId; // 👈 تخزين
     }
     if (role && ["superadmin", "admin"].includes(role)) {
         user.role = role;
@@ -157,7 +157,7 @@ const updateUser = async (req, res, next) => {
             company_name: user.company_name,
             phone: user.phone,
             image_url: user.image_url,
-            warehouse_id: user.warehouse_id,
+            warehouseId: user.warehouseId,
         },
     });
 };

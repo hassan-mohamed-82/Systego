@@ -27,21 +27,21 @@ export const createUser = async (
     company_name,
     phone,
     image_base64,
-    warehouse_id,      // 👈 من البودي
+    warehouseId,      // 👈 من البودي
     role = "admin",
   } = req.body;
 
-  if (!username || !email || !password || !warehouse_id) {
+  if (!username || !email || !password || !warehouseId) {
     throw new BadRequest(
       "Username, email, password and warehouse_id are required"
     );
   }
 
-  if (!mongoose.Types.ObjectId.isValid(warehouse_id)) {
+  if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
     throw new BadRequest("Invalid warehouse_id");
   }
 
-  const warehouseExists = await WarehouseModel.findById(warehouse_id);
+  const warehouseExists = await WarehouseModel.findById(warehouseId);
   if (!warehouseExists) {
     throw new BadRequest("Invalid warehouse_id: Warehouse does not exist");
   }
@@ -68,7 +68,7 @@ export const createUser = async (
     company_name,
     phone,
     image_url,
-    warehouse_id,   // 👈 تخزين في الفيلد الجديد
+    warehouseId,   // 👈 تخزين في الفيلد الجديد
     role,
   });
 
@@ -98,7 +98,7 @@ export const getAllUsers = async (
 ) => {
   const users = await UserModel.find()
     .select("-password_hash -__v")
-    .populate("warehouse_id", "name"); // 👈 تعديل هنا
+    .populate("warehouseId", "name"); // 👈 تعديل هنا
 
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
@@ -126,7 +126,7 @@ export const getUserById = async (
 
   const user = await UserModel.findById(id)
     .select("-password_hash -__v")
-    .populate("warehouse_id", "name"); // 👈 تعديل هنا
+    .populate("warehouseId", "name"); // 👈 تعديل هنا
 
   if (!user) throw new NotFound("User not found");
 
@@ -153,7 +153,7 @@ export const updateUser = async (
     phone,
     status,
     image_base64,
-    warehouse_id,   // 👈 من البودي
+    warehouseId,   // 👈 من البودي
     role,
   } = req.body;
 
@@ -172,17 +172,17 @@ export const updateUser = async (
   if (phone) user.phone = phone;
   if (status) user.status = status;
 
-  if (warehouse_id) {
-    if (!mongoose.Types.ObjectId.isValid(warehouse_id)) {
+  if (warehouseId) {
+    if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
       throw new BadRequest("Invalid warehouse_id");
     }
-    const warehouseExists = await WarehouseModel.findById(warehouse_id);
+    const warehouseExists = await WarehouseModel.findById(warehouseId);
     if (!warehouseExists) {
       throw new BadRequest(
         "Invalid warehouse_id: Warehouse does not exist"
       );
     }
-    (user as any).warehouse_id = warehouse_id; // 👈 تخزين
+    (user as any).warehouseId = warehouseId; // 👈 تخزين
   }
 
   if (role && ["superadmin", "admin"].includes(role)) {
@@ -216,7 +216,7 @@ export const updateUser = async (
       company_name: user.company_name,
       phone: user.phone,
       image_url: user.image_url,
-      warehouse_id: (user as any).warehouse_id,
+      warehouseId: (user as any).warehouseId,
     },
   });
 };
