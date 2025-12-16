@@ -9,7 +9,9 @@ const CustomerSchema = new Schema(
     country: { type: Schema.Types.ObjectId, ref: 'Country' },
     city: { type: Schema.Types.ObjectId, ref: 'City' },
     customer_group_id: { type: Schema.Types.ObjectId, ref: 'CustomerGroup' },
-    total_points_earned: { type: Number, default: 0, min: 0 }
+    total_points_earned: { type: Number, default: 0, min: 0 },
+    is_Due:{type:Boolean,default:false},
+    amount_Due:{type:Number,default:0},
   },
   { timestamps: true }
 );

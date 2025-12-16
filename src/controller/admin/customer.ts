@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { CustomerModel, CustomerGroupModel } from '../../../models/schema/admin/POS/customer';
-import { BadRequest } from '../../../Errors/BadRequest';
-import { NotFound } from '../../../Errors';
-import { SuccessResponse } from '../../../utils/response';
+import { CustomerModel, CustomerGroupModel } from '../../models/schema/admin/POS/customer';
+import { BadRequest } from '../../Errors/BadRequest';
+import { NotFound } from '../../Errors';
+import { SuccessResponse } from '../../utils/response';
 
 // Create Customer
 export const createCustomer = async (req: Request, res: Response)=> {
@@ -13,7 +13,9 @@ export const createCustomer = async (req: Request, res: Response)=> {
             address,
             country,
             city,
-            customer_group_id
+            customer_group_id,
+            is_Due,
+            amount_Due,
         } = req.body;
 
         // Validate required fields
@@ -54,7 +56,9 @@ export const createCustomer = async (req: Request, res: Response)=> {
             address,
             country,
             city,
-            customer_group_id
+            customer_group_id,
+            is_Due,
+            amount_Due,
         });
 
         const savedCustomer = await newCustomer.save();
@@ -74,3 +78,51 @@ export const createCustomer = async (req: Request, res: Response)=> {
     
 };
 
+
+export const getCustomers = async (req: Request, res: Response) => {
+    const customers = await CustomerModel.find();
+    SuccessResponse(res,{
+        message: "Customers fetched successfully",
+        customers
+    });
+}
+export const getCustomerById = async (req: Request, res: Response) => {
+    const customer = await CustomerModel.findById(req.params.id);
+    if (!customer) {
+        throw new NotFound("Customer not found");
+    }
+    SuccessResponse(res,{
+        message: "Customer fetched successfully",
+        customer
+    });
+}
+
+export const getDueCustomers = async (req: Request, res: Response) => {
+    const customers = await CustomerModel.find({ is_Due: true });
+    SuccessResponse(res,{
+        message: "Due customers fetched successfully",
+        customers
+    });
+}
+
+export const updateCustomer = async (req: Request, res: Response) => {
+    const customer = await CustomerModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!customer) {
+        throw new NotFound("Customer not found");
+    }
+    SuccessResponse(res,{
+        message: "Customer updated successfully",
+        customer
+    });
+}
+
+export const deleteCustomer = async (req: Request, res: Response) => {
+    const customer = await CustomerModel.findByIdAndDelete(req.params.id);
+    if (!customer) {
+        throw new NotFound("Customer not found");
+    }
+    SuccessResponse(res,{
+        message: "Customer deleted successfully",
+        customer
+    });
+}

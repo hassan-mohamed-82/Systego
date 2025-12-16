@@ -43,7 +43,9 @@ const CustomerSchema = new mongoose_1.Schema({
     country: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Country' },
     city: { type: mongoose_1.Schema.Types.ObjectId, ref: 'City' },
     customer_group_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'CustomerGroup' },
-    total_points_earned: { type: Number, default: 0, min: 0 }
+    total_points_earned: { type: Number, default: 0, min: 0 },
+    is_Due: { type: Boolean, default: false },
+    amount_Due: { type: Number, default: 0 },
 }, { timestamps: true });
 const CustomerGroupSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },

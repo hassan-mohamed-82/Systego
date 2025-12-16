@@ -35,7 +35,7 @@ import Product_warehouseRouter from "./product_warehouse"
 import  SelectReasonRouter  from "./adjustmentsreason";
 import SaleRouter from "./POS/POSRoutes"
 import CustomerGroupRouter from "./POS/customerGroupRoutes"
-import CustomerRouter from "./POS/customerRoutes"
+import CustomerRouter from "./customerRoutes"
 import GiftCardRouter from "./POS/giftCardRoutes"
 import PosHomeRouter from "./POS/POSHomeRoutes"
 import CashierShiftRouter from "./POS/CashierShiftRoutes"

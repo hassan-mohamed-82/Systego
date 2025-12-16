@@ -77,6 +77,7 @@ export const getAllSelections = async (req: Request, res: Response) => {
     const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
     const customers = await CustomerModel.find().select('name phone_number email address');
     const customerGroups = await CustomerGroupModel.find().select('name ');
+    const dueCustomers = await CustomerModel.find({ is_Due: true }).select('name phone_number email address amount_Due');
     const currency=await CurrencyModel.find({isdefault: true}).select('name  ar_name,amount');
  const countries = await CountryModel.find()
   .select("name ar_name")                    
