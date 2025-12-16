@@ -71,7 +71,7 @@ const getAllSelections = async (req, res) => {
     const customerGroups = await customer_1.CustomerGroupModel.find().select('name ');
     const currency = await Currency_1.CurrencyModel.find({ isdefault: true }).select('name  ar_name,amount');
     const countries = await Country_1.CountryModel.find()
-        .select("name ar_name") // حقول البلد
+        .select("name ar_name")
         .populate({
         path: "cities",
         select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City

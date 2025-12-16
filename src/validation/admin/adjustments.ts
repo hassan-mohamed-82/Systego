@@ -6,7 +6,7 @@ export const createAdjustmentSchema = Joi.object({
     "any.required": "Warehouse ID is required",
   }),
   note: Joi.string().allow("", null).optional(),
-  product_id: Joi.string().optional(),
+  productId: Joi.string().optional(),
   quantity: Joi.number().required().messages({
     "any.required": "Quantity is required",
     "number.base": "Quantity must be a number",

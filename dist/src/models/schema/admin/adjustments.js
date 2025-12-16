@@ -31,7 +31,7 @@ const adjustmentSchema = new Schema({
         type: String,
         trim: true,
     },
-    product_id: [
+    productId: [
         {
             type: Schema.Types.ObjectId,
             ref: "Product",
