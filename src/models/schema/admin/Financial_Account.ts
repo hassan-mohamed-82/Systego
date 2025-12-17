@@ -3,7 +3,7 @@ import mongoose, { Schema } from "mongoose";
 const BankAccountSchema = new Schema(
   {
     name: { type: String, required: true },
-    warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", required: true },
+    warehouseId:[ { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", required: true }],
     image: { type: String  },
     balance: { type: Number, default: 0 },
     description: { type: String  },

@@ -15,11 +15,10 @@ import { BankAccountModel } from '../../../models/schema/admin/Financial_Account
 
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 
-
 export const startcashierShift = async (req: Request, res: Response) => {
-  const cashierman_id = req.user?.id;          // اليوزر اللي داخل بالـ JWT
-  const warehouseId   = (req.user as any)?.warehouse_id;
-  const { cashier_id } = req.body;            // الكاشير المختار من الشاشة (CashierModel._id)
+  const cashierman_id = req.user?.id;
+  const warehouseId = (req.user as any)?.warehouse_id;
+  const { cashier_id } = req.body;
 
   if (!cashierman_id) {
     throw new NotFound("Cashier user not found in token");
@@ -27,22 +26,33 @@ export const startcashierShift = async (req: Request, res: Response) => {
   if (!warehouseId) {
     throw new NotFound("Warehouse ID is required");
   }
-  if (!cashier_id) {
-    throw new BadRequest("Cashier ID is required");
-  }
 
   const cashierUser = await UserModel.findById(cashierman_id);
   if (!cashierUser) {
     throw new NotFound("Cashier user not found");
   }
 
-  // 🔒 امنع أن نفس اليوزر يكون له شيفت مفتوح
+  // ✅ لو فيه شيفت مفتوح، دخّله عليه على طول
   const existingShift = await CashierShift.findOne({
     cashierman_id,
     status: "open",
-  });
+  }).populate("cashier_id", "name code");
+
   if (existingShift) {
-    throw new BadRequest("You already have an open shift");
+    // جيب بيانات الكاشير المرتبط بالشيفت
+    const cashierDoc = await CashierModel.findById(existingShift.cashier_id);
+
+    return SuccessResponse(res, {
+      message: "You already have an open shift",
+      isExisting: true,
+      shift: existingShift,
+      cashier: cashierDoc,
+    });
+  }
+
+  // ✅ لو مفيش شيفت مفتوح، لازم يختار كاشير
+  if (!cashier_id) {
+    throw new BadRequest("Cashier ID is required to start a new shift");
   }
 
   // 🔒 امنع أن نفس الكاشير (CashierModel) يشتغل مع حد تاني
@@ -51,9 +61,9 @@ export const startcashierShift = async (req: Request, res: Response) => {
       _id: cashier_id,
       warehouse_id: warehouseId,
       status: true,
-      cashier_active: false, // لو true يبقى مستخدم عَ شيفت تاني
+      cashier_active: false,
     },
-    { $set: { cashier_active: true } }, // نفعّله
+    { $set: { cashier_active: true } },
     { new: true }
   );
 
@@ -61,7 +71,7 @@ export const startcashierShift = async (req: Request, res: Response) => {
     throw new BadRequest("Cashier already in use or not found");
   }
 
-  // ✅ نفتح الشيفت ونربطه بـ cashierman_id + cashier_id
+  // ✅ نفتح شيفت جديد
   const cashierShift = new CashierShift({
     start_time: new Date(),
     cashierman_id,
@@ -73,10 +83,12 @@ export const startcashierShift = async (req: Request, res: Response) => {
 
   SuccessResponse(res, {
     message: "Cashier shift started successfully",
+    isExisting: false,
     shift: savedShift,
     cashier: cashierDoc,
   });
 };
+
 
 export const endShiftWithReport = async (req: Request, res: Response) => {
 const { password } = req.body;
