@@ -4,15 +4,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.uploadFile = uploadFile;
-// utils/uploadFile.js
+exports.uploadExcelFile = uploadExcelFile;
+// utils/uploadFile.ts
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-// 🧠 دالة بتجهز multer upload object
-async function uploadFile(folderName = "uploads") {
+// للـ Disk Storage (حفظ على السيرفر)
+function uploadFile(folderName = "uploads") {
     const storage = multer_1.default.diskStorage({
         destination: function (req, file, cb) {
-            // 🧠 تأكد إن الفولدر موجود، لو مش موجود اعمله
             if (!fs_1.default.existsSync(folderName)) {
                 fs_1.default.mkdirSync(folderName, { recursive: true });
             }
@@ -23,6 +23,27 @@ async function uploadFile(folderName = "uploads") {
             cb(null, uniqueName);
         },
     });
-    // نرجع كائن multer اللي ممكن نستدعيه في أي route
     return (0, multer_1.default)({ storage });
+}
+// للـ Memory Storage (للـ Excel - بنقرأه من الـ Buffer)
+function uploadExcelFile() {
+    const storage = multer_1.default.memoryStorage();
+    return (0, multer_1.default)({
+        storage: storage,
+        fileFilter: (req, file, cb) => {
+            const allowedMimes = [
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-excel",
+            ];
+            if (allowedMimes.includes(file.mimetype)) {
+                cb(null, true);
+            }
+            else {
+                cb(new Error("Only Excel files (.xlsx, .xls) are allowed"));
+            }
+        },
+        limits: {
+            fileSize: 5 * 1024 * 1024, // 5MB
+        },
+    });
 }

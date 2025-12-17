@@ -12,6 +12,7 @@ import { randomInt } from "crypto";
 import { saveBase64Image } from "../../utils/handleImages"
 import { RoleModel } from "../../models/schema/admin/roles";
 import { ActionModel } from "../../models/schema/admin/Action";
+import { CashierShift } from "../../models/schema/admin/POS/CashierShift";
 
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
@@ -32,7 +33,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // تحويل permissions لشكل مرتب
   const mappedPermissions: UserPermission[] =
     (user.permissions || []).map((p) => ({
       module: p.module,
@@ -42,7 +42,12 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       })),
     }));
 
-  // ✅ استخدم warehouse_id من الداتا
+  // ✅ التحقق من وجود شيفت مفتوح
+  const openShift = await CashierShift.findOne({
+    cashierman_id: user._id,
+    status: "open",
+  });
+
   const token = generateToken({
     _id: user._id!,
     username: user.username,
@@ -65,8 +70,11 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         : null,
       permissions: mappedPermissions,
     },
+    hasOpenShift: !!openShift,  // ✅ true أو false بس
   });
 };
+
+
 export const signup = async (req: Request, res: Response) => {
   const data = req.body;
 

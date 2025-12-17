@@ -12,6 +12,7 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
+const CashierShift_1 = require("../../models/schema/admin/POS/CashierShift");
 const login = async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -25,7 +26,6 @@ const login = async (req, res, next) => {
     if (!isMatch) {
         throw new Errors_1.UnauthorizedError("Invalid email or password");
     }
-    // تحويل permissions لشكل مرتب
     const mappedPermissions = (user.permissions || []).map((p) => ({
         module: p.module,
         actions: (p.actions || []).map((a) => ({
@@ -33,7 +33,11 @@ const login = async (req, res, next) => {
             action: a.action,
         })),
     }));
-    // ✅ استخدم warehouse_id من الداتا
+    // ✅ التحقق من وجود شيفت مفتوح
+    const openShift = await CashierShift_1.CashierShift.findOne({
+        cashierman_id: user._id,
+        status: "open",
+    });
     const token = (0, auth_1.generateToken)({
         _id: user._id,
         username: user.username,
@@ -55,6 +59,7 @@ const login = async (req, res, next) => {
                 : null,
             permissions: mappedPermissions,
         },
+        hasOpenShift: !!openShift, // ✅ true أو false بس
     });
 };
 exports.login = login;
