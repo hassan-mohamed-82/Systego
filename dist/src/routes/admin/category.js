@@ -1,14 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// routes/admin/categoryRoutes.ts
 const express_1 = require("express");
 const category_1 = require("../../controller/admin/category");
 const validation_1 = require("../../middlewares/validation");
 const category_2 = require("../../validation/admin/category");
 const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
+const uploadFile_1 = require("../../utils/uploadFile");
 const route = (0, express_1.Router)();
+// ✅ Static routes أولاً
+route.post("/import", (0, haspremission_1.authorizePermissions)("category", "Add"), (0, uploadFile_1.uploadExcelFile)().single("file"), (0, catchAsync_1.catchAsync)(category_1.importCategoriesFromExcel));
+// CRUD
 route.post("/", (0, haspremission_1.authorizePermissions)("category", "Add"), (0, validation_1.validate)(category_2.createCategorySchema), (0, catchAsync_1.catchAsync)(category_1.createcategory));
 route.get("/", (0, haspremission_1.authorizePermissions)("category", "View"), (0, catchAsync_1.catchAsync)(category_1.getCategories));
+// ✅ Dynamic routes آخراً
 route.get("/:id", (0, haspremission_1.authorizePermissions)("category", "View"), (0, catchAsync_1.catchAsync)(category_1.getCategoryById));
 route.put("/:id", (0, haspremission_1.authorizePermissions)("category", "Edit"), (0, validation_1.validate)(category_2.updateCategorySchema), (0, catchAsync_1.catchAsync)(category_1.updateCategory));
 route.delete("/:id", (0, haspremission_1.authorizePermissions)("category", "Delete"), (0, catchAsync_1.catchAsync)(category_1.deleteCategory));

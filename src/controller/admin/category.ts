@@ -7,6 +7,8 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
 import { ProductModel } from "../../models/schema/admin/products";
 import mongoose from "mongoose";
+import ExcelJS from "exceljs";
+
 
 export const createcategory = async (req: Request, res: Response) => {
   const { name, ar_name, image, parentId } = req.body;
@@ -91,4 +93,126 @@ export const updateCategory =async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "update category successfully", category });
   
+};
+
+
+// controllers/admin/category.ts
+
+
+export const importCategoriesFromExcel = async (req: Request, res: Response) => {
+  if (!req.file) {
+    throw new BadRequest("Excel file is required");
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  // Convert multer buffer to ArrayBuffer for ExcelJS compatibility
+  const arrayBuffer = req.file.buffer.buffer.slice(
+    req.file.buffer.byteOffset,
+    req.file.buffer.byteOffset + req.file.buffer.byteLength
+  ) as ArrayBuffer;
+  await workbook.xlsx.load(arrayBuffer);
+
+  const worksheet = workbook.getWorksheet(1);
+
+  if (!worksheet) {
+    throw new BadRequest("Invalid Excel file");
+  }
+
+  const categories: Array<{
+    name: string;
+    ar_name: string;
+    parent: string;
+    image: string;
+  }> = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // Skip header
+
+    const name = row.getCell(1).value?.toString().trim() || "";
+    const ar_name = row.getCell(2).value?.toString().trim() || "";
+    const parent = row.getCell(3).value?.toString().trim() || "";
+    const image = row.getCell(4).value?.toString().trim() || "";
+
+    if (name) {
+      categories.push({ name, ar_name, parent, image });
+    }
+  });
+
+  if (categories.length === 0) {
+    throw new BadRequest("No valid categories found");
+  }
+
+  const results = {
+    success: [] as string[],
+    failed: [] as { name: string; reason: string }[],
+    skipped: [] as { name: string; reason: string }[],
+  };
+
+  // خريطة الـ Categories الموجودة
+  const categoryMap: { [key: string]: string } = {};
+  const existingCategories = await CategoryModel.find({}).lean();
+  existingCategories.forEach((cat: any) => {
+    categoryMap[cat.name.toLowerCase()] = cat._id.toString();
+  });
+
+  for (const cat of categories) {
+    try {
+      // لو موجود، skip
+      if (categoryMap[cat.name.toLowerCase()]) {
+        results.skipped.push({
+          name: cat.name,
+          reason: "Already exists",
+        });
+        continue;
+      }
+
+      // دور على الـ Parent
+      let parentId = null;
+      if (cat.parent) {
+        parentId = categoryMap[cat.parent.toLowerCase()];
+        if (!parentId) {
+          const parentCategory = await CategoryModel.findOne({
+            name: { $regex: new RegExp(`^${cat.parent}$`, "i") },
+          });
+          if (parentCategory) {
+            parentId = parentCategory._id.toString();
+            categoryMap[cat.parent.toLowerCase()] = parentId;
+          } else {
+            results.failed.push({
+              name: cat.name,
+              reason: `Parent "${cat.parent}" not found`,
+            });
+            continue;
+          }
+        }
+      }
+
+      // أضف الـ Category
+      const newCategory = await CategoryModel.create({
+        name: cat.name,
+        ar_name: cat.ar_name || "",
+        parentId: parentId || null,
+        image: cat.image || "",
+      });
+
+      categoryMap[cat.name.toLowerCase()] = newCategory._id.toString();
+      results.success.push(cat.name);
+    } catch (error: any) {
+      results.failed.push({
+        name: cat.name,
+        reason: error.message || "Unknown error",
+      });
+    }
+  }
+
+  return SuccessResponse(res, {
+    message: "Import completed",
+    total: categories.length,
+    success_count: results.success.length,
+    failed_count: results.failed.length,
+    skipped_count: results.skipped.length,
+    success: results.success,
+    failed: results.failed,
+    skipped: results.skipped,
+  });
 };

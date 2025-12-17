@@ -8,16 +8,24 @@ import {
   generateBarcodeImageController,
   generateProductCode,
   getProductByCode,
-  modelsforselect
+  modelsforselect,
+  importProductsFromExcel
 } from "../../controller/admin/products";
 import { validate } from "../../middlewares/validation";
 import { createProductSchema, updateProductSchema } from "../../validation/admin/products";
 import { catchAsync } from "../../utils/catchAsync";
 import { authenticated } from "../../middlewares/authenticated";
 import {authorizePermissions} from "../../middlewares/haspremission"
+import { uploadExcelFile } from "../../utils/uploadFile";
 
 const route = Router();
-
+// ✅ Static routes أولاً
+route.post(
+  "/import",
+  authorizePermissions("product", "Add"),
+  uploadExcelFile().single("file"),
+  catchAsync(importProductsFromExcel)
+);
 // إنشاء منتج
 route.post("/",authorizePermissions("product","Add"), validate(createProductSchema), catchAsync(createProduct));
 

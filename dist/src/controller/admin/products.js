@@ -1,6 +1,9 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
+exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -13,6 +16,7 @@ const category_1 = require("../../models/schema/admin/category");
 const brand_1 = require("../../models/schema/admin/brand");
 const Variation_1 = require("../../models/schema/admin/Variation");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
+const exceljs_1 = __importDefault(require("exceljs"));
 const createProduct = async (req, res) => {
     const { name, ar_name, image, categoryId, brandId, unit, price, quantity, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, cost, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, } = req.body;
     if (!name)
@@ -439,3 +443,176 @@ const modelsforselect = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { categories, brands, variations, warehouses });
 };
 exports.modelsforselect = modelsforselect;
+// controllers/admin/products.ts
+// ═══════════════════════════════════════════════════════════
+// IMPORT PRODUCTS FROM EXCEL
+// ═══════════════════════════════════════════════════════════
+const importProductsFromExcel = async (req, res) => {
+    if (!req.file) {
+        throw new BadRequest_1.BadRequest("Excel file is required");
+    }
+    const workbook = new exceljs_1.default.Workbook();
+    // Convert multer buffer to ArrayBuffer for ExcelJS compatibility
+    const arrayBuffer = req.file.buffer.buffer.slice(req.file.buffer.byteOffset, req.file.buffer.byteOffset + req.file.buffer.byteLength);
+    await workbook.xlsx.load(arrayBuffer);
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+        throw new BadRequest_1.BadRequest("Invalid Excel file");
+    }
+    const products = [];
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1)
+            return; // Skip header
+        const name = row.getCell(1).value?.toString().trim() || "";
+        const ar_name = row.getCell(2).value?.toString().trim() || "";
+        const ar_description = row.getCell(3).value?.toString().trim() || "";
+        const description = row.getCell(4).value?.toString().trim() || "";
+        const category = row.getCell(5).value?.toString().trim() || "";
+        const brand = row.getCell(6).value?.toString().trim() || "";
+        const code = row.getCell(7).value?.toString().trim() || "";
+        const price = Number(row.getCell(8).value) || 0;
+        const cost = Number(row.getCell(9).value) || 0;
+        const quantity = Number(row.getCell(10).value) || 0;
+        const unit = row.getCell(11).value?.toString().trim() || "";
+        const low_stock = Number(row.getCell(12).value) || 0;
+        const image = row.getCell(13).value?.toString().trim() || "";
+        if (name && ar_name) {
+            products.push({
+                name,
+                ar_name,
+                ar_description,
+                description,
+                category,
+                brand,
+                code,
+                price,
+                cost,
+                quantity,
+                unit,
+                low_stock,
+                image,
+            });
+        }
+    });
+    if (products.length === 0) {
+        throw new BadRequest_1.BadRequest("No valid products found in the file");
+    }
+    const results = {
+        success: [],
+        failed: [],
+        skipped: [],
+    };
+    // Get existing categories and brands
+    const existingCategories = await category_1.CategoryModel.find({}).lean();
+    const categoryMap = {};
+    existingCategories.forEach((cat) => {
+        categoryMap[cat.name.toLowerCase()] = cat._id.toString();
+    });
+    const existingBrands = await brand_1.BrandModel.find({}).lean();
+    const brandMap = {};
+    existingBrands.forEach((brand) => {
+        brandMap[brand.name.toLowerCase()] = brand._id.toString();
+    });
+    // Check existing product codes
+    const existingCodes = await products_1.ProductModel.find({}, { code: 1 }).lean();
+    const codeSet = new Set(existingCodes.map((p) => p.code));
+    const existingPriceCodes = await product_price_1.ProductPriceModel.find({}, { code: 1 }).lean();
+    existingPriceCodes.forEach((p) => codeSet.add(p.code));
+    for (const prod of products) {
+        try {
+            // Check if code already exists
+            if (prod.code && codeSet.has(prod.code)) {
+                results.skipped.push({
+                    name: prod.name,
+                    reason: `Code "${prod.code}" already exists`,
+                });
+                continue;
+            }
+            // Find category
+            let categoryIds = [];
+            if (prod.category) {
+                const categories = prod.category.split(",").map((c) => c.trim());
+                for (const catName of categories) {
+                    const catId = categoryMap[catName.toLowerCase()];
+                    if (catId) {
+                        categoryIds.push(catId);
+                    }
+                    else {
+                        // Try to find in database
+                        const cat = await category_1.CategoryModel.findOne({
+                            name: { $regex: new RegExp(`^${catName}$`, "i") },
+                        });
+                        if (cat) {
+                            categoryIds.push(cat._id.toString());
+                            categoryMap[catName.toLowerCase()] = cat._id.toString();
+                        }
+                    }
+                }
+            }
+            if (categoryIds.length === 0) {
+                results.failed.push({
+                    name: prod.name,
+                    reason: `Category "${prod.category}" not found`,
+                });
+                continue;
+            }
+            // Find brand (optional)
+            let brandId = null;
+            if (prod.brand) {
+                brandId = brandMap[prod.brand.toLowerCase()];
+                if (!brandId) {
+                    const brand = await brand_1.BrandModel.findOne({
+                        name: { $regex: new RegExp(`^${prod.brand}$`, "i") },
+                    });
+                    if (brand) {
+                        brandId = brand._id.toString();
+                        brandMap[prod.brand.toLowerCase()] = brandId;
+                    }
+                }
+            }
+            // Create product
+            const newProduct = await products_1.ProductModel.create({
+                name: prod.name,
+                ar_name: prod.ar_name,
+                ar_description: prod.ar_description || prod.ar_name,
+                description: prod.description || "",
+                categoryId: categoryIds,
+                brandId: brandId || undefined,
+                code: prod.code || undefined,
+                price: prod.price,
+                cost: prod.cost,
+                quantity: prod.quantity,
+                unit: prod.unit || undefined,
+                low_stock: prod.low_stock || 0,
+                image: prod.image || undefined,
+            });
+            // Update category product count
+            for (const catId of categoryIds) {
+                await category_1.CategoryModel.findByIdAndUpdate(catId, {
+                    $inc: { product_quantity: 1 },
+                });
+            }
+            if (prod.code) {
+                codeSet.add(prod.code);
+            }
+            results.success.push(prod.name);
+        }
+        catch (error) {
+            results.failed.push({
+                name: prod.name,
+                reason: error.message || "Unknown error",
+            });
+        }
+    }
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Import completed",
+        total: products.length,
+        success_count: results.success.length,
+        failed_count: results.failed.length,
+        skipped_count: results.skipped.length,
+        success: results.success,
+        failed: results.failed,
+        skipped: results.skipped,
+    });
+};
+exports.importProductsFromExcel = importProductsFromExcel;

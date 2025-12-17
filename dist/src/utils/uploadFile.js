@@ -9,7 +9,7 @@ exports.uploadExcelFile = uploadExcelFile;
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-// للـ Disk Storage (حفظ على السيرفر)
+// للصور والملفات العادية
 function uploadFile(folderName = "uploads") {
     const storage = multer_1.default.diskStorage({
         destination: function (req, file, cb) {
@@ -25,11 +25,10 @@ function uploadFile(folderName = "uploads") {
     });
     return (0, multer_1.default)({ storage });
 }
-// للـ Memory Storage (للـ Excel - بنقرأه من الـ Buffer)
+// للـ Excel (Memory)
 function uploadExcelFile() {
-    const storage = multer_1.default.memoryStorage();
     return (0, multer_1.default)({
-        storage: storage,
+        storage: multer_1.default.memoryStorage(),
         fileFilter: (req, file, cb) => {
             const allowedMimes = [
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -39,11 +38,9 @@ function uploadExcelFile() {
                 cb(null, true);
             }
             else {
-                cb(new Error("Only Excel files (.xlsx, .xls) are allowed"));
+                cb(new Error("Only Excel files allowed"));
             }
         },
-        limits: {
-            fileSize: 5 * 1024 * 1024, // 5MB
-        },
+        limits: { fileSize: 5 * 1024 * 1024 },
     });
 }

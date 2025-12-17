@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateCategory = exports.deleteCategory = exports.getCategoryById = exports.getCategories = exports.createcategory = void 0;
+exports.importCategoriesFromExcel = exports.updateCategory = exports.deleteCategory = exports.getCategoryById = exports.getCategories = exports.createcategory = void 0;
 const response_1 = require("../../utils/response");
 const category_1 = require("../../models/schema/admin/category");
 const handleImages_1 = require("../../utils/handleImages");
@@ -11,6 +11,7 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors/");
 const products_1 = require("../../models/schema/admin/products");
 const mongoose_1 = __importDefault(require("mongoose"));
+const exceljs_1 = __importDefault(require("exceljs"));
 const createcategory = async (req, res) => {
     const { name, ar_name, image, parentId } = req.body;
     if (!name)
@@ -85,3 +86,102 @@ const updateCategory = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "update category successfully", category });
 };
 exports.updateCategory = updateCategory;
+// controllers/admin/category.ts
+const importCategoriesFromExcel = async (req, res) => {
+    if (!req.file) {
+        throw new BadRequest_1.BadRequest("Excel file is required");
+    }
+    const workbook = new exceljs_1.default.Workbook();
+    // Convert multer buffer to ArrayBuffer for ExcelJS compatibility
+    const arrayBuffer = req.file.buffer.buffer.slice(req.file.buffer.byteOffset, req.file.buffer.byteOffset + req.file.buffer.byteLength);
+    await workbook.xlsx.load(arrayBuffer);
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+        throw new BadRequest_1.BadRequest("Invalid Excel file");
+    }
+    const categories = [];
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1)
+            return; // Skip header
+        const name = row.getCell(1).value?.toString().trim() || "";
+        const ar_name = row.getCell(2).value?.toString().trim() || "";
+        const parent = row.getCell(3).value?.toString().trim() || "";
+        const image = row.getCell(4).value?.toString().trim() || "";
+        if (name) {
+            categories.push({ name, ar_name, parent, image });
+        }
+    });
+    if (categories.length === 0) {
+        throw new BadRequest_1.BadRequest("No valid categories found");
+    }
+    const results = {
+        success: [],
+        failed: [],
+        skipped: [],
+    };
+    // خريطة الـ Categories الموجودة
+    const categoryMap = {};
+    const existingCategories = await category_1.CategoryModel.find({}).lean();
+    existingCategories.forEach((cat) => {
+        categoryMap[cat.name.toLowerCase()] = cat._id.toString();
+    });
+    for (const cat of categories) {
+        try {
+            // لو موجود، skip
+            if (categoryMap[cat.name.toLowerCase()]) {
+                results.skipped.push({
+                    name: cat.name,
+                    reason: "Already exists",
+                });
+                continue;
+            }
+            // دور على الـ Parent
+            let parentId = null;
+            if (cat.parent) {
+                parentId = categoryMap[cat.parent.toLowerCase()];
+                if (!parentId) {
+                    const parentCategory = await category_1.CategoryModel.findOne({
+                        name: { $regex: new RegExp(`^${cat.parent}$`, "i") },
+                    });
+                    if (parentCategory) {
+                        parentId = parentCategory._id.toString();
+                        categoryMap[cat.parent.toLowerCase()] = parentId;
+                    }
+                    else {
+                        results.failed.push({
+                            name: cat.name,
+                            reason: `Parent "${cat.parent}" not found`,
+                        });
+                        continue;
+                    }
+                }
+            }
+            // أضف الـ Category
+            const newCategory = await category_1.CategoryModel.create({
+                name: cat.name,
+                ar_name: cat.ar_name || "",
+                parentId: parentId || null,
+                image: cat.image || "",
+            });
+            categoryMap[cat.name.toLowerCase()] = newCategory._id.toString();
+            results.success.push(cat.name);
+        }
+        catch (error) {
+            results.failed.push({
+                name: cat.name,
+                reason: error.message || "Unknown error",
+            });
+        }
+    }
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Import completed",
+        total: categories.length,
+        success_count: results.success.length,
+        failed_count: results.failed.length,
+        skipped_count: results.skipped.length,
+        success: results.success,
+        failed: results.failed,
+        skipped: results.skipped,
+    });
+};
+exports.importCategoriesFromExcel = importCategoriesFromExcel;

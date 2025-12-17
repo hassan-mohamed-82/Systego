@@ -12,6 +12,7 @@ import { BrandModel } from "../../models/schema/admin/brand";
 import { VariationModel } from "../../models/schema/admin/Variation";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
+import ExcelJS from "exceljs";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -566,6 +567,219 @@ export const modelsforselect = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { categories, brands, variations, warehouses });
 };
+
+
+// controllers/admin/products.ts
+
+
+// ═══════════════════════════════════════════════════════════
+// IMPORT PRODUCTS FROM EXCEL
+// ═══════════════════════════════════════════════════════════
+export const importProductsFromExcel = async (req: Request, res: Response) => {
+  if (!req.file) {
+    throw new BadRequest("Excel file is required");
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  // Convert multer buffer to ArrayBuffer for ExcelJS compatibility
+  const arrayBuffer = req.file.buffer.buffer.slice(
+    req.file.buffer.byteOffset,
+    req.file.buffer.byteOffset + req.file.buffer.byteLength
+  ) as ArrayBuffer;
+  await workbook.xlsx.load(arrayBuffer);
+
+  const worksheet = workbook.getWorksheet(1);
+
+  if (!worksheet) {
+    throw new BadRequest("Invalid Excel file");
+  }
+
+  const products: Array<{
+    name: string;
+    ar_name: string;
+    ar_description: string;
+    description: string;
+    category: string;
+    brand: string;
+    code: string;
+    price: number;
+    cost: number;
+    quantity: number;
+    unit: string;
+    low_stock: number;
+    image: string;
+  }> = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // Skip header
+
+    const name = row.getCell(1).value?.toString().trim() || "";
+    const ar_name = row.getCell(2).value?.toString().trim() || "";
+    const ar_description = row.getCell(3).value?.toString().trim() || "";
+    const description = row.getCell(4).value?.toString().trim() || "";
+    const category = row.getCell(5).value?.toString().trim() || "";
+    const brand = row.getCell(6).value?.toString().trim() || "";
+    const code = row.getCell(7).value?.toString().trim() || "";
+    const price = Number(row.getCell(8).value) || 0;
+    const cost = Number(row.getCell(9).value) || 0;
+    const quantity = Number(row.getCell(10).value) || 0;
+    const unit = row.getCell(11).value?.toString().trim() || "";
+    const low_stock = Number(row.getCell(12).value) || 0;
+    const image = row.getCell(13).value?.toString().trim() || "";
+
+    if (name && ar_name) {
+      products.push({
+        name,
+        ar_name,
+        ar_description,
+        description,
+        category,
+        brand,
+        code,
+        price,
+        cost,
+        quantity,
+        unit,
+        low_stock,
+        image,
+      });
+    }
+  });
+
+  if (products.length === 0) {
+    throw new BadRequest("No valid products found in the file");
+  }
+
+  const results = {
+    success: [] as string[],
+    failed: [] as { name: string; reason: string }[],
+    skipped: [] as { name: string; reason: string }[],
+  };
+
+  // Get existing categories and brands
+  const existingCategories = await CategoryModel.find({}).lean();
+  const categoryMap: { [key: string]: string } = {};
+  existingCategories.forEach((cat: any) => {
+    categoryMap[cat.name.toLowerCase()] = cat._id.toString();
+  });
+
+  const existingBrands = await BrandModel.find({}).lean();
+  const brandMap: { [key: string]: string } = {};
+  existingBrands.forEach((brand: any) => {
+    brandMap[brand.name.toLowerCase()] = brand._id.toString();
+  });
+
+  // Check existing product codes
+  const existingCodes = await ProductModel.find({}, { code: 1 }).lean();
+  const codeSet = new Set(existingCodes.map((p: any) => p.code));
+
+  const existingPriceCodes = await ProductPriceModel.find({}, { code: 1 }).lean();
+  existingPriceCodes.forEach((p: any) => codeSet.add(p.code));
+
+  for (const prod of products) {
+    try {
+      // Check if code already exists
+      if (prod.code && codeSet.has(prod.code)) {
+        results.skipped.push({
+          name: prod.name,
+          reason: `Code "${prod.code}" already exists`,
+        });
+        continue;
+      }
+
+      // Find category
+      let categoryIds: string[] = [];
+      if (prod.category) {
+        const categories = prod.category.split(",").map((c) => c.trim());
+        for (const catName of categories) {
+          const catId = categoryMap[catName.toLowerCase()];
+          if (catId) {
+            categoryIds.push(catId);
+          } else {
+            // Try to find in database
+            const cat = await CategoryModel.findOne({
+              name: { $regex: new RegExp(`^${catName}$`, "i") },
+            });
+            if (cat) {
+              categoryIds.push(cat._id.toString());
+              categoryMap[catName.toLowerCase()] = cat._id.toString();
+            }
+          }
+        }
+      }
+
+      if (categoryIds.length === 0) {
+        results.failed.push({
+          name: prod.name,
+          reason: `Category "${prod.category}" not found`,
+        });
+        continue;
+      }
+
+      // Find brand (optional)
+      let brandId = null;
+      if (prod.brand) {
+        brandId = brandMap[prod.brand.toLowerCase()];
+        if (!brandId) {
+          const brand = await BrandModel.findOne({
+            name: { $regex: new RegExp(`^${prod.brand}$`, "i") },
+          });
+          if (brand) {
+            brandId = brand._id.toString();
+            brandMap[prod.brand.toLowerCase()] = brandId;
+          }
+        }
+      }
+
+      // Create product
+      const newProduct = await ProductModel.create({
+        name: prod.name,
+        ar_name: prod.ar_name,
+        ar_description: prod.ar_description || prod.ar_name,
+        description: prod.description || "",
+        categoryId: categoryIds,
+        brandId: brandId || undefined,
+        code: prod.code || undefined,
+        price: prod.price,
+        cost: prod.cost,
+        quantity: prod.quantity,
+        unit: prod.unit || undefined,
+        low_stock: prod.low_stock || 0,
+        image: prod.image || undefined,
+      });
+
+      // Update category product count
+      for (const catId of categoryIds) {
+        await CategoryModel.findByIdAndUpdate(catId, {
+          $inc: { product_quantity: 1 },
+        });
+      }
+
+      if (prod.code) {
+        codeSet.add(prod.code);
+      }
+
+      results.success.push(prod.name);
+    } catch (error: any) {
+      results.failed.push({
+        name: prod.name,
+        reason: error.message || "Unknown error",
+      });
+    }
+  }
+
+  return SuccessResponse(res, {
+    message: "Import completed",
+    total: products.length,
+    success_count: results.success.length,
+    failed_count: results.failed.length,
+    skipped_count: results.skipped.length,
+    success: results.success,
+    failed: results.failed,
+    skipped: results.skipped,
+  });
+};
+
 
 
 

@@ -6,7 +6,10 @@ const validation_1 = require("../../middlewares/validation");
 const products_2 = require("../../validation/admin/products");
 const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
+const uploadFile_1 = require("../../utils/uploadFile");
 const route = (0, express_1.Router)();
+// ✅ Static routes أولاً
+route.post("/import", (0, haspremission_1.authorizePermissions)("product", "Add"), (0, uploadFile_1.uploadExcelFile)().single("file"), (0, catchAsync_1.catchAsync)(products_1.importProductsFromExcel));
 // إنشاء منتج
 route.post("/", (0, haspremission_1.authorizePermissions)("product", "Add"), (0, validation_1.validate)(products_2.createProductSchema), (0, catchAsync_1.catchAsync)(products_1.createProduct));
 // جلب جميع المنتجات
