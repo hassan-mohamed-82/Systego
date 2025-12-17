@@ -33,21 +33,87 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ReturnSaleModel = void 0;
+exports.ReturnModel = void 0;
+// models/Return.ts
 const mongoose_1 = __importStar(require("mongoose"));
-const ReturnSaleSchema = new mongoose_1.Schema({
+const ReturnItemSchema = new mongoose_1.Schema({
+    product_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Product" },
+    product_price_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "ProductPrice" },
+    bundle_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Pandel" },
+    original_quantity: { type: Number, required: true },
+    returned_quantity: { type: Number, required: true, min: 1 },
+    price: { type: Number, required: true },
+    subtotal: { type: Number, required: true },
+    reason: { type: String, default: "" },
+});
+const ReturnSchema = new mongoose_1.Schema({
     reference: {
         type: String,
-        maxlength: 100,
         trim: true,
+        unique: true,
+        maxlength: 8,
         default: function () {
-            const randomPart = Math.random().toString(36).substring(2, 7).toUpperCase();
-            const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-            return `RETURNS-${datePart}-${randomPart}`;
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            const datePart = `${month}${day}`;
+            const randomPart = Math.floor(1000 + Math.random() * 9000);
+            return `${datePart}${randomPart}`;
         },
     },
-    sale_id: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Sale', required: true },
-    return_date: { type: Date, default: Date.now },
-    return_reason: { type: String, trim: true },
-});
-exports.ReturnSaleModel = mongoose_1.default.model("ReturnSale", ReturnSaleSchema);
+    sale_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Sale",
+        required: true,
+    },
+    sale_reference: {
+        type: String,
+        required: true,
+    },
+    customer_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Customer",
+    },
+    warehouse_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Warehouse",
+        required: true,
+    },
+    cashier_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    shift_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "CashierShift",
+        required: true,
+    },
+    items: [ReturnItemSchema],
+    total_amount: {
+        type: Number,
+        required: true,
+    },
+    refund_method: {
+        type: String,
+        enum: ["cash", "card", "store_credit", "original_method"],
+        default: "original_method",
+    },
+    refund_account_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "BankAccount",
+    },
+    note: {
+        type: String,
+        default: "",
+    },
+    date: {
+        type: Date,
+        default: Date.now,
+    },
+}, { timestamps: true });
+ReturnSchema.index({ sale_id: 1 });
+ReturnSchema.index({ customer_id: 1 });
+ReturnSchema.index({ reference: 1 });
+ReturnSchema.index({ sale_reference: 1 });
+exports.ReturnModel = mongoose_1.default.model("Return", ReturnSchema);

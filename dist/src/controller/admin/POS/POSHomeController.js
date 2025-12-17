@@ -77,7 +77,7 @@ const getAllSelections = async (req, res) => {
         path: "cities",
         select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
     });
-    (0, response_1.SuccessResponse)(res, { message: "Selections list", countries, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
+    (0, response_1.SuccessResponse)(res, { message: "Selections list", dueCustomers, countries, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
 // get featured product

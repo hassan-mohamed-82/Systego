@@ -86,7 +86,7 @@ export const getAllSelections = async (req: Request, res: Response) => {
     select: "name ar_name shipingCost",    // الحقول اللي ترجع من الـ City
   });
 
-    SuccessResponse(res, {message: "Selections list",countries ,warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
+    SuccessResponse(res, {message: "Selections list",dueCustomers,countries ,warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
 
