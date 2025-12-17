@@ -9,11 +9,11 @@ exports.createCurrencySchema = joi_1.default.object({
     name: joi_1.default.string().max(100).required(),
     ar_name: joi_1.default.string().max(100).required(),
     amount: joi_1.default.number().min(0),
-    status: joi_1.default.boolean().optional().default(false),
+    isdefault: joi_1.default.boolean().optional().default(false),
 });
 exports.updateCurrencySchema = joi_1.default.object({
     name: joi_1.default.string().max(100).optional(),
     ar_name: joi_1.default.string().max(100).optional(),
     amount: joi_1.default.number().min(0).optional(),
-    status: joi_1.default.boolean().optional(),
+    isdefault: joi_1.default.boolean().optional(),
 });

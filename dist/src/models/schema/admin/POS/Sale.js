@@ -48,7 +48,7 @@ const SaleSchema = new mongoose_1.Schema({
             const day = String(now.getDate()).padStart(2, "0");
             const datePart = `${month}${day}`;
             const randomPart = Math.floor(1000 + Math.random() * 9000);
-            return `${datePart}${randomPart}`; // مثال: 12134827
+            return `${datePart}${randomPart}`;
         },
     },
     customer_id: {
@@ -56,17 +56,33 @@ const SaleSchema = new mongoose_1.Schema({
         ref: "Customer",
         required: false,
     },
+    // ✅ عميل الدين
+    Due_customer_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Customer",
+        required: false,
+    },
+    // ✅ هل فاتورة دين؟
+    Due: {
+        type: Number,
+        enum: [0, 1],
+        default: 0,
+    },
+    // ✅ المبلغ المتبقي
+    remaining_amount: {
+        type: Number,
+        default: 0,
+    },
     warehouse_id: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: "Warehouse",
         required: true,
     },
     account_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "BankAccount" }],
-    // 0 = completed, 1 = pending
     order_pending: {
         type: Number,
         enum: [0, 1],
-        default: 1, // أول ما تتعمل تبقى Pending
+        default: 1,
     },
     order_tax: { type: mongoose_1.Schema.Types.ObjectId, ref: "Taxes" },
     order_discount: { type: mongoose_1.Schema.Types.ObjectId, ref: "Discount" },
@@ -83,7 +99,6 @@ const SaleSchema = new mongoose_1.Schema({
         ref: "CashierShift",
         required: true,
     },
-    // باقي الفيلدز اللي انت بتستخدمها في createSale
     shipping: { type: Number, default: 0 },
     tax_rate: { type: Number, default: 0 },
     tax_amount: { type: Number, default: 0 },
@@ -93,6 +108,9 @@ const SaleSchema = new mongoose_1.Schema({
     note: { type: String, default: "" },
     date: { type: Date, default: Date.now },
 }, { timestamps: true });
+// Index للبحث السريع
+SaleSchema.index({ Due: 1, Due_customer_id: 1 });
+SaleSchema.index({ Due: 1, remaining_amount: 1 });
 const productSalesSchema = new mongoose_1.Schema({
     sale_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Sale", required: true },
     product_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Product" },
@@ -105,7 +123,6 @@ const productSalesSchema = new mongoose_1.Schema({
     isBundle: { type: Boolean, default: false },
     options_id: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "Option" }],
 }, { timestamps: true });
-// Validation للـ product/bundle
 productSalesSchema.pre("save", function (next) {
     if (!this.product_id && !this.bundle_id) {
         return next(new Error("Either product_id or bundle_id is required"));

@@ -3,26 +3,45 @@ import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
   {
-   reference: {
-  type: String,
-  trim: true,
-  unique: true,
-  maxlength: 8,
-  default: function () {
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day   = String(now.getDate()).padStart(2, "0");
-    const datePart = `${month}${day}`;
-    const randomPart = Math.floor(1000 + Math.random() * 9000);
-    return `${datePart}${randomPart}`; // مثال: 12134827
-  },
-
+    reference: {
+      type: String,
+      trim: true,
+      unique: true,
+      maxlength: 8,
+      default: function () {
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const day = String(now.getDate()).padStart(2, "0");
+        const datePart = `${month}${day}`;
+        const randomPart = Math.floor(1000 + Math.random() * 9000);
+        return `${datePart}${randomPart}`;
+      },
     },
-   
+
     customer_id: {
       type: Schema.Types.ObjectId,
       ref: "Customer",
       required: false,
+    },
+
+    // ✅ عميل الدين
+    Due_customer_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Customer",
+      required: false,
+    },
+
+    // ✅ هل فاتورة دين؟
+    Due: {
+      type: Number,
+      enum: [0, 1],
+      default: 0,
+    },
+
+    // ✅ المبلغ المتبقي
+    remaining_amount: {
+      type: Number,
+      default: 0,
     },
 
     warehouse_id: {
@@ -33,11 +52,10 @@ const SaleSchema = new Schema(
 
     account_id: [{ type: Schema.Types.ObjectId, ref: "BankAccount" }],
 
-    // 0 = completed, 1 = pending
     order_pending: {
       type: Number,
       enum: [0, 1],
-      default: 1, // أول ما تتعمل تبقى Pending
+      default: 1,
     },
 
     order_tax: { type: Schema.Types.ObjectId, ref: "Taxes" },
@@ -57,7 +75,6 @@ const SaleSchema = new Schema(
       required: true,
     },
 
-    // باقي الفيلدز اللي انت بتستخدمها في createSale
     shipping: { type: Number, default: 0 },
     tax_rate: { type: Number, default: 0 },
     tax_amount: { type: Number, default: 0 },
@@ -70,6 +87,10 @@ const SaleSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Index للبحث السريع
+SaleSchema.index({ Due: 1, Due_customer_id: 1 });
+SaleSchema.index({ Due: 1, remaining_amount: 1 });
 
 const productSalesSchema = new Schema(
   {
@@ -87,7 +108,6 @@ const productSalesSchema = new Schema(
   { timestamps: true }
 );
 
-// Validation للـ product/bundle
 productSalesSchema.pre("save", function (next) {
   if (!this.product_id && !this.bundle_id) {
     return next(new Error("Either product_id or bundle_id is required"));
