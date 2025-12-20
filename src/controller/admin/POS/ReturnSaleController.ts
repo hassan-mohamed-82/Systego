@@ -416,20 +416,23 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
   // GET RETURN BY ID
   // ═══════════════════════════════════════════════════════════
   export const getReturnById = async (req: Request, res: Response) => {
-    const { return_id } = req.body;
+    const { return_id } = req.query;
   
     if (!return_id) {
       throw new BadRequest("return_id is required");
     }
+
+    // Handle case where return_id might be an array (e.g., ?return_id=a&return_id=b)
+    const returnIdStr = (Array.isArray(return_id) ? return_id[0] : return_id) as string;
   
     let returnDoc;
   
-    if (mongoose.Types.ObjectId.isValid(return_id)) {
-      returnDoc = await ReturnModel.findById(return_id);
+    if (mongoose.Types.ObjectId.isValid(returnIdStr)) {
+      returnDoc = await ReturnModel.findById(returnIdStr);
     }
   
     if (!returnDoc) {
-      returnDoc = await ReturnModel.findOne({ reference: return_id });
+      returnDoc = await ReturnModel.findOne({ reference: returnIdStr });
     }
   
     if (!returnDoc) {
@@ -467,18 +470,21 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
   // GET SALE RETURNS
   // ═══════════════════════════════════════════════════════════
   export const getSaleReturns = async (req: Request, res: Response) => {
-    const { sale_id } = req.body;
+    const { sale_id } = req.query;
   
     if (!sale_id) {
       throw new BadRequest("sale_id is required");
     }
+
+    // Handle case where sale_id might be an array (e.g., ?sale_id=a&sale_id=b)
+    const saleIdStr = (Array.isArray(sale_id) ? sale_id[0] : sale_id) as string;
   
     let saleObjectId;
   
-    if (mongoose.Types.ObjectId.isValid(sale_id)) {
-      saleObjectId = sale_id;
+    if (mongoose.Types.ObjectId.isValid(saleIdStr)) {
+      saleObjectId = saleIdStr;
     } else {
-      const sale = await SaleModel.findOne({ reference: sale_id });
+      const sale = await SaleModel.findOne({ reference: saleIdStr });
       if (!sale) {
         throw new NotFound("Sale not found");
       }

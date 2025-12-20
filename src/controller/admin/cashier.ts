@@ -44,14 +44,27 @@ export const getCashiers = async (req: Request, res: Response) => {
 
 
 export const updateCashier = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { name, ar_name,warehouse_id,status } = req.body;
-    const cashier = await CashierModel.findById(id);
-    if (!cashier) throw new NotFound("Cashier not found");
-    if (name) cashier.name = name;
-    if (ar_name) cashier.ar_name = ar_name;
-    if (warehouse_id) cashier.warehouse_id = warehouse_id;
-    if (status) cashier.status = status;
-    await cashier.save();
-    SuccessResponse(res, { message: "Cashier updated successfully", cashier });
+  const { id } = req.params;
+  const updates = req.body;
+  
+  // Note: 'cashier_active' is intentionally excluded - it's managed by CashierShiftController
+  // to ensure atomic synchronization with shift open/close operations
+  const allowedFields = ['name', 'ar_name', 'warehouse_id', 'status'];
+  const updateData: any = {};
+  
+  for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+          updateData[field] = updates[field];
+      }
+  }
+  
+  const cashier = await CashierModel.findByIdAndUpdate(
+      id, 
+      updateData, 
+      { new: true, runValidators: true }
+  );
+  
+  if (!cashier) throw new NotFound("Cashier not found");
+  
+  SuccessResponse(res, { message: "Cashier updated successfully", cashier });
 }

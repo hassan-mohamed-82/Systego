@@ -94,27 +94,24 @@ export const getExpenses = async (req: Request, res: Response) => {
   const userId = req.user?.id;
   if (!userId) throw new BadRequest("User ID is required");
 
-  // 1️⃣ هات الشيفت المفتوح للكاشير الحالي
+  // 👇 غير cashier_id لـ cashierman_id عشان يطابق الشيفت
   const openShift = await CashierShift.findOne({
-    cashier_id: userId,
+    cashierman_id: userId,  // 👈 صححها
     status: "open",
   }).sort({ start_time: -1 });
 
   if (!openShift) {
-    // مفيش شيفت مفتوح: يا إمّا ترجع فاضي أو ترمي Error
-    // هنا هرجّع فاضي عشان الفرونت يتعامل عادي
     return SuccessResponse(res, {
       message: "No open shift for this cashier",
       expenses: [],
     });
   }
 
-  // 2️⃣ هات المصروفات المرتبطة بالشيفت المفتوح ده
   const expenses = await ExpenseModel.find({
     cashier_id: userId,
     shift_id: openShift._id,
   })
-    .populate("Category_id", "name")
+    .populate("Category_id", "name ar_name")
     .populate("financial_accountId", "name ar_name");
 
   SuccessResponse(res, {

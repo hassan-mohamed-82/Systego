@@ -18,7 +18,18 @@ const createExpenseCategory = async (req, res) => {
 };
 exports.createExpenseCategory = createExpenseCategory;
 const getExpenseCategories = async (req, res) => {
-    const expenseCategories = await expensecategory_1.ExpenseCategoryModel.find({ status: true });
+    const { status } = req.query;
+    const filter = {};
+    if (status !== undefined) {
+        // Handle case where status might be an array (e.g., ?status=true&status=false)
+        const statusValue = Array.isArray(status) ? status[0] : status;
+        filter.status = statusValue === 'true';
+    }
+    else {
+        // Default to only returning active categories (original behavior)
+        filter.status = true;
+    }
+    const expenseCategories = await expensecategory_1.ExpenseCategoryModel.find(filter);
     (0, response_1.SuccessResponse)(res, { expenseCategories });
 };
 exports.getExpenseCategories = getExpenseCategories;
@@ -28,12 +39,12 @@ const updateExpenseCategory = async (req, res) => {
     const expenseCategory = await expensecategory_1.ExpenseCategoryModel.findById(id);
     if (!expenseCategory)
         throw new Errors_1.NotFound("ExpenseCategory not found");
-    if (name)
+    if (name !== undefined)
         expenseCategory.name = name;
-    if (ar_name)
+    if (ar_name !== undefined)
         expenseCategory.ar_name = ar_name;
-    if (status)
-        expenseCategory.status = status;
+    if (status !== undefined)
+        expenseCategory.status = status; // 👈 كده صح
     await expenseCategory.save();
     (0, response_1.SuccessResponse)(res, { message: "ExpenseCategory updated successfully", expenseCategory });
 };

@@ -327,16 +327,18 @@ exports.getAllReturns = getAllReturns;
 // GET RETURN BY ID
 // ═══════════════════════════════════════════════════════════
 const getReturnById = async (req, res) => {
-    const { return_id } = req.body;
+    const { return_id } = req.query;
     if (!return_id) {
         throw new BadRequest_1.BadRequest("return_id is required");
     }
+    // Handle case where return_id might be an array (e.g., ?return_id=a&return_id=b)
+    const returnIdStr = (Array.isArray(return_id) ? return_id[0] : return_id);
     let returnDoc;
-    if (mongoose_1.default.Types.ObjectId.isValid(return_id)) {
-        returnDoc = await ReturnSale_1.ReturnModel.findById(return_id);
+    if (mongoose_1.default.Types.ObjectId.isValid(returnIdStr)) {
+        returnDoc = await ReturnSale_1.ReturnModel.findById(returnIdStr);
     }
     if (!returnDoc) {
-        returnDoc = await ReturnSale_1.ReturnModel.findOne({ reference: return_id });
+        returnDoc = await ReturnSale_1.ReturnModel.findOne({ reference: returnIdStr });
     }
     if (!returnDoc) {
         throw new Errors_1.NotFound("Return not found");
@@ -371,16 +373,18 @@ exports.getReturnById = getReturnById;
 // GET SALE RETURNS
 // ═══════════════════════════════════════════════════════════
 const getSaleReturns = async (req, res) => {
-    const { sale_id } = req.body;
+    const { sale_id } = req.query;
     if (!sale_id) {
         throw new BadRequest_1.BadRequest("sale_id is required");
     }
+    // Handle case where sale_id might be an array (e.g., ?sale_id=a&sale_id=b)
+    const saleIdStr = (Array.isArray(sale_id) ? sale_id[0] : sale_id);
     let saleObjectId;
-    if (mongoose_1.default.Types.ObjectId.isValid(sale_id)) {
-        saleObjectId = sale_id;
+    if (mongoose_1.default.Types.ObjectId.isValid(saleIdStr)) {
+        saleObjectId = saleIdStr;
     }
     else {
-        const sale = await Sale_1.SaleModel.findOne({ reference: sale_id });
+        const sale = await Sale_1.SaleModel.findOne({ reference: saleIdStr });
         if (!sale) {
             throw new Errors_1.NotFound("Sale not found");
         }
