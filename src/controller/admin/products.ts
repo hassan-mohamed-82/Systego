@@ -796,4 +796,31 @@ export const deletemanyproducts = async (req: Request, res: Response) => {
 };
 
 
-export const getminimumquantitysale = async (req: Request, res: Response) => {}
+export const getLowStockProducts = async (req: Request, res: Response) => {
+  const products = await ProductModel.find({
+    $expr: { $lte: ["$quantity", "$low_stock"] }
+  })
+  .select("name ar_name code quantity low_stock image")
+  .populate("categoryId", "name ar_name")
+  .populate("brandId", "name ar_name");
+
+  // تنسيق الـ response
+  const formattedProducts = products.map(product => ({
+    _id: product._id,
+    name: product.name,
+    ar_name: product.ar_name,
+    code: product.code,
+    image: product.image,
+    actual_stock: product.quantity,
+    minimum_stock: product.low_stock ?? 0,
+    shortage: (product.low_stock ?? 0) - product.quantity,  // الفرق
+    category: product.categoryId,
+    brand: product.brandId
+  }));
+
+  SuccessResponse(res, { 
+    message: "Low stock products retrieved successfully",
+    count: formattedProducts.length,
+    products: formattedProducts 
+  });
+};

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getminimumquantitysale = exports.deletemanyproducts = exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
+exports.getLowStockProducts = exports.deletemanyproducts = exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -630,5 +630,30 @@ const deletemanyproducts = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Products deleted successfully" });
 };
 exports.deletemanyproducts = deletemanyproducts;
-const getminimumquantitysale = async (req, res) => { };
-exports.getminimumquantitysale = getminimumquantitysale;
+const getLowStockProducts = async (req, res) => {
+    const products = await products_1.ProductModel.find({
+        $expr: { $lte: ["$quantity", "$low_stock"] }
+    })
+        .select("name ar_name code quantity low_stock image")
+        .populate("categoryId", "name ar_name")
+        .populate("brandId", "name ar_name");
+    // تنسيق الـ response
+    const formattedProducts = products.map(product => ({
+        _id: product._id,
+        name: product.name,
+        ar_name: product.ar_name,
+        code: product.code,
+        image: product.image,
+        actual_stock: product.quantity,
+        minimum_stock: product.low_stock ?? 0,
+        shortage: (product.low_stock ?? 0) - product.quantity, // الفرق
+        category: product.categoryId,
+        brand: product.brandId
+    }));
+    (0, response_1.SuccessResponse)(res, {
+        message: "Low stock products retrieved successfully",
+        count: formattedProducts.length,
+        products: formattedProducts
+    });
+};
+exports.getLowStockProducts = getLowStockProducts;

@@ -9,7 +9,8 @@ import {
   generateProductCode,
   getProductByCode,
   modelsforselect,
-  importProductsFromExcel
+  importProductsFromExcel,
+  getLowStockProducts
 } from "../../controller/admin/products";
 import { validate } from "../../middlewares/validation";
 import { createProductSchema, updateProductSchema } from "../../validation/admin/products";
@@ -32,6 +33,7 @@ route.post("/",authorizePermissions("product","Add"), validate(createProductSche
 
 // جلب جميع المنتجات
 route.get("/",authorizePermissions("product","View"), catchAsync(getProduct));
+route.get("/low-stock",authorizePermissions("product","View"), catchAsync(getLowStockProducts));
 route.delete("/",authorizePermissions("product","Delete"), catchAsync(deletemanyproducts)); 
 // ✅ ضع المسارات الثابتة أولًا
 route.get("/generate-code",authorizePermissions("product","View"), catchAsync(generateProductCode));

@@ -15,6 +15,7 @@ route.post("/import", (0, haspremission_1.authorizePermissions)("product", "Add"
 route.post("/", (0, haspremission_1.authorizePermissions)("product", "Add"), (0, validation_1.validate)(products_2.createProductSchema), (0, catchAsync_1.catchAsync)(products_1.createProduct));
 // جلب جميع المنتجات
 route.get("/", (0, haspremission_1.authorizePermissions)("product", "View"), (0, catchAsync_1.catchAsync)(products_1.getProduct));
+route.get("/low-stock", (0, haspremission_1.authorizePermissions)("product", "View"), (0, catchAsync_1.catchAsync)(products_1.getLowStockProducts));
 route.delete("/", (0, haspremission_1.authorizePermissions)("product", "Delete"), (0, catchAsync_1.catchAsync)(products_3.deletemanyproducts));
 // ✅ ضع المسارات الثابتة أولًا
 route.get("/generate-code", (0, haspremission_1.authorizePermissions)("product", "View"), (0, catchAsync_1.catchAsync)(products_1.generateProductCode));
