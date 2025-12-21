@@ -51,17 +51,8 @@ const getSupplierById = async (req, res) => {
         .populate("countryId");
     if (!supplier)
         throw new Errors_1.NotFound("Supplier not found");
-    // جيب الـ Countries ومعاها الـ Cities
-    const countries = await Country_1.CountryModel.aggregate([
-        {
-            $lookup: {
-                from: "cities",
-                localField: "_id",
-                foreignField: "country_id",
-                as: "cities"
-            }
-        }
-    ]);
+    // جيب الـ Countries ومعاها الـ Cities باستخدام الـ virtual
+    const countries = await Country_1.CountryModel.find().populate("cities");
     (0, response_1.SuccessResponse)(res, {
         message: "Supplier retrieved successfully",
         supplier,

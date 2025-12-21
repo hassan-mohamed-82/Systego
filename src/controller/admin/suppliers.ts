@@ -72,17 +72,8 @@ export const getSupplierById = async (req: Request, res: Response) => {
     
   if (!supplier) throw new NotFound("Supplier not found");
 
-  // جيب الـ Countries ومعاها الـ Cities
-  const countries = await CountryModel.aggregate([
-    {
-      $lookup: {
-        from: "cities",
-        localField: "_id",
-        foreignField: "country_id",
-        as: "cities"
-      }
-    }
-  ]);
+  // جيب الـ Countries ومعاها الـ Cities باستخدام الـ virtual
+  const countries = await CountryModel.find().populate("cities");
 
   SuccessResponse(res, { 
     message: "Supplier retrieved successfully", 
