@@ -578,10 +578,6 @@ export const modelsforselect = async (req: Request, res: Response) => {
   SuccessResponse(res, { categories, brands, variations, warehouses });
 };
 
-
-// controllers/admin/products.ts
-
-
 // ═══════════════════════════════════════════════════════════
 // IMPORT PRODUCTS FROM EXCEL
 // ═══════════════════════════════════════════════════════════
@@ -790,9 +786,6 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   });
 };
 
-
-
-
 export const deletemanyproducts = async (req: Request, res: Response) => {
   const { ids } = req.body;
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -801,3 +794,6 @@ export const deletemanyproducts = async (req: Request, res: Response) => {
   await ProductModel.deleteMany({ _id: { $in: ids } });
   SuccessResponse(res, { message: "Products deleted successfully" });
 };
+
+
+export const getminimumquantitysale = async (req: Request, res: Response) => {}

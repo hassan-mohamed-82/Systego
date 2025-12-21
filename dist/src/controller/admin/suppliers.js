@@ -6,7 +6,6 @@ const handleImages_1 = require("../../utils/handleImages");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
-const City_1 = require("../../models/schema/admin/City");
 const Country_1 = require("../../models/schema/admin/Country");
 const createSupplier = async (req, res) => {
     const { image, username, email, phone_number, address, cityId, countryId, company_name } = req.body;
@@ -37,9 +36,8 @@ const createSupplier = async (req, res) => {
 exports.createSupplier = createSupplier;
 const getSuppliers = async (req, res) => {
     const suppliers = await suppliers_1.SupplierModel.find().populate("cityId").populate("countryId");
-    const city = await City_1.CityModels.find();
-    const country = await Country_1.CountryModel.find();
-    (0, response_1.SuccessResponse)(res, { message: "Suppliers retrieved successfully", suppliers, city, country });
+    const countries = await Country_1.CountryModel.find().populate("cities");
+    (0, response_1.SuccessResponse)(res, { message: "Suppliers retrieved successfully", suppliers, countries });
 };
 exports.getSuppliers = getSuppliers;
 const getSupplierById = async (req, res) => {

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deletemanyproducts = exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
+exports.getminimumquantitysale = exports.deletemanyproducts = exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -449,7 +449,6 @@ const modelsforselect = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { categories, brands, variations, warehouses });
 };
 exports.modelsforselect = modelsforselect;
-// controllers/admin/products.ts
 // ═══════════════════════════════════════════════════════════
 // IMPORT PRODUCTS FROM EXCEL
 // ═══════════════════════════════════════════════════════════
@@ -631,3 +630,5 @@ const deletemanyproducts = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Products deleted successfully" });
 };
 exports.deletemanyproducts = deletemanyproducts;
+const getminimumquantitysale = async (req, res) => { };
+exports.getminimumquantitysale = getminimumquantitysale;

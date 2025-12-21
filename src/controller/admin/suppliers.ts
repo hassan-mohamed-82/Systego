@@ -56,9 +56,9 @@ export const createSupplier = async (req: Request, res: Response) => {
 export const getSuppliers = async (req: Request, res: Response) => {
   const suppliers = await SupplierModel.find().populate("cityId").populate("countryId");
  
-    const city= await CityModels.find();
-    const country= await CountryModel.find();
-  SuccessResponse(res, { message: "Suppliers retrieved successfully", suppliers, city, country });
+  const countries = await CountryModel.find().populate("cities");
+
+  SuccessResponse(res, { message: "Suppliers retrieved successfully", suppliers, countries });
 };
 
 
