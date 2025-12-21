@@ -8,7 +8,7 @@ router.post('/sales',authorizePermissions("POS","Add"), catchAsync(createSale));
 router.get('/sales',authorizePermissions("POS","View"), catchAsync(getSales));
 router.get('/sales/pending',authorizePermissions("POS","View"), catchAsync(getsalePending));
 router.post('/sales/complete',authorizePermissions("POS","View"), catchAsync(getShiftCompletedSales));
-router.get("/sales/pending/:sale_id",authorizePermissions("POS","View"), getSalePendingById);
+router.get("/sales/pending/:sale_id",authorizePermissions("POS","View"), catchAsync(getSalePendingById));
 router.get("/sales/dues", authorizePermissions("POS","View"), catchAsync(getDueSales));
 router.post("/sales/pay-due", authorizePermissions("POS","Add"), catchAsync(payDue));
 
