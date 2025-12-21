@@ -55,8 +55,7 @@ export const createSupplier = async (req: Request, res: Response) => {
 
 export const getSuppliers = async (req: Request, res: Response) => {
   const suppliers = await SupplierModel.find().populate("cityId").populate("countryId");
-  if (!suppliers || suppliers.length === 0) {
-    throw new NotFound("No suppliers found");  }
+ 
     const city= await CityModels.find();
     const country= await CountryModel.find();
   SuccessResponse(res, { message: "Suppliers retrieved successfully", suppliers, city, country });
@@ -67,14 +66,31 @@ export const getSupplierById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Supplier ID is required");
 
-  const supplier = await SupplierModel.findById(id).populate("cityId").populate("countryId");
+  const supplier = await SupplierModel.findById(id)
+    .populate("cityId")
+    .populate("countryId");
+    
   if (!supplier) throw new NotFound("Supplier not found");
-  
-    const city= await CityModels.find();
-    const country= await CountryModel.find();
 
-  SuccessResponse(res, { message: "Supplier retrieved successfully", supplier, city, country });
+  // جيب الـ Countries ومعاها الـ Cities
+  const countries = await CountryModel.aggregate([
+    {
+      $lookup: {
+        from: "cities",
+        localField: "_id",
+        foreignField: "country_id",
+        as: "cities"
+      }
+    }
+  ]);
+
+  SuccessResponse(res, { 
+    message: "Supplier retrieved successfully", 
+    supplier, 
+    countries 
+  });
 };
+
 
 
 export const updateSupplier = async (req: Request, res: Response) => {
