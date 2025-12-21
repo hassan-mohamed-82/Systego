@@ -14,10 +14,14 @@ export const createExpenseCategory = async (req: Request, res: Response) => {
     const expenseCategory = await ExpenseCategoryModel.create({ name, ar_name,status });
     SuccessResponse(res, { message: "ExpenseCategory created successfully", expenseCategory });
 };
+
+
 export const getExpenseCategories = async (req: Request, res: Response) => {
     const expenseCategories = await ExpenseCategoryModel.find();
     SuccessResponse(res, { expenseCategories });
 }
+
+
 export const updateExpenseCategory = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, ar_name, status } = req.body;
