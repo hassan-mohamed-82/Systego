@@ -31,7 +31,7 @@ export const updateExpenseCategory = async (req: Request, res: Response) => {
     
     if (name !== undefined) expenseCategory.name = name;
     if (ar_name !== undefined) expenseCategory.ar_name = ar_name;
-    if (status !== undefined) expenseCategory.status = status;  // 👈 كده صح
+    if (status !== undefined) expenseCategory.status = status;  
     
     await expenseCategory.save();
     SuccessResponse(res, { message: "ExpenseCategory updated successfully", expenseCategory });
