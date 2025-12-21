@@ -13,6 +13,7 @@ import { VariationModel } from "../../models/schema/admin/Variation";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import ExcelJS from "exceljs";
+import { UnitModel } from "../../models/schema/admin/units";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -21,7 +22,9 @@ export const createProduct = async (req: Request, res: Response) => {
     image,
     categoryId,
     brandId,
-    unit,
+    product_unit,
+    sale_unit,
+    purchase_unit,
     price,
     quantity,
     ar_description,
@@ -116,7 +119,9 @@ export const createProduct = async (req: Request, res: Response) => {
     image: imageUrl,
     categoryId,
     brandId,
-    unit,
+    product_unit,
+    sale_unit,
+    purchase_unit,
     code,
     price: basePrice,
     quantity: baseQuantity,
@@ -265,7 +270,9 @@ export const updateProduct = async (req: Request, res: Response) => {
     image,
     categoryId,
     brandId,
-    unit,
+    product_unit,
+    sale_unit,
+    purchase_unit,
     cost,
     price,
     description,
@@ -307,7 +314,9 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.ar_name = ar_name ?? product.ar_name;
   product.categoryId = categoryId ?? product.categoryId;
   product.brandId = brandId ?? product.brandId;
-  product.unit = unit ?? product.unit;
+  product.product_unit = product_unit ?? product.product_unit;
+  product.sale_unit = sale_unit ?? product.sale_unit;
+  product.purchase_unit = purchase_unit ?? product.purchase_unit;
   product.price = price ?? product.price;
   product.description = description ?? product.description;
   product.ar_description = ar_description ?? product.ar_description;
@@ -564,6 +573,7 @@ export const modelsforselect = async (req: Request, res: Response) => {
   const brands = await BrandModel.find().lean();
   const variations = await VariationModel.find().lean().populate("options");
   const warehouses = await WarehouseModel.find().lean();
+  const units = await UnitModel.find().lean();
 
   SuccessResponse(res, { categories, brands, variations, warehouses });
 };
