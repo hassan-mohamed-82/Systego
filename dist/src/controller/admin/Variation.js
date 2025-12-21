@@ -46,24 +46,37 @@ const updateVariationWithOptions = async (req, res) => {
     const variation = await Variation_1.VariationModel.findById(id);
     if (!variation)
         throw new Errors_1.NotFound("Variation not found");
-    if (name)
+    if (name !== undefined)
         variation.name = name;
-    if (ar_name)
+    if (ar_name !== undefined)
         variation.ar_name = ar_name;
     await variation.save();
     if (options && Array.isArray(options)) {
         for (const opt of options) {
             if (opt._id) {
                 // تحديث Option موجود
-                await Variation_2.OptionModel.findByIdAndUpdate(opt._id, { name: opt.name, status: opt.status ?? true });
+                const updateData = {};
+                if (opt.name !== undefined)
+                    updateData.name = opt.name;
+                if (opt.status !== undefined)
+                    updateData.status = opt.status;
+                await Variation_2.OptionModel.findByIdAndUpdate(opt._id, updateData);
             }
             else {
                 // إنشاء Option جديد
-                await Variation_2.OptionModel.create({ variationId: id, name: opt.name, status: opt.status ?? true });
+                await Variation_2.OptionModel.create({
+                    variationId: id,
+                    name: opt.name,
+                    status: opt.status !== undefined ? opt.status : true,
+                });
             }
         }
     }
-    (0, response_1.SuccessResponse)(res, { message: "Variation and options updated successfully" });
+    const updatedVariation = await Variation_1.VariationModel.findById(id).populate("options");
+    (0, response_1.SuccessResponse)(res, {
+        message: "Variation and options updated successfully",
+        variation: updatedVariation,
+    });
 };
 exports.updateVariationWithOptions = updateVariationWithOptions;
 const deleteVariationWithOptions = async (req, res) => {

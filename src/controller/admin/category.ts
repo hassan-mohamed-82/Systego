@@ -15,11 +15,7 @@ export const createcategory = async (req: Request, res: Response) => {
   if (!name ) throw new BadRequest("Category name is required");
   const existingCategory = await CategoryModel.findOne({ name });
   if (existingCategory) throw new BadRequest("Category already exists");
-  
-  if(parentId){
-    const parentCategory = await CategoryModel.findById(parentId);
-    if (!parentCategory) throw new BadRequest("Parent category not found");
-  }
+
   let imageUrl = "";
   if (image) {
     imageUrl = await saveBase64Image(image, Date.now().toString(), req, "category");
@@ -73,27 +69,33 @@ export const deleteCategory = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Category and related data deleted successfully" });
 };
 
-export const updateCategory =async (req: Request, res: Response) => {
+export const updateCategory = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Category id is required");
 
-  const updateData: any = { ...req.body };
+  const category = await CategoryModel.findById(id);
+  if (!category) throw new NotFound("Category not found");
 
-  if (req.body.image) {
-    updateData.image = await saveBase64Image(
-      req.body.image,
+  const { name, ar_name, parentId, image } = req.body;
+
+  if (name !== undefined) category.name = name;
+  if (ar_name !== undefined) category.ar_name = ar_name;
+  if (parentId !== undefined) category.parentId = parentId;
+
+  if (image) {
+    category.image = await saveBase64Image(
+      image,
       Date.now().toString(),
       req,
       "category"
     );
   }
 
-  const category = await CategoryModel.findByIdAndUpdate(id, updateData, { new: true });
-  if (!category) throw new NotFound("Category not found");
+  await category.save();
 
-  SuccessResponse(res, { message: "update category successfully", category });
-  
+  SuccessResponse(res, { message: "Category updated successfully", category });
 };
+
 
 
 // controllers/admin/category.ts

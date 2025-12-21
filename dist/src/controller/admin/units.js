@@ -73,7 +73,8 @@ const getUnitById = async (req, res) => {
         .populate("base_unit", "name ar_name code");
     if (!unit)
         throw new NotFound_1.NotFound("Unit not found");
-    (0, response_1.SuccessResponse)(res, { unit });
+    const baseUnits = await units_1.UnitModel.find({ is_base_unit: true });
+    (0, response_1.SuccessResponse)(res, { unit, baseUnits });
 };
 exports.getUnitById = getUnitById;
 // تحديث وحدة

@@ -41,21 +41,26 @@ export const updateBrand = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Brand id is required");
 
-  const updateData: any = { ...req.body };
+  const brand = await BrandModel.findById(id);
+  if (!brand) throw new NotFound("Brand not found");
 
-  if (req.body.logo) {
-    updateData.logo = await saveBase64Image(
-      req.body.logo,
+  const { name, ar_name, logo } = req.body;
+
+  if (name !== undefined) brand.name = name;
+  if (ar_name !== undefined) brand.ar_name = ar_name;
+
+  if (logo) {
+    brand.logo = await saveBase64Image(
+      logo,
       Date.now().toString(),
       req,
       "brands"
     );
   }
 
-  const brand = await BrandModel.findByIdAndUpdate(id, updateData, { new: true });
-  if (!brand) throw new NotFound("Brand not found");
+  await brand.save();
 
-  SuccessResponse(res, { message: "update brand successfully", brand });
+  SuccessResponse(res, { message: "Brand updated successfully", brand });
 };
 
 export const deleteBrand = async (req: Request, res: Response) => {

@@ -9,7 +9,6 @@ const ReturnItemSchema = new Schema({
   returned_quantity: { type: Number, required: true, min: 1 },
   price: { type: Number, required: true },
   subtotal: { type: Number, required: true },
-  reason: { type: String, default: "" },
 });
 
 const ReturnSchema = new Schema(
@@ -79,6 +78,10 @@ const ReturnSchema = new Schema(
     refund_account_id: {
       type: Schema.Types.ObjectId,
       ref: "BankAccount",
+    },
+    image: {
+      type: String,
+      default: "",
     },
 
     note: {

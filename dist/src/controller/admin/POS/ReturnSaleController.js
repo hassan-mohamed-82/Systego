@@ -8,7 +8,6 @@ const Errors_1 = require("../../../Errors");
 const response_1 = require("../../../utils/response");
 const BadRequest_1 = require("../../../Errors/BadRequest");
 const Sale_1 = require("../../../models/schema/admin/POS/Sale");
-const customer_1 = require("../../../models/schema/admin/POS/customer");
 const product_price_1 = require("../../../models/schema/admin/product_price");
 const mongoose_1 = __importDefault(require("mongoose"));
 const ReturnSale_1 = require("../../../models/schema/admin/POS/ReturnSale");
@@ -16,6 +15,7 @@ const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const products_1 = require("../../../models/schema/admin/products");
 const pandels_1 = require("../../../models/schema/admin/pandels");
+const handleImages_1 = require("../../../utils/handleImages");
 // ═══════════════════════════════════════════════════════════
 // GET SALE FOR RETURN
 // ═══════════════════════════════════════════════════════════
@@ -37,13 +37,44 @@ const getSaleForReturn = async (req, res) => {
     if (sale.order_pending === 1) {
         throw new BadRequest_1.BadRequest("Cannot return items from a pending sale");
     }
-    const saleItems = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
-        .populate("product_id", "name ar_name image price")
-        .populate("product_price_id", "price code quantity")
-        .populate("bundle_id", "name price")
-        .populate("options_id", "name ar_name price")
+    const fullSale = await Sale_1.SaleModel.findById(sale._id)
+        .populate("customer_id", "name email phone_number address")
+        .populate("warehouse_id", "name ar_name")
+        .populate("cashier_id", "name ar_name")
+        .populate("coupon_id", "code discount_type discount_value")
+        .populate("gift_card_id", "code balance")
+        .populate("order_tax", "name rate")
+        .populate("order_discount", "name discount_type discount_value")
         .lean();
-    const previousReturns = await ReturnSale_1.ReturnModel.find({ sale_id: sale._id }).lean();
+    const saleItems = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
+        .populate({
+        path: "product_id",
+        select: "name ar_name image price code quantity categoryId brandId",
+        populate: [
+            { path: "categoryId", select: "name ar_name" },
+            { path: "brandId", select: "name ar_name" }
+        ]
+    })
+        .populate({
+        path: "product_price_id",
+        select: "price code quantity",
+        populate: {
+            path: "productId",
+            select: "name ar_name image"
+        }
+    })
+        .populate({
+        path: "bundle_id",
+        select: "name ar_name price"
+    })
+        .populate({
+        path: "options_id",
+        select: "name ar_name price"
+    })
+        .lean();
+    const previousReturns = await ReturnSale_1.ReturnModel.find({ sale_id: sale._id })
+        .populate("financial_account_id", "name ar_name")
+        .lean();
     const returnedQuantities = {};
     for (const ret of previousReturns) {
         for (const item of ret.items) {
@@ -63,31 +94,65 @@ const getSaleForReturn = async (req, res) => {
                 : item.bundle_id?._id?.toString() || "";
         const alreadyReturned = returnedQuantities[key] || 0;
         const availableToReturn = item.quantity - alreadyReturned;
+        let productInfo = item.product_id || null;
+        if (!productInfo && item.product_price_id?.productId) {
+            productInfo = item.product_price_id.productId;
+        }
         return {
-            ...item,
+            _id: item._id,
+            sale_id: item.sale_id,
+            product: productInfo,
+            product_price: item.product_price_id || null,
+            bundle: item.bundle_id || null,
+            options: item.options_id || [],
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.subtotal,
+            isGift: item.isGift || false,
+            isBundle: item.isBundle || false,
             already_returned: alreadyReturned,
             available_to_return: Math.max(0, availableToReturn),
         };
     });
-    let customer = null;
-    if (sale.customer_id) {
-        customer = await customer_1.CustomerModel.findById(sale.customer_id)
-            .select("name email phone_number")
-            .lean();
-    }
+    const totalReturnedAmount = previousReturns.reduce((sum, ret) => sum + (ret.refund_amount || 0), 0);
+    const totalReturnedItems = previousReturns.reduce((sum, ret) => {
+        return sum + ret.items.reduce((itemSum, item) => itemSum + item.returned_quantity, 0);
+    }, 0);
+    const saleData = fullSale;
     return (0, response_1.SuccessResponse)(res, {
         message: "Sale fetched successfully",
         sale: {
-            _id: sale._id,
-            reference: sale.reference,
-            date: sale.date,
-            grand_total: sale.grand_total,
-            paid_amount: sale.paid_amount,
-            customer: customer,
+            _id: saleData?._id,
+            reference: saleData?.reference,
+            date: saleData?.date,
+            total: saleData?.total,
+            tax_amount: saleData?.tax_amount,
+            tax_rate: saleData?.tax_rate,
+            discount: saleData?.discount,
+            shipping: saleData?.shipping,
+            grand_total: saleData?.grand_total,
+            paid_amount: saleData?.paid_amount,
+            remaining_amount: saleData?.remaining_amount,
+            note: saleData?.note,
+            customer: saleData?.customer_id || null,
+            warehouse: saleData?.warehouse_id || null,
+            cashier: saleData?.cashier_id || null,
+            coupon: saleData?.coupon_id || null,
+            gift_card: saleData?.gift_card_id || null,
+            tax: saleData?.order_tax || null,
+            discount_info: saleData?.order_discount || null,
+            created_at: saleData?.createdAt,
         },
         items: itemsWithAvailable,
+        summary: {
+            total_items: saleItems.length,
+            total_quantity: saleItems.reduce((sum, item) => sum + item.quantity, 0),
+            total_available_to_return: itemsWithAvailable.reduce((sum, item) => sum + item.available_to_return, 0),
+            total_already_returned: totalReturnedItems,
+        },
         previous_returns: previousReturns,
         previous_returns_count: previousReturns.length,
+        total_returned_amount: totalReturnedAmount,
     });
 };
 exports.getSaleForReturn = getSaleForReturn;
@@ -111,7 +176,8 @@ const createReturn = async (req, res) => {
     if (!openShift) {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a return");
     }
-    const { sale_id, items, note, refund_method = "original_method", refund_account_id, } = req.body;
+    const { sale_id, items, reason, // 👈 reason للـ Return ككل
+    note, refund_account_id, image, } = req.body;
     if (!sale_id) {
         throw new BadRequest_1.BadRequest("sale_id is required");
     }
@@ -147,7 +213,7 @@ const createReturn = async (req, res) => {
     const returnItems = [];
     let totalReturnAmount = 0;
     for (const item of items) {
-        const { product_sale_id, product_id, product_price_id, bundle_id, quantity, reason = "", } = item;
+        const { product_sale_id, product_id, product_price_id, bundle_id, quantity, } = item;
         if (!quantity || Number(quantity) <= 0) {
             throw new BadRequest_1.BadRequest("Return quantity must be greater than 0");
         }
@@ -188,7 +254,6 @@ const createReturn = async (req, res) => {
             returned_quantity: returnQuantity,
             price: saleItem.price,
             subtotal: itemSubtotal,
-            reason: reason,
         });
     }
     if (refund_account_id) {
@@ -207,6 +272,10 @@ const createReturn = async (req, res) => {
             throw new BadRequest_1.BadRequest(`Insufficient balance in refund account. Available: ${bankAccount.balance}, Required: ${totalReturnAmount}`);
         }
     }
+    let image_url = "";
+    if (image) {
+        image_url = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "return");
+    }
     const returnDoc = await ReturnSale_1.ReturnModel.create({
         sale_id: sale._id,
         sale_reference: sale.reference,
@@ -216,9 +285,10 @@ const createReturn = async (req, res) => {
         shift_id: openShift._id,
         items: returnItems,
         total_amount: totalReturnAmount,
-        refund_method: refund_method,
         refund_account_id: refund_account_id,
+        reason: reason || "", // 👈 reason للـ Return ككل
         note: note || "",
+        image: image_url,
     });
     for (const item of returnItems) {
         if (item.product_price_id) {

@@ -12,96 +12,172 @@ import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
 import { BankAccountModel } from '../../../models/schema/admin/Financial_Account';
 import { ProductModel } from '../../../models/schema/admin/products';
 import { PandelModel } from '../../../models/schema/admin/pandels';
+import { saveBase64Image } from '../../../utils/handleImages';
 // ═══════════════════════════════════════════════════════════
 // GET SALE FOR RETURN
 // ═══════════════════════════════════════════════════════════
 export const getSaleForReturn = async (req: Request, res: Response) => {
-    const { reference } = req.body;
-  
-    if (!reference) {
-      throw new BadRequest("Sale reference is required");
-    }
-  
-    let sale;
-    if (mongoose.Types.ObjectId.isValid(reference)) {
-      sale = await SaleModel.findById(reference);
-    }
-  
-    if (!sale) {
-      sale = await SaleModel.findOne({ reference: reference });
-    }
-  
-    if (!sale) {
-      throw new NotFound("Sale not found");
-    }
-  
-    if (sale.order_pending === 1) {
-      throw new BadRequest("Cannot return items from a pending sale");
-    }
-  
-    const saleItems = await ProductSalesModel.find({ sale_id: sale._id })
-      .populate("product_id", "name ar_name image price")
-      .populate("product_price_id", "price code quantity")
-      .populate("bundle_id", "name price")
-      .populate("options_id", "name ar_name price")
-      .lean();
-  
-    const previousReturns = await ReturnModel.find({ sale_id: sale._id }).lean();
-  
-    const returnedQuantities: { [key: string]: number } = {};
-  
-    for (const ret of previousReturns) {
-      for (const item of ret.items) {
-        const key = item.product_price_id
-          ? item.product_price_id.toString()
-          : item.product_id
-          ? item.product_id.toString()
-          : item.bundle_id?.toString() || "";
-  
-        returnedQuantities[key] = (returnedQuantities[key] || 0) + item.returned_quantity;
+  const { reference } = req.body;
+
+  if (!reference) {
+    throw new BadRequest("Sale reference is required");
+  }
+
+  let sale;
+  if (mongoose.Types.ObjectId.isValid(reference)) {
+    sale = await SaleModel.findById(reference);
+  }
+
+  if (!sale) {
+    sale = await SaleModel.findOne({ reference: reference });
+  }
+
+  if (!sale) {
+    throw new NotFound("Sale not found");
+  }
+
+  if (sale.order_pending === 1) {
+    throw new BadRequest("Cannot return items from a pending sale");
+  }
+
+  const fullSale = await SaleModel.findById(sale._id)
+    .populate("customer_id", "name email phone_number address")
+    .populate("warehouse_id", "name ar_name")
+    .populate("cashier_id", "name ar_name")
+    .populate("coupon_id", "code discount_type discount_value")
+    .populate("gift_card_id", "code balance")
+    .populate("order_tax", "name rate")
+    .populate("order_discount", "name discount_type discount_value")
+    .lean();
+
+  const saleItems = await ProductSalesModel.find({ sale_id: sale._id })
+    .populate({
+      path: "product_id",
+      select: "name ar_name image price code quantity categoryId brandId",
+      populate: [
+        { path: "categoryId", select: "name ar_name" },
+        { path: "brandId", select: "name ar_name" }
+      ]
+    })
+    .populate({
+      path: "product_price_id",
+      select: "price code quantity",
+      populate: {
+        path: "productId",
+        select: "name ar_name image"
       }
+    })
+    .populate({
+      path: "bundle_id",
+      select: "name ar_name price"
+    })
+    .populate({
+      path: "options_id",
+      select: "name ar_name price"
+    })
+    .lean();
+
+  const previousReturns = await ReturnModel.find({ sale_id: sale._id })
+    .populate("financial_account_id", "name ar_name")
+    .lean();
+
+  const returnedQuantities: { [key: string]: number } = {};
+
+  for (const ret of previousReturns) {
+    for (const item of ret.items) {
+      const key = item.product_price_id
+        ? item.product_price_id.toString()
+        : item.product_id
+        ? item.product_id.toString()
+        : item.bundle_id?.toString() || "";
+
+      returnedQuantities[key] = (returnedQuantities[key] || 0) + item.returned_quantity;
     }
-  
-    const itemsWithAvailable = saleItems.map((item: any) => {
-      const key = item.product_price_id?._id
-        ? item.product_price_id._id.toString()
-        : item.product_id?._id
-        ? item.product_id._id.toString()
-        : item.bundle_id?._id?.toString() || "";
-  
-      const alreadyReturned = returnedQuantities[key] || 0;
-      const availableToReturn = item.quantity - alreadyReturned;
-  
-      return {
-        ...item,
-        already_returned: alreadyReturned,
-        available_to_return: Math.max(0, availableToReturn),
-      };
-    });
-  
-    let customer = null;
-    if (sale.customer_id) {
-      customer = await CustomerModel.findById(sale.customer_id)
-        .select("name email phone_number")
-        .lean();
+  }
+
+  const itemsWithAvailable = saleItems.map((item: any) => {
+    const key = item.product_price_id?._id
+      ? item.product_price_id._id.toString()
+      : item.product_id?._id
+      ? item.product_id._id.toString()
+      : item.bundle_id?._id?.toString() || "";
+
+    const alreadyReturned = returnedQuantities[key] || 0;
+    const availableToReturn = item.quantity - alreadyReturned;
+
+    let productInfo = item.product_id || null;
+    if (!productInfo && item.product_price_id?.productId) {
+      productInfo = item.product_price_id.productId;
     }
+
+    return {
+      _id: item._id,
+      sale_id: item.sale_id,
+      product: productInfo,
+      product_price: item.product_price_id || null,
+      bundle: item.bundle_id || null,
+      options: item.options_id || [],
+      quantity: item.quantity,
+      price: item.price,
+      subtotal: item.subtotal,
+      isGift: item.isGift || false,
+      isBundle: item.isBundle || false,
+      already_returned: alreadyReturned,
+      available_to_return: Math.max(0, availableToReturn),
+    };
+  });
+
+  const totalReturnedAmount = previousReturns.reduce(
+    (sum, ret: any) => sum + (ret.refund_amount || 0),
+    0
+  );
+
+  const totalReturnedItems = previousReturns.reduce((sum, ret: any) => {
+    return sum + ret.items.reduce((itemSum: number, item: any) => itemSum + item.returned_quantity, 0);
+  }, 0);
+
+  const saleData = fullSale as any;
   
-    return SuccessResponse(res, {
-      message: "Sale fetched successfully",
-      sale: {
-        _id: sale._id,
-        reference: sale.reference,
-        date: sale.date,
-        grand_total: sale.grand_total,
-        paid_amount: sale.paid_amount,
-        customer: customer,
-      },
-      items: itemsWithAvailable,
-      previous_returns: previousReturns,
-      previous_returns_count: previousReturns.length,
-    });
-  };
-  
+  return SuccessResponse(res, {
+    message: "Sale fetched successfully",
+    sale: {
+      _id: saleData?._id,
+      reference: saleData?.reference,
+      date: saleData?.date,
+      total: saleData?.total,
+      tax_amount: saleData?.tax_amount,
+      tax_rate: saleData?.tax_rate,
+      discount: saleData?.discount,
+      shipping: saleData?.shipping,
+      grand_total: saleData?.grand_total,
+      paid_amount: saleData?.paid_amount,
+      remaining_amount: saleData?.remaining_amount,
+      note: saleData?.note,
+      customer: saleData?.customer_id || null,
+      warehouse: saleData?.warehouse_id || null,
+      cashier: saleData?.cashier_id || null,
+      coupon: saleData?.coupon_id || null,
+      gift_card: saleData?.gift_card_id || null,
+      tax: saleData?.order_tax || null,
+      discount_info: saleData?.order_discount || null,
+      created_at: saleData?.createdAt,
+    },
+    items: itemsWithAvailable,
+    summary: {
+      total_items: saleItems.length,
+      total_quantity: saleItems.reduce((sum, item: any) => sum + item.quantity, 0),
+      total_available_to_return: itemsWithAvailable.reduce(
+        (sum, item) => sum + item.available_to_return,
+        0
+      ),
+      total_already_returned: totalReturnedItems,
+    },
+    previous_returns: previousReturns,
+    previous_returns_count: previousReturns.length,
+    total_returned_amount: totalReturnedAmount,
+  });
+};
+
   // ═══════════════════════════════════════════════════════════
   // CREATE RETURN
   // ═══════════════════════════════════════════════════════════
@@ -130,9 +206,10 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
     const {
       sale_id,
       items,
+      reason,  // 👈 reason للـ Return ككل
       note,
-      refund_method = "original_method",
       refund_account_id,
+      image,
     } = req.body;
   
     if (!sale_id) {
@@ -185,7 +262,6 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       returned_quantity: number;
       price: number;
       subtotal: number;
-      reason: string;
     }> = [];
   
     let totalReturnAmount = 0;
@@ -197,7 +273,6 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
         product_price_id,
         bundle_id,
         quantity,
-        reason = "",
       } = item;
   
       if (!quantity || Number(quantity) <= 0) {
@@ -257,7 +332,6 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
         returned_quantity: returnQuantity,
         price: saleItem.price,
         subtotal: itemSubtotal,
-        reason: reason,
       });
     }
   
@@ -283,6 +357,11 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       }
     }
   
+    let image_url = "";
+    if (image) {
+      image_url = await saveBase64Image(image, Date.now().toString(), req, "return");
+    }
+  
     const returnDoc = await ReturnModel.create({
       sale_id: sale._id,
       sale_reference: sale.reference,
@@ -292,9 +371,10 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       shift_id: openShift._id,
       items: returnItems,
       total_amount: totalReturnAmount,
-      refund_method: refund_method,
       refund_account_id: refund_account_id,
+      reason: reason || "",  // 👈 reason للـ Return ككل
       note: note || "",
+      image: image_url,
     });
   
     for (const item of returnItems) {

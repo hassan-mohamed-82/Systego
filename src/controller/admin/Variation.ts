@@ -51,31 +51,45 @@ export const getOneVariation = async (req: Request, res: Response) => {
 };
 
 export const updateVariationWithOptions = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { name, ar_name, options } = req.body;
+  const { id } = req.params;
+  const { name, ar_name, options } = req.body;
 
-    const variation = await VariationModel.findById(id);
-    if (!variation) throw new NotFound("Variation not found");
+  const variation = await VariationModel.findById(id);
+  if (!variation) throw new NotFound("Variation not found");
 
-    if (name) variation.name = name;
-    if (ar_name) variation.ar_name = ar_name;
-    await variation.save();
+  if (name !== undefined) variation.name = name;
+  if (ar_name !== undefined) variation.ar_name = ar_name;
+  
+  await variation.save();
 
-    if (options && Array.isArray(options)) {
-      for (const opt of options) {
-        if (opt._id) {
-          // تحديث Option موجود
-          await OptionModel.findByIdAndUpdate(opt._id, { name: opt.name, status: opt.status ?? true });
-        } else {
-          // إنشاء Option جديد
-          await OptionModel.create({ variationId: id, name: opt.name, status: opt.status ?? true });
-        }
+  if (options && Array.isArray(options)) {
+    for (const opt of options) {
+      if (opt._id) {
+        // تحديث Option موجود
+        const updateData: any = {};
+        if (opt.name !== undefined) updateData.name = opt.name;
+        if (opt.status !== undefined) updateData.status = opt.status;
+        
+        await OptionModel.findByIdAndUpdate(opt._id, updateData);
+      } else {
+        // إنشاء Option جديد
+        await OptionModel.create({
+          variationId: id,
+          name: opt.name,
+          status: opt.status !== undefined ? opt.status : true,
+        });
       }
     }
+  }
 
-    SuccessResponse(res, { message: "Variation and options updated successfully" });
- 
+  const updatedVariation = await VariationModel.findById(id).populate("options");
+
+  SuccessResponse(res, {
+    message: "Variation and options updated successfully",
+    variation: updatedVariation,
+  });
 };
+
 
 export const deleteVariationWithOptions = async (req: Request, res: Response) => {
     const { id } = req.params;

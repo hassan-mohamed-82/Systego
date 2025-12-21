@@ -81,7 +81,9 @@ export const getUnitById = async (req: Request, res: Response) => {
     
   if (!unit) throw new NotFound("Unit not found");
 
-  SuccessResponse(res, { unit });
+  const baseUnits = await UnitModel.find({ is_base_unit: true });
+
+  SuccessResponse(res, { unit, baseUnits });
 };
 
 // تحديث وحدة
