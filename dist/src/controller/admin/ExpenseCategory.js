@@ -18,18 +18,7 @@ const createExpenseCategory = async (req, res) => {
 };
 exports.createExpenseCategory = createExpenseCategory;
 const getExpenseCategories = async (req, res) => {
-    const { status } = req.query;
-    const filter = {};
-    if (status !== undefined) {
-        // Handle case where status might be an array (e.g., ?status=true&status=false)
-        const statusValue = Array.isArray(status) ? status[0] : status;
-        filter.status = statusValue === 'true';
-    }
-    else {
-        // Default to only returning active categories (original behavior)
-        filter.status = true;
-    }
-    const expenseCategories = await expensecategory_1.ExpenseCategoryModel.find(filter);
+    const expenseCategories = await expensecategory_1.ExpenseCategoryModel.find();
     (0, response_1.SuccessResponse)(res, { expenseCategories });
 };
 exports.getExpenseCategories = getExpenseCategories;

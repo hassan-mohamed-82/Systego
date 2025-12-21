@@ -7,6 +7,7 @@ import {
   updateCategory,
   deleteCategory,
   importCategoriesFromExcel,
+  deletemanycategories,
 } from "../../controller/admin/category";
 import { validate } from "../../middlewares/validation";
 import {
@@ -27,6 +28,7 @@ route.post(
   catchAsync(importCategoriesFromExcel)
 );
 
+route.delete("/",authorizePermissions("category","Delete"),catchAsync(deletemanycategories));
 // CRUD
 route.post(
   "/",

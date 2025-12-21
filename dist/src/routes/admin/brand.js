@@ -9,6 +9,7 @@ const haspremission_1 = require("../../middlewares/haspremission");
 const route = (0, express_1.Router)();
 route.post("/", (0, haspremission_1.authorizePermissions)("brand", "Add"), (0, validation_1.validate)(brand_1.createBrandSchema), (0, catchAsync_1.catchAsync)(barnd_1.createBrand));
 route.get("/", (0, haspremission_1.authorizePermissions)("brand", "View"), (0, catchAsync_1.catchAsync)(barnd_1.getBrands));
+route.delete("/", (0, haspremission_1.authorizePermissions)("brand", "Delete"), (0, catchAsync_1.catchAsync)(barnd_1.deletemanybrands));
 route.get("/:id", (0, haspremission_1.authorizePermissions)("brand", "View"), (0, catchAsync_1.catchAsync)(barnd_1.getBrandById));
 route.put("/:id", (0, haspremission_1.authorizePermissions)("brand", "Edit"), (0, validation_1.validate)(brand_1.updateBrandSchema), (0, catchAsync_1.catchAsync)(barnd_1.updateBrand));
 route.delete("/:id", (0, haspremission_1.authorizePermissions)("brand", "Delete"), (0, catchAsync_1.catchAsync)(barnd_1.deleteBrand));

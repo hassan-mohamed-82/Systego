@@ -783,4 +783,11 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
 
 
 
-
+export const deletemanyproducts = async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw new BadRequest("At least one product ID is required");
+  }
+  await ProductModel.deleteMany({ _id: { $in: ids } });
+  SuccessResponse(res, { message: "Products deleted successfully" });
+};

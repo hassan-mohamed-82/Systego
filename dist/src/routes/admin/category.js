@@ -11,6 +11,7 @@ const uploadFile_1 = require("../../utils/uploadFile");
 const route = (0, express_1.Router)();
 // ✅ Static routes أولاً
 route.post("/import", (0, haspremission_1.authorizePermissions)("category", "Add"), (0, uploadFile_1.uploadExcelFile)().single("file"), (0, catchAsync_1.catchAsync)(category_1.importCategoriesFromExcel));
+route.delete("/", (0, haspremission_1.authorizePermissions)("category", "Delete"), (0, catchAsync_1.catchAsync)(category_1.deletemanycategories));
 // CRUD
 route.post("/", (0, haspremission_1.authorizePermissions)("category", "Add"), (0, validation_1.validate)(category_2.createCategorySchema), (0, catchAsync_1.catchAsync)(category_1.createcategory));
 route.get("/", (0, haspremission_1.authorizePermissions)("category", "View"), (0, catchAsync_1.catchAsync)(category_1.getCategories));

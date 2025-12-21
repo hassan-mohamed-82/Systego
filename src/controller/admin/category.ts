@@ -216,3 +216,24 @@ export const importCategoriesFromExcel = async (req: Request, res: Response) => 
     skipped: results.skipped,
   });
 };
+
+
+export const deletemanycategories = async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw new BadRequest("At least one category ID is required");
+  }
+
+  // 1️⃣ امسح كل الـ Products اللي تابعة للـ Categories دي
+  const productsResult = await ProductModel.deleteMany({ category_id: { $in: ids } });
+  
+  // 2️⃣ امسح الـ Categories نفسها
+  const categoriesResult = await CategoryModel.deleteMany({ _id: { $in: ids } });
+
+  SuccessResponse(res, { 
+    message: "Categories and their products deleted successfully",
+    deletedCategories: categoriesResult.deletedCount,
+    deletedProducts: productsResult.deletedCount
+  });
+};

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
+exports.deletemanyproducts = exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.getOneProduct = exports.deleteProduct = exports.updateProduct = exports.getProduct = exports.createProduct = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -616,3 +616,12 @@ const importProductsFromExcel = async (req, res) => {
     });
 };
 exports.importProductsFromExcel = importProductsFromExcel;
+const deletemanyproducts = async (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new BadRequest_1.BadRequest("At least one product ID is required");
+    }
+    await products_1.ProductModel.deleteMany({ _id: { $in: ids } });
+    (0, response_1.SuccessResponse)(res, { message: "Products deleted successfully" });
+};
+exports.deletemanyproducts = deletemanyproducts;

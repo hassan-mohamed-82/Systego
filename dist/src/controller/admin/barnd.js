@@ -1,11 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBrand = exports.updateBrand = exports.createBrand = exports.getBrandById = exports.getBrands = void 0;
+exports.deletemanybrands = exports.deleteBrand = exports.updateBrand = exports.createBrand = exports.getBrandById = exports.getBrands = void 0;
 const response_1 = require("../../utils/response");
 const brand_1 = require("../../models/schema/admin/brand");
 const handleImages_1 = require("../../utils/handleImages");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors/");
+const category_1 = require("../../models/schema/admin/category");
+const products_1 = require("../../models/schema/admin/products");
 const getBrands = async (req, res) => {
     const brands = await brand_1.BrandModel.find();
     if (!brands || brands.length === 0)
@@ -62,3 +64,25 @@ const deleteBrand = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "delete brand successfully" });
 };
 exports.deleteBrand = deleteBrand;
+const deletemanybrands = async (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new BadRequest_1.BadRequest("At least one brand ID is required");
+    }
+    // 1️⃣ هات كل الـ Categories اللي تابعة للـ Brands دي
+    const categories = await category_1.CategoryModel.find({ brand_id: { $in: ids } });
+    const categoryIds = categories.map(cat => cat._id);
+    // 2️⃣ امسح كل الـ Products اللي تابعة للـ Categories دي
+    const productsResult = await products_1.ProductModel.deleteMany({ category_id: { $in: categoryIds } });
+    // 3️⃣ امسح الـ Categories
+    const categoriesResult = await category_1.CategoryModel.deleteMany({ brand_id: { $in: ids } });
+    // 4️⃣ امسح الـ Brands نفسها
+    const brandsResult = await brand_1.BrandModel.deleteMany({ _id: { $in: ids } });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Brands, categories and products deleted successfully",
+        deletedBrands: brandsResult.deletedCount,
+        deletedCategories: categoriesResult.deletedCount,
+        deletedProducts: productsResult.deletedCount
+    });
+};
+exports.deletemanybrands = deletemanybrands;

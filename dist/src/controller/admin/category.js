@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.importCategoriesFromExcel = exports.updateCategory = exports.deleteCategory = exports.getCategoryById = exports.getCategories = exports.createcategory = void 0;
+exports.deletemanycategories = exports.importCategoriesFromExcel = exports.updateCategory = exports.deleteCategory = exports.getCategoryById = exports.getCategories = exports.createcategory = void 0;
 const response_1 = require("../../utils/response");
 const category_1 = require("../../models/schema/admin/category");
 const handleImages_1 = require("../../utils/handleImages");
@@ -185,3 +185,19 @@ const importCategoriesFromExcel = async (req, res) => {
     });
 };
 exports.importCategoriesFromExcel = importCategoriesFromExcel;
+const deletemanycategories = async (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new BadRequest_1.BadRequest("At least one category ID is required");
+    }
+    // 1️⃣ امسح كل الـ Products اللي تابعة للـ Categories دي
+    const productsResult = await products_1.ProductModel.deleteMany({ category_id: { $in: ids } });
+    // 2️⃣ امسح الـ Categories نفسها
+    const categoriesResult = await category_1.CategoryModel.deleteMany({ _id: { $in: ids } });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Categories and their products deleted successfully",
+        deletedCategories: categoriesResult.deletedCount,
+        deletedProducts: productsResult.deletedCount
+    });
+};
+exports.deletemanycategories = deletemanycategories;

@@ -13,6 +13,7 @@ import {
 } from "../../controller/admin/products";
 import { validate } from "../../middlewares/validation";
 import { createProductSchema, updateProductSchema } from "../../validation/admin/products";
+import { deletemanyproducts } from "../../controller/admin/products";
 import { catchAsync } from "../../utils/catchAsync";
 import { authenticated } from "../../middlewares/authenticated";
 import {authorizePermissions} from "../../middlewares/haspremission"
@@ -31,7 +32,7 @@ route.post("/",authorizePermissions("product","Add"), validate(createProductSche
 
 // جلب جميع المنتجات
 route.get("/",authorizePermissions("product","View"), catchAsync(getProduct));
-
+route.delete("/",authorizePermissions("product","Delete"), catchAsync(deletemanyproducts)); 
 // ✅ ضع المسارات الثابتة أولًا
 route.get("/generate-code",authorizePermissions("product","View"), catchAsync(generateProductCode));
 route.get("/generate-barcode/:product_price_id", authorizePermissions("product","View"), catchAsync(generateBarcodeImageController));

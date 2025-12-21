@@ -5,6 +5,8 @@ import { BrandModel } from "../../models/schema/admin/brand";
 import { saveBase64Image } from "../../utils/handleImages";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/";
+import { CategoryModel } from "../../models/schema/admin/category";
+import { ProductModel } from "../../models/schema/admin/products";
 
 export const getBrands = async (req: Request, res: Response) => {
   const brands = await BrandModel.find();
@@ -62,4 +64,33 @@ export const deleteBrand = async (req: Request, res: Response) => {
   const brand = await BrandModel.findByIdAndDelete(id);
   if (!brand) throw new NotFound("Brand not found");
   SuccessResponse(res, { message: "delete brand successfully" });
+};
+
+
+export const deletemanybrands = async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    throw new BadRequest("At least one brand ID is required");
+  }
+
+  // 1️⃣ هات كل الـ Categories اللي تابعة للـ Brands دي
+  const categories = await CategoryModel.find({ brand_id: { $in: ids } });
+  const categoryIds = categories.map(cat => cat._id);
+
+  // 2️⃣ امسح كل الـ Products اللي تابعة للـ Categories دي
+  const productsResult = await ProductModel.deleteMany({ category_id: { $in: categoryIds } });
+
+  // 3️⃣ امسح الـ Categories
+  const categoriesResult = await CategoryModel.deleteMany({ brand_id: { $in: ids } });
+
+  // 4️⃣ امسح الـ Brands نفسها
+  const brandsResult = await BrandModel.deleteMany({ _id: { $in: ids } });
+
+  SuccessResponse(res, { 
+    message: "Brands, categories and products deleted successfully",
+    deletedBrands: brandsResult.deletedCount,
+    deletedCategories: categoriesResult.deletedCount,
+    deletedProducts: productsResult.deletedCount
+  });
 };
