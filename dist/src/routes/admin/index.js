@@ -52,6 +52,7 @@ const Qztray_1 = __importDefault(require("./Qztray"));
 const payments_1 = __importDefault(require("./payments"));
 const Offers_1 = __importDefault(require("./Offers"));
 const cashier_1 = __importDefault(require("./cashier"));
+const units_1 = __importDefault(require("./units"));
 const expensecategory_1 = __importDefault(require("./expensecategory")); //Rputer
 const Paymob_1 = __importDefault(require("./Paymob"));
 const notifications_1 = __importDefault(require("./notifications"));
@@ -65,6 +66,7 @@ exports.route.use("/admin", Admin_1.default);
 exports.route.use("/permission", permission_1.default);
 exports.route.use("/category", category_1.default);
 exports.route.use("/product", products_1.default);
+exports.route.use("/units", units_1.default);
 exports.route.use("/cashier", cashier_1.default);
 exports.route.use("/supplier", suppliers_1.default);
 exports.route.use("/recipe", Recipe_1.default);

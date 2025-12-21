@@ -46,6 +46,7 @@ import qztrayRouter from "./Qztray"
 import paymentRouter from "./payments"
 import OffersRouter from "./Offers"
 import CashierRouter from "./cashier"
+import UnitsRouter from "./units"
 import ExpensecategoryRouter from "./expensecategory" //Rputer
 import PaymobRouter from "./Paymob"
 import notificationRoutrt from "./notifications"
@@ -60,6 +61,7 @@ route.use("/admin", AdminRouter);
 route.use("/permission",permissionRouter);
 route.use("/category",CategoryRouter);
 route.use("/product",productRouter);
+route.use("/units",UnitsRouter)
 route.use("/cashier",CashierRouter)
 route.use("/supplier",supplierRouter);
 route.use("/recipe",RecipeRouter);
