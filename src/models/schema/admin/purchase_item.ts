@@ -8,6 +8,7 @@ const PurchaseItemSchema = new Schema(
     category_id: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
     date_of_expiery: { type: Date }, // ✅ جديد
     purchase_id: { type: mongoose.Schema.Types.ObjectId, ref: "Purchase" },
+    patch_number: { type: String },
     warehouse_id: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse" },
     quantity: { type: Number, required: true },
     unit_cost: { type: Number, required: true },

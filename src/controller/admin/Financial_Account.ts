@@ -366,3 +366,12 @@ export const removeWarehouseFromBankAccount = async (req: Request, res: Response
     bankAccount: updatedAccount,
   });
 };
+
+
+export const selectwarehousesforbankaccount = async (req: Request, res: Response) => {
+  const warehouses = await WarehouseModel.find().select("name");
+  SuccessResponse(res, {
+    message: "Warehouses retrieved successfully",
+    warehouses,
+  });
+};

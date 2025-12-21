@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeWarehouseFromBankAccount = exports.addWarehouseToBankAccount = exports.deleteBankAccount = exports.updateBankAccount = exports.getBankAccountById = exports.getBankAccountsForPOS = exports.getBankAccounts = exports.createBankAccount = void 0;
+exports.selectwarehousesforbankaccount = exports.removeWarehouseFromBankAccount = exports.addWarehouseToBankAccount = exports.deleteBankAccount = exports.updateBankAccount = exports.getBankAccountById = exports.getBankAccountsForPOS = exports.getBankAccounts = exports.createBankAccount = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Financial_Account_1 = require("../../models/schema/admin/Financial_Account");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -303,3 +303,11 @@ const removeWarehouseFromBankAccount = async (req, res) => {
     });
 };
 exports.removeWarehouseFromBankAccount = removeWarehouseFromBankAccount;
+const selectwarehousesforbankaccount = async (req, res) => {
+    const warehouses = await Warehouse_1.WarehouseModel.find().select("name");
+    (0, response_1.SuccessResponse)(res, {
+        message: "Warehouses retrieved successfully",
+        warehouses,
+    });
+};
+exports.selectwarehousesforbankaccount = selectwarehousesforbankaccount;

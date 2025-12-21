@@ -39,7 +39,7 @@ const PurchaseSchema = new mongoose_1.Schema({
     date: { type: Date, required: true, default: Date.now },
     warehouse_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" }],
     supplier_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Supplier" }],
-    currency_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Currency" }],
+    // currency_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Currency" }],
     tax_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" }],
     receipt_img: { type: String },
     payment_status: {

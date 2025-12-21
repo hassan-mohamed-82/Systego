@@ -9,6 +9,7 @@ const haspremission_1 = require("../../middlewares/haspremission");
 const route = (0, express_1.Router)();
 route.post("/", (0, haspremission_1.authorizePermissions)("financial_account", "Add"), (0, validation_1.validate)(Financial_Account_2.createBankAccountSchema), (0, catchAsync_1.catchAsync)(Financial_Account_1.createBankAccount));
 route.get("/", (0, haspremission_1.authorizePermissions)("financial_account", "View"), (0, catchAsync_1.catchAsync)(Financial_Account_1.getBankAccounts));
+route.get("/select-warehouses", (0, haspremission_1.authorizePermissions)("financial_account", "View"), (0, catchAsync_1.catchAsync)(Financial_Account_1.selectwarehousesforbankaccount));
 route.get("/:id", (0, haspremission_1.authorizePermissions)("financial_account", "View"), (0, catchAsync_1.catchAsync)(Financial_Account_1.getBankAccountById));
 route.put("/:id", (0, haspremission_1.authorizePermissions)("financial_account", "Edit"), (0, validation_1.validate)(Financial_Account_2.updateBankAccountSchema), (0, catchAsync_1.catchAsync)(Financial_Account_1.updateBankAccount));
 route.delete("/:id", (0, haspremission_1.authorizePermissions)("financial_account", "Delete"), (0, catchAsync_1.catchAsync)(Financial_Account_1.deleteBankAccount));
