@@ -502,9 +502,10 @@ const getSalePendingById = async (req, res) => {
     if (!mongoose_1.default.Types.ObjectId.isValid(sale_id)) {
         throw new BadRequest_1.BadRequest("Invalid sale id");
     }
+    // استخدم $in عشان يشمل كل الاحتمالات
     const sale = await Sale_1.SaleModel.findOne({
         _id: sale_id,
-        order_pending: 1, // 1 = pending
+        order_pending: { $in: [1, "1", true] }
     }).lean();
     if (!sale) {
         throw new Errors_1.NotFound("Pending sale not found");

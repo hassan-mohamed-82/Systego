@@ -602,11 +602,11 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     throw new BadRequest("Invalid sale id");
   }
 
+  // استخدم $in عشان يشمل كل الاحتمالات
   const sale: any = await SaleModel.findOne({
     _id: sale_id,
-    order_pending: 1, // 1 = pending
+    order_pending: { $in: [1, "1", true] }
   }).lean();
-
   if (!sale) {
     throw new NotFound("Pending sale not found");
   }
