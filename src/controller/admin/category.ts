@@ -36,7 +36,6 @@ export const createcategory = async (req: Request, res: Response) => {
 
 export const getCategories = async (req: Request, res: Response) => {
   const categories = await CategoryModel.find({}).populate("parentId", "name");
-  if (!categories || categories.length === 0) throw new NotFound("No categories found");
   const ParentCategories = categories.filter(cat => !cat.parentId);
   SuccessResponse(res, { message: "get categories successfully", categories,ParentCategories });
 };
@@ -93,7 +92,6 @@ export const updateCategory = async (req: Request, res: Response) => {
   if (parentId !== undefined) {
     category.parentId = parentId && parentId !== "" ? parentId : undefined;
   }
-
   if (image) {
     category.image = await saveBase64Image(
       image,

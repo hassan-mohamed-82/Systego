@@ -34,8 +34,6 @@ const createcategory = async (req, res) => {
 exports.createcategory = createcategory;
 const getCategories = async (req, res) => {
     const categories = await category_1.CategoryModel.find({}).populate("parentId", "name");
-    if (!categories || categories.length === 0)
-        throw new Errors_1.NotFound("No categories found");
     const ParentCategories = categories.filter(cat => !cat.parentId);
     (0, response_1.SuccessResponse)(res, { message: "get categories successfully", categories, ParentCategories });
 };
