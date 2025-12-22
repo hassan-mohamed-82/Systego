@@ -12,7 +12,9 @@ import ExcelJS from "exceljs";
 
 export const createcategory = async (req: Request, res: Response) => {
   const { name, ar_name, image, parentId } = req.body;
-  if (!name ) throw new BadRequest("Category name is required");
+  
+  if (!name) throw new BadRequest("Category name is required");
+  
   const existingCategory = await CategoryModel.findOne({ name });
   if (existingCategory) throw new BadRequest("Category already exists");
 
@@ -21,10 +23,16 @@ export const createcategory = async (req: Request, res: Response) => {
     imageUrl = await saveBase64Image(image, Date.now().toString(), req, "category");
   }
 
-
-  const category = await CategoryModel.create({ name, ar_name, image: imageUrl , parentId });
-  SuccessResponse(res, { message: "create category successfully", category });
+  const category = await CategoryModel.create({
+    name,
+    ar_name,
+    image: imageUrl,
+    parentId: parentId && parentId !== "" ? parentId : undefined,  // 👈 لو فاضي يبقى undefined
+  });
+  
+  SuccessResponse(res, { message: "Category created successfully", category });
 };
+
 
 export const getCategories = async (req: Request, res: Response) => {
   const categories = await CategoryModel.find({}).populate("parentId", "name");
@@ -80,7 +88,11 @@ export const updateCategory = async (req: Request, res: Response) => {
 
   if (name !== undefined) category.name = name;
   if (ar_name !== undefined) category.ar_name = ar_name;
-  if (parentId !== undefined) category.parentId = parentId;
+  
+  // 👈 لو parentId فاضي أو null، شيله
+  if (parentId !== undefined) {
+    category.parentId = parentId && parentId !== "" ? parentId : undefined;
+  }
 
   if (image) {
     category.image = await saveBase64Image(
@@ -95,7 +107,6 @@ export const updateCategory = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Category updated successfully", category });
 };
-
 
 
 // controllers/admin/category.ts

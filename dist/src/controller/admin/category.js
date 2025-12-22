@@ -23,8 +23,13 @@ const createcategory = async (req, res) => {
     if (image) {
         imageUrl = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
     }
-    const category = await category_1.CategoryModel.create({ name, ar_name, image: imageUrl, parentId });
-    (0, response_1.SuccessResponse)(res, { message: "create category successfully", category });
+    const category = await category_1.CategoryModel.create({
+        name,
+        ar_name,
+        image: imageUrl,
+        parentId: parentId && parentId !== "" ? parentId : undefined, // 👈 لو فاضي يبقى undefined
+    });
+    (0, response_1.SuccessResponse)(res, { message: "Category created successfully", category });
 };
 exports.createcategory = createcategory;
 const getCategories = async (req, res) => {
@@ -79,8 +84,10 @@ const updateCategory = async (req, res) => {
         category.name = name;
     if (ar_name !== undefined)
         category.ar_name = ar_name;
-    if (parentId !== undefined)
-        category.parentId = parentId;
+    // 👈 لو parentId فاضي أو null، شيله
+    if (parentId !== undefined) {
+        category.parentId = parentId && parentId !== "" ? parentId : undefined;
+    }
     if (image) {
         category.image = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "category");
     }
