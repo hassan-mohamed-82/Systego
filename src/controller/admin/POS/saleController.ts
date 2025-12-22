@@ -602,16 +602,57 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     throw new BadRequest("Invalid sale id");
   }
 
-  // استخدم $in عشان يشمل كل الاحتمالات
-  const sale: any = await SaleModel.findOne({
+  const sale = await SaleModel.findOne({
     _id: sale_id,
     order_pending: { $in: [1, "1", true] }
-  }).lean();
+  })
+    .populate("customer_id", "name email phone_number address")
+    .populate("warehouse_id", "name ar_name")
+    .populate("cashier_id", "name email")
+    .populate("coupon_id", "code discount_type discount_value")
+    .populate("gift_card_id", "code balance")
+    .populate("order_tax", "name rate")
+    .populate("order_discount", "name discount_type discount_value")
+    .lean();
+
   if (!sale) {
     throw new NotFound("Pending sale not found");
   }
 
-  const items = await ProductSalesModel.find({ sale_id: sale._id }).lean();
+  const items = await ProductSalesModel.find({ sale_id: sale._id })
+    .populate({
+      path: "product_id",
+      select: "name ar_name image price code quantity categoryId brandId",
+      populate: [
+        { path: "categoryId", select: "name ar_name" },
+        { path: "brandId", select: "name ar_name" }
+      ]
+    })
+    .populate({
+      path: "product_price_id",
+      select: "price code quantity options",
+      populate: {
+        path: "productId",
+        select: "name ar_name image"
+      }
+    })
+    .populate({
+      path: "bundle_id",
+      select: "name ar_name price productsId",
+      populate: {
+        path: "productsId",
+        select: "name ar_name price"
+      }
+    })
+    .populate({
+      path: "options_id",
+      select: "name ar_name price variationId",
+      populate: {
+        path: "variationId",
+        select: "name ar_name"
+      }
+    })
+    .lean();
 
   const products: any[] = [];
   const bundles: any[] = [];
@@ -619,7 +660,8 @@ export const getSalePendingById = async (req: Request, res: Response) => {
   for (const item of items) {
     if (item.isBundle) {
       bundles.push({
-        bundle_id: item.bundle_id,
+        _id: item._id,
+        bundle: item.bundle_id,
         quantity: item.quantity,
         price: item.price,
         subtotal: item.subtotal,
@@ -627,25 +669,25 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       });
     } else {
       products.push({
-        product_id: item.product_id,
-        product_price_id: item.product_price_id,
+        _id: item._id,
+        product: item.product_id,
+        product_price: item.product_price_id,
+        options: item.options_id || [],
         quantity: item.quantity,
         price: item.price,
         subtotal: item.subtotal,
         isGift: !!item.isGift,
-        options_id: (item as any).options_id || [],
       });
     }
   }
 
   const payloadForCreateSale = {
-    customer_id: sale.customer_id,
-    order_pending: 1, // من الفرونت تقدر تغيّرها 1 أو 0
-    coupon_id: sale.coupon_id,
-    gift_card_id: sale.gift_card_id,
-    tax_id: sale.order_tax,
-    discount_id: sale.order_discount,
-
+    customer_id: (sale.customer_id as any)?._id || null,
+    order_pending: 0,
+    coupon_id: (sale.coupon_id as any)?._id || null,
+    gift_card_id: (sale.gift_card_id as any)?._id || null,
+    tax_id: (sale.order_tax as any)?._id || null,
+    discount_id: (sale.order_discount as any)?._id || null,
     shipping: sale.shipping || 0,
     tax_rate: sale.tax_rate || 0,
     tax_amount: sale.tax_amount || 0,
@@ -653,19 +695,57 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     total: sale.total || sale.grand_total,
     grand_total: sale.grand_total,
     note: sale.note || "",
-
-    products,
-    bundles,
+    products: products.map(p => ({
+      product_id: p.product?._id,
+      product_price_id: p.product_price?._id,
+      quantity: p.quantity,
+      price: p.price,
+      subtotal: p.subtotal,
+      isGift: p.isGift,
+      options_id: p.options?.map((opt: any) => opt._id) || [],
+    })),
+    bundles: bundles.map(b => ({
+      bundle_id: b.bundle?._id,
+      quantity: b.quantity,
+      price: b.price,
+      subtotal: b.subtotal,
+      isGift: b.isGift,
+    })),
   };
 
   return SuccessResponse(res, {
-    sale,
+    sale: {
+      _id: sale._id,
+      reference: sale.reference,
+      date: sale.date,
+      subtotal: sale.total,
+      tax_amount: sale.tax_amount,
+      tax_rate: sale.tax_rate,
+      discount: sale.discount,
+      shipping: sale.shipping,
+      grand_total: sale.grand_total,
+      note: sale.note,
+      order_pending: sale.order_pending,
+      customer: sale.customer_id || null,
+      warehouse: sale.warehouse_id || null,
+      cashier: sale.cashier_id || null,
+      coupon: sale.coupon_id || null,
+      gift_card: sale.gift_card_id || null,
+      tax: sale.order_tax || null,
+      discount_info: sale.order_discount || null,
+      created_at: sale.createdAt,
+    },
     products,
     bundles,
+    summary: {
+      total_products: products.length,
+      total_bundles: bundles.length,
+      total_items: products.length + bundles.length,
+      total_quantity: [...products, ...bundles].reduce((sum, item) => sum + item.quantity, 0),
+    },
     payloadForCreateSale,
   });
 };
-
 
 
 export const getDueSales = async (req: Request, res: Response) => {

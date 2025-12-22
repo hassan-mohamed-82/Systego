@@ -8,14 +8,12 @@ const joi_1 = __importDefault(require("joi"));
 exports.createCategorySchema = joi_1.default.object({
     name: joi_1.default.string().required(),
     ar_name: joi_1.default.string().required(),
-    number_of_products: joi_1.default.number().optional(),
-    image: joi_1.default.string().optional(),
-    parentId: joi_1.default.string().optional(),
+    image: joi_1.default.string().optional().allow("", null),
+    parentId: joi_1.default.string().optional().allow("", null),
 });
 exports.updateCategorySchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     ar_name: joi_1.default.string().optional(),
-    number_of_products: joi_1.default.number().optional(),
-    image: joi_1.default.string().optional(),
-    parentId: joi_1.default.string().optional(),
+    image: joi_1.default.string().optional().allow("", null),
+    parentId: joi_1.default.string().optional().allow("", null),
 });
