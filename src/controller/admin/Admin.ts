@@ -2,14 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { UserModel } from "../../models/schema/admin/User";
 import { BadRequest } from "../../Errors/BadRequest";
-import { UnauthorizedError } from "../../Errors/unauthorizedError";
 import { SuccessResponse } from "../../utils/response";
 import { saveBase64Image } from "../../utils/handleImages";
 import { NotFound } from "../../Errors";
-import { PositionModel } from "../../models/schema/admin/position";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
-import { RoleModel } from "../../models/schema/admin/roles";
-import { ActionModel } from "../../models/schema/admin/Action";
 import mongoose from "mongoose";
 
 // =========================
@@ -27,21 +23,21 @@ export const createUser = async (
     company_name,
     phone,
     image_base64,
-    warehouseId,      // 👈 من البودي
+    warehouse_id,
     role = "admin",
   } = req.body;
 
-  if (!username || !email || !password || !warehouseId) {
+  if (!username || !email || !password || !warehouse_id) {
     throw new BadRequest(
-      "Username, email, password and warehouse_id are required"
+      "username, email, password and warehouse_id are required"
     );
   }
 
-  if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
+  if (!mongoose.Types.ObjectId.isValid(warehouse_id)) {
     throw new BadRequest("Invalid warehouse_id");
   }
 
-  const warehouseExists = await WarehouseModel.findById(warehouseId);
+  const warehouseExists = await WarehouseModel.findById(warehouse_id);
   if (!warehouseExists) {
     throw new BadRequest("Invalid warehouse_id: Warehouse does not exist");
   }
@@ -68,7 +64,7 @@ export const createUser = async (
     company_name,
     phone,
     image_url,
-    warehouseId,   // 👈 تخزين في الفيلد الجديد
+    warehouse_id,
     role,
   });
 
@@ -98,7 +94,7 @@ export const getAllUsers = async (
 ) => {
   const users = await UserModel.find()
     .select("-password_hash -__v")
-    .populate("warehouse_id", "name"); // 👈 تعديل هنا
+    .populate("warehouse_id", "name");
 
   if (!users || users.length === 0) {
     throw new NotFound("No users found");
@@ -126,7 +122,7 @@ export const getUserById = async (
 
   const user = await UserModel.findById(id)
     .select("-password_hash -__v")
-    .populate("warehouse_id", "name"); // 👈 تعديل هنا
+    .populate("warehouse_id", "name");
 
   if (!user) throw new NotFound("User not found");
 
@@ -153,7 +149,7 @@ export const updateUser = async (
     phone,
     status,
     image_base64,
-    warehouseId,   // 👈 من البودي
+    warehouse_id,
     role,
   } = req.body;
 
@@ -166,23 +162,28 @@ export const updateUser = async (
     throw new NotFound("User not found");
   }
 
-  if (username) user.username = username;
-  if (email) user.email = email;
-  if (company_name) user.company_name = company_name;
-  if (phone) user.phone = phone;
-  if (status) user.status = status;
+  if (username !== undefined) user.username = username;
+  if (email !== undefined) user.email = email;
+  if (company_name !== undefined) user.company_name = company_name;
+  if (phone !== undefined) user.phone = phone;
+  if (status !== undefined) user.status = status;
 
-  if (warehouseId) {
-    if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
-      throw new BadRequest("Invalid warehouse_id");
+  // Handle warehouse_id update
+  if (warehouse_id !== undefined) {
+    if (warehouse_id && warehouse_id !== "") {
+      if (!mongoose.Types.ObjectId.isValid(warehouse_id)) {
+        throw new BadRequest("Invalid warehouse_id");
+      }
+      const warehouseExists = await WarehouseModel.findById(warehouse_id);
+      if (!warehouseExists) {
+        throw new BadRequest(
+          "Invalid warehouse_id: Warehouse does not exist"
+        );
+      }
+      (user as any).warehouse_id = warehouse_id;
+    } else {
+      (user as any).warehouse_id = undefined;
     }
-    const warehouseExists = await WarehouseModel.findById(warehouseId);
-    if (!warehouseExists) {
-      throw new BadRequest(
-        "Invalid warehouse_id: Warehouse does not exist"
-      );
-    }
-    (user as any).warehouseId = warehouseId; // 👈 تخزين
   }
 
   if (role && ["superadmin", "admin"].includes(role)) {
@@ -216,7 +217,7 @@ export const updateUser = async (
       company_name: user.company_name,
       phone: user.phone,
       image_url: user.image_url,
-      warehouseId: (user as any).warehouseId,
+      warehouse_id: (user as any).warehouse_id,
     },
   });
 };
