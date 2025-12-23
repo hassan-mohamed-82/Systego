@@ -99,23 +99,47 @@ const importCategoriesFromExcel = async (req, res) => {
         throw new BadRequest_1.BadRequest("Excel file is required");
     }
     const workbook = new exceljs_1.default.Workbook();
-    // Convert multer buffer to ArrayBuffer for ExcelJS compatibility
     const arrayBuffer = req.file.buffer.buffer.slice(req.file.buffer.byteOffset, req.file.buffer.byteOffset + req.file.buffer.byteLength);
     await workbook.xlsx.load(arrayBuffer);
     const worksheet = workbook.getWorksheet(1);
     if (!worksheet) {
         throw new BadRequest_1.BadRequest("Invalid Excel file");
     }
+    // اقرأ الـ headers عشان نعرف ترتيب الأعمدة
+    const headers = [];
+    worksheet.getRow(1).eachCell((cell, colNumber) => {
+        headers[colNumber] = cell.value?.toString().trim().toLowerCase() || "";
+    });
+    // ابحث عن الأعمدة بالاسم
+    const findColumn = (names) => {
+        for (const name of names) {
+            const index = headers.findIndex(h => h === name.toLowerCase());
+            if (index !== -1)
+                return index;
+        }
+        return -1;
+    };
+    const cols = {
+        name: findColumn(["name", "category name", "الاسم"]),
+        ar_name: findColumn(["ar_name", "arabic name", "الاسم بالعربي"]),
+        parent: findColumn(["parent", "parent category", "القسم الرئيسي"]),
+        image: findColumn(["image", "photo", "الصورة"]),
+    };
     const categories = [];
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1)
-            return; // Skip header
-        const name = row.getCell(1).value?.toString().trim() || "";
-        const ar_name = row.getCell(2).value?.toString().trim() || "";
-        const parent = row.getCell(3).value?.toString().trim() || "";
-        const image = row.getCell(4).value?.toString().trim() || "";
+            return;
+        const getValue = (colIndex) => {
+            if (colIndex === -1)
+                return "";
+            return row.getCell(colIndex + 1).value?.toString().trim() || "";
+        };
+        const name = cols.name !== -1 ? getValue(cols.name) : row.getCell(1).value?.toString().trim() || "";
+        const ar_name = cols.ar_name !== -1 ? getValue(cols.ar_name) : row.getCell(2).value?.toString().trim() || "";
+        const parent = cols.parent !== -1 ? getValue(cols.parent) : row.getCell(3).value?.toString().trim() || "";
+        const image = cols.image !== -1 ? getValue(cols.image) : row.getCell(4).value?.toString().trim() || "";
         if (name) {
-            categories.push({ name, ar_name, parent, image });
+            categories.push({ name, ar_name: ar_name || name, parent, image });
         }
     });
     if (categories.length === 0) {
@@ -132,7 +156,15 @@ const importCategoriesFromExcel = async (req, res) => {
     existingCategories.forEach((cat) => {
         categoryMap[cat.name.toLowerCase()] = cat._id.toString();
     });
-    for (const cat of categories) {
+    // رتب الـ categories: الـ parents الأول
+    const sortedCategories = [...categories].sort((a, b) => {
+        if (!a.parent && b.parent)
+            return -1;
+        if (a.parent && !b.parent)
+            return 1;
+        return 0;
+    });
+    for (const cat of sortedCategories) {
         try {
             // لو موجود، skip
             if (categoryMap[cat.name.toLowerCase()]) {
@@ -147,26 +179,17 @@ const importCategoriesFromExcel = async (req, res) => {
             if (cat.parent) {
                 parentId = categoryMap[cat.parent.toLowerCase()];
                 if (!parentId) {
-                    const parentCategory = await category_1.CategoryModel.findOne({
-                        name: { $regex: new RegExp(`^${cat.parent}$`, "i") },
+                    results.failed.push({
+                        name: cat.name,
+                        reason: `Parent "${cat.parent}" not found`,
                     });
-                    if (parentCategory) {
-                        parentId = parentCategory._id.toString();
-                        categoryMap[cat.parent.toLowerCase()] = parentId;
-                    }
-                    else {
-                        results.failed.push({
-                            name: cat.name,
-                            reason: `Parent "${cat.parent}" not found`,
-                        });
-                        continue;
-                    }
+                    continue;
                 }
             }
             // أضف الـ Category
             const newCategory = await category_1.CategoryModel.create({
                 name: cat.name,
-                ar_name: cat.ar_name || "",
+                ar_name: cat.ar_name,
                 parentId: parentId || null,
                 image: cat.image || "",
             });

@@ -47,6 +47,7 @@ exports.MODULES = [
     "recipe",
     "adjustment_reason",
     "Category_Material",
+    "Units"
 ];
 // أسماء بس، من غير ids
 exports.ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"];
