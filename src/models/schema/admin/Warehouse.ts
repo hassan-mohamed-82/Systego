@@ -8,6 +8,7 @@ const WarehouseSchema = new Schema(
     email: { type: String, maxlength: 150 },
     number_of_products: { type: Number, default: 0 },
     stock_Quantity: { type: Number, default: 0 },
+    Is_Online: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
