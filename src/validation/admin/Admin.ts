@@ -11,7 +11,7 @@ export const createUserSchema = Joi.object({
     address: Joi.string().optional(),
     vat_number: Joi.string().optional(),
     state: Joi.string().optional(),
-    warehouseId: Joi.string().optional(),
+    warehouse_id: Joi.string().optional(),
     postal_code: Joi.string().optional(),
     role: Joi.string().valid("superadmin", "admin").optional(),
 });
@@ -26,7 +26,7 @@ export const updateUserSchema = Joi.object({
     image_base64: Joi.string().optional(),
     address: Joi.string().optional(),
     vat_number: Joi.string().optional(),
-    warehouseId: Joi.string().optional(),
+    warehouse_id: Joi.string().optional(),
     state: Joi.string().optional(),
     postal_code: Joi.string().optional(),
     role: Joi.string().valid("superadmin", "admin").optional(),

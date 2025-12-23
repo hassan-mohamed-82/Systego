@@ -45,6 +45,7 @@ export const MODULES = [
   "recipe",
   "adjustment_reason",
   "Category_Material",
+  "Units"
 ] as const;
 
 // أسماء بس، من غير ids

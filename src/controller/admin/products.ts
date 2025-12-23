@@ -14,6 +14,8 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import ExcelJS from "exceljs";
 import { UnitModel } from "../../models/schema/admin/units";
+import { TaxesModel } from "../../models/schema/admin/Taxes";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -26,7 +28,6 @@ export const createProduct = async (req: Request, res: Response) => {
     sale_unit,
     purchase_unit,
     price,
-    quantity,
     ar_description,
     description,
     exp_ability,
@@ -44,6 +45,9 @@ export const createProduct = async (req: Request, res: Response) => {
     gallery_product,
     is_featured,
     code,
+    // بيانات المخزن
+    warehouseId,
+    quantity,
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -55,9 +59,6 @@ export const createProduct = async (req: Request, res: Response) => {
   if (!hasVariations) {
     if (price === undefined || price === null) {
       throw new BadRequest("Product price is required when there are no variations");
-    }
-    if (quantity === undefined || quantity === null) {
-      throw new BadRequest("Product quantity is required when there are no variations");
     }
     if (!code) {
       throw new BadRequest("Product code is required when there are no variations");
@@ -73,19 +74,25 @@ export const createProduct = async (req: Request, res: Response) => {
     throw new BadRequest("At least one categoryId is required");
   }
 
-  const existitcategories = await CategoryModel.find({
+  const existingCategories = await CategoryModel.find({
     _id: { $in: categoryId },
   });
-  if (existitcategories.length !== categoryId.length) {
+  if (existingCategories.length !== categoryId.length) {
     throw new BadRequest("One or more categories not found");
   }
 
   if (brandId) {
-    const existitbrand = await BrandModel.findById(brandId);
-    if (!existitbrand) throw new BadRequest("Brand not found");
+    const existingBrand = await BrandModel.findById(brandId);
+    if (!existingBrand) throw new BadRequest("Brand not found");
   }
 
-  for (const cat of existitcategories) {
+  // Check warehouse if provided
+  if (warehouseId) {
+    const warehouse = await WarehouseModel.findById(warehouseId);
+    if (!warehouse) throw new BadRequest("Warehouse not found");
+  }
+
+  for (const cat of existingCategories) {
     cat.product_quantity += 1;
     await cat.save();
   }
@@ -110,7 +117,6 @@ export const createProduct = async (req: Request, res: Response) => {
   }
 
   const basePrice = hasVariations ? 0 : Number(price);
-  const baseQuantity = hasVariations ? 0 : Number(quantity || 0);
 
   const product = await ProductModel.create({
     name,
@@ -124,7 +130,6 @@ export const createProduct = async (req: Request, res: Response) => {
     purchase_unit,
     code,
     price: basePrice,
-    quantity: baseQuantity,
     description,
     cost,
     exp_ability,
@@ -141,8 +146,25 @@ export const createProduct = async (req: Request, res: Response) => {
     is_featured,
   });
 
+  // إضافة Stock لو فيه warehouseId
+  let stock = null;
+  if (warehouseId && !hasVariations) {
+    stock = await Product_WarehouseModel.create({
+      productId: product._id,
+      warehouseId,
+      quantity: quantity || 0,
+      low_stock: low_stock || 0,
+    });
+
+    await WarehouseModel.findByIdAndUpdate(warehouseId, {
+      $inc: {
+        number_of_products: 1,
+        stock_Quantity: quantity || 0,
+      },
+    });
+  }
+
   if (hasVariations) {
-    let totalQuantity = 0;
     let minVariantPrice: number | null = null;
 
     for (const p of prices) {
@@ -178,8 +200,6 @@ export const createProduct = async (req: Request, res: Response) => {
         strat_quantaty: variantStartQty,
       });
 
-      totalQuantity += variantQty;
-
       if (minVariantPrice === null || variantPrice < minVariantPrice) {
         minVariantPrice = variantPrice;
       }
@@ -194,7 +214,6 @@ export const createProduct = async (req: Request, res: Response) => {
       }
     }
 
-    product.quantity = totalQuantity;
     product.price = minVariantPrice ?? 0;
     await product.save();
   }
@@ -202,10 +221,14 @@ export const createProduct = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Product created successfully",
     product,
+    stock,
   });
 };
 
+// ==================== جلب كل المنتجات ====================
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
+  const { warehouseId } = req.query;
+
   const products = await ProductModel.find()
     .populate("categoryId")
     .populate("brandId")
@@ -215,7 +238,27 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
   const variations = await VariationModel.find().lean();
 
   const formattedProducts = await Promise.all(
-    products.map(async (product) => {
+    products.map(async (product: any) => {
+      // Get stocks
+      let stocks;
+      let totalQuantity = 0;
+
+      if (warehouseId) {
+        stocks = await Product_WarehouseModel.find({
+          productId: product._id,
+          warehouseId,
+        })
+          .populate("warehouseId", "name address")
+          .lean();
+      } else {
+        stocks = await Product_WarehouseModel.find({ productId: product._id })
+          .populate("warehouseId", "name address")
+          .lean();
+      }
+
+      totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+
+      // Get prices/variations
       const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
       const formattedPrices = await Promise.all(
@@ -255,13 +298,94 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
         })
       );
 
-      return { ...product, prices: formattedPrices };
+      return {
+        ...product,
+        totalQuantity,
+        stocks,
+        prices: formattedPrices,
+      };
     })
   );
 
   SuccessResponse(res, { products: formattedProducts });
 };
 
+// ==================== جلب منتج واحد ====================
+export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  const product = await ProductModel.findById(id)
+    .populate("categoryId")
+    .populate("brandId")
+    .populate("taxesId")
+    .lean();
+
+  if (!product) throw new NotFound("Product not found");
+
+  const variations = await VariationModel.find().lean();
+
+  // Get all stocks
+  const stocks = await Product_WarehouseModel.find({ productId: product._id })
+    .populate("warehouseId", "name address phone")
+    .lean();
+
+  const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+
+  // Get prices
+  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+
+  const formattedPrices = await Promise.all(
+    prices.map(async (price) => {
+      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+        .populate({
+          path: "option_id",
+          select: "_id name variationId",
+        })
+        .lean();
+
+      const groupedOptions: Record<string, any[]> = {};
+
+      for (const po of options) {
+        const option = po.option_id as any;
+        if (!option?._id) continue;
+
+        const variation = variations.find(
+          (v) => v._id.toString() === option.variationId?.toString()
+        );
+
+        if (variation) {
+          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          groupedOptions[variation.name].push({
+            _id: option._id,
+            name: option.name,
+          });
+        }
+      }
+
+      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+        name: varName,
+        options: groupedOptions[varName],
+      }));
+
+      return {
+        ...price,
+        variations: variationsArray,
+      };
+    })
+  );
+
+  SuccessResponse(res, {
+    product: {
+      ...product,
+      totalQuantity,
+      stocks,
+      prices: formattedPrices,
+    },
+    message: "Product fetched successfully",
+  });
+};
+
+// ==================== تحديث منتج ====================
 export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
   const {
@@ -290,24 +414,31 @@ export const updateProduct = async (req: Request, res: Response) => {
     prices,
     gallery,
     is_featured,
+    code,
   } = req.body;
 
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
+
+  // Check code unique if changed
+  if (code && code !== product.code) {
+    const existingCode = await ProductModel.findOne({ code, _id: { $ne: id } });
+    if (existingCode) throw new BadRequest("Product code already exists");
+  }
 
   if (image) {
     product.image = await saveBase64Image(image, Date.now().toString(), req, "products");
   }
 
   if (gallery && Array.isArray(gallery)) {
-    let galleryUrles: string[] = [];
+    let galleryUrls: string[] = [];
     for (const g of gallery) {
       if (typeof g === "string") {
         const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
-        galleryUrles.push(gUrl);
+        galleryUrls.push(gUrl);
       }
     }
-    product.gallery_product = galleryUrles;
+    product.gallery_product = galleryUrls;
   }
 
   product.name = name ?? product.name;
@@ -332,10 +463,10 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.show_quantity = show_quantity ?? product.show_quantity;
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
   product.is_featured = is_featured ?? product.is_featured;
+  product.code = code ?? product.code;
 
   await product.save();
 
-  let totalQuantity = 0;
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
       let productPrice;
@@ -373,8 +504,6 @@ export const updateProduct = async (req: Request, res: Response) => {
         });
       }
 
-      totalQuantity += p.quantity || 0;
-
       if (productPrice && p.options && Array.isArray(p.options)) {
         await ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
         for (const opt of p.options) {
@@ -387,98 +516,44 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
   }
 
-  product.quantity = totalQuantity;
-  await product.save();
-
   SuccessResponse(res, { message: "Product updated successfully", product });
 };
 
+// ==================== حذف منتج ====================
 export const deleteProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const product = await ProductModel.findByIdAndDelete(id);
+  const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
+  // Delete stocks and update warehouses
+  const stocks = await Product_WarehouseModel.find({ productId: id });
+  for (const stock of stocks) {
+    await WarehouseModel.findByIdAndUpdate(stock.WarehouseId, {
+      $inc: {
+        number_of_products: -1,
+        stock_Quantity: -stock.quantity,
+      },
+    });
+  }
+  await Product_WarehouseModel.deleteMany({ productId: id });
+
+  // Delete prices and options
   const prices = await ProductPriceModel.find({ productId: id });
   const priceIds = prices.map((p) => p._id);
-
   await ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
   await ProductPriceModel.deleteMany({ productId: id });
 
-  SuccessResponse(res, { message: "Product and all related prices/options deleted successfully" });
-};
+  // Update categories
+  for (const catId of product.categoryId) {
+    await CategoryModel.findByIdAndUpdate(catId, {
+      $inc: { product_quantity: -1 },
+    });
+  }
 
-export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+  await ProductModel.findByIdAndDelete(id);
 
-  const product = await ProductModel.findById(id)
-    .populate("categoryId")
-    .populate("brandId")
-    .populate("taxesId")
-    .lean();
-
-  if (!product) throw new NotFound("Product not found");
-
-  const variations = await VariationModel.find().lean();
-
-  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
-
-  const formattedPrices = await Promise.all(
-    prices.map(async (price) => {
-      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
-        .populate({
-          path: "option_id",
-          select: "_id name variationId",
-        })
-        .lean();
-
-      const groupedOptions: Record<string, any[]> = {};
-
-      for (const po of options) {
-        const option = po.option_id as any;
-        if (!option?._id) continue;
-
-        const variation = variations.find(
-          (v) => v._id.toString() === option.variationId?.toString()
-        );
-
-        if (variation) {
-          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
-          groupedOptions[variation.name].push({
-            _id: option._id,
-            name: option.name,
-          });
-        }
-      }
-
-      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-        name: varName,
-        options: groupedOptions[varName],
-      }));
-
-      return {
-        _id: price._id,
-        productId: price.productId,
-        price: price.price,
-        code: price.code,
-        gallery: price.gallery,
-        quantity: price.quantity,
-        cost: price.cost,
-        strat_quantaty: price.strat_quantaty,
-        createdAt: price.createdAt,
-        updatedAt: price.updatedAt,
-        __v: price.__v,
-        variations: variationsArray,
-      };
-    })
-  );
-
-  (product as any).prices = formattedPrices;
-
-  SuccessResponse(res, {
-    product,
-    message: "Product fetched successfully",
-  });
+  SuccessResponse(res, { message: "Product and all related data deleted successfully" });
 };
 
 export const getProductByCode = async (req: Request, res: Response) => {
@@ -587,7 +662,6 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   }
 
   const workbook = new ExcelJS.Workbook();
-  // Convert multer buffer to ArrayBuffer for ExcelJS compatibility
   const arrayBuffer = req.file.buffer.buffer.slice(
     req.file.buffer.byteOffset,
     req.file.buffer.byteOffset + req.file.buffer.byteLength
@@ -600,54 +674,104 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     throw new BadRequest("Invalid Excel file");
   }
 
-  const products: Array<{
-    name: string;
-    ar_name: string;
-    ar_description: string;
-    description: string;
-    category: string;
-    brand: string;
-    code: string;
-    price: number;
-    cost: number;
-    quantity: number;
-    unit: string;
-    low_stock: number;
-    image: string;
-  }> = [];
+  // اقرأ الـ headers
+  const headers: string[] = [];
+  worksheet.getRow(1).eachCell((cell, colNumber) => {
+    headers[colNumber] = cell.value?.toString().trim().toLowerCase() || "";
+  });
+
+  // Mapping للأعمدة
+  const findColumn = (names: string[]): number => {
+    for (const name of names) {
+      const index = headers.findIndex(h => h === name.toLowerCase());
+      if (index !== -1) return index;
+    }
+    return -1;
+  };
+
+  const cols = {
+    name: findColumn(["name", "product name", "اسم المنتج"]),
+    ar_name: findColumn(["ar_name", "arabic name", "الاسم بالعربي"]),
+    ar_description: findColumn(["ar_description", "arabic description", "الوصف بالعربي"]),
+    description: findColumn(["description", "الوصف"]),
+    category: findColumn(["category", "categories", "القسم", "التصنيف"]),
+    brand: findColumn(["brand", "الماركة"]),
+    code: findColumn(["code", "sku", "barcode", "الكود"]),
+    price: findColumn(["price", "selling price", "سعر البيع"]),
+    cost: findColumn(["cost", "purchase price", "التكلفة", "سعر الشراء"]),
+    quantity: findColumn(["quantity", "qty", "stock", "الكمية"]),
+    low_stock: findColumn(["low_stock", "low stock", "الحد الأدنى"]),
+    whole_price: findColumn(["whole_price", "wholesale price", "سعر الجملة"]),
+    start_quantaty: findColumn(["start_quantaty", "start quantity", "كمية البداية"]),
+    minimum_quantity_sale: findColumn(["minimum_quantity_sale", "min sale qty", "أقل كمية بيع"]),
+    product_unit: findColumn(["product_unit", "unit", "الوحدة"]),
+    sale_unit: findColumn(["sale_unit", "وحدة البيع"]),
+    purchase_unit: findColumn(["purchase_unit", "وحدة الشراء"]),
+    taxes: findColumn(["taxes", "tax", "الضريبة"]),
+    exp_ability: findColumn(["exp_ability", "has expiry", "قابل للانتهاء"]),
+    product_has_imei: findColumn(["product_has_imei", "has imei", "له سيريال"]),
+    different_price: findColumn(["different_price", "سعر مختلف"]),
+    show_quantity: findColumn(["show_quantity", "اظهار الكمية"]),
+    maximum_to_show: findColumn(["maximum_to_show", "max to show", "أقصى كمية للعرض"]),
+    is_featured: findColumn(["is_featured", "featured", "مميز"]),
+    image: findColumn(["image", "photo", "الصورة"]),
+    gallery_product: findColumn(["gallery_product", "gallery", "معرض الصور"]),
+  };
+
+  // Helper functions
+  const getValue = (row: ExcelJS.Row, colIndex: number): string => {
+    if (colIndex === -1) return "";
+    return row.getCell(colIndex + 1).value?.toString().trim() || "";
+  };
+
+  const getNumber = (row: ExcelJS.Row, colIndex: number): number => {
+    if (colIndex === -1) return 0;
+    return Number(row.getCell(colIndex + 1).value) || 0;
+  };
+
+  const getBoolean = (row: ExcelJS.Row, colIndex: number): boolean => {
+    if (colIndex === -1) return false;
+    const val = row.getCell(colIndex + 1).value?.toString().toLowerCase().trim();
+    return val === "true" || val === "1" || val === "yes" || val === "نعم";
+  };
+
+  const products: any[] = [];
 
   worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // Skip header
+    if (rowNumber === 1) return;
 
-    const name = row.getCell(1).value?.toString().trim() || "";
-    const ar_name = row.getCell(2).value?.toString().trim() || "";
-    const ar_description = row.getCell(3).value?.toString().trim() || "";
-    const description = row.getCell(4).value?.toString().trim() || "";
-    const category = row.getCell(5).value?.toString().trim() || "";
-    const brand = row.getCell(6).value?.toString().trim() || "";
-    const code = row.getCell(7).value?.toString().trim() || "";
-    const price = Number(row.getCell(8).value) || 0;
-    const cost = Number(row.getCell(9).value) || 0;
-    const quantity = Number(row.getCell(10).value) || 0;
-    const unit = row.getCell(11).value?.toString().trim() || "";
-    const low_stock = Number(row.getCell(12).value) || 0;
-    const image = row.getCell(13).value?.toString().trim() || "";
+    // Fallback للأعمدة الثابتة لو مفيش headers
+    const name = cols.name !== -1 ? getValue(row, cols.name) : row.getCell(1).value?.toString().trim() || "";
+    const ar_name = cols.ar_name !== -1 ? getValue(row, cols.ar_name) : row.getCell(2).value?.toString().trim() || "";
 
-    if (name && ar_name) {
+    if (name) {
       products.push({
         name,
-        ar_name,
-        ar_description,
-        description,
-        category,
-        brand,
-        code,
-        price,
-        cost,
-        quantity,
-        unit,
-        low_stock,
-        image,
+        ar_name: ar_name || name,
+        ar_description: cols.ar_description !== -1 ? getValue(row, cols.ar_description) : row.getCell(3).value?.toString().trim() || "",
+        description: cols.description !== -1 ? getValue(row, cols.description) : row.getCell(4).value?.toString().trim() || "",
+        category: cols.category !== -1 ? getValue(row, cols.category) : row.getCell(5).value?.toString().trim() || "",
+        brand: cols.brand !== -1 ? getValue(row, cols.brand) : row.getCell(6).value?.toString().trim() || "",
+        code: cols.code !== -1 ? getValue(row, cols.code) : row.getCell(7).value?.toString().trim() || "",
+        price: cols.price !== -1 ? getNumber(row, cols.price) : Number(row.getCell(8).value) || 0,
+        cost: cols.cost !== -1 ? getNumber(row, cols.cost) : Number(row.getCell(9).value) || 0,
+        quantity: cols.quantity !== -1 ? getNumber(row, cols.quantity) : Number(row.getCell(10).value) || 0,
+        low_stock: cols.low_stock !== -1 ? getNumber(row, cols.low_stock) : Number(row.getCell(12).value) || 0,
+        whole_price: getNumber(row, cols.whole_price),
+        start_quantaty: getNumber(row, cols.start_quantaty),
+        minimum_quantity_sale: getNumber(row, cols.minimum_quantity_sale) || 1,
+        product_unit: getValue(row, cols.product_unit),
+        sale_unit: getValue(row, cols.sale_unit),
+        purchase_unit: getValue(row, cols.purchase_unit),
+        taxes: getValue(row, cols.taxes),
+        exp_ability: getBoolean(row, cols.exp_ability),
+        product_has_imei: getBoolean(row, cols.product_has_imei),
+        different_price: getBoolean(row, cols.different_price),
+        show_quantity: cols.show_quantity !== -1 ? getBoolean(row, cols.show_quantity) : true,
+        maximum_to_show: getNumber(row, cols.maximum_to_show),
+        is_featured: getBoolean(row, cols.is_featured),
+        image: cols.image !== -1 ? getValue(row, cols.image) : row.getCell(13).value?.toString().trim() || "",
+        gallery_product: getValue(row, cols.gallery_product),
       });
     }
   });
@@ -662,7 +786,7 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     skipped: [] as { name: string; reason: string }[],
   };
 
-  // Get existing categories and brands
+  // Cache all lookups
   const existingCategories = await CategoryModel.find({}).lean();
   const categoryMap: { [key: string]: string } = {};
   existingCategories.forEach((cat: any) => {
@@ -675,15 +799,34 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     brandMap[brand.name.toLowerCase()] = brand._id.toString();
   });
 
-  // Check existing product codes
-  const existingCodes = await ProductModel.find({}, { code: 1 }).lean();
-  const codeSet = new Set(existingCodes.map((p: any) => p.code));
+  const existingUnits = await UnitModel.find({}).lean();
+  const unitMap: { [key: string]: string } = {};
+  existingUnits.forEach((unit: any) => {
+    unitMap[unit.name.toLowerCase()] = unit._id.toString();
+  });
 
-  const existingPriceCodes = await ProductPriceModel.find({}, { code: 1 }).lean();
-  existingPriceCodes.forEach((p: any) => codeSet.add(p.code));
+  const existingTaxes = await TaxesModel.find({}).lean();
+  const taxMap: { [key: string]: string } = {};
+  existingTaxes.forEach((tax: any) => {
+    taxMap[tax.name.toLowerCase()] = tax._id.toString();
+  });
+
+  // Check existing products
+  const existingProducts = await ProductModel.find({}, { code: 1, name: 1 }).lean();
+  const codeSet = new Set(existingProducts.map((p: any) => p.code).filter(Boolean));
+  const nameSet = new Set(existingProducts.map((p: any) => p.name.toLowerCase()));
 
   for (const prod of products) {
     try {
+      // Check if name already exists
+      if (nameSet.has(prod.name.toLowerCase())) {
+        results.skipped.push({
+          name: prod.name,
+          reason: "Product with this name already exists",
+        });
+        continue;
+      }
+
       // Check if code already exists
       if (prod.code && codeSet.has(prod.code)) {
         results.skipped.push({
@@ -693,23 +836,14 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
         continue;
       }
 
-      // Find category
+      // Find categories
       let categoryIds: string[] = [];
       if (prod.category) {
-        const categories = prod.category.split(",").map((c) => c.trim());
+        const categories = prod.category.split(",").map((c: string) => c.trim());
         for (const catName of categories) {
           const catId = categoryMap[catName.toLowerCase()];
           if (catId) {
             categoryIds.push(catId);
-          } else {
-            // Try to find in database
-            const cat = await CategoryModel.findOne({
-              name: { $regex: new RegExp(`^${catName}$`, "i") },
-            });
-            if (cat) {
-              categoryIds.push(cat._id.toString());
-              categoryMap[catName.toLowerCase()] = cat._id.toString();
-            }
           }
         }
       }
@@ -725,16 +859,21 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
       // Find brand (optional)
       let brandId = null;
       if (prod.brand) {
-        brandId = brandMap[prod.brand.toLowerCase()];
-        if (!brandId) {
-          const brand = await BrandModel.findOne({
-            name: { $regex: new RegExp(`^${prod.brand}$`, "i") },
-          });
-          if (brand) {
-            brandId = brand._id.toString();
-            brandMap[prod.brand.toLowerCase()] = brandId;
-          }
-        }
+        brandId = brandMap[prod.brand.toLowerCase()] || null;
+      }
+
+      // Find units (optional)
+      const productUnitId = prod.product_unit ? unitMap[prod.product_unit.toLowerCase()] : null;
+      const saleUnitId = prod.sale_unit ? unitMap[prod.sale_unit.toLowerCase()] : null;
+      const purchaseUnitId = prod.purchase_unit ? unitMap[prod.purchase_unit.toLowerCase()] : null;
+
+      // Find tax (optional)
+      const taxId = prod.taxes ? taxMap[prod.taxes.toLowerCase()] : null;
+
+      // Parse gallery images
+      let galleryImages: string[] = [];
+      if (prod.gallery_product) {
+        galleryImages = prod.gallery_product.split(",").map((img: string) => img.trim()).filter(Boolean);
       }
 
       // Create product
@@ -745,13 +884,26 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
         description: prod.description || "",
         categoryId: categoryIds,
         brandId: brandId || undefined,
+        product_unit: productUnitId || undefined,
+        sale_unit: saleUnitId || undefined,
+        purchase_unit: purchaseUnitId || undefined,
         code: prod.code || undefined,
         price: prod.price,
-        cost: prod.cost,
+        cost: prod.cost || undefined,
         quantity: prod.quantity,
-        unit: prod.unit || undefined,
         low_stock: prod.low_stock || 0,
+        whole_price: prod.whole_price || undefined,
+        start_quantaty: prod.start_quantaty || undefined,
+        minimum_quantity_sale: prod.minimum_quantity_sale || 1,
+        taxesId: taxId || undefined,
+        exp_ability: prod.exp_ability,
+        product_has_imei: prod.product_has_imei,
+        different_price: prod.different_price,
+        show_quantity: prod.show_quantity,
+        maximum_to_show: prod.maximum_to_show || undefined,
+        is_featured: prod.is_featured,
         image: prod.image || undefined,
+        gallery_product: galleryImages.length > 0 ? galleryImages : undefined,
       });
 
       // Update category product count
@@ -761,9 +913,8 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
         });
       }
 
-      if (prod.code) {
-        codeSet.add(prod.code);
-      }
+      nameSet.add(prod.name.toLowerCase());
+      if (prod.code) codeSet.add(prod.code);
 
       results.success.push(prod.name);
     } catch (error: any) {
@@ -785,6 +936,7 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     skipped: results.skipped,
   });
 };
+
 
 export const deletemanyproducts = async (req: Request, res: Response) => {
   const { ids } = req.body;

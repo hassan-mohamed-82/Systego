@@ -1,12 +1,20 @@
 import {Router} from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import{
-    getproductWarehouse,getproductWarehousebyid
-}from "../../controller/admin/product_warehouse";
+    addProductToWarehouse,
+    updateProductStock,
+    removeProductFromWarehouse,
+    getWarehouseProducts,
+    // transferStock,
+    getAllStocks,
+    getLowStockProducts,}from "../../controller/admin/product_warehouse";
 import {authorizePermissions} from "../../middlewares/haspremission"
 
 const router=Router();
-
-router.get("/:warehouse_id",authorizePermissions("product_warehouse","View"),catchAsync(getproductWarehouse));
-router.get("/:id",authorizePermissions("product_warehouse","View"),catchAsync(getproductWarehousebyid));
+router.post("/",authorizePermissions("product_warehouse","Add"),catchAsync(addProductToWarehouse));
+router.put("/",authorizePermissions("product_warehouse","Edit"),catchAsync(updateProductStock));
+router.delete("/",authorizePermissions("product_warehouse","Delete"),catchAsync(removeProductFromWarehouse));
+router.get("/",authorizePermissions("product_warehouse","View"),catchAsync(getWarehouseProducts));
+router.get("/",authorizePermissions("product_warehouse","View"),catchAsync(getAllStocks));
+router.get("/",authorizePermissions("product_warehouse","View"),catchAsync(getLowStockProducts));
 export default router;
