@@ -5,7 +5,7 @@ import AdminRouter from "./Admin";
 import CategoryRouter from "./category";
 import permissionRouter from './permission';
 import productRouter from './products';
-import CashierShiftRouteer from "./cashiershifts" 
+import CashierShiftRouteer from "./cashiershifts"
 import supplierRouter from './suppliers';
 import WarehouseRouter from "./Warehouse"
 import CouriersRouter from "./Couriers"
@@ -32,7 +32,7 @@ import RecipeRouter from "./Recipe"
 import PointRouter from "./points"
 import redeem_PointsRouter from "./redeem_Points"
 import Product_warehouseRouter from "./product_warehouse"
-import  SelectReasonRouter  from "./adjustmentsreason";
+import SelectReasonRouter from "./adjustmentsreason";
 import SaleRouter from "./POS/POSRoutes"
 import CustomerGroupRouter from "./POS/customerGroupRoutes"
 import CustomerRouter from "./customerRoutes"
@@ -52,63 +52,64 @@ import PaymobRouter from "./Paymob"
 import notificationRoutrt from "./notifications"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
+import RevenueRouter from "./Revenue";
 export const route = Router();
 
-route.use("/auth", authRouter); 
-route.use(authenticated, authorizeRoles("admin","superadmin"));
+route.use("/auth", authRouter);
+route.use(authenticated, authorizeRoles("admin", "superadmin"));
 route.use("/brand", brandRouter);
 route.use("/admin", AdminRouter);
-route.use("/permission",permissionRouter);
-route.use("/category",CategoryRouter);
-route.use("/product",productRouter);
-route.use("/units",UnitsRouter)
-route.use("/cashier",CashierRouter)
-route.use("/supplier",supplierRouter);
-route.use("/recipe",RecipeRouter);
-route.use("/qztray",qztrayRouter);
-route.use("/warehouse",WarehouseRouter)
-route.use("/expensecategory",ExpensecategoryRouter)
-route.use("/discount",discountRouter)
-route.use("/courier",CouriersRouter)
-route.use("/payment_method",paymentMethodRouter)
-route.use("/expense",expensesRouter)
-route.use("/pandel",pandelRouter)
-route.use("/cashiershift",CashierShiftRouteer)
-route.use("/coupon",CouponsRouter)
-route.use("/department",DepartmentRouter)
-route.use("/adjustment",AdjustmentRouter)
+route.use("/permission", permissionRouter);
+route.use("/category", CategoryRouter);
+route.use("/product", productRouter);
+route.use("/units", UnitsRouter)
+route.use("/cashier", CashierRouter)
+route.use("/supplier", supplierRouter);
+route.use("/recipe", RecipeRouter);
+route.use("/qztray", qztrayRouter);
+route.use("/warehouse", WarehouseRouter)
+route.use("/expensecategory", ExpensecategoryRouter)
+route.use("/discount", discountRouter)
+route.use("/courier", CouriersRouter)
+route.use("/payment_method", paymentMethodRouter)
+route.use("/expense", expensesRouter)
+route.use("/pandel", pandelRouter)
+route.use("/cashiershift", CashierShiftRouteer)
+route.use("/coupon", CouponsRouter)
+route.use("/department", DepartmentRouter)
+route.use("/adjustment", AdjustmentRouter)
 route.use("/label", generatelabelRouter);
-route.use("/bank_account",BankAccountRouter)
-route.use("/country",CountryRouter);
-route.use("/city",CityRouter);
-route.use("/purchase",PurchaseRouter);
-route.use("/stock",StockRouter);
-route.use("/zone",ZoneRouter);
-route.use("/currency",CurrencyRouter);
-route.use("/taxes",TaxesRouter);
-route.use("/category_material",Category_MaterialRouter);
-route.use("/variation",VariationRouter);
-route.use("/transfer",trnsferRouter)
-route.use("/product_warehouse",Product_warehouseRouter)
-route.use("/selectreason",SelectReasonRouter)
-route.use("/pos",SaleRouter)
-route.use("/customer-group",CustomerGroupRouter)
-route.use("/customer",CustomerRouter)
-route.use("/gift-card",GiftCardRouter)
-route.use("/pos-home",PosHomeRouter)
-route.use("/cashier-shift",CashierShiftRouter) 
-route.use("/point",PointRouter)
-route.use("/redeem-points",redeem_PointsRouter)
-route.use("/popup",PopupRouter)
-route.use("/offer",OffersRouter)
-route.use("/paymob",PaymobRouter)
-route.use("/payment",paymentRouter)
-route.use("/notification",notificationRoutrt)
+route.use("/bank_account", BankAccountRouter)
+route.use("/country", CountryRouter);
+route.use("/city", CityRouter);
+route.use("/purchase", PurchaseRouter);
+route.use("/stock", StockRouter);
+route.use("/zone", ZoneRouter);
+route.use("/currency", CurrencyRouter);
+route.use("/taxes", TaxesRouter);
+route.use("/category_material", Category_MaterialRouter);
+route.use("/variation", VariationRouter);
+route.use("/transfer", trnsferRouter)
+route.use("/product_warehouse", Product_warehouseRouter)
+route.use("/selectreason", SelectReasonRouter)
+route.use("/pos", SaleRouter)
+route.use("/customer-group", CustomerGroupRouter)
+route.use("/customer", CustomerRouter)
+route.use("/gift-card", GiftCardRouter)
+route.use("/pos-home", PosHomeRouter)
+route.use("/cashier-shift", CashierShiftRouter)
+route.use("/point", PointRouter)
+route.use("/redeem-points", redeem_PointsRouter)
+route.use("/popup", PopupRouter)
+route.use("/offer", OffersRouter)
+route.use("/paymob", PaymobRouter)
+route.use("/payment", paymentRouter)
+route.use("/notification", notificationRoutrt)
 
 
-route.use("/booking",BookingRouter)
-route.use("/return-sale",ReturnRouter)
+route.use("/booking", BookingRouter)
+route.use("/return-sale", ReturnRouter)
 
-  
+route.use("/revenue", RevenueRouter);
 
 export default route;
