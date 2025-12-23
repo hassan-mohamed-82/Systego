@@ -4,6 +4,7 @@ const PurchaseItemSchema = new Schema(
   {
     date: { type: Date, required: true, default: Date.now },
     product_id: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
+    product_price_id: { type: Schema.Types.ObjectId, ref: "ProductPrice" },
     material_id: { type: mongoose.Schema.Types.ObjectId, ref: "Material" }, // ✅ جديد
     category_id: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
     date_of_expiery: { type: Date }, // ✅ جديد
