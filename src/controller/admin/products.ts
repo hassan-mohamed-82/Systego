@@ -15,6 +15,7 @@ import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import ExcelJS from "exceljs";
 import { UnitModel } from "../../models/schema/admin/units";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -27,7 +28,6 @@ export const createProduct = async (req: Request, res: Response) => {
     sale_unit,
     purchase_unit,
     price,
-    quantity,
     ar_description,
     description,
     exp_ability,
@@ -45,6 +45,9 @@ export const createProduct = async (req: Request, res: Response) => {
     gallery_product,
     is_featured,
     code,
+    // بيانات المخزن
+    warehouseId,
+    quantity,
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -56,9 +59,6 @@ export const createProduct = async (req: Request, res: Response) => {
   if (!hasVariations) {
     if (price === undefined || price === null) {
       throw new BadRequest("Product price is required when there are no variations");
-    }
-    if (quantity === undefined || quantity === null) {
-      throw new BadRequest("Product quantity is required when there are no variations");
     }
     if (!code) {
       throw new BadRequest("Product code is required when there are no variations");
@@ -74,19 +74,25 @@ export const createProduct = async (req: Request, res: Response) => {
     throw new BadRequest("At least one categoryId is required");
   }
 
-  const existitcategories = await CategoryModel.find({
+  const existingCategories = await CategoryModel.find({
     _id: { $in: categoryId },
   });
-  if (existitcategories.length !== categoryId.length) {
+  if (existingCategories.length !== categoryId.length) {
     throw new BadRequest("One or more categories not found");
   }
 
   if (brandId) {
-    const existitbrand = await BrandModel.findById(brandId);
-    if (!existitbrand) throw new BadRequest("Brand not found");
+    const existingBrand = await BrandModel.findById(brandId);
+    if (!existingBrand) throw new BadRequest("Brand not found");
   }
 
-  for (const cat of existitcategories) {
+  // Check warehouse if provided
+  if (warehouseId) {
+    const warehouse = await WarehouseModel.findById(warehouseId);
+    if (!warehouse) throw new BadRequest("Warehouse not found");
+  }
+
+  for (const cat of existingCategories) {
     cat.product_quantity += 1;
     await cat.save();
   }
@@ -111,7 +117,6 @@ export const createProduct = async (req: Request, res: Response) => {
   }
 
   const basePrice = hasVariations ? 0 : Number(price);
-  const baseQuantity = hasVariations ? 0 : Number(quantity || 0);
 
   const product = await ProductModel.create({
     name,
@@ -125,7 +130,6 @@ export const createProduct = async (req: Request, res: Response) => {
     purchase_unit,
     code,
     price: basePrice,
-    quantity: baseQuantity,
     description,
     cost,
     exp_ability,
@@ -142,8 +146,25 @@ export const createProduct = async (req: Request, res: Response) => {
     is_featured,
   });
 
+  // إضافة Stock لو فيه warehouseId
+  let stock = null;
+  if (warehouseId && !hasVariations) {
+    stock = await Product_WarehouseModel.create({
+      productId: product._id,
+      warehouseId,
+      quantity: quantity || 0,
+      low_stock: low_stock || 0,
+    });
+
+    await WarehouseModel.findByIdAndUpdate(warehouseId, {
+      $inc: {
+        number_of_products: 1,
+        stock_Quantity: quantity || 0,
+      },
+    });
+  }
+
   if (hasVariations) {
-    let totalQuantity = 0;
     let minVariantPrice: number | null = null;
 
     for (const p of prices) {
@@ -179,8 +200,6 @@ export const createProduct = async (req: Request, res: Response) => {
         strat_quantaty: variantStartQty,
       });
 
-      totalQuantity += variantQty;
-
       if (minVariantPrice === null || variantPrice < minVariantPrice) {
         minVariantPrice = variantPrice;
       }
@@ -195,7 +214,6 @@ export const createProduct = async (req: Request, res: Response) => {
       }
     }
 
-    product.quantity = totalQuantity;
     product.price = minVariantPrice ?? 0;
     await product.save();
   }
@@ -203,10 +221,14 @@ export const createProduct = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Product created successfully",
     product,
+    stock,
   });
 };
 
+// ==================== جلب كل المنتجات ====================
 export const getProduct = async (req: Request, res: Response): Promise<void> => {
+  const { warehouseId } = req.query;
+
   const products = await ProductModel.find()
     .populate("categoryId")
     .populate("brandId")
@@ -216,7 +238,27 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
   const variations = await VariationModel.find().lean();
 
   const formattedProducts = await Promise.all(
-    products.map(async (product) => {
+    products.map(async (product: any) => {
+      // Get stocks
+      let stocks;
+      let totalQuantity = 0;
+
+      if (warehouseId) {
+        stocks = await Product_WarehouseModel.find({
+          productId: product._id,
+          warehouseId,
+        })
+          .populate("warehouseId", "name address")
+          .lean();
+      } else {
+        stocks = await Product_WarehouseModel.find({ productId: product._id })
+          .populate("warehouseId", "name address")
+          .lean();
+      }
+
+      totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+
+      // Get prices/variations
       const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
       const formattedPrices = await Promise.all(
@@ -256,13 +298,94 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
         })
       );
 
-      return { ...product, prices: formattedPrices };
+      return {
+        ...product,
+        totalQuantity,
+        stocks,
+        prices: formattedPrices,
+      };
     })
   );
 
   SuccessResponse(res, { products: formattedProducts });
 };
 
+// ==================== جلب منتج واحد ====================
+export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  const product = await ProductModel.findById(id)
+    .populate("categoryId")
+    .populate("brandId")
+    .populate("taxesId")
+    .lean();
+
+  if (!product) throw new NotFound("Product not found");
+
+  const variations = await VariationModel.find().lean();
+
+  // Get all stocks
+  const stocks = await Product_WarehouseModel.find({ productId: product._id })
+    .populate("warehouseId", "name address phone")
+    .lean();
+
+  const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+
+  // Get prices
+  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+
+  const formattedPrices = await Promise.all(
+    prices.map(async (price) => {
+      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+        .populate({
+          path: "option_id",
+          select: "_id name variationId",
+        })
+        .lean();
+
+      const groupedOptions: Record<string, any[]> = {};
+
+      for (const po of options) {
+        const option = po.option_id as any;
+        if (!option?._id) continue;
+
+        const variation = variations.find(
+          (v) => v._id.toString() === option.variationId?.toString()
+        );
+
+        if (variation) {
+          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          groupedOptions[variation.name].push({
+            _id: option._id,
+            name: option.name,
+          });
+        }
+      }
+
+      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+        name: varName,
+        options: groupedOptions[varName],
+      }));
+
+      return {
+        ...price,
+        variations: variationsArray,
+      };
+    })
+  );
+
+  SuccessResponse(res, {
+    product: {
+      ...product,
+      totalQuantity,
+      stocks,
+      prices: formattedPrices,
+    },
+    message: "Product fetched successfully",
+  });
+};
+
+// ==================== تحديث منتج ====================
 export const updateProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
   const {
@@ -291,24 +414,31 @@ export const updateProduct = async (req: Request, res: Response) => {
     prices,
     gallery,
     is_featured,
+    code,
   } = req.body;
 
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
+
+  // Check code unique if changed
+  if (code && code !== product.code) {
+    const existingCode = await ProductModel.findOne({ code, _id: { $ne: id } });
+    if (existingCode) throw new BadRequest("Product code already exists");
+  }
 
   if (image) {
     product.image = await saveBase64Image(image, Date.now().toString(), req, "products");
   }
 
   if (gallery && Array.isArray(gallery)) {
-    let galleryUrles: string[] = [];
+    let galleryUrls: string[] = [];
     for (const g of gallery) {
       if (typeof g === "string") {
         const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
-        galleryUrles.push(gUrl);
+        galleryUrls.push(gUrl);
       }
     }
-    product.gallery_product = galleryUrles;
+    product.gallery_product = galleryUrls;
   }
 
   product.name = name ?? product.name;
@@ -333,10 +463,10 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.show_quantity = show_quantity ?? product.show_quantity;
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
   product.is_featured = is_featured ?? product.is_featured;
+  product.code = code ?? product.code;
 
   await product.save();
 
-  let totalQuantity = 0;
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
       let productPrice;
@@ -374,8 +504,6 @@ export const updateProduct = async (req: Request, res: Response) => {
         });
       }
 
-      totalQuantity += p.quantity || 0;
-
       if (productPrice && p.options && Array.isArray(p.options)) {
         await ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
         for (const opt of p.options) {
@@ -388,98 +516,44 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
   }
 
-  product.quantity = totalQuantity;
-  await product.save();
-
   SuccessResponse(res, { message: "Product updated successfully", product });
 };
 
+// ==================== حذف منتج ====================
 export const deleteProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const product = await ProductModel.findByIdAndDelete(id);
+  const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
+  // Delete stocks and update warehouses
+  const stocks = await Product_WarehouseModel.find({ productId: id });
+  for (const stock of stocks) {
+    await WarehouseModel.findByIdAndUpdate(stock.WarehouseId, {
+      $inc: {
+        number_of_products: -1,
+        stock_Quantity: -stock.quantity,
+      },
+    });
+  }
+  await Product_WarehouseModel.deleteMany({ productId: id });
+
+  // Delete prices and options
   const prices = await ProductPriceModel.find({ productId: id });
   const priceIds = prices.map((p) => p._id);
-
   await ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
   await ProductPriceModel.deleteMany({ productId: id });
 
-  SuccessResponse(res, { message: "Product and all related prices/options deleted successfully" });
-};
+  // Update categories
+  for (const catId of product.categoryId) {
+    await CategoryModel.findByIdAndUpdate(catId, {
+      $inc: { product_quantity: -1 },
+    });
+  }
 
-export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+  await ProductModel.findByIdAndDelete(id);
 
-  const product = await ProductModel.findById(id)
-    .populate("categoryId")
-    .populate("brandId")
-    .populate("taxesId")
-    .lean();
-
-  if (!product) throw new NotFound("Product not found");
-
-  const variations = await VariationModel.find().lean();
-
-  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
-
-  const formattedPrices = await Promise.all(
-    prices.map(async (price) => {
-      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
-        .populate({
-          path: "option_id",
-          select: "_id name variationId",
-        })
-        .lean();
-
-      const groupedOptions: Record<string, any[]> = {};
-
-      for (const po of options) {
-        const option = po.option_id as any;
-        if (!option?._id) continue;
-
-        const variation = variations.find(
-          (v) => v._id.toString() === option.variationId?.toString()
-        );
-
-        if (variation) {
-          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
-          groupedOptions[variation.name].push({
-            _id: option._id,
-            name: option.name,
-          });
-        }
-      }
-
-      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-        name: varName,
-        options: groupedOptions[varName],
-      }));
-
-      return {
-        _id: price._id,
-        productId: price.productId,
-        price: price.price,
-        code: price.code,
-        gallery: price.gallery,
-        quantity: price.quantity,
-        cost: price.cost,
-        strat_quantaty: price.strat_quantaty,
-        createdAt: price.createdAt,
-        updatedAt: price.updatedAt,
-        __v: price.__v,
-        variations: variationsArray,
-      };
-    })
-  );
-
-  (product as any).prices = formattedPrices;
-
-  SuccessResponse(res, {
-    product,
-    message: "Product fetched successfully",
-  });
+  SuccessResponse(res, { message: "Product and all related data deleted successfully" });
 };
 
 export const getProductByCode = async (req: Request, res: Response) => {
