@@ -7,6 +7,7 @@ export const MODULES = [
   "warehouse",
   "payment_method",
   "brand",
+  "Revenue",
   "city",
   "country",
   "expenseAdmin",

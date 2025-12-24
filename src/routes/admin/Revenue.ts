@@ -6,22 +6,25 @@ import {
     getRevenueById,
     selectionRevenue,
 } from "../../controller/admin/RevenueController";
+import { catchAsync } from "../../utils/catchAsync";
+import {authorizePermissions} from "../../middlewares/haspremission"
 
-const RevenueRouter = Router();
+const Route = Router();
 
-// Get selection data (categories and accounts)
-RevenueRouter.get("/selection", selectionRevenue);
-
-// Get all revenues for the authenticated admin
-RevenueRouter.get("/", getRevenues);
-
-// Get a specific revenue by ID
-RevenueRouter.get("/:id", getRevenueById);
 
 // Create a new revenue
-RevenueRouter.post("/", createRevenue);
+Route.post("/", authorizePermissions("Revenue","Add"), catchAsync(createRevenue));
+
+// Get selection data (categories and accounts)
+Route.get("/selection", authorizePermissions("Revenue","View"), catchAsync(selectionRevenue));
+
+// Get all revenues for the authenticated admin
+Route.get("/", authorizePermissions("Revenue","View"), catchAsync(getRevenues));
+
+// Get a specific revenue by ID
+Route.get("/:id", authorizePermissions("Revenue","View"), catchAsync(getRevenueById));
 
 // Update a revenue
-RevenueRouter.put("/:id", updateRevenue);
+Route.put("/:id", authorizePermissions("Revenue","Edit"), catchAsync(updateRevenue));
 
-export default RevenueRouter;
+export default Route;
