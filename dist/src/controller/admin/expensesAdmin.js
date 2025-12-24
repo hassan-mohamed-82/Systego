@@ -126,7 +126,7 @@ const getselectionExpenseAdmin = async (req, res) => {
     if (!userId)
         throw new Errors_1.BadRequest("User ID is required");
     const expensecategory = await expensecategory_1.ExpenseCategoryModel.find();
-    const financial_account = await Financial_Account_1.BankAccountModel.find();
+    const financial_account = await Financial_Account_1.BankAccountModel.find({ status: true });
     (0, response_1.SuccessResponse)(res, { message: "ExpenseCategory retrieved successfully", expensecategory, financial_account });
 };
 exports.getselectionExpenseAdmin = getselectionExpenseAdmin;
