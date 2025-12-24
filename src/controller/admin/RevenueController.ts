@@ -89,7 +89,6 @@ export const updateRevenue = async (req: Request, res: Response) => {
         {
             _id: revenue.financial_accountId,
             status: true,
-            in_POS: false, // عشان دا ادمن
         },
         { $inc: { balance: balanceDifference } }, // هنا بنعدل الفرق بين القديم والجديد
         { new: true }
