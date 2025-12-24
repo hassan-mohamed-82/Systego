@@ -97,7 +97,6 @@ const deletePandel = async (req, res) => {
     return (0, response_1.SuccessResponse)(res, { message: "Pandel deleted successfully" });
 };
 exports.deletePandel = deletePandel;
-// get active bundles (pandels) for POS
 const getActiveBundles = async (req, res) => {
     const currentDate = new Date();
     // جلب الـ Bundles النشطة فقط (في نطاق التاريخ)

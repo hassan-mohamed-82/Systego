@@ -10,13 +10,13 @@ const Discount_1 = require("../../../models/schema/admin/Discount");
 const Warehouse_1 = require("../../../models/schema/admin/Warehouse");
 const giftCard_1 = require("../../../models/schema/admin/POS/giftCard");
 const payment_methods_1 = require("../../../models/schema/admin/payment_methods");
+const product_price_1 = require("../../../models/schema/admin/product_price");
 const customer_1 = require("../../../models/schema/admin/POS/customer");
 const Errors_1 = require("../../../Errors");
 const response_1 = require("../../../utils/response");
 const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const Currency_1 = require("../../../models/schema/admin/Currency");
 const pandels_1 = require("../../../models/schema/admin/pandels");
-const producthelper_1 = require("../../../utils/producthelper");
 const Country_1 = require("../../../models/schema/admin/Country");
 const cashier_1 = require("../../../models/schema/admin/cashier");
 const BadRequest_1 = require("../../../Errors/BadRequest");
@@ -28,19 +28,29 @@ const getAllCategorys = async (req, res) => {
     if (!warehouseId) {
         throw new BadRequest_1.BadRequest("Warehouse is not assigned to this user");
     }
-    // هات الـ Products الموجودة في المخزن ده
     const warehouseProducts = await Product_Warehouse_1.Product_WarehouseModel.find({
         warehouseId: warehouseId,
         quantity: { $gt: 0 },
     }).select("productId");
     const productIds = warehouseProducts.map((wp) => wp.productId);
-    // هات الـ Categories اللي فيها منتجات في المخزن ده
+    // هات المنتجات مع categoryId
     const products = await products_1.ProductModel.find({
         _id: { $in: productIds },
     }).select("categoryId");
-    const categoryIds = [...new Set(products.map((p) => p.categoryId?.toString()).filter(Boolean))];
+    // ✅ categoryId هو Array of ObjectIds
+    const categoryIds = [];
+    products.forEach((p) => {
+        if (p.categoryId && p.categoryId.length > 0) {
+            p.categoryId.forEach((catId) => {
+                if (catId) {
+                    categoryIds.push(catId.toString());
+                }
+            });
+        }
+    });
+    const uniqueCategoryIds = [...new Set(categoryIds)];
     const categories = await category_1.CategoryModel.find({
-        _id: { $in: categoryIds },
+        _id: { $in: uniqueCategoryIds },
     });
     (0, response_1.SuccessResponse)(res, { message: "Category list", categories });
 };
@@ -54,19 +64,25 @@ const getAllBrands = async (req, res) => {
     if (!warehouseId) {
         throw new BadRequest_1.BadRequest("Warehouse is not assigned to this user");
     }
-    // هات الـ Products الموجودة في المخزن ده
     const warehouseProducts = await Product_Warehouse_1.Product_WarehouseModel.find({
         warehouseId: warehouseId,
         quantity: { $gt: 0 },
     }).select("productId");
     const productIds = warehouseProducts.map((wp) => wp.productId);
-    // هات الـ Brands اللي فيها منتجات في المخزن ده
     const products = await products_1.ProductModel.find({
         _id: { $in: productIds },
     }).select("brandId");
-    const brandIds = [...new Set(products.map((p) => p.brandId?.toString()).filter(Boolean))];
+    const brandIds = [];
+    products.forEach((p) => {
+        if (p.brandId) {
+            const id = p.brandId?._id?.toString() || p.brandId?.toString();
+            if (id)
+                brandIds.push(id);
+        }
+    });
+    const uniqueBrandIds = [...new Set(brandIds)];
     const brands = await brand_1.BrandModel.find({
-        _id: { $in: brandIds },
+        _id: { $in: uniqueBrandIds },
     });
     (0, response_1.SuccessResponse)(res, { message: "Brand list", brands });
 };
@@ -84,13 +100,35 @@ const getProductsByCategory = async (req, res) => {
     const category = await category_1.CategoryModel.findById(categoryId);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    const products = await (0, producthelper_1.buildProductsWithVariations)({
-        filter: { categoryId },
-        warehouseId,
-    });
+    // هات المنتجات الموجودة في المخزن
+    const warehouseProducts = await Product_Warehouse_1.Product_WarehouseModel.find({
+        warehouseId: warehouseId,
+        quantity: { $gt: 0 },
+    }).select("productId quantity");
+    const productIds = warehouseProducts.map((wp) => wp.productId);
+    // ✅ categoryId هو Array عشان كده نستخدم $in
+    const products = await products_1.ProductModel.find({
+        _id: { $in: productIds },
+        categoryId: { $in: [categoryId] },
+    })
+        .populate("categoryId", "name ar_name")
+        .populate("brandId", "name ar_name")
+        .lean();
+    // إضافة الكمية من المخزن والـ Variations
+    const result = await Promise.all(products.map(async (product) => {
+        const warehouseStock = warehouseProducts.find((wp) => wp.productId.toString() === product._id.toString());
+        const variations = await product_price_1.ProductPriceModel.find({
+            productId: product._id,
+        }).lean();
+        return {
+            ...product,
+            quantity: warehouseStock?.quantity ?? 0,
+            variations,
+        };
+    }));
     (0, response_1.SuccessResponse)(res, {
         message: "Products list by category",
-        products,
+        products: result,
     });
 };
 exports.getProductsByCategory = getProductsByCategory;
@@ -107,13 +145,33 @@ const getProductsByBrand = async (req, res) => {
     const brand = await brand_1.BrandModel.findById(brandId);
     if (!brand)
         throw new Errors_1.NotFound("Brand not found");
-    const products = await (0, producthelper_1.buildProductsWithVariations)({
-        filter: { brandId },
-        warehouseId,
-    });
+    // هات المنتجات الموجودة في المخزن
+    const warehouseProducts = await Product_Warehouse_1.Product_WarehouseModel.find({
+        warehouseId: warehouseId,
+        quantity: { $gt: 0 },
+    }).select("productId quantity");
+    const productIds = warehouseProducts.map((wp) => wp.productId);
+    const products = await products_1.ProductModel.find({
+        _id: { $in: productIds },
+        brandId: brandId,
+    })
+        .populate("categoryId", "name ar_name")
+        .populate("brandId", "name ar_name")
+        .lean();
+    const result = await Promise.all(products.map(async (product) => {
+        const warehouseStock = warehouseProducts.find((wp) => wp.productId.toString() === product._id.toString());
+        const variations = await product_price_1.ProductPriceModel.find({
+            productId: product._id,
+        }).lean();
+        return {
+            ...product,
+            quantity: warehouseStock?.quantity ?? 0,
+            variations,
+        };
+    }));
     (0, response_1.SuccessResponse)(res, {
         message: "Products list by brand",
-        products,
+        products: result,
     });
 };
 exports.getProductsByBrand = getProductsByBrand;
@@ -126,13 +184,33 @@ const getFeaturedProducts = async (req, res) => {
     if (!warehouseId) {
         throw new BadRequest_1.BadRequest("Warehouse is not assigned to this user");
     }
-    const products = await (0, producthelper_1.buildProductsWithVariations)({
-        filter: { is_featured: true },
-        warehouseId,
-    });
+    // هات المنتجات الموجودة في المخزن
+    const warehouseProducts = await Product_Warehouse_1.Product_WarehouseModel.find({
+        warehouseId: warehouseId,
+        quantity: { $gt: 0 },
+    }).select("productId quantity");
+    const productIds = warehouseProducts.map((wp) => wp.productId);
+    const products = await products_1.ProductModel.find({
+        _id: { $in: productIds },
+        is_featured: true,
+    })
+        .populate("categoryId", "name ar_name")
+        .populate("brandId", "name ar_name")
+        .lean();
+    const result = await Promise.all(products.map(async (product) => {
+        const warehouseStock = warehouseProducts.find((wp) => wp.productId.toString() === product._id.toString());
+        const variations = await product_price_1.ProductPriceModel.find({
+            productId: product._id,
+        }).lean();
+        return {
+            ...product,
+            quantity: warehouseStock?.quantity ?? 0,
+            variations,
+        };
+    }));
     (0, response_1.SuccessResponse)(res, {
         message: "Featured products",
-        products,
+        products: result,
     });
 };
 exports.getFeaturedProducts = getFeaturedProducts;

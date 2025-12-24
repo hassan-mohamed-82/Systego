@@ -100,9 +100,6 @@ export const deletePandel = async (req: Request, res: Response) => {
   return SuccessResponse(res, { message: "Pandel deleted successfully" });
 };
 
-
-
-// get active bundles (pandels) for POS
 export const getActiveBundles = async (req: Request, res: Response) => {
   const currentDate = new Date();
 
