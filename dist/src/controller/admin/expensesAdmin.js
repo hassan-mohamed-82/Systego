@@ -24,7 +24,7 @@ const createExpenseAdmin = async (req, res) => {
         _id: financial_accountId,
         status: true,
         balance: { $gte: amount },
-    }, { $inc: { balance: +amount } }, // هنا بيزود الفلوس
+    }, { $inc: { balance: -amount } }, // هنا بيقلل الفلوس
     { new: true });
     if (!updatedAccount) {
         throw new Errors_1.BadRequest("Insufficient balance in the selected account");
@@ -50,9 +50,44 @@ const updateExpenseAdmin = async (req, res) => {
     const expense = await expenses_1.ExpenseModel.findOne({ _id: id });
     if (!expense)
         throw new Errors_1.NotFound("Expense not found");
+    const newAmount = req.body.amount;
+    // If no amount change, just update other fields
+    if (newAmount == null) {
+        Object.assign(expense, req.body);
+        await expense.save();
+        (0, response_1.SuccessResponse)(res, { message: "Expense updated successfully", expense });
+        return;
+    }
+    if (newAmount <= 0) {
+        throw new Errors_1.BadRequest("Amount must be greater than 0");
+    }
+    const oldAmount = expense.amount;
+    // Calculate the difference for the bank balance
+    // Expense subtracts from balance:
+    // Increase in expense (new > old) -> Decrease in balance (difference negative)
+    // Decrease in expense (new < old) -> Increase in balance (difference positive)
+    // Formula: oldAmount - newAmount
+    const balanceDifference = oldAmount - newAmount;
+    const updatedAccount = await Financial_Account_1.BankAccountModel.findOneAndUpdate({
+        _id: expense.financial_accountId,
+        status: true,
+    }, { $inc: { balance: balanceDifference } }, { new: true });
+    if (!updatedAccount) {
+        throw new Errors_1.BadRequest("Financial account not found or inactive");
+    }
+    // Check if balance went negative after the update
+    if (updatedAccount.balance < 0) {
+        // Rollback the balance change
+        await Financial_Account_1.BankAccountModel.findByIdAndUpdate(expense.financial_accountId, { $inc: { balance: -balanceDifference } });
+        throw new Errors_1.BadRequest("Insufficient balance in financial account");
+    }
     Object.assign(expense, req.body);
     await expense.save();
-    (0, response_1.SuccessResponse)(res, { message: "Expense updated successfully", expense });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Expense updated successfully",
+        expense,
+        account_balance: updatedAccount.balance
+    });
 };
 exports.updateExpenseAdmin = updateExpenseAdmin;
 const getExpensesAdmin = async (req, res) => {
