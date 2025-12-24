@@ -1,4 +1,5 @@
 "use strict";
+// src/models/schema/admin/User.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -34,18 +35,15 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserModel = void 0;
-// src/models/schema/admin/User.ts
 const mongoose_1 = __importStar(require("mongoose"));
 const constant_1 = require("../../../types/constant");
-// كل أكشن هيبقى Subdocument بـ _id + action
 const PermissionActionSchema = new mongoose_1.Schema({
     action: {
         type: String,
-        enum: constant_1.ACTION_NAMES, // ["view","add","edit","delete"]
+        enum: constant_1.ACTION_NAMES,
         required: true,
     },
-}, { _id: true } // هنا بيولد _id لكل أكشن
-);
+}, { _id: true });
 const PermissionSchema = new mongoose_1.Schema({
     module: {
         type: String,
@@ -58,7 +56,12 @@ const PermissionSchema = new mongoose_1.Schema({
     },
 }, { _id: false });
 const UserSchema = new mongoose_1.Schema({
-    username: { type: String, required: true, unique: true, trim: true },
+    username: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true
+    },
     email: {
         type: String,
         required: true,
@@ -66,14 +69,27 @@ const UserSchema = new mongoose_1.Schema({
         lowercase: true,
         trim: true,
     },
-    password_hash: { type: String, required: true },
-    company_name: { type: String },
-    phone: { type: String },
+    password_hash: {
+        type: String,
+        required: true
+    },
+    company_name: {
+        type: String
+    },
+    phone: {
+        type: String
+    },
+    // Reference للـ Role (Select من Dropdown)
+    role_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Role"
+    },
     role: {
         type: String,
         enum: ["superadmin", "admin"],
         default: "admin",
     },
+    // صلاحيات إضافية خاصة باليوزر (override)
     permissions: {
         type: [PermissionSchema],
         default: [],
@@ -88,6 +104,9 @@ const UserSchema = new mongoose_1.Schema({
     vat_number: { type: String },
     state: { type: String },
     postal_code: { type: String },
-    warehouse_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Warehouse" },
+    warehouse_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Warehouse"
+    },
 }, { timestamps: true });
 exports.UserModel = mongoose_1.default.model("User", UserSchema);

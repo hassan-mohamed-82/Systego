@@ -28,7 +28,7 @@ exports.createProductSchema = joi_1.default.object({
     code: joi_1.default.string(),
     categoryId: joi_1.default.array().items(exports.objectId).min(1).required(),
     brandId: exports.objectId.required(),
-    price: joi_1.default.number().required(),
+    price: joi_1.default.number().optional(),
     quantity: joi_1.default.number().optional(),
     description: joi_1.default.string().optional(),
     exp_ability: joi_1.default.boolean().optional(),

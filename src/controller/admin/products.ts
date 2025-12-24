@@ -239,7 +239,6 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
 
   const formattedProducts = await Promise.all(
     products.map(async (product: any) => {
-      // Get stocks
       let stocks;
       let totalQuantity = 0;
 
@@ -258,7 +257,6 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
 
       totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
 
-      // Get prices/variations
       const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
       const formattedPrices = await Promise.all(
@@ -324,14 +322,12 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
 
   const variations = await VariationModel.find().lean();
 
-  // Get all stocks
   const stocks = await Product_WarehouseModel.find({ productId: product._id })
     .populate("warehouseId", "name address phone")
     .lean();
 
   const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
 
-  // Get prices
   const prices = await ProductPriceModel.find({ productId: product._id }).lean();
 
   const formattedPrices = await Promise.all(
@@ -420,7 +416,6 @@ export const updateProduct = async (req: Request, res: Response) => {
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
-  // Check code unique if changed
   if (code && code !== product.code) {
     const existingCode = await ProductModel.findOne({ code, _id: { $ne: id } });
     if (existingCode) throw new BadRequest("Product code already exists");
@@ -529,7 +524,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
   // Delete stocks and update warehouses
   const stocks = await Product_WarehouseModel.find({ productId: id });
   for (const stock of stocks) {
-    await WarehouseModel.findByIdAndUpdate(stock.WarehouseId, {
+    await WarehouseModel.findByIdAndUpdate(stock.warehouseId, {
       $inc: {
         number_of_products: -1,
         stock_Quantity: -stock.quantity,
@@ -556,63 +551,107 @@ export const deleteProduct = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Product and all related data deleted successfully" });
 };
 
+// ==================== جلب منتج بالكود ====================
 export const getProductByCode = async (req: Request, res: Response) => {
   const { code } = req.body;
 
   if (!code) throw new BadRequest("Code is required");
 
+  // أولاً: دور في ProductPrice
   const productPrice = await ProductPriceModel.findOne({ code }).lean();
-  if (!productPrice) throw new NotFound("No product found for this code");
 
-  const product = await ProductModel.findById(productPrice.productId)
+  if (productPrice) {
+    const product = await ProductModel.findById(productPrice.productId)
+      .populate("categoryId")
+      .populate("brandId")
+      .populate("taxesId")
+      .lean();
+
+    if (!product) throw new NotFound("Product not found");
+
+    const variations = await VariationModel.find().populate("options").lean();
+    const categories = await CategoryModel.find().lean();
+    const brands = await BrandModel.find().lean();
+
+    const options = await ProductPriceOptionModel.find({ product_price_id: productPrice._id })
+      .populate("option_id")
+      .lean();
+
+    const groupedOptions: Record<string, any[]> = {};
+
+    options.forEach((po: any) => {
+      const option = po.option_id;
+      if (!option || !option._id) return;
+
+      const variation = variations.find((v: any) =>
+        v.options.some((opt: any) => opt._id.toString() === option._id.toString())
+      );
+
+      if (variation) {
+        if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+        groupedOptions[variation.name].push(option);
+      }
+    });
+
+    const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+      name: varName,
+      options: groupedOptions[varName],
+    }));
+
+    (product as any).price = {
+      ...productPrice,
+      variations: variationsArray,
+    };
+
+    // Get stocks
+    const stocks = await Product_WarehouseModel.find({ productId: product._id })
+      .populate("warehouseId", "name address")
+      .lean();
+    const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+
+    return SuccessResponse(res, {
+      product: {
+        ...product,
+        totalQuantity,
+        stocks,
+      },
+      categories,
+      brands,
+      variations,
+    });
+  }
+
+  // ثانياً: دور في Product
+  const product = await ProductModel.findOne({ code })
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
 
-  if (!product) throw new NotFound("Product not found");
+  if (!product) throw new NotFound("No product found for this code");
 
-  const variations = await VariationModel.find().populate("options").lean();
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
+  const variations = await VariationModel.find().lean();
 
-  const options = await ProductPriceOptionModel.find({ product_price_id: productPrice._id })
-    .populate("option_id")
+  // Get stocks
+  const stocks = await Product_WarehouseModel.find({ productId: product._id })
+    .populate("warehouseId", "name address")
     .lean();
-
-  const groupedOptions: Record<string, any[]> = {};
-
-  options.forEach((po: any) => {
-    const option = po.option_id;
-    if (!option || !option._id) return;
-
-    const variation = variations.find((v: any) =>
-      v.options.some((opt: any) => opt._id.toString() === option._id.toString())
-    );
-
-    if (variation) {
-      if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
-      groupedOptions[variation.name].push(option);
-    }
-  });
-
-  const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-    name: varName,
-    options: groupedOptions[varName],
-  }));
-
-  (product as any).price = {
-    ...productPrice,
-    variations: variationsArray,
-  };
+  const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
 
   SuccessResponse(res, {
-    product,
+    product: {
+      ...product,
+      totalQuantity,
+      stocks,
+    },
     categories,
     brands,
     variations,
   });
 };
+
 
 export const generateBarcodeImageController = async (req: Request, res: Response) => {
   const { product_price_id } = req.params;
@@ -650,7 +689,7 @@ export const modelsforselect = async (req: Request, res: Response) => {
   const warehouses = await WarehouseModel.find().lean();
   const units = await UnitModel.find().lean();
 
-  SuccessResponse(res, { categories, brands, variations, warehouses });
+  SuccessResponse(res, { categories, brands, variations, warehouses, units });
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -943,36 +982,90 @@ export const deletemanyproducts = async (req: Request, res: Response) => {
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     throw new BadRequest("At least one product ID is required");
   }
+
+  // Get all products to be deleted
+  const products = await ProductModel.find({ _id: { $in: ids } });
+
+  for (const product of products) {
+    // Delete stocks and update warehouses
+    const stocks = await Product_WarehouseModel.find({ productId: product._id });
+    for (const stock of stocks) {
+      await WarehouseModel.findByIdAndUpdate(stock.warehouseId, {
+        $inc: {
+          number_of_products: -1,
+          stock_Quantity: -stock.quantity,
+        },
+      });
+    }
+    await Product_WarehouseModel.deleteMany({ productId: product._id });
+
+    // Delete prices and options
+    const prices = await ProductPriceModel.find({ productId: product._id });
+    const priceIds = prices.map((p) => p._id);
+    await ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
+    await ProductPriceModel.deleteMany({ productId: product._id });
+
+    // Update categories
+    for (const catId of product.categoryId) {
+      await CategoryModel.findByIdAndUpdate(catId, {
+        $inc: { product_quantity: -1 },
+      });
+    }
+  }
+
   await ProductModel.deleteMany({ _id: { $in: ids } });
   SuccessResponse(res, { message: "Products deleted successfully" });
 };
 
 
 export const getLowStockProducts = async (req: Request, res: Response) => {
-  const products = await ProductModel.find({
-    $expr: { $lte: ["$quantity", "$low_stock"] }
-  })
-  .select("name ar_name code quantity low_stock image")
-  .populate("categoryId", "name ar_name")
-  .populate("brandId", "name ar_name");
+  const { warehouseId } = req.query;
 
-  // تنسيق الـ response
-  const formattedProducts = products.map(product => ({
-    _id: product._id,
-    name: product.name,
-    ar_name: product.ar_name,
-    code: product.code,
-    image: product.image,
-    actual_stock: product.quantity,
-    minimum_stock: product.low_stock ?? 0,
-    shortage: (product.low_stock ?? 0) - product.quantity,  // الفرق
-    category: product.categoryId,
-    brand: product.brandId
-  }));
+  // Get all products with their low_stock threshold
+  const products = await ProductModel.find({ low_stock: { $exists: true, $gt: 0 } })
+    .select("name ar_name code low_stock image categoryId brandId")
+    .populate("categoryId", "name ar_name")
+    .populate("brandId", "name ar_name")
+    .lean();
 
-  SuccessResponse(res, { 
+  const lowStockProducts = [];
+
+  for (const product of products) {
+    // Build stock query
+    const stockQuery: any = { productId: product._id };
+    if (warehouseId) {
+      stockQuery.warehouseId = warehouseId;
+    }
+
+    // Get stocks for this product
+    const stocks = await Product_WarehouseModel.find(stockQuery)
+      .populate("warehouseId", "name")
+      .lean();
+
+    const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+    const lowStockThreshold = product.low_stock ?? 0;
+
+    // Check if total stock is below threshold
+    if (totalQuantity <= lowStockThreshold) {
+      lowStockProducts.push({
+        _id: product._id,
+        name: product.name,
+        ar_name: product.ar_name,
+        code: product.code,
+        image: product.image,
+        actual_stock: totalQuantity,
+        minimum_stock: lowStockThreshold,
+        shortage: lowStockThreshold - totalQuantity,
+        category: product.categoryId,
+        brand: product.brandId,
+        stocks,
+      });
+    }
+  }
+
+  SuccessResponse(res, {
     message: "Low stock products retrieved successfully",
-    count: formattedProducts.length,
-    products: formattedProducts 
+    count: lowStockProducts.length,
+    products: lowStockProducts,
   });
 };

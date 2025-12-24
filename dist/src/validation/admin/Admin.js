@@ -24,6 +24,8 @@ exports.updateUserSchema = joi_1.default.object({
     username: joi_1.default.string().optional(),
     email: joi_1.default.string().email().optional(),
     password: joi_1.default.string().optional(),
+    status: joi_1.default.string().valid("active", "inactive").optional(),
+    role_id: joi_1.default.string().optional(),
     // positionId: Joi.string().optional(),
     company_name: joi_1.default.string().optional(),
     phone: joi_1.default.string().optional(),

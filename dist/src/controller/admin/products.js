@@ -190,7 +190,6 @@ const getProduct = async (req, res) => {
         .lean();
     const variations = await Variation_1.VariationModel.find().lean();
     const formattedProducts = await Promise.all(products.map(async (product) => {
-        // Get stocks
         let stocks;
         let totalQuantity = 0;
         if (warehouseId) {
@@ -207,7 +206,6 @@ const getProduct = async (req, res) => {
                 .lean();
         }
         totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
-        // Get prices/variations
         const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
         const formattedPrices = await Promise.all(prices.map(async (price) => {
             const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: price._id })
@@ -258,12 +256,10 @@ const getOneProduct = async (req, res) => {
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
     const variations = await Variation_1.VariationModel.find().lean();
-    // Get all stocks
     const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: product._id })
         .populate("warehouseId", "name address phone")
         .lean();
     const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
-    // Get prices
     const prices = await product_price_1.ProductPriceModel.find({ productId: product._id }).lean();
     const formattedPrices = await Promise.all(prices.map(async (price) => {
         const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: price._id })
@@ -314,7 +310,6 @@ const updateProduct = async (req, res) => {
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
-    // Check code unique if changed
     if (code && code !== product.code) {
         const existingCode = await products_1.ProductModel.findOne({ code, _id: { $ne: id } });
         if (existingCode)
@@ -412,7 +407,7 @@ const deleteProduct = async (req, res) => {
     // Delete stocks and update warehouses
     const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: id });
     for (const stock of stocks) {
-        await Warehouse_1.WarehouseModel.findByIdAndUpdate(stock.WarehouseId, {
+        await Warehouse_1.WarehouseModel.findByIdAndUpdate(stock.warehouseId, {
             $inc: {
                 number_of_products: -1,
                 stock_Quantity: -stock.quantity,
@@ -435,48 +430,85 @@ const deleteProduct = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Product and all related data deleted successfully" });
 };
 exports.deleteProduct = deleteProduct;
+// ==================== جلب منتج بالكود ====================
 const getProductByCode = async (req, res) => {
     const { code } = req.body;
     if (!code)
         throw new BadRequest_1.BadRequest("Code is required");
+    // أولاً: دور في ProductPrice
     const productPrice = await product_price_1.ProductPriceModel.findOne({ code }).lean();
-    if (!productPrice)
-        throw new NotFound_1.NotFound("No product found for this code");
-    const product = await products_1.ProductModel.findById(productPrice.productId)
+    if (productPrice) {
+        const product = await products_1.ProductModel.findById(productPrice.productId)
+            .populate("categoryId")
+            .populate("brandId")
+            .populate("taxesId")
+            .lean();
+        if (!product)
+            throw new NotFound_1.NotFound("Product not found");
+        const variations = await Variation_1.VariationModel.find().populate("options").lean();
+        const categories = await category_1.CategoryModel.find().lean();
+        const brands = await brand_1.BrandModel.find().lean();
+        const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: productPrice._id })
+            .populate("option_id")
+            .lean();
+        const groupedOptions = {};
+        options.forEach((po) => {
+            const option = po.option_id;
+            if (!option || !option._id)
+                return;
+            const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
+            if (variation) {
+                if (!groupedOptions[variation.name])
+                    groupedOptions[variation.name] = [];
+                groupedOptions[variation.name].push(option);
+            }
+        });
+        const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+            name: varName,
+            options: groupedOptions[varName],
+        }));
+        product.price = {
+            ...productPrice,
+            variations: variationsArray,
+        };
+        // Get stocks
+        const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: product._id })
+            .populate("warehouseId", "name address")
+            .lean();
+        const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+        return (0, response_1.SuccessResponse)(res, {
+            product: {
+                ...product,
+                totalQuantity,
+                stocks,
+            },
+            categories,
+            brands,
+            variations,
+        });
+    }
+    // ثانياً: دور في Product
+    const product = await products_1.ProductModel.findOne({ code })
         .populate("categoryId")
         .populate("brandId")
         .populate("taxesId")
         .lean();
     if (!product)
-        throw new NotFound_1.NotFound("Product not found");
-    const variations = await Variation_1.VariationModel.find().populate("options").lean();
+        throw new NotFound_1.NotFound("No product found for this code");
     const categories = await category_1.CategoryModel.find().lean();
     const brands = await brand_1.BrandModel.find().lean();
-    const options = await product_price_2.ProductPriceOptionModel.find({ product_price_id: productPrice._id })
-        .populate("option_id")
+    const variations = await Variation_1.VariationModel.find().lean();
+    // Get stocks
+    const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: product._id })
+        .populate("warehouseId", "name address")
         .lean();
-    const groupedOptions = {};
-    options.forEach((po) => {
-        const option = po.option_id;
-        if (!option || !option._id)
-            return;
-        const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
-        if (variation) {
-            if (!groupedOptions[variation.name])
-                groupedOptions[variation.name] = [];
-            groupedOptions[variation.name].push(option);
-        }
-    });
-    const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-        name: varName,
-        options: groupedOptions[varName],
-    }));
-    product.price = {
-        ...productPrice,
-        variations: variationsArray,
-    };
+    const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
     (0, response_1.SuccessResponse)(res, {
-        product,
+        product: {
+            ...product,
+            totalQuantity,
+            stocks,
+        },
         categories,
         brands,
         variations,
@@ -515,7 +547,7 @@ const modelsforselect = async (req, res) => {
     const variations = await Variation_1.VariationModel.find().lean().populate("options");
     const warehouses = await Warehouse_1.WarehouseModel.find().lean();
     const units = await units_1.UnitModel.find().lean();
-    (0, response_1.SuccessResponse)(res, { categories, brands, variations, warehouses });
+    (0, response_1.SuccessResponse)(res, { categories, brands, variations, warehouses, units });
 };
 exports.modelsforselect = modelsforselect;
 // ═══════════════════════════════════════════════════════════
@@ -778,34 +810,78 @@ const deletemanyproducts = async (req, res) => {
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
         throw new BadRequest_1.BadRequest("At least one product ID is required");
     }
+    // Get all products to be deleted
+    const products = await products_1.ProductModel.find({ _id: { $in: ids } });
+    for (const product of products) {
+        // Delete stocks and update warehouses
+        const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: product._id });
+        for (const stock of stocks) {
+            await Warehouse_1.WarehouseModel.findByIdAndUpdate(stock.warehouseId, {
+                $inc: {
+                    number_of_products: -1,
+                    stock_Quantity: -stock.quantity,
+                },
+            });
+        }
+        await Product_Warehouse_1.Product_WarehouseModel.deleteMany({ productId: product._id });
+        // Delete prices and options
+        const prices = await product_price_1.ProductPriceModel.find({ productId: product._id });
+        const priceIds = prices.map((p) => p._id);
+        await product_price_2.ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
+        await product_price_1.ProductPriceModel.deleteMany({ productId: product._id });
+        // Update categories
+        for (const catId of product.categoryId) {
+            await category_1.CategoryModel.findByIdAndUpdate(catId, {
+                $inc: { product_quantity: -1 },
+            });
+        }
+    }
     await products_1.ProductModel.deleteMany({ _id: { $in: ids } });
     (0, response_1.SuccessResponse)(res, { message: "Products deleted successfully" });
 };
 exports.deletemanyproducts = deletemanyproducts;
 const getLowStockProducts = async (req, res) => {
-    const products = await products_1.ProductModel.find({
-        $expr: { $lte: ["$quantity", "$low_stock"] }
-    })
-        .select("name ar_name code quantity low_stock image")
+    const { warehouseId } = req.query;
+    // Get all products with their low_stock threshold
+    const products = await products_1.ProductModel.find({ low_stock: { $exists: true, $gt: 0 } })
+        .select("name ar_name code low_stock image categoryId brandId")
         .populate("categoryId", "name ar_name")
-        .populate("brandId", "name ar_name");
-    // تنسيق الـ response
-    const formattedProducts = products.map(product => ({
-        _id: product._id,
-        name: product.name,
-        ar_name: product.ar_name,
-        code: product.code,
-        image: product.image,
-        actual_stock: product.quantity,
-        minimum_stock: product.low_stock ?? 0,
-        shortage: (product.low_stock ?? 0) - product.quantity, // الفرق
-        category: product.categoryId,
-        brand: product.brandId
-    }));
+        .populate("brandId", "name ar_name")
+        .lean();
+    const lowStockProducts = [];
+    for (const product of products) {
+        // Build stock query
+        const stockQuery = { productId: product._id };
+        if (warehouseId) {
+            stockQuery.warehouseId = warehouseId;
+        }
+        // Get stocks for this product
+        const stocks = await Product_Warehouse_1.Product_WarehouseModel.find(stockQuery)
+            .populate("warehouseId", "name")
+            .lean();
+        const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+        const lowStockThreshold = product.low_stock ?? 0;
+        // Check if total stock is below threshold
+        if (totalQuantity <= lowStockThreshold) {
+            lowStockProducts.push({
+                _id: product._id,
+                name: product.name,
+                ar_name: product.ar_name,
+                code: product.code,
+                image: product.image,
+                actual_stock: totalQuantity,
+                minimum_stock: lowStockThreshold,
+                shortage: lowStockThreshold - totalQuantity,
+                category: product.categoryId,
+                brand: product.brandId,
+                stocks,
+            });
+        }
+    }
     (0, response_1.SuccessResponse)(res, {
         message: "Low stock products retrieved successfully",
-        count: formattedProducts.length,
-        products: formattedProducts
+        count: lowStockProducts.length,
+        products: lowStockProducts,
     });
 };
 exports.getLowStockProducts = getLowStockProducts;

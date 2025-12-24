@@ -26,7 +26,6 @@ export const createRevenue = async (req: Request, res: Response) => {
         {
             _id: financial_accountId,
             status: true,
-            in_POS: false, // عشان دا ادمن
             balance: { $gte: amount },
         },
         { $inc: { balance: +amount } }, // هنا بيزود الفلوس
@@ -34,7 +33,7 @@ export const createRevenue = async (req: Request, res: Response) => {
     );
 
     if (!updatedAccount) {
-        throw new BadRequest("Insufficient balance or financial account is not allowed in POS");
+        throw new BadRequest("Insufficient balance in the selected account");
     }
 
     const revenue = await RevenueModel.create({
@@ -60,7 +59,7 @@ export const updateRevenue = async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) throw new BadRequest("Revenue ID is required");
 
-    const revenue = await RevenueModel.findOne({ _id: id, admin_id: userId });
+    const revenue = await RevenueModel.findOne({ _id: id });
     if (!revenue) throw new NotFound("Revenue not found");
     const newAmount = req.body.amount;
 
@@ -124,7 +123,8 @@ export const getRevenues = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     if (!userId) throw new BadRequest("Unauthorized Token");
 
-    const revenues = await RevenueModel.find({ admin_id: userId })
+    const revenues = await RevenueModel.find()
+        .populate("admin_id", "username ")
         .populate("Category_id", "name ar_name")
         .populate("financial_accountId", "name ar_name");
 
@@ -133,7 +133,7 @@ export const getRevenues = async (req: Request, res: Response) => {
 
 export const selectionRevenue = async (req: Request, res: Response) => {
     const categories = await ExpenseCategoryModel.find({ status: true });
-    const accounts = await BankAccountModel.find({ in_POS: false, status: true });
+    const accounts = await BankAccountModel.find({ status: true });
 
     SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
 };
@@ -145,7 +145,8 @@ export const getRevenueById = async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) throw new BadRequest("Revenue ID is required");
 
-    const revenue = await RevenueModel.findOne({ _id: id, admin_id: userId })
+    const revenue = await RevenueModel.findOne({ _id: id})
+        .populate("admin_id", "username ")
         .populate("Category_id", "name ar_name")
         .populate("financial_accountId", "name ar_name");
 

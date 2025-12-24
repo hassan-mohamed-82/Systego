@@ -1,4 +1,5 @@
 "use strict";
+// src/utils/bookingcheck.ts
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -25,7 +26,7 @@ node_cron_1.default.schedule("0 * * * *", async () => {
                 if (booking.ProductId) {
                     const product = await products_1.ProductModel.findById(booking.ProductId);
                     if (product) {
-                        product.quantity += 1;
+                        product.quantity = (product.quantity ?? 0) + 1;
                         await product.save();
                         console.log(`↩️ Restored quantity for product ${product._id}`);
                     }
@@ -36,7 +37,7 @@ node_cron_1.default.schedule("0 * * * *", async () => {
                     if (option) {
                         const price = await product_price_1.ProductPriceModel.findById(option.product_price_id);
                         if (price) {
-                            price.quantity += 1;
+                            price.quantity = (price.quantity ?? 0) + 1;
                             await price.save();
                             console.log(`↩️ Restored quantity for product price ${price._id}`);
                         }
@@ -45,6 +46,7 @@ node_cron_1.default.schedule("0 * * * *", async () => {
                 console.log(`❌ Booking ${booking._id} marked as failer and quantities restored`);
             }
         }
+        console.log("✅ Booking check completed");
     }
     catch (err) {
         console.error("❌ Error checking bookings:", err);

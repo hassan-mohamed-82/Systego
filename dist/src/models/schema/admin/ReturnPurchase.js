@@ -33,9 +33,18 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PurchaseModel = void 0;
+exports.ReturnPurchaseModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const PurchaseSchema = new mongoose_1.Schema({
+const ReturnItemSchema = new mongoose_1.Schema({
+    product_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Product" },
+    product_price_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "ProductPrice" },
+    bundle_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Pandel" },
+    original_quantity: { type: Number, required: true },
+    returned_quantity: { type: Number, required: true, min: 1 },
+    price: { type: Number, required: true },
+    subtotal: { type: Number, required: true },
+});
+const ReturnPurchaseSchema = new mongoose_1.Schema({
     reference: {
         type: String,
         trim: true,
@@ -50,38 +59,44 @@ const PurchaseSchema = new mongoose_1.Schema({
             return `${datePart}${randomPart}`;
         },
     },
-    date: { type: Date, required: true, default: Date.now },
-    warehouse_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" }],
-    supplier_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Supplier" }],
-    // currency_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Currency" }],
-    tax_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" }],
-    receipt_img: { type: String },
-    payment_status: {
-        type: String,
-        enum: ["pending", "partial", "full", "later"],
-        default: "pending",
+    purchase_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Purchase" },
+    purchase_reference: { type: String, required: true },
+    warehouse_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Warehouse", required: true },
+    supplier_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "Supplier" },
+    // ---- Admin -----
+    user_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    // ---- Admin -----
+    items: [ReturnItemSchema],
+    total_amount: {
+        type: Number,
+        required: true,
     },
-    exchange_rate: { type: Number, required: true, default: 1 },
-    subtotal: { type: Number, required: true },
-    shiping_cost: { type: Number, required: true },
-    discount: { type: Number, default: 0 },
-}, { timestamps: true });
-// في VariationSchema
-PurchaseSchema.virtual("items", {
-    ref: "PurchaseItem",
-    localField: "_id",
-    foreignField: "purchase_id",
+    refund_account_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "BankAccount",
+    },
+    refund_method: {
+        type: String,
+        enum: ["cash", "card", "store_credit", "original_method"],
+        default: "original_method",
+    },
+    image: {
+        type: String,
+        default: "",
+    },
+    note: {
+        type: String,
+        default: ""
+    },
+    date: {
+        type: Date,
+        default: Date.now
+    },
+}, {
+    timestamps: true
 });
-// في VariationSchema
-PurchaseSchema.virtual("invoices", {
-    ref: "PurchaseInvoice",
-    localField: "_id",
-    foreignField: "purchase_id",
-});
-// في VariationSchema
-PurchaseSchema.virtual("duePayments", {
-    ref: "PurchaseDuePayment",
-    localField: "_id",
-    foreignField: "purchase_id",
-});
-exports.PurchaseModel = mongoose_1.default.model("Purchase", PurchaseSchema);
+ReturnPurchaseSchema.index({ purchase_id: 1 });
+ReturnPurchaseSchema.index({ supplier_id: 1 });
+ReturnPurchaseSchema.index({ reference: 1 });
+ReturnPurchaseSchema.index({ purchase_reference: 1 });
+exports.ReturnPurchaseModel = mongoose_1.default.model("ReturnPurchase", ReturnPurchaseSchema);

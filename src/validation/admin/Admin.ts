@@ -20,6 +20,8 @@ export const updateUserSchema = Joi.object({
     username: Joi.string().optional(),
     email: Joi.string().email().optional(),
     password: Joi.string().optional(),
+    status: Joi.string().valid("active", "inactive").optional(),
+    role_id: Joi.string().optional(),
    // positionId: Joi.string().optional(),
     company_name: Joi.string().optional(),
     phone: Joi.string().optional(),

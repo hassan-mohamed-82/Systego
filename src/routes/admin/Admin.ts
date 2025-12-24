@@ -1,17 +1,33 @@
-import { Router } from 'express';
-import { createUser,getAllUsers,getUserById,updateUser,deleteUser,selection} from '../../controller/admin/Admin';
-import { validate } from '../../middlewares/validation';
-import { loginSchema } from '../../validation/admin/auth';
-import { catchAsync } from '../../utils/catchAsync';
-import { createUserSchema,updateUserSchema } from '../../validation/admin/Admin';
-export const route = Router();
+// src/routes/admin/userRoutes.ts
 
-route.post("/",validate(createUserSchema), catchAsync(createUser));
-route.get("/",catchAsync(getAllUsers));
-route.get("/selection",catchAsync(selection));
-route.get("/:id",catchAsync(getUserById));
-route.put("/:id" ,validate(updateUserSchema), catchAsync(updateUser));
-route.delete("/:id",catchAsync(deleteUser));
+import { Router } from "express";
+import { catchAsync } from "../../utils/catchAsync";
+import { authenticated } from "../../middlewares/authenticated";
+import {
+  createUser,
+  getAllUsers,
+  getUserById,
+  updateUser,
+  deleteUser,
+//   toggleUserStatus,
+  getSelectionData,
+} from "../../controller/admin/Admin";
 
-// Export the authRouter to be used in the main app
+const route = Router();
+
+
+// Selection data (warehouses + roles)
+route.get("/selection", catchAsync(getSelectionData));
+
+// CRUD
+route.post("/", catchAsync(createUser));
+route.get("/", catchAsync(getAllUsers));
+route.get("/:id", catchAsync(getUserById));
+route.put("/:id", catchAsync(updateUser));
+route.delete("/:id", catchAsync(deleteUser));
+
+// Status toggle
+// router.patch("/:id/status", catchAsync(toggleUserStatus));
+
+
 export default route;

@@ -181,8 +181,9 @@ const createSale = async (req, res) => {
                 if (!productDoc) {
                     throw new Errors_1.NotFound("Product not found");
                 }
-                if (productDoc.quantity < quantity) {
-                    throw new BadRequest_1.BadRequest(`Not enough stock for product ${productDoc._id}, available: ${productDoc.quantity}, required: ${quantity}`);
+                const availableQty = productDoc.quantity ?? 0;
+                if (availableQty < quantity) {
+                    throw new BadRequest_1.BadRequest(`Not enough stock for product ${productDoc._id}, available: ${availableQty}, required: ${quantity}`);
                 }
             }
         }
