@@ -49,10 +49,10 @@ const getAllCategorys = async (req, res) => {
         }
     });
     const uniqueCategoryIds = [...new Set(categoryIds)];
-    const categories = await category_1.CategoryModel.find({
+    const category = await category_1.CategoryModel.find({
         _id: { $in: uniqueCategoryIds },
     });
-    (0, response_1.SuccessResponse)(res, { message: "Category list", categories });
+    (0, response_1.SuccessResponse)(res, { message: "Category list", category });
 };
 exports.getAllCategorys = getAllCategorys;
 // ═══════════════════════════════════════════════════════════
@@ -81,10 +81,10 @@ const getAllBrands = async (req, res) => {
         }
     });
     const uniqueBrandIds = [...new Set(brandIds)];
-    const brands = await brand_1.BrandModel.find({
+    const brand = await brand_1.BrandModel.find({
         _id: { $in: uniqueBrandIds },
     });
-    (0, response_1.SuccessResponse)(res, { message: "Brand list", brands });
+    (0, response_1.SuccessResponse)(res, { message: "Brand list", brand });
 };
 exports.getAllBrands = getAllBrands;
 // ═══════════════════════════════════════════════════════════

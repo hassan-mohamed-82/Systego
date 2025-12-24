@@ -58,11 +58,11 @@ export const getAllCategorys = async (req: Request, res: Response) => {
 
   const uniqueCategoryIds = [...new Set(categoryIds)];
 
-  const categories = await CategoryModel.find({
+  const category = await CategoryModel.find({
     _id: { $in: uniqueCategoryIds },
   });
 
-  SuccessResponse(res, { message: "Category list", categories });
+  SuccessResponse(res, { message: "Category list", category });
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -97,11 +97,11 @@ export const getAllBrands = async (req: Request, res: Response) => {
 
   const uniqueBrandIds = [...new Set(brandIds)];
 
-  const brands = await BrandModel.find({
+  const brand = await BrandModel.find({
     _id: { $in: uniqueBrandIds },
   });
 
-  SuccessResponse(res, { message: "Brand list", brands });
+  SuccessResponse(res, { message: "Brand list", brand });
 };
 
 // ═══════════════════════════════════════════════════════════
