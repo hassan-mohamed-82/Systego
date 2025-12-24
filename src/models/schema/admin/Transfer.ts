@@ -1,9 +1,24 @@
 import mongoose from "mongoose";
 
-const TransferSchema = new mongoose.Schema({
-  date: { type: Date, default: Date.now },
-  reference: { type: String, unique: true },
 
+const TransferSchema = new mongoose.Schema({
+
+  reference: {
+      type: String,
+      trim: true,
+      unique: true,
+      maxlength: 8,
+      default: function () {
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const day = String(now.getDate()).padStart(2, "0");
+        const datePart = `${month}${day}`;
+        const randomPart = Math.floor(1000 + Math.random() * 9000);
+        return `${datePart}${randomPart}`;
+      },
+  },
+  
+  date: { type: Date, default: Date.now },
   fromWarehouseId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Warehouse", 

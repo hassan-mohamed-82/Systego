@@ -10,8 +10,7 @@ const PopupSchema = new mongoose_1.default.Schema({
     title_En: { type: String, required: true },
     description_ar: { type: String, required: true },
     description_En: { type: String, required: true },
-    image_ar: { type: String },
-    image_En: { type: String },
+    image: { type: String },
     link: { type: String, required: true },
 });
 exports.PopupModel = mongoose_1.default.model("Popup", PopupSchema);
