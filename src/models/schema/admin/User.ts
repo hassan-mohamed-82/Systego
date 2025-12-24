@@ -1,17 +1,17 @@
 // src/models/schema/admin/User.ts
-import mongoose, { Schema } from "mongoose";
-import { MODULES, ACTION_NAMES } from "../../../types/constant";
 
-// كل أكشن هيبقى Subdocument بـ _id + action
+import mongoose, { Schema, Document } from "mongoose";
+import { MODULES, ACTION_NAMES, ModuleName, ActionName } from "../../../types/constant";
+
 const PermissionActionSchema = new Schema(
   {
     action: {
       type: String,
-      enum: ACTION_NAMES,     // ["view","add","edit","delete"]
+      enum: ACTION_NAMES,
       required: true,
     },
   },
-  { _id: true }          // هنا بيولد _id لكل أكشن
+  { _id: true }
 );
 
 const PermissionSchema = new Schema(
@@ -29,9 +29,37 @@ const PermissionSchema = new Schema(
   { _id: false }
 );
 
-const UserSchema = new Schema(
+export interface IUser extends Document {
+  username: string;
+  email: string;
+  password_hash: string;
+  company_name?: string;
+  phone?: string;
+  role_id?: mongoose.Types.ObjectId;
+  permissions: {
+    module: ModuleName;
+    actions: { _id: mongoose.Types.ObjectId; action: ActionName }[];
+  }[];
+  status: "active" | "inactive";
+  image_url?: string;
+  address?: string;
+  role: "superadmin" | "admin";
+  vat_number?: string;
+  state?: string;
+  postal_code?: string;
+  warehouse_id?: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const UserSchema = new Schema<IUser>(
   {
-    username: { type: String, required: true, unique: true, trim: true },
+    username: { 
+      type: String, 
+      required: true, 
+      unique: true, 
+      trim: true 
+    },
     email: {
       type: String,
       required: true,
@@ -39,17 +67,30 @@ const UserSchema = new Schema(
       lowercase: true,
       trim: true,
     },
-    password_hash: { type: String, required: true },
+    password_hash: { 
+      type: String, 
+      required: true 
+    },
+    company_name: { 
+      type: String 
+    },
+    phone: { 
+      type: String 
+    },
 
-    company_name: { type: String },
-    phone: { type: String },
-
+    // Reference للـ Role (Select من Dropdown)
+    role_id: { 
+      type: Schema.Types.ObjectId, 
+      ref: "Role"
+    },
     role: {
       type: String,
       enum: ["superadmin", "admin"],
       default: "admin",
     },
+    
 
+    // صلاحيات إضافية خاصة باليوزر (override)
     permissions: {
       type: [PermissionSchema],
       default: [],
@@ -66,10 +107,12 @@ const UserSchema = new Schema(
     vat_number: { type: String },
     state: { type: String },
     postal_code: { type: String },
-
-warehouse_id: { type: Schema.Types.ObjectId, ref: "Warehouse" },
+    warehouse_id: { 
+      type: Schema.Types.ObjectId, 
+      ref: "Warehouse" 
+    },
   },
   { timestamps: true }
 );
 
-export const UserModel = mongoose.model("User", UserSchema);
+export const UserModel = mongoose.model<IUser>("User", UserSchema);

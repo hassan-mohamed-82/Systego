@@ -8,7 +8,7 @@ const Product_WarehouseSchema = new mongoose.Schema(
       ref: "Product",
       required: true,
     },
-    WarehouseId: {
+    warehouseId: {  // ✅ w صغيرة
       type: mongoose.Schema.Types.ObjectId,
       ref: "Warehouse",
       required: true,
@@ -19,7 +19,6 @@ const Product_WarehouseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// منتج واحد في مخزن واحد مرة واحدة بس
-Product_WarehouseSchema.index({ productId: 1, WarehouseId: 1 }, { unique: true });
+Product_WarehouseSchema.index({ productId: 1, warehouseId: 1 }, { unique: true });
 
 export const Product_WarehouseModel = mongoose.model("Product_Warehouse", Product_WarehouseSchema);

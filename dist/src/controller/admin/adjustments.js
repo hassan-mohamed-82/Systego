@@ -11,7 +11,7 @@ const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse
 const handleImages_1 = require("../../utils/handleImages");
 const createAdjustment = async (req, res) => {
     const { warehouse_id, note, productId, quantity, select_reasonId, image } = req.body;
-    if (!warehouse_id || productId || quantity || select_reasonId) {
+    if (!warehouse_id || !productId || !quantity || !select_reasonId) {
         throw new BadRequest_1.BadRequest("Please provide all required fields");
     }
     // ✅ تأكد إن المخزن موجود
@@ -40,14 +40,16 @@ const createAdjustment = async (req, res) => {
         note,
         image: image_url
     });
-    if (quantity > product.quantity)
+    const currentQty = product.quantity ?? 0;
+    if (quantity > currentQty)
         throw new BadRequest_1.BadRequest("Insufficient product quantity");
-    if (quantity == product.quantity) {
+    if (quantity === currentQty) {
         warehouse.stock_Quantity -= 1;
     }
-    product.quantity -= quantity;
+    product.quantity = currentQty - quantity;
     await product.save();
-    products.quantity -= quantity;
+    const productQty = products.quantity ?? 0;
+    products.quantity = productQty - quantity;
     await products.save();
     (0, response_1.SuccessResponse)(res, { message: "Adjustment created successfully", adjustment });
 };

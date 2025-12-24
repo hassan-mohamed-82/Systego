@@ -1,17 +1,18 @@
 "use strict";
+// src/routes/admin/userRoutes.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.route = void 0;
 const express_1 = require("express");
-const Admin_1 = require("../../controller/admin/Admin");
-const validation_1 = require("../../middlewares/validation");
 const catchAsync_1 = require("../../utils/catchAsync");
-const Admin_2 = require("../../validation/admin/Admin");
-exports.route = (0, express_1.Router)();
-exports.route.post("/", (0, validation_1.validate)(Admin_2.createUserSchema), (0, catchAsync_1.catchAsync)(Admin_1.createUser));
-exports.route.get("/", (0, catchAsync_1.catchAsync)(Admin_1.getAllUsers));
-exports.route.get("/selection", (0, catchAsync_1.catchAsync)(Admin_1.selection));
-exports.route.get("/:id", (0, catchAsync_1.catchAsync)(Admin_1.getUserById));
-exports.route.put("/:id", (0, validation_1.validate)(Admin_2.updateUserSchema), (0, catchAsync_1.catchAsync)(Admin_1.updateUser));
-exports.route.delete("/:id", (0, catchAsync_1.catchAsync)(Admin_1.deleteUser));
-// Export the authRouter to be used in the main app
-exports.default = exports.route;
+const Admin_1 = require("../../controller/admin/Admin");
+const route = (0, express_1.Router)();
+// Selection data (warehouses + roles)
+route.get("/selection", (0, catchAsync_1.catchAsync)(Admin_1.getSelectionData));
+// CRUD
+route.post("/", (0, catchAsync_1.catchAsync)(Admin_1.createUser));
+route.get("/", (0, catchAsync_1.catchAsync)(Admin_1.getAllUsers));
+route.get("/:id", (0, catchAsync_1.catchAsync)(Admin_1.getUserById));
+route.put("/:id", (0, catchAsync_1.catchAsync)(Admin_1.updateUser));
+route.delete("/:id", (0, catchAsync_1.catchAsync)(Admin_1.deleteUser));
+// Status toggle
+// router.patch("/:id/status", catchAsync(toggleUserStatus));
+exports.default = route;

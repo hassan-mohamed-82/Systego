@@ -114,7 +114,7 @@ export const signup = async (req: Request, res: Response) => {
   if (data.imageBase64) {
     const imageUrl = await saveBase64Image(
       data.imageBase64,
-      newUser._id.toString(),
+      String(newUser._id),
       req,
       "users"
     );

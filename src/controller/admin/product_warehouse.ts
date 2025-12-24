@@ -9,29 +9,30 @@ import { SuccessResponse } from "../../utils/response";
 
 // ==================== إضافة منتج لمخزن ====================
 export const addProductToWarehouse = async (req: Request, res: Response) => {
-  const { productId,WarehouseId, quantity, low_stock } = req.body;
+  const { productId, warehouseId, quantity, low_stock } = req.body;
 
-  if (!WarehouseId) throw new BadRequest("Warehouse ID is required");
+  if (!productId) throw new BadRequest("Product ID is required");
+  if (!warehouseId) throw new BadRequest("Warehouse ID is required");
 
   const product = await ProductModel.findById(productId);
   if (!product) throw new NotFound("Product not found");
 
-  const warehouse = await WarehouseModel.findById(WarehouseId);
+  const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) throw new NotFound("Warehouse not found");
 
-  const existingStock = await Product_WarehouseModel.findOne({ productId, WarehouseId });
+  const existingStock = await Product_WarehouseModel.findOne({ productId, warehouseId });
   if (existingStock) {
     throw new BadRequest("Product already exists in this warehouse");
   }
 
   const stock = await Product_WarehouseModel.create({
     productId,
-    WarehouseId,
+    warehouseId,
     quantity: quantity || 0,
     low_stock: low_stock || 0,
   });
 
-  await WarehouseModel.findByIdAndUpdate(WarehouseId, {
+  await WarehouseModel.findByIdAndUpdate(warehouseId, {
     $inc: {
       number_of_products: 1,
       stock_Quantity: quantity || 0,
@@ -46,9 +47,12 @@ export const addProductToWarehouse = async (req: Request, res: Response) => {
 
 // ==================== تحديث كمية منتج في مخزن ====================
 export const updateProductStock = async (req: Request, res: Response) => {
-  const {productId, WarehouseId, quantity, low_stock } = req.body;
+  const { productId, warehouseId, quantity, low_stock } = req.body;
 
-  const stock = await Product_WarehouseModel.findOne({ productId, WarehouseId });
+  if (!productId) throw new BadRequest("Product ID is required");
+  if (!warehouseId) throw new BadRequest("Warehouse ID is required");
+
+  const stock = await Product_WarehouseModel.findOne({ productId, warehouseId });
   if (!stock) throw new NotFound("Product not found in this warehouse");
 
   const oldQuantity = stock.quantity;
@@ -58,7 +62,7 @@ export const updateProductStock = async (req: Request, res: Response) => {
   await stock.save();
 
   const quantityDiff = stock.quantity - oldQuantity;
-  await WarehouseModel.findByIdAndUpdate(WarehouseId, {
+  await WarehouseModel.findByIdAndUpdate(warehouseId, {
     $inc: { stock_Quantity: quantityDiff },
   });
 
@@ -70,12 +74,15 @@ export const updateProductStock = async (req: Request, res: Response) => {
 
 // ==================== حذف منتج من مخزن ====================
 export const removeProductFromWarehouse = async (req: Request, res: Response) => {
-  const { productId, WarehouseId } = req.body;
+  const { productId, warehouseId } = req.body;
 
-  const stock = await Product_WarehouseModel.findOneAndDelete({ productId, WarehouseId });
+  if (!productId) throw new BadRequest("Product ID is required");
+  if (!warehouseId) throw new BadRequest("Warehouse ID is required");
+
+  const stock = await Product_WarehouseModel.findOneAndDelete({ productId, warehouseId });
   if (!stock) throw new NotFound("Product not found in this warehouse");
 
-  await WarehouseModel.findByIdAndUpdate(WarehouseId, {
+  await WarehouseModel.findByIdAndUpdate(warehouseId, {
     $inc: {
       number_of_products: -1,
       stock_Quantity: -stock.quantity,
@@ -89,12 +96,12 @@ export const removeProductFromWarehouse = async (req: Request, res: Response) =>
 
 // ==================== جلب منتجات مخزن معين ====================
 export const getWarehouseProducts = async (req: Request, res: Response) => {
-  const { WarehouseId } = req.params;
+  const { warehouseId } = req.params;
 
-  const warehouse = await WarehouseModel.findById(WarehouseId);
+  const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) throw new NotFound("Warehouse not found");
 
-  const stocks = await Product_WarehouseModel.find({ WarehouseId })
+  const stocks = await Product_WarehouseModel.find({ warehouseId })
     .populate({
       path: "productId",
       populate: [{ path: "categoryId" }, { path: "brandId" }],
@@ -116,70 +123,70 @@ export const getWarehouseProducts = async (req: Request, res: Response) => {
 };
 
 // ==================== نقل كمية بين مخزنين ====================
-// export const transferStock = async (req: Request, res: Response) => {
-//   const { productId, fromWarehouseId, toWarehouseId, quantity } = req.body;
+export const transferStock = async (req: Request, res: Response) => {
+  const { productId, fromWarehouseId, toWarehouseId, quantity } = req.body;
 
-//   if (!productId || !fromWarehouseId || !toWarehouseId || !quantity) {
-//     throw new BadRequest("All fields are required");
-//   }
+  if (!productId || !fromWarehouseId || !toWarehouseId || !quantity) {
+    throw new BadRequest("All fields are required");
+  }
 
-//   if (quantity <= 0) throw new BadRequest("Quantity must be positive");
-//   if (fromWarehouseId === toWarehouseId) {
-//     throw new BadRequest("Source and destination warehouses must be different");
-//   }
+  if (quantity <= 0) throw new BadRequest("Quantity must be positive");
+  if (fromWarehouseId === toWarehouseId) {
+    throw new BadRequest("Source and destination warehouses must be different");
+  }
 
-//   const fromStock = await Product_WarehouseModel.findOne({
-//     productId,
-//     WarehouseId: fromWarehouseId,
-//   });
-//   if (!fromStock) throw new NotFound("Product not found in source warehouse");
-//   if (fromStock.quantity < quantity) {
-//     throw new BadRequest("Insufficient quantity in source warehouse");
-//   }
+  const fromStock = await Product_WarehouseModel.findOne({
+    productId,
+    warehouseId: fromWarehouseId,
+  });
+  if (!fromStock) throw new NotFound("Product not found in source warehouse");
+  if (fromStock.quantity < quantity) {
+    throw new BadRequest("Insufficient quantity in source warehouse");
+  }
 
-//   let toStock = await Product_WarehouseModel.findOne({
-//     productId,
-//     WarehouseId: toWarehouseId,
-//   });
+  let toStock = await Product_WarehouseModel.findOne({
+    productId,
+    warehouseId: toWarehouseId,
+  });
 
-//   if (!toStock) {
-//     toStock = await Product_WarehouseModel.create({
-//       productId,
-//       WarehouseId: toWarehouseId,
-//       quantity: 0,
-//       low_stock: fromStock.low_stock,
-//     });
+  if (!toStock) {
+    toStock = await Product_WarehouseModel.create({
+      productId,
+      warehouseId: toWarehouseId,
+      quantity: 0,
+      low_stock: fromStock.low_stock,
+    });
 
-//     await WarehouseModel.findByIdAndUpdate(toWarehouseId, {
-//       $inc: { number_of_products: 1 },
-//     });
-//   }
+    await WarehouseModel.findByIdAndUpdate(toWarehouseId, {
+      $inc: { number_of_products: 1 },
+    });
+  }
 
-//   fromStock.quantity -= quantity;
-//   toStock.quantity += quantity;
+  fromStock.quantity -= quantity;
+  toStock.quantity += quantity;
 
-//   await fromStock.save();
-//   await toStock.save();
+  await fromStock.save();
+  await toStock.save();
 
-//   await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
-//     $inc: { stock_Quantity: -quantity },
-//   });
-//   await WarehouseModel.findByIdAndUpdate(toWarehouseId, {
-//     $inc: { stock_Quantity: quantity },
-//   });
+  await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
+    $inc: { stock_Quantity: -quantity },
+  });
+  await WarehouseModel.findByIdAndUpdate(toWarehouseId, {
+    $inc: { stock_Quantity: quantity },
+  });
 
-//   SuccessResponse(res, {
-//     message: "Stock transferred successfully",
-//     fromStock,
-//     toStock,
-//   });
-// };
+  SuccessResponse(res, {
+    message: "Stock transferred successfully",
+    fromStock,
+    toStock,
+  });
+};
 
 // ==================== جلب كل الـ Stocks ====================
 export const getAllStocks = async (req: Request, res: Response) => {
   const stocks = await Product_WarehouseModel.find()
     .populate("productId", "name ar_name code price image")
-    .populate("WarehouseId", "name address")
+    .populate("warehouseId", "name address")
     .lean();
 
   SuccessResponse(res, { stocks });
@@ -187,24 +194,35 @@ export const getAllStocks = async (req: Request, res: Response) => {
 
 // ==================== جلب المنتجات اللي كميتها قليلة ====================
 export const getLowStockProducts = async (req: Request, res: Response) => {
-  const { WarehouseId } = req.query;
+  const { warehouseId } = req.query;
 
   const filter: any = {
     $expr: { $lte: ["$quantity", "$low_stock"] },
   };
 
-  if (WarehouseId) {
-    filter.WarehouseId = WarehouseId;
+  if (warehouseId) {
+    filter.warehouseId = warehouseId;
   }
 
   const lowStocks = await Product_WarehouseModel.find(filter)
     .populate("productId", "name ar_name code price image")
-    .populate("WarehouseId", "name address")
+    .populate("warehouseId", "name address")
     .lean();
+
+  // تنسيق البيانات
+  const formattedProducts = lowStocks.map((stock: any) => ({
+    _id: stock._id,
+    product: stock.productId,
+    warehouse: stock.warehouseId,
+    currentQuantity: stock.quantity,      // الكمية الحالية
+    lowStockThreshold: stock.low_stock,   // الحد الأدنى
+    shortage: stock.low_stock - stock.quantity,  // الكمية الناقصة
+    status: stock.quantity === 0 ? "Out of Stock" : "Low Stock",
+  }));
 
   SuccessResponse(res, {
     message: "Low stock products",
-    count: lowStocks.length,
-    products: lowStocks,
+    count: formattedProducts.length,
+    products: formattedProducts,
   });
 };

@@ -34,18 +34,20 @@ export const createbooking=async(req:Request,res:Response)=>{
         if(!existwarehouse) throw new BadRequest("Warehouse not found")
           const existproduct = await ProductModel.findById(ProductId)
         if(!existproduct) throw new BadRequest("Product not found")   
-        if(existproduct.quantity<1) throw new BadRequest("Product out of stock")  
-    const booking = await BookingModel.create({number_of_days
-,deposit
-,CustmerId
-,WarehouseId
-,ProductId
-,CategoryId
-,option_id
-,status: "pending"
-})
-    existproduct.quantity=existproduct.quantity-1
-    existproduct.save() 
+        const existQty = existproduct.quantity ?? 0;
+        if (existQty < 1) throw new BadRequest("Product out of stock");
+    const booking = await BookingModel.create({
+      number_of_days,
+      deposit,
+      CustmerId,
+      WarehouseId,
+      ProductId,
+      CategoryId,
+      option_id,
+      status: "pending"
+    });
+    existproduct.quantity = existQty - 1;
+    await existproduct.save(); 
     const option = await ProductPriceOptionModel.findById(option_id)
     if(!option) throw new BadRequest("Option not found")
        const productprice = option.product_price_id
@@ -141,7 +143,7 @@ export const deleteBooking = async (req: Request, res: Response) => {
   if (booking.ProductId) {
     const product = await ProductModel.findById(booking.ProductId);
     if (product) {
-      product.quantity += 1;
+      product.quantity = (product.quantity ?? 0) + 1;
       await product.save();
     }
   }

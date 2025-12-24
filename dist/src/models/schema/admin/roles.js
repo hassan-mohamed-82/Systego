@@ -1,4 +1,5 @@
 "use strict";
+// src/models/schema/admin/Role.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -35,8 +36,43 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoleModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
+const constant_1 = require("../../../types/constant");
+// Schema للـ Action داخل كل Permission
+const PermissionActionSchema = new mongoose_1.Schema({
+    action: {
+        type: String,
+        enum: constant_1.ACTION_NAMES,
+        required: true,
+    },
+}, { _id: true });
+// Schema للـ Permission (module + actions)
+const RolePermissionSchema = new mongoose_1.Schema({
+    module: {
+        type: String,
+        enum: constant_1.MODULES,
+        required: true,
+    },
+    actions: {
+        type: [PermissionActionSchema],
+        default: [],
+    },
+}, { _id: false });
+// Schema الرئيسي للـ Role
 const RoleSchema = new mongoose_1.Schema({
-    positionId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Position", required: true },
-    name: { type: String, required: true, unique: true }, // زي "UserManagement" أو "Inventory"
+    name: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+    },
+    status: {
+        type: String,
+        enum: ["active", "inactive"],
+        default: "active",
+    },
+    permissions: {
+        type: [RolePermissionSchema],
+        default: [],
+    },
 }, { timestamps: true });
 exports.RoleModel = mongoose_1.default.model("Role", RoleSchema);

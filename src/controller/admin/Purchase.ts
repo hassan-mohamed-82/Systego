@@ -392,7 +392,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
           if (product && p.quantity !== undefined) {
             const diff = p.quantity - purchaseItem.quantity;
-            product.quantity += diff;
+            product.quantity = (product.quantity ?? 0) + diff;
             await product.save();
 
             const category = await CategoryModel.findById(product.categoryId);
@@ -558,7 +558,7 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
     image: product.image,
     actual_stock: product.quantity,
     minimum_stock: product.low_stock ?? 0,
-    shortage: (product.low_stock ?? 0) - product.quantity,  // الفرق
+    shortage: (product.low_stock ?? 0) - (product.quantity ?? 0),  // الفرق
     category: product.categoryId,
     brand: product.brandId
   }));

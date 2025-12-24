@@ -95,7 +95,7 @@ const signup = async (req, res) => {
     });
     // ✅ save image if exists
     if (data.imageBase64) {
-        const imageUrl = await (0, handleImages_1.saveBase64Image)(data.imageBase64, newUser._id.toString(), req, "users");
+        const imageUrl = await (0, handleImages_1.saveBase64Image)(data.imageBase64, String(newUser._id), req, "users");
         newUser.image_url = imageUrl;
         await newUser.save();
     }

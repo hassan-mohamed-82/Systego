@@ -1,15 +1,38 @@
 import { Router } from 'express';
-import {updateUserPermissions,getUserPermissions,deleteUserPermissionAction} from '../../controller/admin/permission';
-import { validate } from '../../middlewares/validation';
+import {
+  getAllRoles,
+  getRoleById,
+  getRolePermissions,
+  getRolesForSelection,
+  createRole,
+  updateRole,
+  //updateRolePermissions,
+  //toggleRolePermissionAction,
+  deleteRole,
+ // deleteRolePermissionAction
+} from '../../controller/admin/permission';
 import { catchAsync } from '../../utils/catchAsync';
 import { authenticated } from '../../middlewares/authenticated';
 
-const route = Router();
+const router = Router();
 
-route.put("/:id" , catchAsync(updateUserPermissions));
-route.get("/:id",catchAsync(getUserPermissions));
-route.delete("/:userId/:module/:actionId",catchAsync(deleteUserPermissionAction));
+// Apply authentication to all routes
 
+// Selection (for dropdown)
+router.get("/selection", catchAsync(getRolesForSelection));
 
-// Export the authRouter to be used in the main app
-export default route;
+// CRUD
+router.post("/", catchAsync(createRole));
+router.get("/", catchAsync(getAllRoles));
+router.get("/:id", catchAsync(getRoleById));
+router.get("/:id/permissions", catchAsync(getRolePermissions));
+router.put("/:id", catchAsync(updateRole));
+router.delete("/:id", catchAsync(deleteRole));
+
+// Permissions
+// router.get("/:id/permissions", catchAsync(getRolePermissions));
+// router.put("/:id/permissions", catchAsync(updateRolePermissions));
+// router.post("/:id/permissions/toggle", catchAsync(toggleRolePermissionAction));
+// router.delete("/:roleId/permissions/:module/:actionId", catchAsync(deleteRolePermissionAction));
+
+export default router;

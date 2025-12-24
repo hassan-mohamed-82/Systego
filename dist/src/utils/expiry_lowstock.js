@@ -17,7 +17,8 @@ class NotificationService {
         const product = await products_1.ProductModel.findById(productId);
         if (!product)
             return;
-        if (product.low_stock && product.quantity <= product.low_stock) {
+        const qty = product.quantity ?? 0;
+        if (product.low_stock && qty <= product.low_stock) {
             const existingNotification = await Notfication_1.NotificationModel.findOne({
                 type: "low_stock",
                 productId: product._id,
@@ -28,7 +29,7 @@ class NotificationService {
             const notification = await Notfication_1.NotificationModel.create({
                 type: "low_stock",
                 productId: product._id,
-                message: `⚠️ Product ${product.name} is low in stock (${product.quantity}).`,
+                message: `⚠️ Product ${product.name} is low in stock (${qty}).`,
             });
             this.io.emit("notification", notification);
         }
@@ -105,7 +106,8 @@ class NotificationService {
             low_stock: { $exists: true, $ne: null },
         });
         for (const product of products) {
-            if (product.low_stock && product.quantity <= product.low_stock) {
+            const qty = product.quantity ?? 0;
+            if (product.low_stock && qty <= product.low_stock) {
                 const existingNotification = await Notfication_1.NotificationModel.findOne({
                     type: "low_stock",
                     productId: product._id,
@@ -116,7 +118,7 @@ class NotificationService {
                 const notification = await Notfication_1.NotificationModel.create({
                     type: "low_stock",
                     productId: product._id,
-                    message: `⚠️ Product ${product.name} is low in stock (${product.quantity}).`,
+                    message: `⚠️ Product ${product.name} is low in stock (${qty}).`,
                 });
                 this.io.emit("notification", notification);
             }
