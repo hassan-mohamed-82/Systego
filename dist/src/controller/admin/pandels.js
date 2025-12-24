@@ -8,6 +8,7 @@ const handleImages_1 = require("../../utils/handleImages");
 const products_1 = require("../../models/schema/admin/products");
 const pandels_1 = require("../../models/schema/admin/pandels");
 const deleteImage_1 = require("../../utils/deleteImage");
+const producthelper_1 = require("../../utils/producthelper");
 const getPandels = async (req, res) => {
     const pandels = await pandels_1.PandelModel.find({ status: true }).populate('productsId', 'name price');
     return (0, response_1.SuccessResponse)(res, { message: "Pandels found successfully", pandels });
@@ -15,12 +16,25 @@ const getPandels = async (req, res) => {
 exports.getPandels = getPandels;
 const getPandelById = async (req, res) => {
     const { id } = req.params;
+    const jwtUser = req.user;
+    const warehouseId = jwtUser?.warehouse_id;
     if (!id)
         throw new BadRequest_1.BadRequest("Pandel id is required");
-    const pandel = await pandels_1.PandelModel.findById(id).populate('productsId', 'name');
+    const pandel = await pandels_1.PandelModel.findById(id).lean();
     if (!pandel)
         throw new Errors_1.NotFound("Pandel not found");
-    return (0, response_1.SuccessResponse)(res, { message: "Pandel found successfully", pandel });
+    // هات الـ Products كاملة بالـ Variations
+    const products = await (0, producthelper_1.buildProductsWithVariations)({
+        filter: { _id: { $in: pandel.productsId } },
+        warehouseId,
+    });
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Pandel found successfully",
+        pandel: {
+            ...pandel,
+            products,
+        },
+    });
 };
 exports.getPandelById = getPandelById;
 const createPandel = async (req, res) => {

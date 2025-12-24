@@ -65,6 +65,7 @@ const PurchaseSchema = new mongoose_1.Schema({
     subtotal: { type: Number, required: true },
     shiping_cost: { type: Number, required: true },
     discount: { type: Number, default: 0 },
+    note: { type: String } //✅ جديد
 }, { timestamps: true });
 // في VariationSchema
 PurchaseSchema.virtual("items", {

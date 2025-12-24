@@ -6,18 +6,37 @@ import { saveBase64Image } from "../../utils/handleImages";
 import { ProductModel } from "../../models/schema/admin/products";
 import { PandelModel } from "../../models/schema/admin/pandels";
 import { deletePhotoFromServer } from "../../utils/deleteImage";
+import { buildProductsWithVariations } from "../../utils/producthelper";
 
 export const getPandels = async (req: Request, res: Response) => {
     const pandels = await PandelModel.find({status: true}).populate('productsId', 'name price');
     return SuccessResponse(res, { message: "Pandels found successfully", pandels });
 }
 export const getPandelById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    if (!id) throw new BadRequest("Pandel id is required");
-    const pandel = await PandelModel.findById(id).populate('productsId', 'name');
-    if (!pandel) throw new NotFound("Pandel not found");
-    return SuccessResponse(res, { message: "Pandel found successfully", pandel });
-}
+  const { id } = req.params;
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
+
+  if (!id) throw new BadRequest("Pandel id is required");
+
+  const pandel = await PandelModel.findById(id).lean();
+  if (!pandel) throw new NotFound("Pandel not found");
+
+  // هات الـ Products كاملة بالـ Variations
+  const products = await buildProductsWithVariations({
+    filter: { _id: { $in: pandel.productsId } },
+    warehouseId,
+  });
+
+  return SuccessResponse(res, {
+    message: "Pandel found successfully",
+    pandel: {
+      ...pandel,
+      products,
+    },
+  });
+};
+
 
 export const createPandel = async (req: Request, res: Response) => {
     const { name, productsId, images,startdate, enddate, status ,price } = req.body;
