@@ -23,6 +23,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const products_1 = require("../../../models/schema/admin/products");
 const User_1 = require("../../../models/schema/admin/User");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const Product_Warehouse_1 = require("../../../models/schema/admin/Product_Warehouse");
 const STORE_INFO = {
     name: "SYSTEGO",
     phone: "01134567",
@@ -60,6 +61,7 @@ const createSale = async (req, res) => {
     const normalizedOrderPending = Number(order_pending) === 0 ? 0 : 1;
     const isPending = normalizedOrderPending === 1;
     const isDue = Number(Due) === 1;
+    // Customer Validation
     let customer = null;
     if (customer_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(customer_id)) {
@@ -108,6 +110,7 @@ const createSale = async (req, res) => {
             }
         }
     }
+    // Coupon Validation
     let coupon = null;
     if (coupon_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(coupon_id)) {
@@ -122,6 +125,7 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("Coupon is expired");
         }
     }
+    // Tax Validation
     let tax = null;
     if (order_tax) {
         if (!mongoose_1.default.Types.ObjectId.isValid(order_tax)) {
@@ -133,6 +137,7 @@ const createSale = async (req, res) => {
         if (!tax.status)
             throw new BadRequest_1.BadRequest("Tax is not active");
     }
+    // Discount Validation
     let discountDoc = null;
     if (order_discount) {
         if (!mongoose_1.default.Types.ObjectId.isValid(order_discount)) {
@@ -144,6 +149,7 @@ const createSale = async (req, res) => {
         if (!discountDoc.status)
             throw new BadRequest_1.BadRequest("Discount is not active");
     }
+    // Gift Card Validation
     let giftCard = null;
     if (gift_card_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(gift_card_id)) {
@@ -158,10 +164,12 @@ const createSale = async (req, res) => {
             throw new BadRequest_1.BadRequest("Gift card is expired");
         }
     }
+    // ✅ STOCK VALIDATION
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_price_id, product_id, quantity } = p;
             if (product_price_id) {
+                // منتج مع Variation
                 if (!mongoose_1.default.Types.ObjectId.isValid(product_price_id)) {
                     throw new BadRequest_1.BadRequest("Invalid product_price_id");
                 }
@@ -169,25 +177,29 @@ const createSale = async (req, res) => {
                 if (!priceDoc) {
                     throw new Errors_1.NotFound("Product price (variation) not found");
                 }
-                if (priceDoc.quantity < quantity) {
-                    throw new BadRequest_1.BadRequest(`Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity}, required: ${quantity}`);
+                if ((priceDoc.quantity ?? 0) < quantity) {
+                    throw new BadRequest_1.BadRequest(`Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`);
                 }
             }
             else {
+                // منتج بدون Variation - التحقق من Product_Warehouse
                 if (!product_id || !mongoose_1.default.Types.ObjectId.isValid(product_id)) {
                     throw new BadRequest_1.BadRequest("Invalid product_id");
                 }
-                const productDoc = await products_1.ProductModel.findById(product_id);
-                if (!productDoc) {
-                    throw new Errors_1.NotFound("Product not found");
+                const warehouseStock = await Product_Warehouse_1.Product_WarehouseModel.findOne({
+                    productId: product_id,
+                    warehouseId: warehouseId,
+                });
+                if (!warehouseStock) {
+                    throw new Errors_1.NotFound(`Product ${product_id} not found in warehouse ${warehouseId}`);
                 }
-                const availableQty = productDoc.quantity ?? 0;
-                if (availableQty < quantity) {
-                    throw new BadRequest_1.BadRequest(`Not enough stock for product ${productDoc._id}, available: ${availableQty}, required: ${quantity}`);
+                if ((warehouseStock.quantity ?? 0) < quantity) {
+                    throw new BadRequest_1.BadRequest(`Not enough stock for product in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`);
                 }
             }
         }
     }
+    // Bundles Validation
     if (bundles && bundles.length > 0) {
         for (const b of bundles) {
             const { bundle_id, quantity } = b;
@@ -199,12 +211,13 @@ const createSale = async (req, res) => {
                 throw new Errors_1.NotFound("Bundle not found");
             }
             for (const pPrice of bundleDoc.productsId || []) {
-                if (pPrice.quantity < quantity) {
+                if ((pPrice.quantity ?? 0) < quantity) {
                     throw new BadRequest_1.BadRequest(`Not enough stock in bundle ${bundleDoc.name}, product ${pPrice._id}`);
                 }
             }
         }
     }
+    // CREATE SALE
     const accountIdsForSale = !isPending && !isDue && paymentLines.length > 0
         ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
         : [];
@@ -235,6 +248,7 @@ const createSale = async (req, res) => {
         cashier_id: cashierId,
         shift_id: openShift._id,
     });
+    // CREATE PRODUCT SALES
     if (products && products.length > 0) {
         for (const p of products) {
             await Sale_1.ProductSalesModel.create({
@@ -267,7 +281,9 @@ const createSale = async (req, res) => {
             });
         }
     }
+    // ✅ STOCK DEDUCTION & PAYMENTS
     if (!isPending) {
+        // Payment Processing
         if (!isDue && paymentLines.length > 0) {
             await payment_1.PaymentModel.create({
                 sale_id: sale._id,
@@ -282,43 +298,73 @@ const createSale = async (req, res) => {
                 });
             }
         }
+        // ✅ خصم كميات المنتجات
         if (products && products.length > 0) {
             for (const p of products) {
                 if (p.product_price_id) {
+                    // ═══════════════════════════════════════════════════
+                    // ✅ منتج مع Variation - خصم من مكانين
+                    // ═══════════════════════════════════════════════════
+                    // 1️⃣ خصم من ProductPrice
                     await product_price_1.ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
+                        $inc: { quantity: -p.quantity },
+                    });
+                    // 2️⃣ خصم من Product
+                    await products_1.ProductModel.findByIdAndUpdate(p.product_id, {
                         $inc: { quantity: -p.quantity },
                     });
                 }
                 else if (p.product_id) {
+                    // ═══════════════════════════════════════════════════
+                    // ✅ منتج بدون Variation - خصم من 3 أماكن
+                    // ═══════════════════════════════════════════════════
+                    // 1️⃣ خصم من Product_Warehouse
+                    await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({ productId: p.product_id, warehouseId: warehouseId }, { $inc: { quantity: -p.quantity } });
+                    // 2️⃣ خصم من Warehouse
+                    await Warehouse_1.WarehouseModel.findByIdAndUpdate(warehouseId, {
+                        $inc: { stock_Quantity: -p.quantity },
+                    });
+                    // 3️⃣ خصم من Product
                     await products_1.ProductModel.findByIdAndUpdate(p.product_id, {
                         $inc: { quantity: -p.quantity },
                     });
                 }
             }
         }
+        // ✅ خصم كميات الـ Bundles
         if (bundles && bundles.length > 0) {
             for (const b of bundles) {
                 const bundleDoc = await pandels_1.PandelModel.findById(b.bundle_id).populate("productsId");
                 if (bundleDoc) {
                     for (const pPrice of bundleDoc.productsId || []) {
+                        // خصم من ProductPrice
                         await product_price_1.ProductPriceModel.findByIdAndUpdate(pPrice._id, {
                             $inc: { quantity: -b.quantity },
                         });
+                        // خصم من Product
+                        if (pPrice.productId) {
+                            await products_1.ProductModel.findByIdAndUpdate(pPrice.productId, {
+                                $inc: { quantity: -b.quantity },
+                            });
+                        }
                     }
                 }
             }
         }
+        // Coupon Update
         if (!isDue && coupon) {
             await coupons_1.CouponModel.findByIdAndUpdate(coupon._id, {
                 $inc: { available: -1 },
             });
         }
+        // Gift Card Update
         if (!isDue && giftCard && totalPaidFromLines > 0) {
             await giftCard_1.GiftCardModel.findByIdAndUpdate(giftCard._id, {
                 $inc: { amount: -totalPaidFromLines },
             });
         }
     }
+    // FETCH FULL SALE DATA
     const fullSale = await Sale_1.SaleModel.findById(sale._id)
         .populate("customer_id", "name email phone_number")
         .populate("Due_customer_id", "name email phone_number")

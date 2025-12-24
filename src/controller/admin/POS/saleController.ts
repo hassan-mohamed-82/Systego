@@ -18,6 +18,7 @@ import mongoose from 'mongoose';
 import { ProductModel } from '../../../models/schema/admin/products';
 import { UserModel } from '../../../models/schema/admin/User';
 import bcrypt from "bcryptjs";
+import { Product_WarehouseModel } from '../../../models/schema/admin/Product_Warehouse';
 
 const STORE_INFO = {
   name: "SYSTEGO",
@@ -86,6 +87,7 @@ export const createSale = async (req: Request, res: Response) => {
   const isPending = normalizedOrderPending === 1;
   const isDue = Number(Due) === 1;
 
+  // Customer Validation
   let customer: any = null;
   if (customer_id) {
     if (!mongoose.Types.ObjectId.isValid(customer_id)) {
@@ -101,6 +103,7 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("Customer is required for due sales");
   }
 
+  // Financials Validation
   type FinancialLine = { account_id: string; amount: number };
   let paymentLines: FinancialLine[] = [];
   let totalPaidFromLines = 0;
@@ -155,6 +158,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // Coupon Validation
   let coupon: any = null;
   if (coupon_id) {
     if (!mongoose.Types.ObjectId.isValid(coupon_id)) {
@@ -168,6 +172,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // Tax Validation
   let tax: any = null;
   if (order_tax) {
     if (!mongoose.Types.ObjectId.isValid(order_tax)) {
@@ -178,6 +183,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (!tax.status) throw new BadRequest("Tax is not active");
   }
 
+  // Discount Validation
   let discountDoc: any = null;
   if (order_discount) {
     if (!mongoose.Types.ObjectId.isValid(order_discount)) {
@@ -188,6 +194,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (!discountDoc.status) throw new BadRequest("Discount is not active");
   }
 
+  // Gift Card Validation
   let giftCard: any = null;
   if (gift_card_id) {
     if (!mongoose.Types.ObjectId.isValid(gift_card_id)) {
@@ -201,11 +208,13 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ✅ STOCK VALIDATION
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       const { product_price_id, product_id, quantity } = p;
 
       if (product_price_id) {
+        // منتج مع Variation
         if (!mongoose.Types.ObjectId.isValid(product_price_id)) {
           throw new BadRequest("Invalid product_price_id");
         }
@@ -213,29 +222,38 @@ export const createSale = async (req: Request, res: Response) => {
         if (!priceDoc) {
           throw new NotFound("Product price (variation) not found");
         }
-        if (priceDoc.quantity < quantity) {
+        if ((priceDoc.quantity ?? 0) < quantity) {
           throw new BadRequest(
-            `Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity}, required: ${quantity}`
+            `Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`
           );
         }
       } else {
+        // منتج بدون Variation - التحقق من Product_Warehouse
         if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
           throw new BadRequest("Invalid product_id");
         }
-        const productDoc = await ProductModel.findById(product_id);
-        if (!productDoc) {
-          throw new NotFound("Product not found");
+
+        const warehouseStock = await Product_WarehouseModel.findOne({
+          productId: product_id,
+          warehouseId: warehouseId,
+        });
+
+        if (!warehouseStock) {
+          throw new NotFound(
+            `Product ${product_id} not found in warehouse ${warehouseId}`
+          );
         }
-        const availableQty = productDoc.quantity ?? 0;
-        if (availableQty < quantity) {
+
+        if ((warehouseStock.quantity ?? 0) < quantity) {
           throw new BadRequest(
-            `Not enough stock for product ${productDoc._id}, available: ${availableQty}, required: ${quantity}`
+            `Not enough stock for product in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`
           );
         }
       }
     }
   }
 
+  // Bundles Validation
   if (bundles && bundles.length > 0) {
     for (const b of bundles as any[]) {
       const { bundle_id, quantity } = b;
@@ -251,7 +269,7 @@ export const createSale = async (req: Request, res: Response) => {
       }
 
       for (const pPrice of bundleDoc.productsId || []) {
-        if (pPrice.quantity < quantity) {
+        if ((pPrice.quantity ?? 0) < quantity) {
           throw new BadRequest(
             `Not enough stock in bundle ${bundleDoc.name}, product ${pPrice._id}`
           );
@@ -260,6 +278,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // CREATE SALE
   const accountIdsForSale =
     !isPending && !isDue && paymentLines.length > 0
       ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
@@ -294,6 +313,7 @@ export const createSale = async (req: Request, res: Response) => {
     shift_id: openShift._id,
   });
 
+  // CREATE PRODUCT SALES
   if (products && products.length > 0) {
     for (const p of products as any[]) {
       await ProductSalesModel.create({
@@ -328,7 +348,9 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ✅ STOCK DEDUCTION & PAYMENTS
   if (!isPending) {
+    // Payment Processing
     if (!isDue && paymentLines.length > 0) {
       await PaymentModel.create({
         sale_id: sale._id,
@@ -345,13 +367,41 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
+    // ✅ خصم كميات المنتجات
     if (products && products.length > 0) {
       for (const p of products as any[]) {
         if (p.product_price_id) {
+          // ═══════════════════════════════════════════════════
+          // ✅ منتج مع Variation - خصم من مكانين
+          // ═══════════════════════════════════════════════════
+
+          // 1️⃣ خصم من ProductPrice
           await ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
             $inc: { quantity: -p.quantity },
           });
+
+          // 2️⃣ خصم من Product
+          await ProductModel.findByIdAndUpdate(p.product_id, {
+            $inc: { quantity: -p.quantity },
+          });
+
         } else if (p.product_id) {
+          // ═══════════════════════════════════════════════════
+          // ✅ منتج بدون Variation - خصم من 3 أماكن
+          // ═══════════════════════════════════════════════════
+
+          // 1️⃣ خصم من Product_Warehouse
+          await Product_WarehouseModel.findOneAndUpdate(
+            { productId: p.product_id, warehouseId: warehouseId },
+            { $inc: { quantity: -p.quantity } }
+          );
+
+          // 2️⃣ خصم من Warehouse
+          await WarehouseModel.findByIdAndUpdate(warehouseId, {
+            $inc: { stock_Quantity: -p.quantity },
+          });
+
+          // 3️⃣ خصم من Product
           await ProductModel.findByIdAndUpdate(p.product_id, {
             $inc: { quantity: -p.quantity },
           });
@@ -359,6 +409,7 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
+    // ✅ خصم كميات الـ Bundles
     if (bundles && bundles.length > 0) {
       for (const b of bundles as any[]) {
         const bundleDoc: any = await PandelModel.findById(b.bundle_id).populate(
@@ -366,20 +417,30 @@ export const createSale = async (req: Request, res: Response) => {
         );
         if (bundleDoc) {
           for (const pPrice of bundleDoc.productsId || []) {
+            // خصم من ProductPrice
             await ProductPriceModel.findByIdAndUpdate(pPrice._id, {
               $inc: { quantity: -b.quantity },
             });
+
+            // خصم من Product
+            if (pPrice.productId) {
+              await ProductModel.findByIdAndUpdate(pPrice.productId, {
+                $inc: { quantity: -b.quantity },
+              });
+            }
           }
         }
       }
     }
 
+    // Coupon Update
     if (!isDue && coupon) {
       await CouponModel.findByIdAndUpdate(coupon._id, {
         $inc: { available: -1 },
       });
     }
 
+    // Gift Card Update
     if (!isDue && giftCard && totalPaidFromLines > 0) {
       await GiftCardModel.findByIdAndUpdate(giftCard._id, {
         $inc: { amount: -totalPaidFromLines },
@@ -387,6 +448,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // FETCH FULL SALE DATA
   const fullSale = await SaleModel.findById(sale._id)
     .populate("customer_id", "name email phone_number")
     .populate("Due_customer_id", "name email phone_number")
@@ -416,7 +478,6 @@ export const createSale = async (req: Request, res: Response) => {
     items: fullItems,
   });
 };
-
 
 
 
@@ -775,10 +836,6 @@ export const getDueSales = async (req: Request, res: Response) => {
     sales: dueSales,
   });
 };
-
-
-
-
 // ═══════════════════════════════════════════════════════════
 // PAY DUE
 // ═══════════════════════════════════════════════════════════

@@ -21,27 +21,90 @@ import { CountryModel } from "../../../models/schema/admin/Country";
 import { CityModels } from "../../../models/schema/admin/City";
 import { CashierModel } from "../../../models/schema/admin/cashier";
 import { BadRequest } from "../../../Errors/BadRequest";
+import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
-    const category = await CategoryModel.find()
- SuccessResponse(res, {message: "Category list", category});
-}
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
 
-// get all brand 
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
+
+  // هات الـ Products الموجودة في المخزن ده
+  const warehouseProducts = await Product_WarehouseModel.find({
+    warehouseId: warehouseId,
+    quantity: { $gt: 0 },
+  }).select("productId");
+
+  const productIds = warehouseProducts.map((wp) => wp.productId);
+
+  // هات الـ Categories اللي فيها منتجات في المخزن ده
+  const products = await ProductModel.find({
+    _id: { $in: productIds },
+  }).select("categoryId");
+
+  const categoryIds = [...new Set(products.map((p) => p.categoryId?.toString()).filter(Boolean))];
+
+  const categories = await CategoryModel.find({
+    _id: { $in: categoryIds },
+  });
+
+  SuccessResponse(res, { message: "Category list", categories });
+};
+
+// ═══════════════════════════════════════════════════════════
+// Get All Brands (بالـ Warehouse)
+// ═══════════════════════════════════════════════════════════
 export const getAllBrands = async (req: Request, res: Response) => {
-    const brand = await BrandModel.find();
- SuccessResponse(res, {message: "Brand list", brand});
-}
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
 
-// get all products by category 
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
+
+  // هات الـ Products الموجودة في المخزن ده
+  const warehouseProducts = await Product_WarehouseModel.find({
+    warehouseId: warehouseId,
+    quantity: { $gt: 0 },
+  }).select("productId");
+
+  const productIds = warehouseProducts.map((wp) => wp.productId);
+
+  // هات الـ Brands اللي فيها منتجات في المخزن ده
+  const products = await ProductModel.find({
+    _id: { $in: productIds },
+  }).select("brandId");
+
+  const brandIds = [...new Set(products.map((p) => p.brandId?.toString()).filter(Boolean))];
+
+  const brands = await BrandModel.find({
+    _id: { $in: brandIds },
+  });
+
+  SuccessResponse(res, { message: "Brand list", brands });
+};
+
+// ═══════════════════════════════════════════════════════════
+// Get Products By Category (بالـ Warehouse)
+// ═══════════════════════════════════════════════════════════
 export const getProductsByCategory = async (req: Request, res: Response) => {
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
   const { categoryId } = req.params;
+
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
 
   const category = await CategoryModel.findById(categoryId);
   if (!category) throw new NotFound("Category not found");
 
-  // 🔹 استخدم نفس الـ helper لكن بفلتر الكاتيجوري
-  const products = await buildProductsWithVariations({ categoryId });
+  const products = await buildProductsWithVariations({
+    filter: { categoryId },
+    warehouseId,
+  });
 
   SuccessResponse(res, {
     message: "Products list by category",
@@ -49,18 +112,50 @@ export const getProductsByCategory = async (req: Request, res: Response) => {
   });
 };
 
-
-// get all products by brand 
+// ═══════════════════════════════════════════════════════════
+// Get Products By Brand (بالـ Warehouse)
+// ═══════════════════════════════════════════════════════════
 export const getProductsByBrand = async (req: Request, res: Response) => {
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
   const { brandId } = req.params;
+
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
 
   const brand = await BrandModel.findById(brandId);
   if (!brand) throw new NotFound("Brand not found");
 
-  const products = await buildProductsWithVariations({ brandId });
+  const products = await buildProductsWithVariations({
+    filter: { brandId },
+    warehouseId,
+  });
 
   SuccessResponse(res, {
     message: "Products list by brand",
+    products,
+  });
+};
+
+// ═══════════════════════════════════════════════════════════
+// Get Featured Products (بالـ Warehouse)
+// ═══════════════════════════════════════════════════════════
+export const getFeaturedProducts = async (req: Request, res: Response) => {
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
+
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
+
+  const products = await buildProductsWithVariations({
+    filter: { is_featured: true },
+    warehouseId,
+  });
+
+  SuccessResponse(res, {
+    message: "Featured products",
     products,
   });
 };
@@ -89,16 +184,6 @@ export const getAllSelections = async (req: Request, res: Response) => {
     SuccessResponse(res, {message: "Selections list",dueCustomers,countries ,warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
-
-// get featured product
-export const getFeaturedProducts = async (req: Request, res: Response) => {
-  const products = await buildProductsWithVariations({ is_featured: true });
-
-  SuccessResponse(res, {
-    message: "Featured products",
-    products,
-  });
-};
 
 
 

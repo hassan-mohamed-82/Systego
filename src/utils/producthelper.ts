@@ -1,18 +1,39 @@
+// src/utils/buildProductsWithVariations.ts
+
 import { ProductModel } from "../models/schema/admin/products";
 import { ProductPriceModel, ProductPriceOptionModel } from "../models/schema/admin/product_price";
-import { VariationModel } from "../models/schema/admin/Variation"; // تأكد من المسار
-import { CategoryModel } from "../models/schema/admin/category";
-import { BrandModel } from "../models/schema/admin/brand";
-import { NotFound } from "../Errors/NotFound";
-import { SuccessResponse } from "./response";
+import { VariationModel } from "../models/schema/admin/Variation";
+import { Product_WarehouseModel } from "../models/schema/admin/Product_Warehouse";
+interface BuildProductsOptions {
+  filter?: any;
+  warehouseId?: string;
+}
 
-/**
- * يبني نفس الـ structure بتاع getProduct
- * مع إمكانية الفلترة (كل المنتجات / حسب كاتيجوري / حسب براند / غيره)
- */
-export async function buildProductsWithVariations(filter: any = {}) {
+export async function buildProductsWithVariations(options: BuildProductsOptions = {}) {
+  const { filter = {}, warehouseId } = options;
+
+  let productFilter = { ...filter };
+
+  // ✅ لو فيه warehouseId، هات بس المنتجات الموجودة في المخزن
+  let warehouseProductsMap: Map<string, number> = new Map();
+
+  if (warehouseId) {
+    const warehouseProducts = await Product_WarehouseModel.find({
+      warehouseId: warehouseId,
+      quantity: { $gt: 0 },
+    }).select("productId quantity");
+
+    // Map للوصول السريع للكمية
+    warehouseProducts.forEach((wp) => {
+      warehouseProductsMap.set(wp.productId.toString(), wp.quantity ?? 0);
+    });
+
+    const productIds = warehouseProducts.map((wp) => wp.productId);
+    productFilter._id = { $in: productIds };
+  }
+
   // 1️⃣ المنتجات حسب الفلتر
-  const products = await ProductModel.find(filter)
+  const products = await ProductModel.find(productFilter)
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
@@ -70,8 +91,14 @@ export async function buildProductsWithVariations(filter: any = {}) {
         })
       );
 
+      // ✅ الكمية من المخزن لو موجود warehouseId
+      const quantity = warehouseId
+        ? warehouseProductsMap.get(product._id.toString()) ?? 0
+        : product.quantity;
+
       return {
         ...product,
+        quantity, // ✅ الكمية الصحيحة
         prices: formattedPrices,
       };
     })
