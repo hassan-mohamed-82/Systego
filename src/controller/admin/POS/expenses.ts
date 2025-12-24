@@ -122,10 +122,10 @@ export const getExpenses = async (req: Request, res: Response) => {
 
 
 export const selectionExpense = async (req: Request, res: Response) => {
- const categories = await ExpenseCategoryModel.find({status: true});
- const accounts = await BankAccountModel.find({ in_POS: true , status: true});
+  const categories = await ExpenseCategoryModel.find({ status: true });
+  const accounts = await BankAccountModel.find({ in_POS: true, status: true });
 
- SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
+  SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
 }
 
 
