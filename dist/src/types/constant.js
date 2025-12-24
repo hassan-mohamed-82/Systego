@@ -11,6 +11,7 @@ exports.MODULES = [
     "brand",
     "city",
     "country",
+    "expenseAdmin",
     "zone",
     "POS",
     "notification",

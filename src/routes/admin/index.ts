@@ -49,6 +49,7 @@ import CashierRouter from "./cashier"
 import UnitsRouter from "./units"
 import ExpensecategoryRouter from "./expensecategory" //Rputer
 import PaymobRouter from "./Paymob"
+import ExpenseAdminRouter from "./expensesAdmin"
 import notificationRoutrt from "./notifications"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
@@ -62,6 +63,7 @@ route.use("/admin", AdminRouter);
 route.use("/permission", permissionRouter);
 route.use("/category", CategoryRouter);
 route.use("/product", productRouter);
+route.use("/expenseAdmin", ExpenseAdminRouter)
 route.use("/units", UnitsRouter)
 route.use("/cashier", CashierRouter)
 route.use("/supplier", supplierRouter);

@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const catchAsync_1 = require("../../utils/catchAsync");
+const expensesAdmin_1 = require("../../controller/admin/expensesAdmin");
+const haspremission_1 = require("../../middlewares/haspremission");
+const router = (0, express_1.Router)();
+router.get("/", (0, haspremission_1.authorizePermissions)("expenseAdmin", "View"), (0, catchAsync_1.catchAsync)(expensesAdmin_1.getExpensesAdmin));
+router.get("/selection", (0, haspremission_1.authorizePermissions)("expenseAdmin", "View"), (0, catchAsync_1.catchAsync)(expensesAdmin_1.getselectionExpenseAdmin));
+router.get("/:id", (0, haspremission_1.authorizePermissions)("expenseAdmin", "View"), (0, catchAsync_1.catchAsync)(expensesAdmin_1.getExpenseByIdAdmin));
+router.post("/", (0, haspremission_1.authorizePermissions)("expenseAdmin", "Add"), (0, catchAsync_1.catchAsync)(expensesAdmin_1.createExpenseAdmin));
+router.put("/:id", (0, haspremission_1.authorizePermissions)("expenseAdmin", "Edit"), (0, catchAsync_1.catchAsync)(expensesAdmin_1.updateExpenseAdmin));
+exports.default = router;

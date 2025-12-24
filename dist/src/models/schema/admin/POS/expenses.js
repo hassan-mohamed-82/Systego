@@ -11,6 +11,7 @@ const expenseSchema = new mongoose_1.default.Schema({
     Category_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "ExpenseCategory", required: true },
     shift_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "CashierShift", required: false },
     cashier_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: false },
+    admin_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: false },
     note: { type: String },
     financial_accountId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "BankAccount", required: true }
 }, { timestamps: true });
