@@ -16,6 +16,7 @@ const PurchaseItemSchema = new Schema(
     discount: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
     subtotal: { type: Number, required: true },
+    // costAfterDiscount: { type: Number, default: 0 }, //✅ جديد
     item_type: {
       type: String,
       enum: ["product", "material"],
