@@ -124,7 +124,7 @@ export const getRevenues = async (req: Request, res: Response) => {
     if (!userId) throw new BadRequest("Unauthorized Token");
 
     const revenues = await RevenueModel.find()
-        .populate("admin_id", "name ")
+        .populate("admin_id", "username ")
         .populate("Category_id", "name ar_name")
         .populate("financial_accountId", "name ar_name");
 
@@ -146,7 +146,7 @@ export const getRevenueById = async (req: Request, res: Response) => {
     if (!id) throw new BadRequest("Revenue ID is required");
 
     const revenue = await RevenueModel.findOne({ _id: id})
-        .populate("admin_id", "name ")
+        .populate("admin_id", "username ")
         .populate("Category_id", "name ar_name")
         .populate("financial_accountId", "name ar_name");
 
