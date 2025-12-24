@@ -80,14 +80,70 @@ export const createExpense = async (req: Request, res: Response) => {
 export const updateExpense = async (req: Request, res: Response) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError("Unauthorized");
+
   const { id } = req.params;
   if (!id) throw new BadRequest("Expense ID is required");
+
   const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId });
   if (!expense) throw new NotFound("Expense not found");
 
+  const newAmount = req.body.amount;
+
+  // If no amount change, just update other fields
+  if (newAmount == null) {
+    Object.assign(expense, req.body);
+    await expense.save();
+    SuccessResponse(res, { message: "Expense updated successfully", expense });
+    return;
+  }
+
+  if (newAmount <= 0) {
+    throw new BadRequest("Amount must be greater than 0");
+  }
+
+  const oldAmount = expense.amount;
+
+  // Calculate the difference for the bank balance
+  // Since expense subtracts from balance:
+  // Increase in expense (new > old) -> Decrease in balance (difference negative)
+  // Decrease in expense (new < old) -> Increase in balance (difference positive)
+  // Formula: oldAmount - newAmount
+  const balanceDifference = oldAmount - newAmount;
+
+  const updatedAccount = await BankAccountModel.findOneAndUpdate(
+    {
+      _id: expense.financial_accountId,
+      status: true,
+      in_POS: true,
+    },
+    { $inc: { balance: balanceDifference } },
+    { new: true }
+  );
+
+  if (!updatedAccount) {
+    throw new BadRequest(
+      "Financial account not found or is not allowed in POS"
+    );
+  }
+
+  // Check if balance went negative after the update
+  if (updatedAccount.balance < 0) {
+    // Rollback the balance change
+    await BankAccountModel.findByIdAndUpdate(
+      expense.financial_accountId,
+      { $inc: { balance: -balanceDifference } }
+    );
+    throw new BadRequest("Insufficient balance in financial account");
+  }
+
   Object.assign(expense, req.body);
   await expense.save();
-  SuccessResponse(res, { message: "Expense updated successfully", expense });
+
+  SuccessResponse(res, {
+    message: "Expense updated successfully",
+    expense,
+    account_balance: updatedAccount.balance,
+  });
 };
 
 export const getExpenses = async (req: Request, res: Response) => {
