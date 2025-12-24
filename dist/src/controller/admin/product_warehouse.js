@@ -44,25 +44,38 @@ const addProductToWarehouse = async (req, res) => {
 exports.addProductToWarehouse = addProductToWarehouse;
 // ==================== تحديث كمية منتج في مخزن ====================
 const updateProductStock = async (req, res) => {
-    const { productId, warehouseId, quantity, low_stock } = req.body;
-    if (!productId)
-        throw new BadRequest_1.BadRequest("Product ID is required");
-    if (!warehouseId)
-        throw new BadRequest_1.BadRequest("Warehouse ID is required");
-    const stock = await Product_Warehouse_1.Product_WarehouseModel.findOne({ productId, warehouseId });
+    const { id } = req.params;
+    const { productId, low_stock } = req.body;
+    if (!id)
+        throw new BadRequest_1.BadRequest("Stock ID is required");
+    const stock = await Product_Warehouse_1.Product_WarehouseModel.findById(id);
     if (!stock)
-        throw new NotFound_1.NotFound("Product not found in this warehouse");
-    const oldQuantity = stock.quantity;
-    stock.quantity = quantity ?? stock.quantity;
-    stock.low_stock = low_stock ?? stock.low_stock;
+        throw new NotFound_1.NotFound("Stock not found");
+    // ✅ لو بيغير الـ Product
+    if (productId && productId !== stock.productId.toString()) {
+        const product = await products_1.ProductModel.findById(productId);
+        if (!product)
+            throw new NotFound_1.NotFound("Product not found");
+        const existing = await Product_Warehouse_1.Product_WarehouseModel.findOne({
+            productId: productId,
+            warehouseId: stock.warehouseId,
+            _id: { $ne: id },
+        });
+        if (existing)
+            throw new BadRequest_1.BadRequest("Product already exists in this warehouse");
+        stock.productId = productId;
+    }
+    // ✅ تحديث الـ low_stock
+    if (low_stock !== undefined) {
+        stock.low_stock = low_stock;
+    }
     await stock.save();
-    const quantityDiff = stock.quantity - oldQuantity;
-    await Warehouse_1.WarehouseModel.findByIdAndUpdate(warehouseId, {
-        $inc: { stock_Quantity: quantityDiff },
-    });
+    const updatedStock = await Product_Warehouse_1.Product_WarehouseModel.findById(id)
+        .populate("productId", "name ar_name image price")
+        .populate("warehouseId", "name address");
     (0, response_1.SuccessResponse)(res, {
         message: "Stock updated successfully",
-        stock,
+        stock: updatedStock,
     });
 };
 exports.updateProductStock = updateProductStock;

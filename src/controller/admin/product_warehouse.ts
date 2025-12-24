@@ -47,28 +47,43 @@ export const addProductToWarehouse = async (req: Request, res: Response) => {
 
 // ==================== تحديث كمية منتج في مخزن ====================
 export const updateProductStock = async (req: Request, res: Response) => {
-  const { productId, warehouseId, quantity, low_stock } = req.body;
+  const { id } = req.params;
+  const { productId, low_stock } = req.body;
 
-  if (!productId) throw new BadRequest("Product ID is required");
-  if (!warehouseId) throw new BadRequest("Warehouse ID is required");
+  if (!id) throw new BadRequest("Stock ID is required");
 
-  const stock = await Product_WarehouseModel.findOne({ productId, warehouseId });
-  if (!stock) throw new NotFound("Product not found in this warehouse");
+  const stock = await Product_WarehouseModel.findById(id);
+  if (!stock) throw new NotFound("Stock not found");
 
-  const oldQuantity = stock.quantity;
+  // ✅ لو بيغير الـ Product
+  if (productId && productId !== stock.productId.toString()) {
+    const product = await ProductModel.findById(productId);
+    if (!product) throw new NotFound("Product not found");
 
-  stock.quantity = quantity ?? stock.quantity;
-  stock.low_stock = low_stock ?? stock.low_stock;
+    const existing = await Product_WarehouseModel.findOne({
+      productId: productId,
+      warehouseId: stock.warehouseId,
+      _id: { $ne: id },
+    });
+    if (existing) throw new BadRequest("Product already exists in this warehouse");
+
+    stock.productId = productId;
+  }
+
+  // ✅ تحديث الـ low_stock
+  if (low_stock !== undefined) {
+    stock.low_stock = low_stock;
+  }
+
   await stock.save();
 
-  const quantityDiff = stock.quantity - oldQuantity;
-  await WarehouseModel.findByIdAndUpdate(warehouseId, {
-    $inc: { stock_Quantity: quantityDiff },
-  });
+  const updatedStock = await Product_WarehouseModel.findById(id)
+    .populate("productId", "name ar_name image price")
+    .populate("warehouseId", "name address");
 
   SuccessResponse(res, {
     message: "Stock updated successfully",
-    stock,
+    stock: updatedStock,
   });
 };
 
