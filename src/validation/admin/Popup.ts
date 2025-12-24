@@ -37,8 +37,7 @@ export const createPopupSchema = Joi.object({
       "string.pattern.base": "English description must contain only English letters, numbers or symbols",
     }),
 
-  image_ar: Joi.string().allow("", null),
-  image_En: Joi.string().allow("", null),
+  image: Joi.string().allow("", null),
 
   link: Joi.string()
     .uri()
@@ -76,8 +75,7 @@ export const updatePopupSchema = Joi.object({
       "string.pattern.base": "English description must contain only English letters",
     }),
 
-  image_ar: Joi.string().allow("", null),
-  image_En: Joi.string().allow("", null),
+  image: Joi.string().allow("", null),
 
   link: Joi.string()
     .uri()

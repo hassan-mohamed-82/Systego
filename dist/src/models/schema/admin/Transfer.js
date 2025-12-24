@@ -6,8 +6,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TransferModel = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const TransferSchema = new mongoose_1.default.Schema({
+    reference: {
+        type: String,
+        trim: true,
+        unique: true,
+        maxlength: 8,
+        default: function () {
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            const datePart = `${month}${day}`;
+            const randomPart = Math.floor(1000 + Math.random() * 9000);
+            return `${datePart}${randomPart}`;
+        },
+    },
     date: { type: Date, default: Date.now },
-    reference: { type: String, unique: true },
     fromWarehouseId: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: "Warehouse",

@@ -37,8 +37,7 @@ exports.createPopupSchema = joi_1.default.object({
         "string.empty": "English description is required",
         "string.pattern.base": "English description must contain only English letters, numbers or symbols",
     }),
-    image_ar: joi_1.default.string().allow("", null),
-    image_En: joi_1.default.string().allow("", null),
+    image: joi_1.default.string().allow("", null),
     link: joi_1.default.string()
         .uri()
         .required()
@@ -69,8 +68,7 @@ exports.updatePopupSchema = joi_1.default.object({
         .messages({
         "string.pattern.base": "English description must contain only English letters",
     }),
-    image_ar: joi_1.default.string().allow("", null),
-    image_En: joi_1.default.string().allow("", null),
+    image: joi_1.default.string().allow("", null),
     link: joi_1.default.string()
         .uri()
         .messages({
