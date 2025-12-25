@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PurchaseModel } from "../../models/schema/admin/Purchase";
+import { IPurchase, IPurchaseItem, PurchaseModel } from "../../models/schema/admin/Purchase";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import { PurchaseDuePaymentModel } from "../../models/schema/admin/purchase_due_payment";
 import { PurchaseItemOptionModel } from "../../models/schema/admin/purchase_item_option";
@@ -31,14 +31,16 @@ export const createPurchase = async (req: Request, res: Response) => {
     receipt_img,
     payment_status,
     exchange_rate,
-    subtotal,
-    shiping_cost,
+    total,
     discount,
+    shipping_cost,
+    grand_total,
     tax_id,
     purchase_items = [],
     purchase_materials = [],
     financials,
     purchase_due_payment,
+    note,
   } = req.body;
 
   // ========== Validations ==========
@@ -67,10 +69,12 @@ export const createPurchase = async (req: Request, res: Response) => {
     receipt_img: imageUrl,
     payment_status,
     exchange_rate,
-    subtotal,
-    shiping_cost,
+    total,
     discount,
+    shipping_cost,
+    grand_total,
     tax_id,
+    note,
   });
 
   let warehouse = await WarehouseModel.findById(warehouse_id);
@@ -94,27 +98,27 @@ export const createPurchase = async (req: Request, res: Response) => {
     if (!product) throw new NotFound(`Product not found: ${product_id}`);
 
     // التحقق من تاريخ الانتهاء
-    if (product.exp_ability) {
+    if ((product as any).exp_ability) {
       if (!p.date_of_expiery) {
-        throw new BadRequest(`Expiry date is required for product: ${product.name}`);
+        throw new BadRequest(`Expiry date is required for product: ${(product as any).name}`);
       }
       const expiryDate = new Date(p.date_of_expiery);
       const today = new Date();
       expiryDate.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
       if (expiryDate < today) {
-        throw new BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
+        throw new BadRequest(`Expiry date cannot be in the past for product: ${(product as any).name}`);
       }
     }
 
     const existingPurchaseItem = await PurchaseItemModel.findOne({ warehouse_id, product_id });
     if (!existingPurchaseItem && warehouse) {
-      warehouse.number_of_products += 1;
+      (warehouse as any).number_of_products += 1;
       await warehouse.save();
     }
 
     const purchaseItem = await PurchaseItemModel.create({
-      date: p.date,
+      date: p.date || date,
       warehouse_id,
       purchase_id: purchase._id,
       category_id,
@@ -122,27 +126,28 @@ export const createPurchase = async (req: Request, res: Response) => {
       patch_number: p.patch_number,
       quantity: p.quantity,
       unit_cost: p.unit_cost,
-      discount: p.discount,
-      tax: p.tax,
       subtotal: p.subtotal,
+      discount_share: p.discount_share || 0,
+      unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
+      tax: p.tax || 0,
       item_type: "product",
-      date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
+      date_of_expiery: (product as any).exp_ability ? p.date_of_expiery : undefined,
     });
 
     // Update product quantity
-    product.quantity += p.quantity ?? 0;
+    (product as any).quantity += p.quantity ?? 0;
     await product.save();
 
     // Update category
-    const category = await CategoryModel.findById(product.categoryId);
+    const category = await CategoryModel.findById((product as any).categoryId);
     if (category) {
-      category.product_quantity += p.quantity ?? 0;
+      (category as any).product_quantity += p.quantity ?? 0;
       await category.save();
     }
 
     // Update warehouse
     if (warehouse) {
-      warehouse.stock_Quantity += p.quantity ?? 0;
+      (warehouse as any).stock_Quantity += p.quantity ?? 0;
       await warehouse.save();
     }
 
@@ -153,7 +158,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     });
 
     if (productWarehouse) {
-      productWarehouse.quantity += p.quantity ?? 0;
+      (productWarehouse as any).quantity += p.quantity ?? 0;
       await productWarehouse.save();
     } else {
       await Product_WarehouseModel.create({
@@ -183,22 +188,23 @@ export const createPurchase = async (req: Request, res: Response) => {
       date: m.date || date,
       warehouse_id,
       purchase_id: purchase._id,
-      category_id: material.category_id,
+      category_id: (material as any).category_id,
       material_id: m.material_id,
       patch_number: m.patch_number,
       quantity: m.quantity,
       unit_cost: m.unit_cost,
-      discount: m.discount || 0,
-      tax: m.tax || 0,
       subtotal: m.subtotal,
+      discount_share: m.discount_share || 0,
+      unit_cost_after_discount: m.unit_cost_after_discount || m.unit_cost,
+      tax: m.tax || 0,
       item_type: "material",
     });
 
-    material.quantity += m.quantity ?? 0;
+    (material as any).quantity += m.quantity ?? 0;
     await material.save();
 
     if (warehouse) {
-      warehouse.stock_Quantity += m.quantity ?? 0;
+      (warehouse as any).stock_Quantity += m.quantity ?? 0;
       await warehouse.save();
     }
   }
@@ -214,7 +220,7 @@ export const createPurchase = async (req: Request, res: Response) => {
 
       const financial = await BankAccountModel.findById(ele.financial_id);
       if (financial) {
-        financial.balance -= ele.payment_amount;
+        (financial as any).balance -= ele.payment_amount;
         await financial.save();
       }
     }
@@ -231,104 +237,67 @@ export const createPurchase = async (req: Request, res: Response) => {
     }
   }
 
-  SuccessResponse(res, { message: "Purchase created successfully", purchase });
+  const fullPurchase = await PurchaseModel.findById(purchase._id)
+    .populate("items")
+    .populate("warehouse_id")
+    .populate("supplier_id")
+    .populate("tax_id");
+
+  SuccessResponse(res, { message: "Purchase created successfully", purchase: fullPurchase });
 };
+export const getAllPurchases = async (req: Request, res: Response) => {
+  const { page = 1, limit = 10, payment_status, warehouse_id, supplier_id } = req.query;
 
-export const getPurchases = async (req: Request, res: Response): Promise<void> => {
-  const [
-    purchases,
-    warehouses,
-    suppliers,
-    taxes,
-    financial_account,
-    products,
-    materials,
-    variations,
-  ] = await Promise.all([
-    PurchaseModel.find()
-      .select("_id date shiping_cost discount payment_status subtotal")
-      .populate({ path: "warehouse_id", select: "_id name" })
-      .populate({ path: "supplier_id", select: "_id username phone_number" })
-      .populate({ path: "tax_id", select: "_id name rate" })
-      .lean(),
+  const filter: any = {};
+  if (payment_status) filter.payment_status = payment_status;
+  if (warehouse_id) filter.warehouse_id = warehouse_id;
+  if (supplier_id) filter.supplier_id = supplier_id;
 
-    WarehouseModel.find({ status: true }).select("_id name").lean(),
-    SupplierModel.find({ status: true }).select("_id username").lean(),
-    TaxesModel.find({ status: true }).select("_id name rate").lean(),
-    BankAccountModel.find({ status: true }).select("_id name balance").lean(),
-    ProductModel.find().select("_id name ar_name exp_ability code price").lean(),
-    MaterialModel.find().select("_id name ar_name unit quantity").lean(),
-    VariationModel.find({ status: true })
-      .select("_id name")
-      .populate({ path: "options", select: "_id name", match: { status: true } })
-      .lean(),
-  ]);
+  const purchases = await PurchaseModel.find(filter)
+    .populate("warehouse_id")
+    .populate("supplier_id")
+    .populate("tax_id")
+    .populate("items")
+    .populate("invoices")
+    .populate("duePayments")
+    .sort({ createdAt: -1 })
+    .skip((Number(page) - 1) * Number(limit))
+    .limit(Number(limit));
+
+  const total = await PurchaseModel.countDocuments(filter);
 
   SuccessResponse(res, {
     purchases,
-    warehouses,
-    suppliers,
-    taxes,
-    financial_account,
-    products,
-    materials,
-    variations,
+    pagination: {
+      current_page: Number(page),
+      total_pages: Math.ceil(total / Number(limit)),
+      total_items: total,
+      per_page: Number(limit),
+    },
   });
 };
-
 export const getPurchaseById = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const baseUrl = req.protocol + "://" + req.get("host");
 
   const purchase = await PurchaseModel.findById(id)
-    .populate({ path: "warehouse_id", select: "_id name" })
-    .populate({ path: "supplier_id", select: "_id username phone_number" })
-    .populate({ path: "tax_id", select: "_id name rate" })
-    .lean({ virtuals: true });
+    .populate("warehouse_id")
+    .populate("supplier_id")
+    .populate("tax_id")
+    .populate({
+      path: "items",
+      populate: [
+        { path: "product_id" },
+        { path: "material_id" },
+        { path: "category_id" },
+        { path: "options", populate: { path: "option_id" } },
+      ],
+    })
+    .populate("invoices")
+    .populate("duePayments");
 
   if (!purchase) throw new NotFound("Purchase not found");
 
-  // Get items with populated data
-  const items = await PurchaseItemModel.find({ purchase_id: id })
-    .populate({ path: "product_id", select: "_id name ar_name code price" })
-    .populate({ path: "material_id", select: "_id name ar_name" })
-    .populate({ path: "category_id", select: "_id name" })
-    .lean({ virtuals: true });
-
-  // Separate products and materials
-  const products = items.filter(item => item.item_type === "product");
-  const materials = items.filter(item => item.item_type === "material");
-
-  // Get options for each product item
-  for (const product of products) {
-    const options = await PurchaseItemOptionModel.find({ purchase_item_id: product._id })
-      .populate({ path: "option_id", select: "_id name" })
-      .lean();
-    (product as any).options = options;
-  }
-
-  // Get invoices
-  const invoices = await PurchaseInvoiceModel.find({ purchase_id: id })
-    .populate({ path: "financial_id", select: "_id name" })
-    .lean();
-
-  // Get due payments
-  const duePayments = await PurchaseDuePaymentModel.find({ purchase_id: id }).lean();
-
-  // Fix image URL
-  if (purchase?.receipt_img) {
-    purchase.receipt_img = `${baseUrl}/${purchase.receipt_img}`;
-  }
-
-  SuccessResponse(res, {
-    purchase: {
-      ...purchase,
-      products,
-      materials,
-      invoices,
-      duePayments,
-    },
-  });
+  SuccessResponse(res, { purchase });
 };
 
 export const updatePurchase = async (req: Request, res: Response) => {
@@ -338,208 +307,281 @@ export const updatePurchase = async (req: Request, res: Response) => {
     warehouse_id,
     supplier_id,
     receipt_img,
-    shiping_cost,
-    discount,
-    tax_id,
-    exchange_rate,
     payment_status,
-    subtotal,
-    purchase_items,
-    purchase_materials,
+    exchange_rate,
+    total,
+    discount,
+    shipping_cost,
+    grand_total,
+    tax_id,
+    note,
+    purchase_items = [],
+    purchase_materials = [],
+    financials,
+    purchase_due_payment,
   } = req.body;
 
-  const purchase = await PurchaseModel.findById(id);
-  if (!purchase) throw new NotFound("Purchase not found");
+  const existingPurchase = await PurchaseModel.findById(id);
+  if (!existingPurchase) throw new NotFound("Purchase not found");
 
-  // Update image
+  // ========== Validations ==========
+  if (warehouse_id) {
+    const existingWarehouse = await WarehouseModel.findById(warehouse_id);
+    if (!existingWarehouse) throw new BadRequest("Warehouse not found");
+  }
+
+  if (supplier_id) {
+    const existingSupplier = await SupplierModel.findById(supplier_id);
+    if (!existingSupplier) throw new BadRequest("Supplier not found");
+  }
+
+  if (tax_id) {
+    const existingTax = await TaxesModel.findById(tax_id);
+    if (!existingTax) throw new BadRequest("Tax not found");
+  }
+
+  // ========== Save Image ==========
+  let imageUrl = receipt_img;
   if (receipt_img && receipt_img.startsWith("data:")) {
-    purchase.receipt_img = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
-  } else if (receipt_img) {
-    purchase.receipt_img = receipt_img;
+    imageUrl = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
   }
 
-  // Update fields
-  if (date !== undefined) purchase.date = date;
-  if (warehouse_id !== undefined) purchase.warehouse_id = warehouse_id;
-  if (supplier_id !== undefined) purchase.supplier_id = supplier_id;
-  if (exchange_rate !== undefined) purchase.exchange_rate = exchange_rate;
-  if (shiping_cost !== undefined) purchase.shiping_cost = shiping_cost;
-  if (discount !== undefined) purchase.discount = discount;
-  if (tax_id !== undefined) purchase.tax_id = tax_id;
-  if (payment_status !== undefined) purchase.payment_status = payment_status;
-  if (subtotal !== undefined) purchase.subtotal = subtotal;
+  // ========== Reverse Old Items ==========
+  const oldItems = await PurchaseItemModel.find({ purchase_id: id });
 
-  await purchase.save();
+  for (const item of oldItems) {
+    const itemData = item as any;
 
-  // ========== Update Products ==========
-  if (purchase_items && Array.isArray(purchase_items)) {
-    for (const p of purchase_items) {
-      if (p._id) {
-        // Update existing item
-        const purchaseItem = await PurchaseItemModel.findById(p._id);
-        if (purchaseItem && purchaseItem.item_type === "product") {
-          const product = await ProductModel.findById(purchaseItem.product_id);
-
-          if (product?.exp_ability && p.date_of_expiery) {
-            const expiryDate = new Date(p.date_of_expiery);
-            const today = new Date();
-            expiryDate.setHours(0, 0, 0, 0);
-            today.setHours(0, 0, 0, 0);
-            if (expiryDate < today) {
-              throw new BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
-            }
-          }
-
-          if (product && p.quantity !== undefined) {
-            const diff = p.quantity - purchaseItem.quantity;
-            product.quantity = (product.quantity ?? 0) + diff;
-            await product.save();
-
-            const category = await CategoryModel.findById(product.categoryId);
-            if (category) {
-              category.product_quantity += diff;
-              await category.save();
-            }
-
-            const productWarehouse = await Product_WarehouseModel.findOne({
-              productId: purchaseItem.product_id,
-              WarehouseId: purchase.warehouse_id,
-            });
-            if (productWarehouse) {
-              productWarehouse.quantity += diff;
-              await productWarehouse.save();
-            }
-
-            const warehouse = await WarehouseModel.findById(purchase.warehouse_id);
-            if (warehouse) {
-              warehouse.stock_Quantity += diff;
-              await warehouse.save();
-            }
-          }
-
-          if (p.date !== undefined) purchaseItem.date = p.date;
-          if (p.quantity !== undefined) purchaseItem.quantity = p.quantity;
-          if (p.unit_cost !== undefined) purchaseItem.unit_cost = p.unit_cost;
-          if (p.tax !== undefined) purchaseItem.tax = p.tax;
-          if (p.discount !== undefined) purchaseItem.discount = p.discount;
-          if (p.subtotal !== undefined) purchaseItem.subtotal = p.subtotal;
-          if (p.date_of_expiery !== undefined) purchaseItem.date_of_expiery = p.date_of_expiery;
-          if (p.patch_number !== undefined) purchaseItem.patch_number = p.patch_number;
-
-          await purchaseItem.save();
-        }
-      } else {
-        // Create new item
-        const product = await ProductModel.findById(p.product_id);
-        if (!product) throw new NotFound(`Product not found: ${p.product_id}`);
-
-        if (product.exp_ability && !p.date_of_expiery) {
-          throw new BadRequest(`Expiry date is required for product: ${product.name}`);
-        }
-
-        const newItem = await PurchaseItemModel.create({
-          date: p.date || date,
-          warehouse_id: purchase.warehouse_id,
-          purchase_id: purchase._id,
-          category_id: product.categoryId,
-          product_id: p.product_id,
-          patch_number: p.patch_number,
-          quantity: p.quantity,
-          unit_cost: p.unit_cost,
-          discount: p.discount || 0,
-          tax: p.tax || 0,
-          subtotal: p.subtotal,
-          item_type: "product",
-          date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
-        });
-
-        product.quantity += p.quantity ?? 0;
+    if (itemData.item_type === "product" && itemData.product_id) {
+      const product = await ProductModel.findById(itemData.product_id);
+      if (product) {
+        (product as any).quantity -= itemData.quantity;
         await product.save();
+      }
 
-        const warehouse = await WarehouseModel.findById(purchase.warehouse_id);
-        if (warehouse) {
-          warehouse.stock_Quantity += p.quantity ?? 0;
-          await warehouse.save();
-        }
+      const category = await CategoryModel.findById(itemData.category_id);
+      if (category) {
+        (category as any).product_quantity -= itemData.quantity;
+        await category.save();
+      }
 
-        // Create options
-        if (p.options && Array.isArray(p.options)) {
-          for (const opt of p.options) {
-            await PurchaseItemOptionModel.create({
-              purchase_item_id: newItem._id,
-              option_id: opt.id || opt.option_id,
-            });
-          }
-        }
+      const productWarehouse = await Product_WarehouseModel.findOne({
+        productId: itemData.product_id,
+        WarehouseId: itemData.warehouse_id,
+      });
+      if (productWarehouse) {
+        (productWarehouse as any).quantity -= itemData.quantity;
+        await productWarehouse.save();
       }
     }
-  }
 
-  // ========== Update Materials ==========
-  if (purchase_materials && Array.isArray(purchase_materials)) {
-    for (const m of purchase_materials) {
-      if (m._id) {
-        // Update existing
-        const purchaseItem = await PurchaseItemModel.findById(m._id);
-        if (purchaseItem && purchaseItem.item_type === "material") {
-          const material = await MaterialModel.findById(purchaseItem.material_id);
-
-          if (material && m.quantity !== undefined) {
-            const diff = m.quantity - purchaseItem.quantity;
-            material.quantity += diff;
-            await material.save();
-
-            const warehouse = await WarehouseModel.findById(purchase.warehouse_id);
-            if (warehouse) {
-              warehouse.stock_Quantity += diff;
-              await warehouse.save();
-            }
-          }
-
-          if (m.date !== undefined) purchaseItem.date = m.date;
-          if (m.quantity !== undefined) purchaseItem.quantity = m.quantity;
-          if (m.unit_cost !== undefined) purchaseItem.unit_cost = m.unit_cost;
-          if (m.tax !== undefined) purchaseItem.tax = m.tax;
-          if (m.discount !== undefined) purchaseItem.discount = m.discount;
-          if (m.subtotal !== undefined) purchaseItem.subtotal = m.subtotal;
-
-          await purchaseItem.save();
-        }
-      } else {
-        // Create new
-        const material = await MaterialModel.findById(m.material_id);
-        if (!material) throw new NotFound(`Material not found: ${m.material_id}`);
-
-        await PurchaseItemModel.create({
-          date: m.date || date,
-          warehouse_id: purchase.warehouse_id,
-          purchase_id: purchase._id,
-          category_id: material.category_id,
-          material_id: m.material_id,
-          patch_number: m.patch_number,
-          quantity: m.quantity,
-          unit_cost: m.unit_cost,
-          discount: m.discount || 0,
-          tax: m.tax || 0,
-          subtotal: m.subtotal,
-          item_type: "material",
-        });
-
-        material.quantity += m.quantity ?? 0;
+    if (itemData.item_type === "material" && itemData.material_id) {
+      const material = await MaterialModel.findById(itemData.material_id);
+      if (material) {
+        (material as any).quantity -= itemData.quantity;
         await material.save();
+      }
+    }
 
-        const warehouse = await WarehouseModel.findById(purchase.warehouse_id);
-        if (warehouse) {
-          warehouse.stock_Quantity += m.quantity ?? 0;
-          await warehouse.save();
-        }
+    await PurchaseItemOptionModel.deleteMany({ purchase_item_id: itemData._id });
+  }
+
+  // Update warehouse stock
+  const oldWarehouse = await WarehouseModel.findById((existingPurchase as any).warehouse_id);
+  if (oldWarehouse) {
+    const totalOldQty = oldItems.reduce((sum, item) => sum + (item as any).quantity, 0);
+    (oldWarehouse as any).stock_Quantity -= totalOldQty;
+    await oldWarehouse.save();
+  }
+
+  // Delete old items
+  await PurchaseItemModel.deleteMany({ purchase_id: id });
+
+  // Delete old invoices and restore balance
+  const oldInvoices = await PurchaseInvoiceModel.find({ purchase_id: id });
+  for (const inv of oldInvoices) {
+    const financial = await BankAccountModel.findById((inv as any).financial_id);
+    if (financial) {
+      (financial as any).balance += (inv as any).amount;
+      await financial.save();
+    }
+  }
+  await PurchaseInvoiceModel.deleteMany({ purchase_id: id });
+
+  // Delete old due payments
+  await PurchaseDuePaymentModel.deleteMany({ purchase_id: id });
+
+  // ========== Update Purchase ==========
+  (existingPurchase as any).date = date ?? (existingPurchase as any).date;
+  (existingPurchase as any).warehouse_id = warehouse_id ?? (existingPurchase as any).warehouse_id;
+  (existingPurchase as any).supplier_id = supplier_id ?? (existingPurchase as any).supplier_id;
+  (existingPurchase as any).receipt_img = imageUrl ?? (existingPurchase as any).receipt_img;
+  (existingPurchase as any).payment_status = payment_status ?? (existingPurchase as any).payment_status;
+  (existingPurchase as any).exchange_rate = exchange_rate ?? (existingPurchase as any).exchange_rate;
+  (existingPurchase as any).total = total ?? (existingPurchase as any).total;
+  (existingPurchase as any).discount = discount ?? (existingPurchase as any).discount;
+  (existingPurchase as any).shipping_cost = shipping_cost ?? (existingPurchase as any).shipping_cost;
+  (existingPurchase as any).grand_total = grand_total ?? (existingPurchase as any).grand_total;
+  if (tax_id !== undefined) (existingPurchase as any).tax_id = tax_id;
+  if (note !== undefined) (existingPurchase as any).note = note;
+
+  await existingPurchase.save();
+
+  let warehouse = await WarehouseModel.findById((existingPurchase as any).warehouse_id);
+
+  // ========== Process New Products ==========
+  for (const p of purchase_items) {
+    let category_id = p.category_id;
+    let product_id = p.product_id;
+
+    if (p.product_code) {
+      const product_price = await ProductPriceModel.findOne({ code: p.product_code }).populate("productId");
+      if (product_price) {
+        const productDoc: any = product_price.productId;
+        product_id = productDoc?._id;
+        category_id = productDoc?.categoryId;
+      }
+    }
+
+    const product = await ProductModel.findById(product_id);
+    if (!product) throw new NotFound(`Product not found: ${product_id}`);
+
+    if ((product as any).exp_ability) {
+      if (!p.date_of_expiery) {
+        throw new BadRequest(`Expiry date is required for product: ${(product as any).name}`);
+      }
+      const expiryDate = new Date(p.date_of_expiery);
+      const today = new Date();
+      expiryDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      if (expiryDate < today) {
+        throw new BadRequest(`Expiry date cannot be in the past for product: ${(product as any).name}`);
+      }
+    }
+
+    const purchaseItem = await PurchaseItemModel.create({
+      date: p.date || (existingPurchase as any).date,
+      warehouse_id: (existingPurchase as any).warehouse_id,
+      purchase_id: existingPurchase._id,
+      category_id,
+      product_id,
+      patch_number: p.patch_number,
+      quantity: p.quantity,
+      unit_cost: p.unit_cost,
+      subtotal: p.subtotal,
+      discount_share: p.discount_share || 0,
+      unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
+      tax: p.tax || 0,
+      item_type: "product",
+      date_of_expiery: (product as any).exp_ability ? p.date_of_expiery : undefined,
+    });
+
+    (product as any).quantity += p.quantity ?? 0;
+    await product.save();
+
+    const category = await CategoryModel.findById((product as any).categoryId);
+    if (category) {
+      (category as any).product_quantity += p.quantity ?? 0;
+      await category.save();
+    }
+
+    if (warehouse) {
+      (warehouse as any).stock_Quantity += p.quantity ?? 0;
+      await warehouse.save();
+    }
+
+    let productWarehouse = await Product_WarehouseModel.findOne({
+      productId: product_id,
+      WarehouseId: (existingPurchase as any).warehouse_id,
+    });
+
+    if (productWarehouse) {
+      (productWarehouse as any).quantity += p.quantity ?? 0;
+      await productWarehouse.save();
+    } else {
+      await Product_WarehouseModel.create({
+        productId: product_id,
+        WarehouseId: (existingPurchase as any).warehouse_id,
+        quantity: p.quantity ?? 0,
+      });
+    }
+
+    if (p.options && Array.isArray(p.options)) {
+      for (const opt of p.options) {
+        await PurchaseItemOptionModel.create({
+          purchase_item_id: purchaseItem._id,
+          option_id: opt.id || opt.option_id,
+        });
       }
     }
   }
 
-  SuccessResponse(res, { message: "Purchase updated successfully", purchase });
-};
+  // ========== Process New Materials ==========
+  for (const m of purchase_materials) {
+    const material = await MaterialModel.findById(m.material_id);
+    if (!material) throw new NotFound(`Material not found: ${m.material_id}`);
 
+    await PurchaseItemModel.create({
+      date: m.date || (existingPurchase as any).date,
+      warehouse_id: (existingPurchase as any).warehouse_id,
+      purchase_id: existingPurchase._id,
+      category_id: (material as any).category_id,
+      material_id: m.material_id,
+      patch_number: m.patch_number,
+      quantity: m.quantity,
+      unit_cost: m.unit_cost,
+      subtotal: m.subtotal,
+      discount_share: m.discount_share || 0,
+      unit_cost_after_discount: m.unit_cost_after_discount || m.unit_cost,
+      tax: m.tax || 0,
+      item_type: "material",
+    });
+
+    (material as any).quantity += m.quantity ?? 0;
+    await material.save();
+
+    if (warehouse) {
+      (warehouse as any).stock_Quantity += m.quantity ?? 0;
+      await warehouse.save();
+    }
+  }
+
+  // ========== Create New Invoices ==========
+  if (financials && Array.isArray(financials)) {
+    for (const ele of financials) {
+      await PurchaseInvoiceModel.create({
+        financial_id: ele.financial_id,
+        amount: ele.payment_amount,
+        purchase_id: existingPurchase._id,
+      });
+
+      const financial = await BankAccountModel.findById(ele.financial_id);
+      if (financial) {
+        (financial as any).balance -= ele.payment_amount;
+        await financial.save();
+      }
+    }
+  }
+
+  // ========== Create New Due Payments ==========
+  if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
+    for (const due_payment of purchase_due_payment) {
+      await PurchaseDuePaymentModel.create({
+        purchase_id: existingPurchase._id,
+        amount: due_payment.amount,
+        date: due_payment.date,
+      });
+    }
+  }
+
+  const fullPurchase = await PurchaseModel.findById(existingPurchase._id)
+    .populate("items")
+    .populate("warehouse_id")
+    .populate("supplier_id")
+    .populate("tax_id");
+
+  SuccessResponse(res, { message: "Purchase updated successfully", purchase: fullPurchase });
+};
 
 export const getLowStockProducts = async (req: Request, res: Response) => {
   const products = await ProductModel.find({

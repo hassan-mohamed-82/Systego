@@ -37,7 +37,7 @@ exports.PurchaseItemOptionModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const PurchaseItemOptionSchema = new mongoose_1.Schema({
     date: { type: Date, required: true, default: Date.now },
-    purchase_item_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "PurchaseItem" }],
-    option_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Option" }],
+    purchase_item_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "PurchaseItem" },
+    option_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Option" },
 }, { timestamps: true });
 exports.PurchaseItemOptionModel = mongoose_1.default.model("PurchaseItemOption", PurchaseItemOptionSchema);

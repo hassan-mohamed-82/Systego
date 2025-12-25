@@ -51,10 +51,9 @@ const PurchaseSchema = new mongoose_1.Schema({
         },
     },
     date: { type: Date, required: true, default: Date.now },
-    warehouse_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" }],
-    supplier_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Supplier" }],
-    // currency_id: [{ type: mongoose.Schema.Types.ObjectId, ref: "Currency" }],
-    tax_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" }],
+    warehouse_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" },
+    supplier_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Supplier" },
+    tax_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Taxes" },
     receipt_img: { type: String },
     payment_status: {
         type: String,
@@ -62,27 +61,27 @@ const PurchaseSchema = new mongoose_1.Schema({
         default: "pending",
     },
     exchange_rate: { type: Number, required: true, default: 1 },
-    subtotal: { type: Number, required: true },
-    shiping_cost: { type: Number, required: true },
+    total: { type: Number, required: true },
     discount: { type: Number, default: 0 },
-    note: { type: String } //✅ جديد
+    shipping_cost: { type: Number, default: 0 },
+    grand_total: { type: Number, required: true },
+    note: { type: String },
 }, { timestamps: true });
-// في VariationSchema
 PurchaseSchema.virtual("items", {
     ref: "PurchaseItem",
     localField: "_id",
     foreignField: "purchase_id",
 });
-// في VariationSchema
 PurchaseSchema.virtual("invoices", {
     ref: "PurchaseInvoice",
     localField: "_id",
     foreignField: "purchase_id",
 });
-// في VariationSchema
 PurchaseSchema.virtual("duePayments", {
     ref: "PurchaseDuePayment",
     localField: "_id",
     foreignField: "purchase_id",
 });
+PurchaseSchema.set("toObject", { virtuals: true });
+PurchaseSchema.set("toJSON", { virtuals: true });
 exports.PurchaseModel = mongoose_1.default.model("Purchase", PurchaseSchema);

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import {getPurchaseById, createPurchase,getPurchases,updatePurchase,getLowStockProducts
+import {getPurchaseById, createPurchase,getAllPurchases,updatePurchase,getLowStockProducts
     ,getCriticalExpiryProducts,getExpiringProducts,getExpiredProducts
 } from "../../controller/admin/Purchase"
 import {validate} from"../../middlewares/validation";
@@ -15,7 +15,7 @@ route.get("/low-stock",authorizePermissions("purchase","View"),catchAsync(getLow
 route.get("/critical-expiry",authorizePermissions("purchase","View"),catchAsync(getCriticalExpiryProducts));
 route.get("/expiring",authorizePermissions("purchase","View"),catchAsync(getExpiringProducts));
 route.get("/expired",authorizePermissions("purchase","View"),catchAsync(getExpiredProducts));
-route.get("/",authorizePermissions("purchase","View"),catchAsync(getPurchases));
+route.get("/",authorizePermissions("purchase","View"),catchAsync(getAllPurchases));
 route.get("/:id" ,authorizePermissions("purchase","View"),catchAsync(getPurchaseById));
 route.put("/:id" ,authorizePermissions("purchase","Edit"),validate(updatePurchaseSchema), catchAsync(updatePurchase));
 

@@ -39,25 +39,24 @@ const PurchaseItemSchema = new mongoose_1.Schema({
     date: { type: Date, required: true, default: Date.now },
     product_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Product" },
     product_price_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "ProductPrice" },
-    material_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Material" }, // ✅ جديد
+    material_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Material" },
     category_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Category" },
-    date_of_expiery: { type: Date }, // ✅ جديد
+    date_of_expiery: { type: Date },
     purchase_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Purchase" },
     patch_number: { type: String },
     warehouse_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Warehouse" },
     quantity: { type: Number, required: true },
     unit_cost: { type: Number, required: true },
-    discount: { type: Number, default: 0 },
-    tax: { type: Number, default: 0 },
     subtotal: { type: Number, required: true },
-    // costAfterDiscount: { type: Number, default: 0 }, //✅ جديد
+    discount_share: { type: Number, default: 0 },
+    unit_cost_after_discount: { type: Number, default: 0 },
+    tax: { type: Number, default: 0 },
     item_type: {
         type: String,
         enum: ["product", "material"],
         default: "product",
-    }, // ✅ جديد
+    },
 }, { timestamps: true });
-// Validation
 PurchaseItemSchema.pre("save", function (next) {
     if (!this.product_id && !this.material_id) {
         return next(new Error("Either product_id or material_id is required"));
@@ -72,4 +71,6 @@ PurchaseItemSchema.virtual("options", {
     localField: "_id",
     foreignField: "purchase_item_id",
 });
+PurchaseItemSchema.set("toObject", { virtuals: true });
+PurchaseItemSchema.set("toJSON", { virtuals: true });
 exports.PurchaseItemModel = mongoose_1.default.model("PurchaseItem", PurchaseItemSchema);
