@@ -16,6 +16,10 @@ export const createPurchaseItemSchema = Joi.object({
   discount: Joi.number().required(),
   tax: Joi.number().required(),
   subtotal: Joi.number().required(),
+  patch_number: Joi.string().optional(),
+  date_of_expiery: Joi.date().optional(),
+  discount_share: Joi.number().optional(),
+  unit_cost_after_discount: Joi.number().optional(),
   options: Joi.array().items(createPurchaseItemOptionSchema).optional(),
 });
 
@@ -34,17 +38,20 @@ export const createPurchaseSchema = Joi.object({
   date: Joi.string().required(),
   warehouse_id: Joi.string().required(),
   supplier_id: Joi.string().required(),
-  receipt_img: Joi.string().required(),
-  currency_id: Joi.string().required(),
+  receipt_img: Joi.string().optional(),
+  // currency_id: Joi.string().optional(),
   tax_id: Joi.string().optional(),
-  payment_status: Joi.string().valid("pending", "partial", "paid").required(),
+  payment_status: Joi.string().valid("pending", "partial", "full", "later").required(),
   exchange_rate: Joi.number().required(),
-  subtotal: Joi.number().required(),
-  shiping_cost: Joi.number().required(),
+  total: Joi.number().required(),
+  shipping_cost: Joi.number().required(),
+  grand_total: Joi.number().required(),
   discount: Joi.number().required(),
-  purchase_items: Joi.array().items(createPurchaseItemSchema).required(), 
-  financials: Joi.array().items(createFinancialSchema).required(), 
-  purchase_due_payment: Joi.array().items(createPurchaseDuePaymentSchema).required(), 
+  note: Joi.string().optional(),
+  purchase_items: Joi.array().items(createPurchaseItemSchema).optional(),
+  purchase_materials: Joi.array().optional(), // Adding this to allow materials
+  financials: Joi.array().items(createFinancialSchema).optional(),
+  purchase_due_payment: Joi.array().items(createPurchaseDuePaymentSchema).optional(),
 });
 
 // ___________________ Update _________________________
@@ -65,17 +72,17 @@ export const updatePurchaseItemSchema = Joi.object({
   tax: Joi.number().optional(),
   subtotal: Joi.number().optional(),
   options: Joi.array().items(updatePurchaseItemOptionSchema).optional(),
-}); 
+});
 
 export const updatePurchaseSchema = Joi.object({
-    date: Joi.string().optional(),
-    warehouse_id: Joi.string().optional(),
-    supplier_id: Joi.string().optional(),
-    receipt_img: Joi.string().optional(),
-    currency_id: Joi.string().optional(),
-    tax_id: Joi.string().optional(),
-    exchange_rate: Joi.number().optional(),
-    shiping_cost: Joi.number().optional(),
-    discount: Joi.number().optional(),
-    purchase_items: Joi.array().items(updatePurchaseItemSchema).optional(),
+  date: Joi.string().optional(),
+  warehouse_id: Joi.string().optional(),
+  supplier_id: Joi.string().optional(),
+  receipt_img: Joi.string().optional(),
+  currency_id: Joi.string().optional(),
+  tax_id: Joi.string().optional(),
+  exchange_rate: Joi.number().optional(),
+  shiping_cost: Joi.number().optional(),
+  discount: Joi.number().optional(),
+  purchase_items: Joi.array().items(updatePurchaseItemSchema).optional(),
 });

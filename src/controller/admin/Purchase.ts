@@ -19,7 +19,7 @@ import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { saveBase64Image } from "../../utils/handleImages";
-import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
+import { generateBarcodeImage, generateEAN13Barcode } from "../../utils/barcode"
 import { any } from "joi";
 import { MaterialModel } from "../../models/schema/admin/Materials";
 
@@ -135,8 +135,8 @@ export const createPurchase = async (req: Request, res: Response) => {
     });
 
     // Update product quantity
-    (product as any).quantity += p.quantity ?? 0;
-    await product.save();
+    // Update product quantity
+    await ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: p.quantity ?? 0 } });
 
     // Update category
     const category = await CategoryModel.findById((product as any).categoryId);
@@ -154,7 +154,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     // Update product-warehouse
     let productWarehouse = await Product_WarehouseModel.findOne({
       productId: product_id,
-      WarehouseId: warehouse_id,
+      warehouseId: warehouse_id,
     });
 
     if (productWarehouse) {
@@ -163,7 +163,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     } else {
       await Product_WarehouseModel.create({
         productId: product_id,
-        WarehouseId: warehouse_id,
+        warehouseId: warehouse_id,
         quantity: p.quantity ?? 0,
       });
     }
@@ -355,8 +355,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     if (itemData.item_type === "product" && itemData.product_id) {
       const product = await ProductModel.findById(itemData.product_id);
       if (product) {
-        (product as any).quantity -= itemData.quantity;
-        await product.save();
+        await ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: -itemData.quantity } });
       }
 
       const category = await CategoryModel.findById(itemData.category_id);
@@ -476,8 +475,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
       date_of_expiery: (product as any).exp_ability ? p.date_of_expiery : undefined,
     });
 
-    (product as any).quantity += p.quantity ?? 0;
-    await product.save();
+    await ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: p.quantity ?? 0 } });
 
     const category = await CategoryModel.findById((product as any).categoryId);
     if (category) {
@@ -492,7 +490,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
     let productWarehouse = await Product_WarehouseModel.findOne({
       productId: product_id,
-      WarehouseId: (existingPurchase as any).warehouse_id,
+      warehouseId: (existingPurchase as any).warehouse_id,
     });
 
     if (productWarehouse) {
@@ -501,7 +499,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     } else {
       await Product_WarehouseModel.create({
         productId: product_id,
-        WarehouseId: (existingPurchase as any).warehouse_id,
+        warehouseId: (existingPurchase as any).warehouse_id,
         quantity: p.quantity ?? 0,
       });
     }
@@ -587,9 +585,9 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
   const products = await ProductModel.find({
     $expr: { $lte: ["$quantity", "$low_stock"] }
   })
-  .select("name ar_name code quantity low_stock image")
-  .populate("categoryId", "name ar_name")
-  .populate("brandId", "name ar_name");
+    .select("name ar_name code quantity low_stock image")
+    .populate("categoryId", "name ar_name")
+    .populate("brandId", "name ar_name");
 
   // تنسيق الـ response
   const formattedProducts = products.map(product => ({
@@ -605,10 +603,10 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
     brand: product.brandId
   }));
 
-  SuccessResponse(res, { 
+  SuccessResponse(res, {
     message: "Low stock products retrieved successfully",
     count: formattedProducts.length,
-    products: formattedProducts 
+    products: formattedProducts
   });
 };
 
@@ -624,24 +622,24 @@ export const getCriticalExpiryProducts = async (req: Request, res: Response) => 
 
   const criticalItems = await PurchaseItemModel.find({
     item_type: "product",
-    date_of_expiery: { 
-      $exists: true, 
-      $ne: null, 
+    date_of_expiery: {
+      $exists: true,
+      $ne: null,
       $gte: today,
-      $lte: nextWeek 
+      $lte: nextWeek
     },
     quantity: { $gt: 0 }
   })
-  .populate({
-    path: "product_id",
-    select: "name ar_name code image"
-  })
-  .populate({
-    path: "warehouse_id",
-    select: "name"
-  })
-  .select("product_id warehouse_id quantity date_of_expiery patch_number")
-  .sort({ date_of_expiery: 1 });
+    .populate({
+      path: "product_id",
+      select: "name ar_name code image"
+    })
+    .populate({
+      path: "warehouse_id",
+      select: "name"
+    })
+    .select("product_id warehouse_id quantity date_of_expiery patch_number")
+    .sort({ date_of_expiery: 1 });
 
   const formattedProducts = criticalItems.map(item => {
     const expiryDate = new Date(item.date_of_expiery!);
@@ -681,16 +679,16 @@ export const getExpiringProducts = async (req: Request, res: Response) => {
     item_type: "product",
     date_of_expiery: { $exists: true, $ne: null, $lte: futureDate }
   })
-  .populate({
-    path: "product_id",
-    select: "name ar_name code image exp_ability"
-  })
-  .populate({
-    path: "warehouse_id",
-    select: "name"
-  })
-  .select("product_id warehouse_id quantity date_of_expiery patch_number")
-  .sort({ date_of_expiery: 1 }); // الأقرب للانتهاء أولاً
+    .populate({
+      path: "product_id",
+      select: "name ar_name code image exp_ability"
+    })
+    .populate({
+      path: "warehouse_id",
+      select: "name"
+    })
+    .select("product_id warehouse_id quantity date_of_expiery patch_number")
+    .sort({ date_of_expiery: 1 }); // الأقرب للانتهاء أولاً
 
   // تنسيق الـ response
   const formattedProducts = expiringItems.map(item => {
@@ -749,16 +747,16 @@ export const getExpiredProducts = async (req: Request, res: Response) => {
     date_of_expiery: { $exists: true, $ne: null, $lt: today },
     quantity: { $gt: 0 } // اللي لسه فيها كمية
   })
-  .populate({
-    path: "product_id",
-    select: "name ar_name code image"
-  })
-  .populate({
-    path: "warehouse_id",
-    select: "name"
-  })
-  .select("product_id warehouse_id quantity date_of_expiery patch_number")
-  .sort({ date_of_expiery: 1 });
+    .populate({
+      path: "product_id",
+      select: "name ar_name code image"
+    })
+    .populate({
+      path: "warehouse_id",
+      select: "name"
+    })
+    .select("product_id warehouse_id quantity date_of_expiery patch_number")
+    .sort({ date_of_expiery: 1 });
 
   const formattedProducts = expiredItems.map(item => {
     const expiryDate = new Date(item.date_of_expiery!);
