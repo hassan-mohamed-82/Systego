@@ -126,3 +126,54 @@ export const deleteCustomer = async (req: Request, res: Response) => {
         customer
     });
 }
+
+export const customerandDuecustomers = async (req: Request, res: Response) => {
+    const customers = await CustomerModel.find();
+    const dueCustomers = await CustomerModel.find({ is_Due: true });
+    SuccessResponse(res,{
+        message: "Customers fetched successfully",
+        customers,
+        dueCustomers
+    });
+}
+
+export const getallgroups = async (req: Request, res: Response) => {
+    const groups = await CustomerGroupModel.find();
+    SuccessResponse(res,{
+        message: "Customer groups fetched successfully",
+        groups
+    });
+}
+
+export const getgroupbyid = async (req: Request, res: Response) => {
+    const group = await CustomerGroupModel.findById(req.params.id);
+    if (!group) {
+        throw new NotFound("Customer group not found");
+    }
+    SuccessResponse(res,{
+        message: "Customer group fetched successfully",
+        group
+    });
+}
+
+export const updategroup = async (req: Request, res: Response) => {
+    const group = await CustomerGroupModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!group) {
+        throw new NotFound("Customer group not found");
+    }
+    SuccessResponse(res,{
+        message: "Customer group updated successfully",
+        group
+    });
+}
+
+export const deletegroup = async (req: Request, res: Response) => {
+    const group = await CustomerGroupModel.findByIdAndDelete(req.params.id);
+    if (!group) {
+        throw new NotFound("Customer group not found");
+    }
+    SuccessResponse(res,{
+        message: "Customer group deleted successfully",
+        group
+    });
+}

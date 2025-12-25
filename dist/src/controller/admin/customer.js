@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCustomer = exports.updateCustomer = exports.getDueCustomers = exports.getCustomerById = exports.getCustomers = exports.createCustomer = void 0;
+exports.deletegroup = exports.updategroup = exports.getgroupbyid = exports.getallgroups = exports.customerandDuecustomers = exports.deleteCustomer = exports.updateCustomer = exports.getDueCustomers = exports.getCustomerById = exports.getCustomers = exports.createCustomer = void 0;
 const customer_1 = require("../../models/schema/admin/POS/customer");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -108,3 +108,54 @@ const deleteCustomer = async (req, res) => {
     });
 };
 exports.deleteCustomer = deleteCustomer;
+const customerandDuecustomers = async (req, res) => {
+    const customers = await customer_1.CustomerModel.find();
+    const dueCustomers = await customer_1.CustomerModel.find({ is_Due: true });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customers fetched successfully",
+        customers,
+        dueCustomers
+    });
+};
+exports.customerandDuecustomers = customerandDuecustomers;
+const getallgroups = async (req, res) => {
+    const groups = await customer_1.CustomerGroupModel.find();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer groups fetched successfully",
+        groups
+    });
+};
+exports.getallgroups = getallgroups;
+const getgroupbyid = async (req, res) => {
+    const group = await customer_1.CustomerGroupModel.findById(req.params.id);
+    if (!group) {
+        throw new Errors_1.NotFound("Customer group not found");
+    }
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer group fetched successfully",
+        group
+    });
+};
+exports.getgroupbyid = getgroupbyid;
+const updategroup = async (req, res) => {
+    const group = await customer_1.CustomerGroupModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!group) {
+        throw new Errors_1.NotFound("Customer group not found");
+    }
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer group updated successfully",
+        group
+    });
+};
+exports.updategroup = updategroup;
+const deletegroup = async (req, res) => {
+    const group = await customer_1.CustomerGroupModel.findByIdAndDelete(req.params.id);
+    if (!group) {
+        throw new Errors_1.NotFound("Customer group not found");
+    }
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer group deleted successfully",
+        group
+    });
+};
+exports.deletegroup = deletegroup;
