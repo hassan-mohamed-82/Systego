@@ -54,6 +54,7 @@ import notificationRoutrt from "./notifications"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
 import RevenueRouter from "./Revenue";
+import ReturnPurchaseRouter from "./returnPurchase";
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -111,7 +112,7 @@ route.use("/notification", notificationRoutrt)
 
 route.use("/booking", BookingRouter)
 route.use("/return-sale", ReturnRouter)
-
+route.use("/return-purchase", ReturnPurchaseRouter)
 route.use("/revenue", RevenueRouter);
 
 export default route;
