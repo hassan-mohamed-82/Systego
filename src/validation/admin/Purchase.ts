@@ -8,6 +8,15 @@ export const createPurchaseItemOptionSchema = Joi.object({
   quantity: Joi.number().optional()
 });
 
+
+export const createPurchaseItemVariationSchema = Joi.object({
+  product_price_id: Joi.string().optional(),
+  quantity: Joi.number().required(),
+  options: Joi.array().items(Joi.object({
+    option_id: Joi.string().required()
+  })).optional(),
+});
+
 export const createPurchaseItemSchema = Joi.object({
   date: Joi.date().required(),
   category_id: Joi.string().optional(),
@@ -23,7 +32,7 @@ export const createPurchaseItemSchema = Joi.object({
   discount_share: Joi.number().optional(),
   unit_cost_after_discount: Joi.number().optional(),
   options: Joi.array().items(createPurchaseItemOptionSchema).optional(),
-  variations: Joi.array().items(createPurchaseItemOptionSchema).optional(),
+  variations: Joi.array().items(createPurchaseItemVariationSchema).optional(),
 });
 
 export const createPurchaseDuePaymentSchema = Joi.object({
