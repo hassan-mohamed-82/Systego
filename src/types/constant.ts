@@ -47,6 +47,7 @@ export const MODULES = [
   "recipe",
   "adjustment_reason",
   "Category_Material",
+  "purchase_return",
   "Units"
 ] as const;
 
