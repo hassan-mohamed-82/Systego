@@ -6,6 +6,7 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { SuccessResponse } from "../../utils/response";
+import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
 
 // ==================== إضافة منتج لمخزن ====================
 export const addProductToWarehouse = async (req: Request, res: Response) => {
@@ -123,12 +124,48 @@ export const getWarehouseProducts = async (req: Request, res: Response) => {
     })
     .lean();
 
-  const products = stocks.map((stock: any) => ({
-    ...stock.productId,
-    quantity: stock.quantity,
-    low_stock: stock.low_stock,
-    stockId: stock._id,
-  }));
+  // ✅ إضافة الـ Variations لكل Product
+  const products = await Promise.all(
+    stocks.map(async (stock: any) => {
+      // هات الـ Variations
+      const variations = await ProductPriceModel.find({
+        productId: stock.productId._id,
+      })
+        .populate({
+          path: "options",
+          populate: { path: "variationId", select: "name ar_name" },
+        })
+        .lean();
+
+      // هات الـ Options لكل Variation
+      const variationsWithOptions = await Promise.all(
+        variations.map(async (variation: any) => {
+          const options = await ProductPriceOptionModel.find({
+            product_price_id: variation._id,
+          })
+            .populate({
+              path: "option_id",
+              select: "name ar_name variationId",
+              populate: { path: "variationId", select: "name ar_name" },
+            })
+            .lean();
+
+          return {
+            ...variation,
+            options,
+          };
+        })
+      );
+
+      return {
+        ...stock.productId,
+        quantity: stock.quantity,
+        low_stock: stock.low_stock,
+        stockId: stock._id,
+        variations: variationsWithOptions,
+      };
+    })
+  );
 
   SuccessResponse(res, {
     warehouse,

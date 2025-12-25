@@ -7,6 +7,7 @@ const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
+const product_price_1 = require("../../models/schema/admin/product_price");
 // ==================== إضافة منتج لمخزن ====================
 const addProductToWarehouse = async (req, res) => {
     const { productId, warehouseId, quantity, low_stock } = req.body;
@@ -112,11 +113,40 @@ const getWarehouseProducts = async (req, res) => {
         populate: [{ path: "categoryId" }, { path: "brandId" }],
     })
         .lean();
-    const products = stocks.map((stock) => ({
-        ...stock.productId,
-        quantity: stock.quantity,
-        low_stock: stock.low_stock,
-        stockId: stock._id,
+    // ✅ إضافة الـ Variations لكل Product
+    const products = await Promise.all(stocks.map(async (stock) => {
+        // هات الـ Variations
+        const variations = await product_price_1.ProductPriceModel.find({
+            productId: stock.productId._id,
+        })
+            .populate({
+            path: "options",
+            populate: { path: "variationId", select: "name ar_name" },
+        })
+            .lean();
+        // هات الـ Options لكل Variation
+        const variationsWithOptions = await Promise.all(variations.map(async (variation) => {
+            const options = await product_price_1.ProductPriceOptionModel.find({
+                product_price_id: variation._id,
+            })
+                .populate({
+                path: "option_id",
+                select: "name ar_name variationId",
+                populate: { path: "variationId", select: "name ar_name" },
+            })
+                .lean();
+            return {
+                ...variation,
+                options,
+            };
+        }));
+        return {
+            ...stock.productId,
+            quantity: stock.quantity,
+            low_stock: stock.low_stock,
+            stockId: stock._id,
+            variations: variationsWithOptions,
+        };
     }));
     (0, response_1.SuccessResponse)(res, {
         warehouse,
