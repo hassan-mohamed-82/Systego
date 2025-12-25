@@ -3,7 +3,9 @@ import Joi from "joi";
 export const optionSchema = Joi.string(); // مجرد ObjectId
 
 export const createPurchaseItemOptionSchema = Joi.object({
+  product_price_id: Joi.string().optional(),
   option_id: Joi.string().required(),
+  quantity: Joi.number().optional()
 });
 
 export const createPurchaseItemSchema = Joi.object({
@@ -21,6 +23,7 @@ export const createPurchaseItemSchema = Joi.object({
   discount_share: Joi.number().optional(),
   unit_cost_after_discount: Joi.number().optional(),
   options: Joi.array().items(createPurchaseItemOptionSchema).optional(),
+  variations: Joi.array().items(createPurchaseItemOptionSchema).optional(),
 });
 
 export const createPurchaseDuePaymentSchema = Joi.object({
