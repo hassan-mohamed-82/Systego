@@ -7,6 +7,7 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { SuccessResponse } from "../../utils/response";
 import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import mongoose from "mongoose";
 
 // ==================== إضافة منتج لمخزن ====================
 export const addProductToWarehouse = async (req: Request, res: Response) => {
@@ -124,35 +125,42 @@ export const getWarehouseProducts = async (req: Request, res: Response) => {
     })
     .lean();
 
-  // ✅ إضافة الـ Variations لكل Product
   const products = await Promise.all(
     stocks.map(async (stock: any) => {
-      // هات الـ Variations
-      const variations = await ProductPriceModel.find({
-        productId: stock.productId._id,
-      })
-        .populate({
-          path: "options",
-          populate: { path: "variationId", select: "name ar_name" },
-        })
-        .lean();
+      // لو مفيش productId
+      if (!stock.productId) return null;
 
-      // هات الـ Options لكل Variation
-      const variationsWithOptions = await Promise.all(
-        variations.map(async (variation: any) => {
-          const options = await ProductPriceOptionModel.find({
-            product_price_id: variation._id,
-          })
-            .populate({
-              path: "option_id",
-              select: "name ar_name variationId",
-              populate: { path: "variationId", select: "name ar_name" },
+      // هات الـ Prices
+      const prices = await ProductPriceModel.find({
+        productId: stock.productId._id,
+      }).lean();
+
+      // هات الـ Options لكل Price
+      const pricesWithOptions = await Promise.all(
+        prices.map(async (price: any) => {
+          const priceOptions = await ProductPriceOptionModel.find({
+            product_price_id: price._id,
+          }).lean();
+
+          // هات تفاصيل كل Option
+          const optionsWithDetails = await Promise.all(
+            priceOptions.map(async (po: any) => {
+              if (!po.option_id) return null;
+
+              const option = await mongoose.model("Option").findById(po.option_id)
+                .populate("variationId", "name ar_name")
+                .lean();
+
+              return option;
             })
-            .lean();
+          );
+
+          // فلتر الـ null values
+          const validOptions = optionsWithDetails.filter((o) => o !== null);
 
           return {
-            ...variation,
-            options,
+            ...price,
+            options: validOptions,
           };
         })
       );
@@ -162,15 +170,18 @@ export const getWarehouseProducts = async (req: Request, res: Response) => {
         quantity: stock.quantity,
         low_stock: stock.low_stock,
         stockId: stock._id,
-        variations: variationsWithOptions,
+        prices: pricesWithOptions,
       };
     })
   );
 
+  // فلتر الـ null products
+  const validProducts = products.filter((p) => p !== null);
+
   SuccessResponse(res, {
     warehouse,
-    products,
-    totalProducts: products.length,
+    products: validProducts,
+    totalProducts: validProducts.length,
   });
 };
 

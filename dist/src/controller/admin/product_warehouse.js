@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getLowStockProducts = exports.getAllStocks = exports.transferStock = exports.getWarehouseProducts = exports.removeProductFromWarehouse = exports.updateProductStock = exports.addProductToWarehouse = void 0;
 const products_1 = require("../../models/schema/admin/products");
@@ -8,6 +11,7 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
 const product_price_1 = require("../../models/schema/admin/product_price");
+const mongoose_1 = __importDefault(require("mongoose"));
 // ==================== إضافة منتج لمخزن ====================
 const addProductToWarehouse = async (req, res) => {
     const { productId, warehouseId, quantity, low_stock } = req.body;
@@ -113,31 +117,33 @@ const getWarehouseProducts = async (req, res) => {
         populate: [{ path: "categoryId" }, { path: "brandId" }],
     })
         .lean();
-    // ✅ إضافة الـ Variations لكل Product
     const products = await Promise.all(stocks.map(async (stock) => {
-        // هات الـ Variations
-        const variations = await product_price_1.ProductPriceModel.find({
+        // لو مفيش productId
+        if (!stock.productId)
+            return null;
+        // هات الـ Prices
+        const prices = await product_price_1.ProductPriceModel.find({
             productId: stock.productId._id,
-        })
-            .populate({
-            path: "options",
-            populate: { path: "variationId", select: "name ar_name" },
-        })
-            .lean();
-        // هات الـ Options لكل Variation
-        const variationsWithOptions = await Promise.all(variations.map(async (variation) => {
-            const options = await product_price_1.ProductPriceOptionModel.find({
-                product_price_id: variation._id,
-            })
-                .populate({
-                path: "option_id",
-                select: "name ar_name variationId",
-                populate: { path: "variationId", select: "name ar_name" },
-            })
-                .lean();
+        }).lean();
+        // هات الـ Options لكل Price
+        const pricesWithOptions = await Promise.all(prices.map(async (price) => {
+            const priceOptions = await product_price_1.ProductPriceOptionModel.find({
+                product_price_id: price._id,
+            }).lean();
+            // هات تفاصيل كل Option
+            const optionsWithDetails = await Promise.all(priceOptions.map(async (po) => {
+                if (!po.option_id)
+                    return null;
+                const option = await mongoose_1.default.model("Option").findById(po.option_id)
+                    .populate("variationId", "name ar_name")
+                    .lean();
+                return option;
+            }));
+            // فلتر الـ null values
+            const validOptions = optionsWithDetails.filter((o) => o !== null);
             return {
-                ...variation,
-                options,
+                ...price,
+                options: validOptions,
             };
         }));
         return {
@@ -145,13 +151,15 @@ const getWarehouseProducts = async (req, res) => {
             quantity: stock.quantity,
             low_stock: stock.low_stock,
             stockId: stock._id,
-            variations: variationsWithOptions,
+            prices: pricesWithOptions,
         };
     }));
+    // فلتر الـ null products
+    const validProducts = products.filter((p) => p !== null);
     (0, response_1.SuccessResponse)(res, {
         warehouse,
-        products,
-        totalProducts: products.length,
+        products: validProducts,
+        totalProducts: validProducts.length,
     });
 };
 exports.getWarehouseProducts = getWarehouseProducts;

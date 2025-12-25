@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { CustomerGroupModel } from '../../../models/schema/admin/POS/customer';
+import { CustomerGroupModel, CustomerModel } from '../../../models/schema/admin/POS/customer';
 import { BadRequest } from '../../../Errors/BadRequest';
 import { SuccessResponse } from '../../../utils/response';
 import { NotFound } from '../../../Errors';
@@ -34,6 +34,57 @@ export const createCustomerGroup = async (req: Request, res: Response) => {
     
 };
 
+export const createCustomer =async (req: Request, res: Response) => {
+    const{
+        name,
+        email,
+        phone_number,
+        address,
+        country,
+        city,
+        customer_group_id
+       }=req.body;
+
+       if(!name || !phone_number){
+        throw new BadRequest("Name and phone number are required");
+       }
+
+       const existingCustomer = await CustomerModel.findOne({phone_number});
+       if(existingCustomer){
+        throw new BadRequest("Customer with this phone number already exists");
+       }
+
+       const customer = await CustomerModel.create({
+        name,
+        email,
+        phone_number,
+        address,
+        country,
+        city,
+        customer_group_id
+       });
+       SuccessResponse(res, {
+        message: "Customer created successfully",
+        customer
+       });
+
+}
+
+export const getCustomers = async (req: Request, res: Response) => {
+    const customers = await CustomerModel.find();
+    SuccessResponse(res, {
+        message: "Customers fetched successfully",
+        customers
+    });
+}
 
 
+
+export const getallgroups = async (req: Request, res: Response) => {
+    const groups = await CustomerGroupModel.find();
+    SuccessResponse(res, {
+        message: "Customer groups fetched successfully",
+        groups
+    });
+}
 

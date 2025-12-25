@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createCustomerGroup = void 0;
+exports.getallgroups = exports.getCustomers = exports.createCustomer = exports.createCustomerGroup = void 0;
 const customer_1 = require("../../../models/schema/admin/POS/customer");
 const BadRequest_1 = require("../../../Errors/BadRequest");
 const response_1 = require("../../../utils/response");
@@ -28,3 +28,43 @@ const createCustomerGroup = async (req, res) => {
     });
 };
 exports.createCustomerGroup = createCustomerGroup;
+const createCustomer = async (req, res) => {
+    const { name, email, phone_number, address, country, city, customer_group_id } = req.body;
+    if (!name || !phone_number) {
+        throw new BadRequest_1.BadRequest("Name and phone number are required");
+    }
+    const existingCustomer = await customer_1.CustomerModel.findOne({ phone_number });
+    if (existingCustomer) {
+        throw new BadRequest_1.BadRequest("Customer with this phone number already exists");
+    }
+    const customer = await customer_1.CustomerModel.create({
+        name,
+        email,
+        phone_number,
+        address,
+        country,
+        city,
+        customer_group_id
+    });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer created successfully",
+        customer
+    });
+};
+exports.createCustomer = createCustomer;
+const getCustomers = async (req, res) => {
+    const customers = await customer_1.CustomerModel.find();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customers fetched successfully",
+        customers
+    });
+};
+exports.getCustomers = getCustomers;
+const getallgroups = async (req, res) => {
+    const groups = await customer_1.CustomerGroupModel.find();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer groups fetched successfully",
+        groups
+    });
+};
+exports.getallgroups = getallgroups;

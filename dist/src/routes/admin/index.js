@@ -100,7 +100,7 @@ exports.route.use("/transfer", Transfer_1.default);
 exports.route.use("/product_warehouse", product_warehouse_1.default);
 exports.route.use("/selectreason", adjustmentsreason_1.default);
 exports.route.use("/pos", POSRoutes_1.default);
-exports.route.use("/customer-group", customerGroupRoutes_1.default);
+exports.route.use("/pos_customer", customerGroupRoutes_1.default);
 exports.route.use("/customer", customerRoutes_1.default);
 exports.route.use("/gift-card", giftCardRoutes_1.default);
 exports.route.use("/pos-home", POSHomeRoutes_1.default);
