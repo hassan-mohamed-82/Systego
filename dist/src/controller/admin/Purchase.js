@@ -83,6 +83,12 @@ const createPurchase = async (req, res) => {
                 throw new BadRequest_1.BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
             }
         }
+        // ✅ حساب الكمية: لو في variations نجمع كمياتهم، لو مفيش ناخد الكمية العادية
+        let totalQuantity = p.quantity ?? 0;
+        const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
+        if (hasVariations) {
+            totalQuantity = p.variations.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
+        }
         const existingPurchaseItem = await purchase_item_1.PurchaseItemModel.findOne({ warehouse_id, product_id });
         if (!existingPurchaseItem && warehouse) {
             warehouse.number_of_products += 1;
@@ -95,7 +101,7 @@ const createPurchase = async (req, res) => {
             category_id,
             product_id,
             patch_number: p.patch_number,
-            quantity: p.quantity,
+            quantity: totalQuantity,
             unit_cost: p.unit_cost,
             subtotal: p.subtotal,
             discount_share: p.discount_share || 0,
@@ -104,44 +110,57 @@ const createPurchase = async (req, res) => {
             item_type: "product",
             date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
         });
-        // Update product quantity
-        product.quantity += p.quantity ?? 0;
-        await product.save();
+        // ✅ لو في Variations
+        if (hasVariations) {
+            for (const v of p.variations) {
+                // التحقق من وجود الـ ProductPrice
+                const productPrice = await product_price_1.ProductPriceModel.findById(v.product_price_id);
+                if (!productPrice) {
+                    throw new NotFound_1.NotFound(`ProductPrice not found: ${v.product_price_id}`);
+                }
+                // إنشاء PurchaseItemOption
+                await purchase_item_option_1.PurchaseItemOptionModel.create({
+                    purchase_item_id: purchaseItem._id,
+                    product_price_id: v.product_price_id,
+                    option_id: v.option_id,
+                    quantity: v.quantity || 0,
+                });
+                // ✅ تحديث كمية الـ ProductPrice (الـ Variation)
+                await product_price_1.ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
+                    $inc: { quantity: v.quantity ?? 0 },
+                });
+            }
+        }
+        // ✅ تحديث كمية الـ Product الرئيسي
+        await products_1.ProductModel.findByIdAndUpdate(product._id, {
+            $inc: { quantity: totalQuantity },
+        });
         // Update category
         const category = await category_1.CategoryModel.findById(product.categoryId);
         if (category) {
-            category.product_quantity += p.quantity ?? 0;
+            category.product_quantity += totalQuantity;
             await category.save();
         }
         // Update warehouse
         if (warehouse) {
-            warehouse.stock_Quantity += p.quantity ?? 0;
+            warehouse.stock_Quantity += totalQuantity;
             await warehouse.save();
         }
         // Update product-warehouse
         let productWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
             productId: product_id,
-            WarehouseId: warehouse_id,
+            warehouseId: warehouse_id,
         });
         if (productWarehouse) {
-            productWarehouse.quantity += p.quantity ?? 0;
+            productWarehouse.quantity += totalQuantity;
             await productWarehouse.save();
         }
         else {
             await Product_Warehouse_1.Product_WarehouseModel.create({
                 productId: product_id,
-                WarehouseId: warehouse_id,
-                quantity: p.quantity ?? 0,
+                warehouseId: warehouse_id,
+                quantity: totalQuantity,
             });
-        }
-        // Create options
-        if (p.options && Array.isArray(p.options)) {
-            for (const opt of p.options) {
-                await purchase_item_option_1.PurchaseItemOptionModel.create({
-                    purchase_item_id: purchaseItem._id,
-                    option_id: opt.id || opt.option_id,
-                });
-            }
         }
     }
     // ========== Process Materials ==========
@@ -197,7 +216,20 @@ const createPurchase = async (req, res) => {
         }
     }
     const fullPurchase = await Purchase_1.PurchaseModel.findById(purchase._id)
-        .populate("items")
+        .populate({
+        path: "items",
+        populate: [
+            { path: "product_id" },
+            { path: "category_id" },
+            {
+                path: "options",
+                populate: [
+                    { path: "product_price_id" },
+                    { path: "option_id" },
+                ],
+            },
+        ],
+    })
         .populate("warehouse_id")
         .populate("supplier_id")
         .populate("tax_id");
@@ -291,8 +323,7 @@ const updatePurchase = async (req, res) => {
         if (itemData.item_type === "product" && itemData.product_id) {
             const product = await products_1.ProductModel.findById(itemData.product_id);
             if (product) {
-                product.quantity -= itemData.quantity;
-                await product.save();
+                await products_1.ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: -itemData.quantity } });
             }
             const category = await category_1.CategoryModel.findById(itemData.category_id);
             if (category) {
@@ -398,8 +429,7 @@ const updatePurchase = async (req, res) => {
             item_type: "product",
             date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
         });
-        product.quantity += p.quantity ?? 0;
-        await product.save();
+        await products_1.ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: p.quantity ?? 0 } });
         const category = await category_1.CategoryModel.findById(product.categoryId);
         if (category) {
             category.product_quantity += p.quantity ?? 0;
@@ -411,7 +441,7 @@ const updatePurchase = async (req, res) => {
         }
         let productWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
             productId: product_id,
-            WarehouseId: existingPurchase.warehouse_id,
+            warehouseId: existingPurchase.warehouse_id,
         });
         if (productWarehouse) {
             productWarehouse.quantity += p.quantity ?? 0;
@@ -420,7 +450,7 @@ const updatePurchase = async (req, res) => {
         else {
             await Product_Warehouse_1.Product_WarehouseModel.create({
                 productId: product_id,
-                WarehouseId: existingPurchase.warehouse_id,
+                warehouseId: existingPurchase.warehouse_id,
                 quantity: p.quantity ?? 0,
             });
         }

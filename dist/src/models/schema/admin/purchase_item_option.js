@@ -1,4 +1,5 @@
 "use strict";
+// src/models/PurchaseItemOption.ts
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -38,6 +39,8 @@ const mongoose_1 = __importStar(require("mongoose"));
 const PurchaseItemOptionSchema = new mongoose_1.Schema({
     date: { type: Date, required: true, default: Date.now },
     purchase_item_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "PurchaseItem" },
+    product_price_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "ProductPrice" }, // ✅ إضافة
     option_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Option" },
+    quantity: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.PurchaseItemOptionModel = mongoose_1.default.model("PurchaseItemOption", PurchaseItemOptionSchema);

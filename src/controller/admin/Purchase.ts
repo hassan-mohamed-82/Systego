@@ -111,6 +111,14 @@ export const createPurchase = async (req: Request, res: Response) => {
       }
     }
 
+    // ✅ حساب الكمية: لو في variations نجمع كمياتهم، لو مفيش ناخد الكمية العادية
+    let totalQuantity = p.quantity ?? 0;
+    const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
+
+    if (hasVariations) {
+      totalQuantity = p.variations.reduce((sum: number, v: any) => sum + (v.quantity ?? 0), 0);
+    }
+
     const existingPurchaseItem = await PurchaseItemModel.findOne({ warehouse_id, product_id });
     if (!existingPurchaseItem && warehouse) {
       (warehouse as any).number_of_products += 1;
@@ -124,7 +132,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       category_id,
       product_id,
       patch_number: p.patch_number,
-      quantity: p.quantity,
+      quantity: totalQuantity,
       unit_cost: p.unit_cost,
       subtotal: p.subtotal,
       discount_share: p.discount_share || 0,
@@ -134,20 +142,45 @@ export const createPurchase = async (req: Request, res: Response) => {
       date_of_expiery: (product as any).exp_ability ? p.date_of_expiery : undefined,
     });
 
-    // Update product quantity
-    // Update product quantity
-    await ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: p.quantity ?? 0 } });
+    // ✅ لو في Variations
+    if (hasVariations) {
+      for (const v of p.variations) {
+        // التحقق من وجود الـ ProductPrice
+        const productPrice = await ProductPriceModel.findById(v.product_price_id);
+        if (!productPrice) {
+          throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
+        }
+
+        // إنشاء PurchaseItemOption
+        await PurchaseItemOptionModel.create({
+          purchase_item_id: purchaseItem._id,
+          product_price_id: v.product_price_id,
+          option_id: v.option_id,
+          quantity: v.quantity || 0,
+        });
+
+        // ✅ تحديث كمية الـ ProductPrice (الـ Variation)
+        await ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
+          $inc: { quantity: v.quantity ?? 0 },
+        });
+      }
+    }
+
+    // ✅ تحديث كمية الـ Product الرئيسي
+    await ProductModel.findByIdAndUpdate(product._id, {
+      $inc: { quantity: totalQuantity },
+    });
 
     // Update category
     const category = await CategoryModel.findById((product as any).categoryId);
     if (category) {
-      (category as any).product_quantity += p.quantity ?? 0;
+      (category as any).product_quantity += totalQuantity;
       await category.save();
     }
 
     // Update warehouse
     if (warehouse) {
-      (warehouse as any).stock_Quantity += p.quantity ?? 0;
+      (warehouse as any).stock_Quantity += totalQuantity;
       await warehouse.save();
     }
 
@@ -158,24 +191,14 @@ export const createPurchase = async (req: Request, res: Response) => {
     });
 
     if (productWarehouse) {
-      (productWarehouse as any).quantity += p.quantity ?? 0;
+      (productWarehouse as any).quantity += totalQuantity;
       await productWarehouse.save();
     } else {
       await Product_WarehouseModel.create({
         productId: product_id,
         warehouseId: warehouse_id,
-        quantity: p.quantity ?? 0,
+        quantity: totalQuantity,
       });
-    }
-
-    // Create options
-    if (p.options && Array.isArray(p.options)) {
-      for (const opt of p.options) {
-        await PurchaseItemOptionModel.create({
-          purchase_item_id: purchaseItem._id,
-          option_id: opt.id || opt.option_id,
-        });
-      }
     }
   }
 
@@ -238,13 +261,27 @@ export const createPurchase = async (req: Request, res: Response) => {
   }
 
   const fullPurchase = await PurchaseModel.findById(purchase._id)
-    .populate("items")
+    .populate({
+      path: "items",
+      populate: [
+        { path: "product_id" },
+        { path: "category_id" },
+        {
+          path: "options",
+          populate: [
+            { path: "product_price_id" },
+            { path: "option_id" },
+          ],
+        },
+      ],
+    })
     .populate("warehouse_id")
     .populate("supplier_id")
     .populate("tax_id");
 
   SuccessResponse(res, { message: "Purchase created successfully", purchase: fullPurchase });
 };
+
 export const getAllPurchases = async (req: Request, res: Response) => {
   const { page = 1, limit = 10, payment_status, warehouse_id, supplier_id } = req.query;
 

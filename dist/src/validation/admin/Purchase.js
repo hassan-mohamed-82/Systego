@@ -19,6 +19,10 @@ exports.createPurchaseItemSchema = joi_1.default.object({
     discount: joi_1.default.number().required(),
     tax: joi_1.default.number().required(),
     subtotal: joi_1.default.number().required(),
+    patch_number: joi_1.default.string().optional(),
+    date_of_expiery: joi_1.default.date().optional(),
+    discount_share: joi_1.default.number().optional(),
+    unit_cost_after_discount: joi_1.default.number().optional(),
     options: joi_1.default.array().items(exports.createPurchaseItemOptionSchema).optional(),
 });
 exports.createPurchaseDuePaymentSchema = joi_1.default.object({
@@ -33,17 +37,20 @@ exports.createPurchaseSchema = joi_1.default.object({
     date: joi_1.default.string().required(),
     warehouse_id: joi_1.default.string().required(),
     supplier_id: joi_1.default.string().required(),
-    receipt_img: joi_1.default.string().required(),
-    currency_id: joi_1.default.string().required(),
+    receipt_img: joi_1.default.string().optional(),
+    // currency_id: Joi.string().optional(),
     tax_id: joi_1.default.string().optional(),
-    payment_status: joi_1.default.string().valid("pending", "partial", "paid").required(),
+    payment_status: joi_1.default.string().valid("pending", "partial", "full", "later").required(),
     exchange_rate: joi_1.default.number().required(),
-    subtotal: joi_1.default.number().required(),
-    shiping_cost: joi_1.default.number().required(),
+    total: joi_1.default.number().required(),
+    shipping_cost: joi_1.default.number().required(),
+    grand_total: joi_1.default.number().required(),
     discount: joi_1.default.number().required(),
-    purchase_items: joi_1.default.array().items(exports.createPurchaseItemSchema).required(),
-    financials: joi_1.default.array().items(exports.createFinancialSchema).required(),
-    purchase_due_payment: joi_1.default.array().items(exports.createPurchaseDuePaymentSchema).required(),
+    note: joi_1.default.string().optional(),
+    purchase_items: joi_1.default.array().items(exports.createPurchaseItemSchema).optional(),
+    purchase_materials: joi_1.default.array().optional(), // Adding this to allow materials
+    financials: joi_1.default.array().items(exports.createFinancialSchema).optional(),
+    purchase_due_payment: joi_1.default.array().items(exports.createPurchaseDuePaymentSchema).optional(),
 });
 // ___________________ Update _________________________
 exports.updatePurchaseItemOptionSchema = joi_1.default.object({
