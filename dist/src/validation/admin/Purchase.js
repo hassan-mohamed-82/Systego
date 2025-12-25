@@ -3,11 +3,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePurchaseSchema = exports.updatePurchaseItemSchema = exports.updatePurchaseItemOptionSchema = exports.createPurchaseSchema = exports.createFinancialSchema = exports.createPurchaseDuePaymentSchema = exports.createPurchaseItemSchema = exports.createPurchaseItemOptionSchema = exports.optionSchema = void 0;
+exports.updatePurchaseSchema = exports.updatePurchaseItemSchema = exports.updatePurchaseItemOptionSchema = exports.createPurchaseSchema = exports.createFinancialSchema = exports.createPurchaseDuePaymentSchema = exports.createPurchaseItemSchema = exports.createPurchaseItemVariationSchema = exports.createPurchaseItemOptionSchema = exports.optionSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.optionSchema = joi_1.default.string(); // مجرد ObjectId
 exports.createPurchaseItemOptionSchema = joi_1.default.object({
+    product_price_id: joi_1.default.string().optional(),
     option_id: joi_1.default.string().required(),
+    quantity: joi_1.default.number().optional()
+});
+exports.createPurchaseItemVariationSchema = joi_1.default.object({
+    product_price_id: joi_1.default.string().optional(),
+    quantity: joi_1.default.number().required(),
+    options: joi_1.default.array().items(joi_1.default.object({
+        option_id: joi_1.default.string().required()
+    })).optional(),
 });
 exports.createPurchaseItemSchema = joi_1.default.object({
     date: joi_1.default.date().required(),
@@ -24,6 +33,7 @@ exports.createPurchaseItemSchema = joi_1.default.object({
     discount_share: joi_1.default.number().optional(),
     unit_cost_after_discount: joi_1.default.number().optional(),
     options: joi_1.default.array().items(exports.createPurchaseItemOptionSchema).optional(),
+    variations: joi_1.default.array().items(exports.createPurchaseItemVariationSchema).optional(),
 });
 exports.createPurchaseDuePaymentSchema = joi_1.default.object({
     date: joi_1.default.date().required(),

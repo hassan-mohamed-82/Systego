@@ -76,8 +76,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     receipt_img: { type: String },
     payment_status: {
       type: String,
-      enum: ["pending", "partial", "full", "later"],
-      default: "pending",
+      enum: ["partial", "full", "later"],
     },
     exchange_rate: { type: Number, required: true, default: 1 },
     total: { type: Number, required: true },
