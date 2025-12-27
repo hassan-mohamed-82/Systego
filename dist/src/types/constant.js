@@ -49,6 +49,7 @@ exports.MODULES = [
     "recipe",
     "adjustment_reason",
     "Category_Material",
+    "purchase_return",
     "Units"
 ];
 // أسماء بس، من غير ids

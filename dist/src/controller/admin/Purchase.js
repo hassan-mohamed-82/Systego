@@ -20,7 +20,7 @@ const NotFound_1 = require("../../Errors/NotFound");
 const handleImages_1 = require("../../utils/handleImages");
 const Materials_1 = require("../../models/schema/admin/Materials");
 const createPurchase = async (req, res) => {
-    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials, purchase_due_payment, note, } = req.body;
+    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials = [], purchase_due_payment = [], note, } = req.body;
     // ========== Validations ==========
     const existingWarehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     if (!existingWarehouse)
@@ -32,6 +32,41 @@ const createPurchase = async (req, res) => {
         const existingTax = await Taxes_1.TaxesModel.findById(tax_id);
         if (!existingTax)
             throw new BadRequest_1.BadRequest("Tax not found");
+    }
+    // ========== Payment Validation ==========
+    const totalPaidNow = financials.reduce((sum, f) => sum + (f.payment_amount || 0), 0);
+    const totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const totalPayments = totalPaidNow + totalDuePayments;
+    // التحقق من حالة الدفع
+    if (payment_status === "full") {
+        // لازم يدفع كل المبلغ دلوقتي
+        if (totalPaidNow !== grand_total) {
+            throw new BadRequest_1.BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
+        }
+        if (purchase_due_payment.length > 0) {
+            throw new BadRequest_1.BadRequest("Full payment should not have due payments");
+        }
+    }
+    else if (payment_status === "later") {
+        // مفيش دفع دلوقتي، كله لاحقاً
+        if (totalPaidNow > 0) {
+            throw new BadRequest_1.BadRequest("Later payment should not have immediate payments");
+        }
+        if (totalDuePayments !== grand_total) {
+            throw new BadRequest_1.BadRequest(`Due payments must equal grand_total. Expected: ${grand_total}, Received: ${totalDuePayments}`);
+        }
+    }
+    else if (payment_status === "partial") {
+        // دفع جزء دلوقتي + الباقي لاحقاً
+        if (totalPaidNow <= 0) {
+            throw new BadRequest_1.BadRequest("Partial payment requires immediate payment");
+        }
+        if (totalPaidNow >= grand_total) {
+            throw new BadRequest_1.BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
+        }
+        if (totalPayments !== grand_total) {
+            throw new BadRequest_1.BadRequest(`Total payments must equal grand_total. Expected: ${grand_total}, Received: ${totalPayments}`);
+        }
     }
     // ========== Save Image ==========
     let imageUrl = receipt_img;
@@ -83,7 +118,7 @@ const createPurchase = async (req, res) => {
                 throw new BadRequest_1.BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
             }
         }
-        // ✅ حساب الكمية: لو في variations نجمع كمياتهم، لو مفيش ناخد الكمية العادية
+        // حساب الكمية
         let totalQuantity = p.quantity ?? 0;
         const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
         if (hasVariations) {
@@ -110,51 +145,31 @@ const createPurchase = async (req, res) => {
             item_type: "product",
             date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
         });
-        // ✅ لو في Variations
-        // ✅ لو في Variations
+        // لو في Variations
         if (hasVariations) {
             for (const v of p.variations) {
-                let productPrice;
-                // إذا لم يتم تمرير الخيارات، نستخدم خيار افتراضي للتجربة (يجب تغييره بناءً على منطق العمل الحقيقي)
-                // هذا مجرد Fallback لضمان عدم توقف الكود إذا كانت options فارغة في الطلب
-                const optionsList = v.options || [{ option_id: "68ed6379f8e0871bd1f061e7" }];
-                // محاولة العثور على ProductPrice موجود لهذا المنتج بنفس الخيارات
-                // هذه الخطوة معقدة قليلاً لأن ProductPrice لا يحمل الخيارات مباشرة بل عبر جدول ProductPriceOption
-                // للتبسيط هنا سنبحث عن أي ProductPrice للمنتج، وفي الواقع يجب فلترته حسب الخيارات
-                const potentialPrices = await product_price_1.ProductPriceModel.find({ productId: product_id });
-                for (const price of potentialPrices) {
-                    // هنا يمكن إضافة منطق للتحقق من أن هذا السعر يطابق الخيارات المطلوبة
-                    // سنفترض مؤقتاً أنه إذا وجدنا سعرًا، سنستخدمه (أو يمكن تحسين البحث لاحقاً)
-                    productPrice = price;
-                    break;
+                // التحقق من وجود product_price_id
+                if (!v.product_price_id) {
+                    throw new BadRequest_1.BadRequest("product_price_id is required for variations");
                 }
-                if (productPrice) {
-                    // تحديث الكمية إذا وجدنا السعر
-                    await product_price_1.ProductPriceModel.findByIdAndUpdate(productPrice._id, { $inc: { quantity: v.quantity ?? 0 } });
+                const productPrice = await product_price_1.ProductPriceModel.findById(v.product_price_id);
+                if (!productPrice) {
+                    throw new NotFound_1.NotFound(`ProductPrice not found: ${v.product_price_id}`);
                 }
-                else {
-                    // إنشاء ProductPrice جديد
-                    const randomCode = `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-                    productPrice = await product_price_1.ProductPriceModel.create({
-                        productId: product_id,
-                        price: p.unit_cost, // افتراض السعر نفس سعر الشراء أو سعر محدد
-                        code: randomCode,
-                        quantity: v.quantity ?? 0,
-                        cost: p.unit_cost
-                    });
-                }
-                // إنشاء PurchaseItemOption وربطها بالسعر (ProductPrice) والخيار (Option)
-                for (const opt of optionsList) {
-                    await purchase_item_option_1.PurchaseItemOptionModel.create({
-                        purchase_item_id: purchaseItem._id,
-                        product_price_id: productPrice._id,
-                        option_id: opt.option_id,
-                        quantity: v.quantity || 0,
-                    });
-                }
+                // تحديث كمية الـ ProductPrice
+                await product_price_1.ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
+                    $inc: { quantity: v.quantity ?? 0 },
+                });
+                // إنشاء PurchaseItemOption
+                await purchase_item_option_1.PurchaseItemOptionModel.create({
+                    purchase_item_id: purchaseItem._id,
+                    product_price_id: v.product_price_id,
+                    option_id: v.option_id,
+                    quantity: v.quantity || 0,
+                });
             }
         }
-        // ✅ تحديث كمية الـ Product الرئيسي
+        // تحديث كمية الـ Product الرئيسي
         await products_1.ProductModel.findByIdAndUpdate(product._id, {
             $inc: { quantity: totalQuantity },
         });
@@ -213,8 +228,8 @@ const createPurchase = async (req, res) => {
             await warehouse.save();
         }
     }
-    // ========== Create Invoices ==========
-    if (financials && Array.isArray(financials)) {
+    // ========== Create Invoices (الدفع الفوري) ==========
+    if (financials && Array.isArray(financials) && financials.length > 0) {
         for (const ele of financials) {
             await PurchaseInvoice_1.PurchaseInvoiceModel.create({
                 financial_id: ele.financial_id,
@@ -228,8 +243,8 @@ const createPurchase = async (req, res) => {
             }
         }
     }
-    // ========== Create Due Payments ==========
-    if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
+    // ========== Create Due Payments (الدفع اللاحق) ==========
+    if (purchase_due_payment && Array.isArray(purchase_due_payment) && purchase_due_payment.length > 0) {
         for (const due_payment of purchase_due_payment) {
             await purchase_due_payment_1.PurchaseDuePaymentModel.create({
                 purchase_id: purchase._id,
@@ -238,11 +253,13 @@ const createPurchase = async (req, res) => {
             });
         }
     }
+    // ========== Get Full Purchase ==========
     const fullPurchase = await Purchase_1.PurchaseModel.findById(purchase._id)
         .populate({
         path: "items",
         populate: [
             { path: "product_id" },
+            { path: "material_id" },
             { path: "category_id" },
             {
                 path: "options",
@@ -255,37 +272,63 @@ const createPurchase = async (req, res) => {
     })
         .populate("warehouse_id")
         .populate("supplier_id")
-        .populate("tax_id");
+        .populate("tax_id")
+        .populate("invoices")
+        .populate("duePayments");
     (0, response_1.SuccessResponse)(res, { message: "Purchase created successfully", purchase: fullPurchase });
 };
 exports.createPurchase = createPurchase;
 const getAllPurchases = async (req, res) => {
-    const { page = 1, limit = 10, payment_status, warehouse_id, supplier_id } = req.query;
+    const { page = 1, limit = 10, warehouse_id, supplier_id } = req.query;
     const filter = {};
-    if (payment_status)
-        filter.payment_status = payment_status;
     if (warehouse_id)
         filter.warehouse_id = warehouse_id;
     if (supplier_id)
         filter.supplier_id = supplier_id;
-    const purchases = await Purchase_1.PurchaseModel.find(filter)
+    // جلب كل الـ Purchases
+    const allPurchases = await Purchase_1.PurchaseModel.find(filter)
         .populate("warehouse_id")
         .populate("supplier_id")
         .populate("tax_id")
-        .populate("items")
+        .populate({
+        path: "items",
+        populate: [
+            { path: "product_id" },
+            { path: "material_id" },
+            { path: "category_id" },
+            {
+                path: "options",
+                populate: [
+                    { path: "product_price_id" },
+                    { path: "option_id" },
+                ],
+            },
+        ],
+    })
         .populate("invoices")
         .populate("duePayments")
-        .sort({ createdAt: -1 })
-        .skip((Number(page) - 1) * Number(limit))
-        .limit(Number(limit));
-    const total = await Purchase_1.PurchaseModel.countDocuments(filter);
+        .sort({ createdAt: -1 });
+    // تقسيم حسب الـ payment_status
+    const fullPayments = allPurchases.filter((p) => p.payment_status === "full");
+    const laterPayments = allPurchases.filter((p) => p.payment_status === "later");
+    const partialPayments = allPurchases.filter((p) => p.payment_status === "partial");
+    // حساب الإحصائيات
+    const stats = {
+        total_purchases: allPurchases.length,
+        full_count: fullPayments.length,
+        later_count: laterPayments.length,
+        partial_count: partialPayments.length,
+        total_amount: allPurchases.reduce((sum, p) => sum + (p.grand_total || 0), 0),
+        full_amount: fullPayments.reduce((sum, p) => sum + (p.grand_total || 0), 0),
+        later_amount: laterPayments.reduce((sum, p) => sum + (p.grand_total || 0), 0),
+        partial_amount: partialPayments.reduce((sum, p) => sum + (p.grand_total || 0), 0),
+    };
     (0, response_1.SuccessResponse)(res, {
-        purchases,
-        pagination: {
-            current_page: Number(page),
-            total_pages: Math.ceil(total / Number(limit)),
-            total_items: total,
-            per_page: Number(limit),
+        stats,
+        purchases: {
+            full: fullPayments,
+            later: laterPayments,
+            partial: partialPayments,
         },
     });
 };
@@ -314,7 +357,7 @@ const getPurchaseById = async (req, res) => {
 exports.getPurchaseById = getPurchaseById;
 const updatePurchase = async (req, res) => {
     const { id } = req.params;
-    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, note, purchase_items = [], purchase_materials = [], financials, purchase_due_payment, } = req.body;
+    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, note, purchase_items = [], purchase_materials = [], financials = [], purchase_due_payment = [], } = req.body;
     const existingPurchase = await Purchase_1.PurchaseModel.findById(id);
     if (!existingPurchase)
         throw new NotFound_1.NotFound("Purchase not found");
@@ -334,6 +377,39 @@ const updatePurchase = async (req, res) => {
         if (!existingTax)
             throw new BadRequest_1.BadRequest("Tax not found");
     }
+    // ========== Payment Validation ==========
+    const finalGrandTotal = grand_total ?? existingPurchase.grand_total;
+    const finalPaymentStatus = payment_status ?? existingPurchase.payment_status;
+    const totalPaidNow = financials.reduce((sum, f) => sum + (f.payment_amount || 0), 0);
+    const totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const totalPayments = totalPaidNow + totalDuePayments;
+    if (finalPaymentStatus === "full") {
+        if (totalPaidNow !== finalGrandTotal) {
+            throw new BadRequest_1.BadRequest(`Full payment required. Expected: ${finalGrandTotal}, Received: ${totalPaidNow}`);
+        }
+        if (purchase_due_payment.length > 0) {
+            throw new BadRequest_1.BadRequest("Full payment should not have due payments");
+        }
+    }
+    else if (finalPaymentStatus === "later") {
+        if (totalPaidNow > 0) {
+            throw new BadRequest_1.BadRequest("Later payment should not have immediate payments");
+        }
+        if (totalDuePayments !== finalGrandTotal) {
+            throw new BadRequest_1.BadRequest(`Due payments must equal grand_total. Expected: ${finalGrandTotal}, Received: ${totalDuePayments}`);
+        }
+    }
+    else if (finalPaymentStatus === "partial") {
+        if (totalPaidNow <= 0) {
+            throw new BadRequest_1.BadRequest("Partial payment requires immediate payment");
+        }
+        if (totalPaidNow >= finalGrandTotal) {
+            throw new BadRequest_1.BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
+        }
+        if (totalPayments !== finalGrandTotal) {
+            throw new BadRequest_1.BadRequest(`Total payments must equal grand_total. Expected: ${finalGrandTotal}, Received: ${totalPayments}`);
+        }
+    }
     // ========== Save Image ==========
     let imageUrl = receipt_img;
     if (receipt_img && receipt_img.startsWith("data:")) {
@@ -344,10 +420,9 @@ const updatePurchase = async (req, res) => {
     for (const item of oldItems) {
         const itemData = item;
         if (itemData.item_type === "product" && itemData.product_id) {
-            const product = await products_1.ProductModel.findById(itemData.product_id);
-            if (product) {
-                await products_1.ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: -itemData.quantity } });
-            }
+            await products_1.ProductModel.findByIdAndUpdate(itemData.product_id, {
+                $inc: { quantity: -itemData.quantity },
+            });
             const category = await category_1.CategoryModel.findById(itemData.category_id);
             if (category) {
                 category.product_quantity -= itemData.quantity;
@@ -355,11 +430,20 @@ const updatePurchase = async (req, res) => {
             }
             const productWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
                 productId: itemData.product_id,
-                WarehouseId: itemData.warehouse_id,
+                warehouseId: itemData.warehouse_id,
             });
             if (productWarehouse) {
                 productWarehouse.quantity -= itemData.quantity;
                 await productWarehouse.save();
+            }
+            // ✅ Reverse ProductPrice quantity if variations exist
+            const oldOptions = await purchase_item_option_1.PurchaseItemOptionModel.find({ purchase_item_id: itemData._id });
+            for (const opt of oldOptions) {
+                if (opt.product_price_id) {
+                    await product_price_1.ProductPriceModel.findByIdAndUpdate(opt.product_price_id, {
+                        $inc: { quantity: -opt.quantity },
+                    });
+                }
             }
         }
         if (itemData.item_type === "material" && itemData.material_id) {
@@ -397,12 +481,12 @@ const updatePurchase = async (req, res) => {
     existingPurchase.warehouse_id = warehouse_id ?? existingPurchase.warehouse_id;
     existingPurchase.supplier_id = supplier_id ?? existingPurchase.supplier_id;
     existingPurchase.receipt_img = imageUrl ?? existingPurchase.receipt_img;
-    existingPurchase.payment_status = payment_status ?? existingPurchase.payment_status;
+    existingPurchase.payment_status = finalPaymentStatus;
     existingPurchase.exchange_rate = exchange_rate ?? existingPurchase.exchange_rate;
     existingPurchase.total = total ?? existingPurchase.total;
     existingPurchase.discount = discount ?? existingPurchase.discount;
     existingPurchase.shipping_cost = shipping_cost ?? existingPurchase.shipping_cost;
-    existingPurchase.grand_total = grand_total ?? existingPurchase.grand_total;
+    existingPurchase.grand_total = finalGrandTotal;
     if (tax_id !== undefined)
         existingPurchase.tax_id = tax_id;
     if (note !== undefined)
@@ -436,6 +520,12 @@ const updatePurchase = async (req, res) => {
                 throw new BadRequest_1.BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
             }
         }
+        // حساب الكمية
+        let totalQuantity = p.quantity ?? 0;
+        const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
+        if (hasVariations) {
+            totalQuantity = p.variations.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
+        }
         const purchaseItem = await purchase_item_1.PurchaseItemModel.create({
             date: p.date || existingPurchase.date,
             warehouse_id: existingPurchase.warehouse_id,
@@ -443,7 +533,7 @@ const updatePurchase = async (req, res) => {
             category_id,
             product_id,
             patch_number: p.patch_number,
-            quantity: p.quantity,
+            quantity: totalQuantity,
             unit_cost: p.unit_cost,
             subtotal: p.subtotal,
             discount_share: p.discount_share || 0,
@@ -452,14 +542,37 @@ const updatePurchase = async (req, res) => {
             item_type: "product",
             date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
         });
-        await products_1.ProductModel.findByIdAndUpdate(product._id, { $inc: { quantity: p.quantity ?? 0 } });
+        // لو في Variations
+        if (hasVariations) {
+            for (const v of p.variations) {
+                if (!v.product_price_id) {
+                    throw new BadRequest_1.BadRequest("product_price_id is required for variations");
+                }
+                const productPrice = await product_price_1.ProductPriceModel.findById(v.product_price_id);
+                if (!productPrice) {
+                    throw new NotFound_1.NotFound(`ProductPrice not found: ${v.product_price_id}`);
+                }
+                await product_price_1.ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
+                    $inc: { quantity: v.quantity ?? 0 },
+                });
+                await purchase_item_option_1.PurchaseItemOptionModel.create({
+                    purchase_item_id: purchaseItem._id,
+                    product_price_id: v.product_price_id,
+                    option_id: v.option_id,
+                    quantity: v.quantity || 0,
+                });
+            }
+        }
+        await products_1.ProductModel.findByIdAndUpdate(product._id, {
+            $inc: { quantity: totalQuantity },
+        });
         const category = await category_1.CategoryModel.findById(product.categoryId);
         if (category) {
-            category.product_quantity += p.quantity ?? 0;
+            category.product_quantity += totalQuantity;
             await category.save();
         }
         if (warehouse) {
-            warehouse.stock_Quantity += p.quantity ?? 0;
+            warehouse.stock_Quantity += totalQuantity;
             await warehouse.save();
         }
         let productWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
@@ -467,23 +580,15 @@ const updatePurchase = async (req, res) => {
             warehouseId: existingPurchase.warehouse_id,
         });
         if (productWarehouse) {
-            productWarehouse.quantity += p.quantity ?? 0;
+            productWarehouse.quantity += totalQuantity;
             await productWarehouse.save();
         }
         else {
             await Product_Warehouse_1.Product_WarehouseModel.create({
                 productId: product_id,
                 warehouseId: existingPurchase.warehouse_id,
-                quantity: p.quantity ?? 0,
+                quantity: totalQuantity,
             });
-        }
-        if (p.options && Array.isArray(p.options)) {
-            for (const opt of p.options) {
-                await purchase_item_option_1.PurchaseItemOptionModel.create({
-                    purchase_item_id: purchaseItem._id,
-                    option_id: opt.id || opt.option_id,
-                });
-            }
         }
     }
     // ========== Process New Materials ==========
@@ -514,7 +619,7 @@ const updatePurchase = async (req, res) => {
         }
     }
     // ========== Create New Invoices ==========
-    if (financials && Array.isArray(financials)) {
+    if (financials && Array.isArray(financials) && financials.length > 0) {
         for (const ele of financials) {
             await PurchaseInvoice_1.PurchaseInvoiceModel.create({
                 financial_id: ele.financial_id,
@@ -529,7 +634,7 @@ const updatePurchase = async (req, res) => {
         }
     }
     // ========== Create New Due Payments ==========
-    if (purchase_due_payment && Array.isArray(purchase_due_payment)) {
+    if (purchase_due_payment && Array.isArray(purchase_due_payment) && purchase_due_payment.length > 0) {
         for (const due_payment of purchase_due_payment) {
             await purchase_due_payment_1.PurchaseDuePaymentModel.create({
                 purchase_id: existingPurchase._id,
@@ -539,10 +644,26 @@ const updatePurchase = async (req, res) => {
         }
     }
     const fullPurchase = await Purchase_1.PurchaseModel.findById(existingPurchase._id)
-        .populate("items")
+        .populate({
+        path: "items",
+        populate: [
+            { path: "product_id" },
+            { path: "material_id" },
+            { path: "category_id" },
+            {
+                path: "options",
+                populate: [
+                    { path: "product_price_id" },
+                    { path: "option_id" },
+                ],
+            },
+        ],
+    })
         .populate("warehouse_id")
         .populate("supplier_id")
-        .populate("tax_id");
+        .populate("tax_id")
+        .populate("invoices")
+        .populate("duePayments");
     (0, response_1.SuccessResponse)(res, { message: "Purchase updated successfully", purchase: fullPurchase });
 };
 exports.updatePurchase = updatePurchase;

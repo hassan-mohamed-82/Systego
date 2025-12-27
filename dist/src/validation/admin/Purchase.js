@@ -50,7 +50,7 @@ exports.createPurchaseSchema = joi_1.default.object({
     receipt_img: joi_1.default.string().optional(),
     // currency_id: Joi.string().optional(),
     tax_id: joi_1.default.string().optional(),
-    payment_status: joi_1.default.string().valid("pending", "partial", "full", "later").required(),
+    payment_status: joi_1.default.string().valid("partial", "full", "later").required(),
     exchange_rate: joi_1.default.number().required(),
     total: joi_1.default.number().required(),
     shipping_cost: joi_1.default.number().required(),
