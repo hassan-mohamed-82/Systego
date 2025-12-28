@@ -50,12 +50,22 @@ const getAvailableLabelSizes = async (req, res) => {
             useCase: "منتجات كبيرة",
         },
         {
-            id: "58x40",
-            name: "58×40mm",
+            id: "57x45",
+            name: "57×45mm (2.24×1.75 in)",
+            description: "طابعات Xprinter",
+            paperType: "Thermal",
+            labelsPerSheet: 1,
+            labelSize: "57mm × 45mm",
+            recommended: true,
+            useCase: "Xprinter XP-370B وما شابه",
+        },
+        {
+            id: "57x40",
+            name: "57×40mm",
             description: "طابعات الكاشير",
             paperType: "Roll",
             labelsPerSheet: 1,
-            labelSize: "58mm × 40mm",
+            labelSize: "57mm × 40mm",
             recommended: true,
             useCase: "طابعات POS - فواتير",
         },
@@ -76,6 +86,16 @@ const getAvailableLabelSizes = async (req, res) => {
             paperType: "Thermal",
             labelsPerSheet: 1,
             labelSize: "50mm × 25mm",
+            recommended: false,
+            useCase: "منتجات صغيرة",
+        },
+        {
+            id: "40x30",
+            name: "40×30mm",
+            description: "ملصق صغير",
+            paperType: "Thermal",
+            labelsPerSheet: 1,
+            labelSize: "40mm × 30mm",
             recommended: false,
             useCase: "منتجات صغيرة",
         },
@@ -152,7 +172,6 @@ const generateLabelsController = async (req, res) => {
             throw new BadRequest_1.BadRequest("Quantity must be at least 1");
         }
     }
-    // القيم الافتراضية - تم تكبيرها
     const defaultLabelConfig = {
         showProductName: true,
         showPrice: true,
@@ -160,10 +179,10 @@ const generateLabelsController = async (req, res) => {
         showBusinessName: true,
         showBrand: true,
         showBarcode: true,
-        productNameSize: 10,
-        priceSize: 12,
-        promotionalPriceSize: 12,
-        businessNameSize: 8,
+        productNameSize: 11,
+        priceSize: 13,
+        promotionalPriceSize: 13,
+        businessNameSize: 7,
         brandSize: 8,
     };
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };

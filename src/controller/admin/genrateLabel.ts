@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { generateLabelsPDF, PAPER_CONFIGS } from "../../utils/genrateLabel";
 import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
-import { LabelConfig, LabelSize } from "../../types/generateLabel";
+import { LabelSize } from "../../types/generateLabel";
+
 // ============================================
 // Get Available Label Sizes
 // ============================================
@@ -49,12 +50,22 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
       useCase: "منتجات كبيرة",
     },
     {
-      id: "58x40",
-      name: "58×40mm",
+      id: "57x45",
+      name: "57×45mm (2.24×1.75 in)",
+      description: "طابعات Xprinter",
+      paperType: "Thermal",
+      labelsPerSheet: 1,
+      labelSize: "57mm × 45mm",
+      recommended: true,
+      useCase: "Xprinter XP-370B وما شابه",
+    },
+    {
+      id: "57x40",
+      name: "57×40mm",
       description: "طابعات الكاشير",
       paperType: "Roll",
       labelsPerSheet: 1,
-      labelSize: "58mm × 40mm",
+      labelSize: "57mm × 40mm",
       recommended: true,
       useCase: "طابعات POS - فواتير",
     },
@@ -75,6 +86,16 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
       paperType: "Thermal",
       labelsPerSheet: 1,
       labelSize: "50mm × 25mm",
+      recommended: false,
+      useCase: "منتجات صغيرة",
+    },
+    {
+      id: "40x30",
+      name: "40×30mm",
+      description: "ملصق صغير",
+      paperType: "Thermal",
+      labelsPerSheet: 1,
+      labelSize: "40mm × 30mm",
       recommended: false,
       useCase: "منتجات صغيرة",
     },
@@ -160,7 +181,6 @@ export const generateLabelsController = async (req: Request, res: Response) => {
     }
   }
 
-  // القيم الافتراضية - تم تكبيرها
   const defaultLabelConfig = {
     showProductName: true,
     showPrice: true,
@@ -168,10 +188,10 @@ export const generateLabelsController = async (req: Request, res: Response) => {
     showBusinessName: true,
     showBrand: true,
     showBarcode: true,
-    productNameSize: 10,
-    priceSize: 12,
-    promotionalPriceSize: 12,
-    businessNameSize: 8,
+    productNameSize: 11,
+    priceSize: 13,
+    promotionalPriceSize: 13,
+    businessNameSize: 7,
     brandSize: 8,
   };
 
