@@ -10,109 +10,190 @@ const products_1 = require("../models/schema/admin/products");
 const product_price_1 = require("../models/schema/admin/product_price");
 const NotFound_1 = require("../Errors/NotFound");
 const mmToPoints = (mm) => mm * 2.83465;
+// ============================================
+// Paper Configurations
+// ============================================
 exports.PAPER_CONFIGS = {
     "100x150": {
-        labelsPerSheet: 1, sheetWidth: 100, sheetHeight: 150,
-        labelWidth: 100, labelHeight: 150,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 100,
+        sheetHeight: 150,
+        labelWidth: 100,
+        labelHeight: 150,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "100x100": {
-        labelsPerSheet: 1, sheetWidth: 100, sheetHeight: 100,
-        labelWidth: 100, labelHeight: 100,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 100,
+        sheetHeight: 100,
+        labelWidth: 100,
+        labelHeight: 100,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "100x50": {
-        labelsPerSheet: 1, sheetWidth: 100, sheetHeight: 50,
-        labelWidth: 100, labelHeight: 50,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 100,
+        sheetHeight: 50,
+        labelWidth: 100,
+        labelHeight: 50,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "80x50": {
-        labelsPerSheet: 1, sheetWidth: 80, sheetHeight: 50,
-        labelWidth: 80, labelHeight: 50,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 80,
+        sheetHeight: 50,
+        labelWidth: 80,
+        labelHeight: 50,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "58x40": {
-        labelsPerSheet: 1, sheetWidth: 58, sheetHeight: 40,
-        labelWidth: 58, labelHeight: 40,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 58,
+        sheetHeight: 40,
+        labelWidth: 58,
+        labelHeight: 40,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "50x30": {
-        labelsPerSheet: 1, sheetWidth: 50, sheetHeight: 30,
-        labelWidth: 50, labelHeight: 30,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 50,
+        sheetHeight: 30,
+        labelWidth: 50,
+        labelHeight: 30,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "50x25": {
-        labelsPerSheet: 1, sheetWidth: 50, sheetHeight: 25,
-        labelWidth: 50, labelHeight: 25,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 50,
+        sheetHeight: 25,
+        labelWidth: 50,
+        labelHeight: 25,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "38x25": {
-        labelsPerSheet: 1, sheetWidth: 38, sheetHeight: 25,
-        labelWidth: 38, labelHeight: 25,
-        columns: 1, rows: 1, marginTop: 0, marginLeft: 0, gapX: 0, gapY: 0,
+        labelsPerSheet: 1,
+        sheetWidth: 38,
+        sheetHeight: 25,
+        labelWidth: 38,
+        labelHeight: 25,
+        columns: 1,
+        rows: 1,
+        marginTop: 0,
+        marginLeft: 0,
+        gapX: 0,
+        gapY: 0,
     },
     "a4_65": {
-        labelsPerSheet: 65, sheetWidth: 210, sheetHeight: 297,
-        labelWidth: 38.1, labelHeight: 21.2,
-        columns: 5, rows: 13, marginTop: 10.7, marginLeft: 4.7, gapX: 2.5, gapY: 0,
+        labelsPerSheet: 65,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 38.1,
+        labelHeight: 21.2,
+        columns: 5,
+        rows: 13,
+        marginTop: 10.7,
+        marginLeft: 4.7,
+        gapX: 2.5,
+        gapY: 0,
     },
     "a4_24": {
-        labelsPerSheet: 24, sheetWidth: 210, sheetHeight: 297,
-        labelWidth: 64, labelHeight: 34,
-        columns: 3, rows: 8, marginTop: 12.5, marginLeft: 9, gapX: 2.5, gapY: 2.5,
+        labelsPerSheet: 24,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 64,
+        labelHeight: 34,
+        columns: 3,
+        rows: 8,
+        marginTop: 12.5,
+        marginLeft: 9,
+        gapX: 2.5,
+        gapY: 2.5,
     },
     "a4_21": {
-        labelsPerSheet: 21, sheetWidth: 210, sheetHeight: 297,
-        labelWidth: 63.5, labelHeight: 38.1,
-        columns: 3, rows: 7, marginTop: 15.1, marginLeft: 7.2, gapX: 2.5, gapY: 0,
+        labelsPerSheet: 21,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 63.5,
+        labelHeight: 38.1,
+        columns: 3,
+        rows: 7,
+        marginTop: 15.1,
+        marginLeft: 7.2,
+        gapX: 2.5,
+        gapY: 0,
     },
     "a4_14": {
-        labelsPerSheet: 14, sheetWidth: 210, sheetHeight: 297,
-        labelWidth: 99.1, labelHeight: 38.1,
-        columns: 2, rows: 7, marginTop: 15.1, marginLeft: 4.7, gapX: 2.5, gapY: 0,
+        labelsPerSheet: 14,
+        sheetWidth: 210,
+        sheetHeight: 297,
+        labelWidth: 99.1,
+        labelHeight: 38.1,
+        columns: 2,
+        rows: 7,
+        marginTop: 15.1,
+        marginLeft: 4.7,
+        gapX: 2.5,
+        gapY: 0,
     },
 };
 // ============================================
-// Generate Barcode - Rotated
+// Generate Barcode
 // ============================================
 const generateBarcodeBuffer = async (text) => {
     return await bwip_js_1.default.toBuffer({
         bcid: "code128",
         text: text,
-        scale: 1.2,
-        height: 6,
+        scale: 1,
+        height: 5,
         includetext: true,
         textxalign: "center",
-        textsize: 5,
-        rotate: "R", // ✅ تدوير الباركود 90 درجة لليمين
+        textsize: 4,
+        rotate: "L",
     });
 };
 // ============================================
-// Draw Rotated Text Helper
+// Draw Label - Rotated for Thermal Printer
 // ============================================
-const drawRotatedText = (doc, text, x, y, fontSize, font, color, align = "center") => {
-    doc.save();
-    doc.translate(x, y);
-    doc.rotate(-90); // ✅ تدوير -90 درجة
-    doc.fontSize(fontSize).font(font).fillColor(color);
-    doc.text(text, 0, 0, { align, lineBreak: false });
-    doc.restore();
-    return fontSize + 1;
-};
-// ============================================
-// Draw Label - Rotated 90° للطابعات الحرارية
-// ============================================
-const drawLabelRotated = async (doc, data, labelX, labelY, labelWidth, // 50mm in points
-labelHeight, // 30mm in points
-config) => {
-    const padding = 3;
-    // ✅ بعد التدوير: العرض الفعلي للمحتوى = ارتفاع الـ label
-    // والارتفاع الفعلي للمحتوى = عرض الـ label
-    const contentWidth = labelHeight - padding * 2; // 30mm
-    const contentHeight = labelWidth - padding * 2; // 50mm
-    // نبدأ من اليمين ونمشي لليسار (بسبب التدوير)
-    let currentX = labelX + labelWidth - padding;
-    // حساب المساحات
+const drawLabelRotated = async (doc, data, labelX, labelY, labelWidth, labelHeight, config) => {
+    const padding = 2;
+    const contentWidth = labelHeight - padding * 2;
+    const contentHeight = labelWidth - padding * 2;
+    let currentX = labelX + padding;
     let elementsCount = 0;
     if (config.showBusinessName && data.businessName)
         elementsCount++;
@@ -124,68 +205,40 @@ config) => {
         elementsCount++;
     const barcodeWidth = config.showBarcode && data.barcode ? contentHeight * 0.35 : 0;
     const textAreaWidth = contentHeight - barcodeWidth;
-    const lineSpacing = elementsCount > 0 ? textAreaWidth / elementsCount : 10;
-    // ============ Business Name ============
-    if (config.showBusinessName && data.businessName) {
-        const fontSize = 5;
-        doc.save();
-        doc.translate(currentX, labelY + labelHeight / 2);
-        doc.rotate(-90);
-        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-        doc.text(data.businessName, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-        });
-        doc.restore();
-        currentX -= lineSpacing;
-    }
-    // ============ Product Name ============
-    if (config.showProductName && data.productName) {
-        const fontSize = 6;
-        const maxChars = Math.floor(contentWidth / (fontSize * 0.45));
-        const displayName = data.productName.length > maxChars
-            ? data.productName.substring(0, maxChars - 2) + ".."
-            : data.productName;
-        doc.save();
-        doc.translate(currentX, labelY + labelHeight / 2);
-        doc.rotate(-90);
-        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-        doc.text(displayName, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-        });
-        doc.restore();
-        currentX -= lineSpacing;
-    }
-    // ============ Brand ============
-    if (config.showBrand && data.brandName) {
-        const fontSize = 4;
-        doc.save();
-        doc.translate(currentX, labelY + labelHeight / 2);
-        doc.rotate(-90);
-        doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-        doc.text(data.brandName, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-        });
-        doc.restore();
-        currentX -= lineSpacing;
+    const lineSpacing = elementsCount > 0 ? textAreaWidth / elementsCount : 8;
+    // ============ Barcode ============
+    if (config.showBarcode && data.barcode && barcodeWidth > 10) {
+        try {
+            const barcodeBuffer = await generateBarcodeBuffer(data.barcode);
+            const barcodeImgWidth = barcodeWidth - 2;
+            const barcodeImgHeight = contentWidth * 0.8;
+            const barcodeY = labelY + (labelHeight - barcodeImgHeight) / 2;
+            doc.image(barcodeBuffer, currentX, barcodeY, {
+                fit: [barcodeImgWidth, barcodeImgHeight],
+                align: "center",
+                valign: "center",
+            });
+            currentX += barcodeWidth;
+        }
+        catch (err) {
+            console.error("Barcode error:", err);
+            currentX += barcodeWidth;
+        }
     }
     // ============ Price ============
     if (config.showPrice && data.price) {
-        const fontSize = 8;
+        const fontSize = 5;
         let priceText = `${data.price}`;
         let priceColor = "black";
-        if (config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price) {
+        if (config.showPromotionalPrice &&
+            data.promotionalPrice &&
+            data.promotionalPrice < data.price) {
             priceText = `${data.promotionalPrice}`;
             priceColor = "red";
         }
         doc.save();
-        doc.translate(currentX, labelY + labelHeight / 2);
-        doc.rotate(-90);
+        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
+        doc.rotate(90);
         doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(priceColor);
         doc.text(priceText, -contentWidth / 2, -fontSize / 2, {
             width: contentWidth,
@@ -193,29 +246,59 @@ config) => {
             lineBreak: false,
         });
         doc.restore();
-        currentX -= lineSpacing;
+        currentX += lineSpacing;
     }
-    // ============ Barcode ============
-    if (config.showBarcode && data.barcode && barcodeWidth > 10) {
-        try {
-            const barcodeBuffer = await generateBarcodeBuffer(data.barcode);
-            const barcodeImgWidth = barcodeWidth - 4;
-            const barcodeImgHeight = contentWidth * 0.85;
-            const barcodeX = labelX + padding + 2;
-            const barcodeY = labelY + (labelHeight - barcodeImgHeight) / 2;
-            doc.image(barcodeBuffer, barcodeX, barcodeY, {
-                fit: [barcodeImgWidth, barcodeImgHeight],
-                align: "center",
-                valign: "center",
-            });
-        }
-        catch (err) {
-            console.error("Barcode error:", err);
-        }
+    // ============ Brand ============
+    if (config.showBrand && data.brandName) {
+        const fontSize = 3;
+        doc.save();
+        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
+        doc.rotate(90);
+        doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
+        doc.text(data.brandName, -contentWidth / 2, -fontSize / 2, {
+            width: contentWidth,
+            align: "center",
+            lineBreak: false,
+        });
+        doc.restore();
+        currentX += lineSpacing;
+    }
+    // ============ Product Name ============
+    if (config.showProductName && data.productName) {
+        const fontSize = 4;
+        const maxChars = Math.floor(contentWidth / (fontSize * 0.4));
+        const displayName = data.productName.length > maxChars
+            ? data.productName.substring(0, maxChars - 2) + ".."
+            : data.productName;
+        doc.save();
+        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
+        doc.rotate(90);
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
+        doc.text(displayName, -contentWidth / 2, -fontSize / 2, {
+            width: contentWidth,
+            align: "center",
+            lineBreak: false,
+        });
+        doc.restore();
+        currentX += lineSpacing;
+    }
+    // ============ Business Name ============
+    if (config.showBusinessName && data.businessName) {
+        const fontSize = 3;
+        doc.save();
+        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
+        doc.rotate(90);
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
+        doc.text(data.businessName, -contentWidth / 2, -fontSize / 2, {
+            width: contentWidth,
+            align: "center",
+            lineBreak: false,
+        });
+        doc.restore();
     }
 };
 // ============================================
-// Draw Label - Normal (for A4)
+// Draw Label - Normal for A4
 // ============================================
 const drawLabelNormal = async (doc, data, x, y, width, height, config) => {
     const padding = 2;
@@ -235,61 +318,94 @@ const drawLabelNormal = async (doc, data, x, y, width, height, config) => {
     const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.4 : 0;
     const textAreaHeight = innerHeight - barcodeHeight;
     const lineHeight = elementsCount > 0 ? textAreaHeight / elementsCount : 10;
+    // Business Name
     if (config.showBusinessName && data.businessName) {
-        const fontSize = Math.min(6, lineHeight * 0.7);
+        const fontSize = Math.min(5, lineHeight * 0.6);
         doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
         doc.text(data.businessName, innerX, currentY, {
-            width: innerWidth, align: "center", lineBreak: false,
+            width: innerWidth,
+            align: "center",
+            lineBreak: false,
         });
         currentY += lineHeight;
     }
+    // Product Name
     if (config.showProductName && data.productName) {
-        const fontSize = Math.min(7, lineHeight * 0.75);
+        const fontSize = Math.min(6, lineHeight * 0.65);
         doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-        const maxChars = Math.floor(innerWidth / (fontSize * 0.45));
+        const maxChars = Math.floor(innerWidth / (fontSize * 0.4));
         const displayName = data.productName.length > maxChars
             ? data.productName.substring(0, maxChars - 2) + ".."
             : data.productName;
         doc.text(displayName, innerX, currentY, {
-            width: innerWidth, align: "center", lineBreak: false,
+            width: innerWidth,
+            align: "center",
+            lineBreak: false,
         });
         currentY += lineHeight;
     }
+    // Brand
     if (config.showBrand && data.brandName) {
-        const fontSize = Math.min(5, lineHeight * 0.6);
+        const fontSize = Math.min(4, lineHeight * 0.5);
         doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
         doc.text(data.brandName, innerX, currentY, {
-            width: innerWidth, align: "center", lineBreak: false,
+            width: innerWidth,
+            align: "center",
+            lineBreak: false,
         });
         doc.fillColor("black");
         currentY += lineHeight;
     }
+    // Price
     if (config.showPrice && data.price) {
-        const fontSize = Math.min(9, lineHeight * 0.8);
-        if (config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price) {
+        const fontSize = Math.min(7, lineHeight * 0.7);
+        if (config.showPromotionalPrice &&
+            data.promotionalPrice &&
+            data.promotionalPrice < data.price) {
             doc.fontSize(fontSize * 0.6).font("Helvetica").fillColor("gray");
-            doc.text(`${data.price}`, innerX, currentY, { width: innerWidth / 2, align: "right", lineBreak: false });
+            doc.text(`${data.price}`, innerX, currentY, {
+                width: innerWidth / 2,
+                align: "right",
+                lineBreak: false,
+            });
             doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("red");
-            doc.text(`${data.promotionalPrice}`, innerX + innerWidth / 2 + 2, currentY, { width: innerWidth / 2, align: "left", lineBreak: false });
+            doc.text(`${data.promotionalPrice}`, innerX + innerWidth / 2 + 2, currentY, {
+                width: innerWidth / 2,
+                align: "left",
+                lineBreak: false,
+            });
             doc.fillColor("black");
         }
         else {
             doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-            doc.text(`${data.price}`, innerX, currentY, { width: innerWidth, align: "center", lineBreak: false });
+            doc.text(`${data.price}`, innerX, currentY, {
+                width: innerWidth,
+                align: "center",
+                lineBreak: false,
+            });
         }
         currentY += lineHeight;
     }
+    // Barcode
     if (config.showBarcode && data.barcode && barcodeHeight > 10) {
         try {
             const barcodeBuffer = await bwip_js_1.default.toBuffer({
-                bcid: "code128", text: data.barcode, scale: 1.2, height: 6,
-                includetext: true, textxalign: "center", textsize: 5, rotate: "N",
+                bcid: "code128",
+                text: data.barcode,
+                scale: 1,
+                height: 5,
+                includetext: true,
+                textxalign: "center",
+                textsize: 4,
+                rotate: "N",
             });
-            const barcodeImgWidth = Math.min(innerWidth * 0.85, 100);
+            const barcodeImgWidth = Math.min(innerWidth * 0.8, 80);
             const barcodeImgHeight = barcodeHeight - 4;
             const barcodeX = innerX + (innerWidth - barcodeImgWidth) / 2;
             doc.image(barcodeBuffer, barcodeX, currentY, {
-                fit: [barcodeImgWidth, barcodeImgHeight], align: "center", valign: "center",
+                fit: [barcodeImgWidth, barcodeImgHeight],
+                align: "center",
+                valign: "center",
             });
         }
         catch (err) {
@@ -298,14 +414,14 @@ const drawLabelNormal = async (doc, data, x, y, width, height, config) => {
     }
 };
 // ============================================
-// Create PDF - Thermal
+// Create PDF - Thermal Printer
 // ============================================
 const createPDFThermal = async (labelsData, labelConfig, paperConfig) => {
     return new Promise(async (resolve, reject) => {
         try {
             const totalLabels = labelsData.length;
-            const labelWidth = mmToPoints(paperConfig.labelWidth); // 50mm
-            const labelHeight = mmToPoints(paperConfig.labelHeight); // 30mm
+            const labelWidth = mmToPoints(paperConfig.labelWidth);
+            const labelHeight = mmToPoints(paperConfig.labelHeight);
             const pageHeight = labelHeight * totalLabels;
             const doc = new pdfkit_1.default({
                 size: [labelWidth, pageHeight],
@@ -393,11 +509,8 @@ const generateLabelsPDF = async (products, labelConfig, paperSize) => {
     if (labelsData.length === 0) {
         throw new NotFound_1.NotFound("No valid products found to generate labels");
     }
-    if (paperSize.startsWith("a4_")) {
-        return await createPDFA4(labelsData, labelConfig, paperConfig);
-    }
-    else {
-        return await createPDFThermal(labelsData, labelConfig, paperConfig);
-    }
+    return paperSize.startsWith("a4_")
+        ? await createPDFA4(labelsData, labelConfig, paperConfig)
+        : await createPDFThermal(labelsData, labelConfig, paperConfig);
 };
 exports.generateLabelsPDF = generateLabelsPDF;

@@ -1,19 +1,14 @@
-// utils/generateLabel.ts
-import PDFDocument from "pdfkit";
-import bwipjs from "bwip-js";
 import { Request, Response } from "express";
-import { ProductModel } from "../../models/schema/admin/products";
-import { ProductPriceModel } from "../../models/schema/admin/product_price";
+import { generateLabelsPDF, PAPER_CONFIGS } from "../../utils/genrateLabel";
+import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
 import { LabelSize } from "../../types/generateLabel";
-import { BadRequest } from "../../Errors";
-import { generateLabelsPDF, PAPER_CONFIGS } from "../../utils/genrateLabel";
 
-
-// توليد الباركود كـ Buffer
+// ============================================
+// Get Available Label Sizes
+// ============================================
 export const getAvailableLabelSizes = async (req: Request, res: Response) => {
   const labelSizes: LabelSize[] = [
-    // Thermal Labels
     {
       id: "100x150",
       name: "100×150mm",
@@ -94,7 +89,6 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
       recommended: true,
       useCase: "أدوية - منتجات صغيرة",
     },
-    // A4 Sheets
     {
       id: "a4_65",
       name: "A4 - 65 ملصق",
@@ -146,7 +140,6 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
 export const generateLabelsController = async (req: Request, res: Response) => {
   const { products, labelConfig, paperSize } = req.body;
 
-  // Validation
   if (!products || !Array.isArray(products) || products.length === 0) {
     throw new BadRequest("Products array is required");
   }
@@ -168,12 +161,11 @@ export const generateLabelsController = async (req: Request, res: Response) => {
     }
   }
 
-  // Default config
   const defaultLabelConfig = {
     showProductName: true,
     showPrice: true,
     showPromotionalPrice: true,
-    showBusinessName: false,
+    showBusinessName: true,
     showBrand: true,
     showBarcode: true,
     productNameSize: 10,
@@ -185,10 +177,8 @@ export const generateLabelsController = async (req: Request, res: Response) => {
 
   const finalConfig = { ...defaultLabelConfig, ...labelConfig };
 
-  // Generate PDF
   const pdfBuffer = await generateLabelsPDF(products, finalConfig, paperSize);
 
-  // Send PDF
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",

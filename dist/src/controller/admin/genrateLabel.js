@@ -1,13 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateLabelsController = exports.getAvailableLabelSizes = void 0;
-const response_1 = require("../../utils/response");
-const Errors_1 = require("../../Errors");
 const genrateLabel_1 = require("../../utils/genrateLabel");
-// توليد الباركود كـ Buffer
+const BadRequest_1 = require("../../Errors/BadRequest");
+const response_1 = require("../../utils/response");
+// ============================================
+// Get Available Label Sizes
+// ============================================
 const getAvailableLabelSizes = async (req, res) => {
     const labelSizes = [
-        // Thermal Labels
         {
             id: "100x150",
             name: "100×150mm",
@@ -88,7 +89,6 @@ const getAvailableLabelSizes = async (req, res) => {
             recommended: true,
             useCase: "أدوية - منتجات صغيرة",
         },
-        // A4 Sheets
         {
             id: "a4_65",
             name: "A4 - 65 ملصق",
@@ -138,27 +138,25 @@ exports.getAvailableLabelSizes = getAvailableLabelSizes;
 // ============================================
 const generateLabelsController = async (req, res) => {
     const { products, labelConfig, paperSize } = req.body;
-    // Validation
     if (!products || !Array.isArray(products) || products.length === 0) {
-        throw new Errors_1.BadRequest("Products array is required");
+        throw new BadRequest_1.BadRequest("Products array is required");
     }
     if (!paperSize || !genrateLabel_1.PAPER_CONFIGS[paperSize]) {
-        throw new Errors_1.BadRequest(`Invalid paper size. Available: ${Object.keys(genrateLabel_1.PAPER_CONFIGS).join(", ")}`);
+        throw new BadRequest_1.BadRequest(`Invalid paper size. Available: ${Object.keys(genrateLabel_1.PAPER_CONFIGS).join(", ")}`);
     }
     for (const product of products) {
         if (!product.productId || !product.productPriceId || !product.quantity) {
-            throw new Errors_1.BadRequest("Each product must have productId, productPriceId, and quantity");
+            throw new BadRequest_1.BadRequest("Each product must have productId, productPriceId, and quantity");
         }
         if (product.quantity < 1) {
-            throw new Errors_1.BadRequest("Quantity must be at least 1");
+            throw new BadRequest_1.BadRequest("Quantity must be at least 1");
         }
     }
-    // Default config
     const defaultLabelConfig = {
         showProductName: true,
         showPrice: true,
         showPromotionalPrice: true,
-        showBusinessName: false,
+        showBusinessName: true,
         showBrand: true,
         showBarcode: true,
         productNameSize: 10,
@@ -168,9 +166,7 @@ const generateLabelsController = async (req, res) => {
         brandSize: 8,
     };
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };
-    // Generate PDF
     const pdfBuffer = await (0, genrateLabel_1.generateLabelsPDF)(products, finalConfig, paperSize);
-    // Send PDF
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename=labels_${paperSize}_${Date.now()}.pdf`);
     res.send(pdfBuffer);
