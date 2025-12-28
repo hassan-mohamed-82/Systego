@@ -1,3 +1,5 @@
+import { Types } from "mongoose";
+
 export interface LabelProduct {
   productId: string;
   productPriceId: string;
@@ -11,11 +13,11 @@ export interface LabelConfig {
   showBusinessName: boolean;
   showBrand: boolean;
   showBarcode: boolean;
-  productNameSize: number;
-  priceSize: number;
-  promotionalPriceSize: number;
-  businessNameSize: number;
-  brandSize: number;
+  productNameSize?: number;
+  priceSize?: number;
+  promotionalPriceSize?: number;
+  businessNameSize?: number;
+  brandSize?: number;
 }
 
 export interface PaperConfig {
@@ -36,7 +38,7 @@ export interface LabelSize {
   id: string;
   name: string;
   description: string;
-  paperType: "A4" | "Thermal" | "Roll";
+  paperType: string;
   labelsPerSheet: number;
   labelSize: string;
   recommended: boolean;
@@ -45,7 +47,7 @@ export interface LabelSize {
 
 export interface GenerateLabelsRequest {
   products: LabelProduct[];
-  labelConfig: LabelConfig;
+  labelConfig: Partial<LabelConfig>;
   paperSize: string;
 }
 
@@ -54,6 +56,6 @@ export interface LabelData {
   brandName: string;
   businessName: string;
   price: number;
-  promotionalPrice: number | null;
+  promotionalPrice?: number;
   barcode: string;
 }
