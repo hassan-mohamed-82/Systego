@@ -118,7 +118,7 @@ exports.PAPER_CONFIGS = {
         gapX: 0,
         gapY: 0,
     },
-    "a4_65": {
+    a4_65: {
         labelsPerSheet: 65,
         sheetWidth: 210,
         sheetHeight: 297,
@@ -131,7 +131,7 @@ exports.PAPER_CONFIGS = {
         gapX: 2.5,
         gapY: 0,
     },
-    "a4_24": {
+    a4_24: {
         labelsPerSheet: 24,
         sheetWidth: 210,
         sheetHeight: 297,
@@ -144,7 +144,7 @@ exports.PAPER_CONFIGS = {
         gapX: 2.5,
         gapY: 2.5,
     },
-    "a4_21": {
+    a4_21: {
         labelsPerSheet: 21,
         sheetWidth: 210,
         sheetHeight: 297,
@@ -157,7 +157,7 @@ exports.PAPER_CONFIGS = {
         gapX: 2.5,
         gapY: 0,
     },
-    "a4_14": {
+    a4_14: {
         labelsPerSheet: 14,
         sheetWidth: 210,
         sheetHeight: 297,
@@ -172,62 +172,68 @@ exports.PAPER_CONFIGS = {
     },
 };
 // ============================================
-// Generate Barcode
+// Generate Barcode - بدون rotation
 // ============================================
-const generateBarcodeBuffer = async (text, rotated = true) => {
+const generateBarcodeBuffer = async (text) => {
     return await bwip_js_1.default.toBuffer({
         bcid: "code128",
         text: text,
-        scale: 2,
-        height: 8,
+        scale: 3,
+        height: 12,
         includetext: true,
         textxalign: "center",
-        textsize: 8,
-        rotate: rotated ? "L" : "N",
+        textsize: 10,
     });
 };
 // ============================================
-// Draw Label - Rotated for Thermal Printer
+// Draw Label - Thermal (الباركود تحت)
 // ============================================
-const drawLabelRotated = async (doc, data, labelX, labelY, labelWidth, labelHeight, config) => {
-    const padding = 3;
-    const contentWidth = labelHeight - padding * 2;
-    const contentHeight = labelWidth - padding * 2;
-    let currentX = labelX + padding;
-    let elementsCount = 0;
-    if (config.showBusinessName && data.businessName)
-        elementsCount++;
+const drawLabelThermal = async (doc, data, labelX, labelY, labelWidth, labelHeight, config) => {
+    const padding = 4;
+    const innerWidth = labelWidth - padding * 2;
+    const innerHeight = labelHeight - padding * 2;
+    let currentY = labelY + padding;
+    // حساب المساحات
+    const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.35 : 0;
+    const textAreaHeight = innerHeight - barcodeHeight;
+    // عد العناصر النصية
+    let textElements = 0;
     if (config.showProductName && data.productName)
-        elementsCount++;
+        textElements++;
     if (config.showBrand && data.brandName)
-        elementsCount++;
+        textElements++;
     if (config.showPrice && data.price)
-        elementsCount++;
-    const barcodeWidth = config.showBarcode && data.barcode ? contentHeight * 0.4 : 0;
-    const textAreaWidth = contentHeight - barcodeWidth;
-    const lineSpacing = elementsCount > 0 ? textAreaWidth / elementsCount : 10;
-    // ============ Barcode ============
-    if (config.showBarcode && data.barcode && barcodeWidth > 10) {
-        try {
-            const barcodeBuffer = await generateBarcodeBuffer(data.barcode, true);
-            const barcodeImgWidth = barcodeWidth - 4;
-            const barcodeImgHeight = contentWidth * 0.85;
-            const barcodeY = labelY + (labelHeight - barcodeImgHeight) / 2;
-            doc.image(barcodeBuffer, currentX, barcodeY, {
-                fit: [barcodeImgWidth, barcodeImgHeight],
-                align: "center",
-                valign: "center",
-            });
-            currentX += barcodeWidth;
-        }
-        catch (err) {
-            console.error("Barcode error:", err);
-            currentX += barcodeWidth;
-        }
+        textElements++;
+    if (config.showBusinessName && data.businessName)
+        textElements++;
+    const lineHeight = textElements > 0 ? textAreaHeight / textElements : 15;
+    // ============ Product Name ============
+    if (config.showProductName && data.productName) {
+        const fontSize = Math.min(config.productNameSize || 14, lineHeight * 0.7);
+        const maxChars = Math.floor(innerWidth / (fontSize * 0.6));
+        const displayName = data.productName.length > maxChars
+            ? data.productName.substring(0, maxChars - 2) + ".."
+            : data.productName;
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
+        doc.text(displayName, labelX + padding, currentY, {
+            width: innerWidth,
+            align: "center",
+        });
+        currentY += lineHeight;
+    }
+    // ============ Brand ============
+    if (config.showBrand && data.brandName) {
+        const fontSize = Math.min(config.brandSize || 10, lineHeight * 0.6);
+        doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
+        doc.text(data.brandName, labelX + padding, currentY, {
+            width: innerWidth,
+            align: "center",
+        });
+        currentY += lineHeight;
     }
     // ============ Price ============
     if (config.showPrice && data.price) {
-        const fontSize = config.priceSize || 12;
+        const fontSize = Math.min(config.priceSize || 16, lineHeight * 0.8);
         let priceText = `${data.price}`;
         let priceColor = "black";
         if (config.showPromotionalPrice &&
@@ -236,65 +242,40 @@ const drawLabelRotated = async (doc, data, labelX, labelY, labelWidth, labelHeig
             priceText = `${data.promotionalPrice}`;
             priceColor = "red";
         }
-        doc.save();
-        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-        doc.rotate(90);
         doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(priceColor);
-        doc.text(priceText, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
+        doc.text(priceText, labelX + padding, currentY, {
+            width: innerWidth,
             align: "center",
-            lineBreak: false,
         });
-        doc.restore();
-        currentX += lineSpacing;
-    }
-    // ============ Brand ============
-    if (config.showBrand && data.brandName) {
-        const fontSize = config.brandSize || 8;
-        doc.save();
-        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-        doc.rotate(90);
-        doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-        doc.text(data.brandName, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-        });
-        doc.restore();
-        currentX += lineSpacing;
-    }
-    // ============ Product Name ============
-    if (config.showProductName && data.productName) {
-        const fontSize = config.productNameSize || 10;
-        const maxChars = Math.floor(contentWidth / (fontSize * 0.5));
-        const displayName = data.productName.length > maxChars
-            ? data.productName.substring(0, maxChars - 2) + ".."
-            : data.productName;
-        doc.save();
-        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-        doc.rotate(90);
-        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-        doc.text(displayName, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-        });
-        doc.restore();
-        currentX += lineSpacing;
+        currentY += lineHeight;
     }
     // ============ Business Name ============
     if (config.showBusinessName && data.businessName) {
-        const fontSize = config.businessNameSize || 8;
-        doc.save();
-        doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-        doc.rotate(90);
-        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-        doc.text(data.businessName, -contentWidth / 2, -fontSize / 2, {
-            width: contentWidth,
+        const fontSize = Math.min(config.businessNameSize || 10, lineHeight * 0.5);
+        doc.fontSize(fontSize).font("Helvetica").fillColor("black");
+        doc.text(data.businessName, labelX + padding, currentY, {
+            width: innerWidth,
             align: "center",
-            lineBreak: false,
         });
-        doc.restore();
+        currentY += lineHeight;
+    }
+    // ============ Barcode (في الأسفل) ============
+    if (config.showBarcode && data.barcode && barcodeHeight > 15) {
+        try {
+            const barcodeBuffer = await generateBarcodeBuffer(data.barcode);
+            const barcodeImgWidth = innerWidth * 0.85;
+            const barcodeImgHeight = barcodeHeight - 5;
+            const barcodeX = labelX + (labelWidth - barcodeImgWidth) / 2;
+            const barcodeY = labelY + labelHeight - barcodeHeight - padding;
+            doc.image(barcodeBuffer, barcodeX, barcodeY, {
+                fit: [barcodeImgWidth, barcodeImgHeight],
+                align: "center",
+                valign: "center",
+            });
+        }
+        catch (err) {
+            console.error("Barcode error:", err);
+        }
     }
 };
 // ============================================
@@ -389,7 +370,7 @@ const drawLabelNormal = async (doc, data, x, y, width, height, config) => {
     // Barcode
     if (config.showBarcode && data.barcode && barcodeHeight > 10) {
         try {
-            const barcodeBuffer = await generateBarcodeBuffer(data.barcode, false);
+            const barcodeBuffer = await generateBarcodeBuffer(data.barcode);
             const barcodeImgWidth = Math.min(innerWidth * 0.9, 100);
             const barcodeImgHeight = barcodeHeight - 4;
             const barcodeX = innerX + (innerWidth - barcodeImgWidth) / 2;
@@ -405,26 +386,28 @@ const drawLabelNormal = async (doc, data, x, y, width, height, config) => {
     }
 };
 // ============================================
-// Create PDF - Thermal Printer
+// Create PDF - Thermal Printer (صفحة لكل ملصق)
 // ============================================
 const createPDFThermal = async (labelsData, labelConfig, paperConfig) => {
     return new Promise(async (resolve, reject) => {
         try {
-            const totalLabels = labelsData.length;
             const labelWidth = mmToPoints(paperConfig.labelWidth);
             const labelHeight = mmToPoints(paperConfig.labelHeight);
-            const pageHeight = labelHeight * totalLabels;
             const doc = new pdfkit_1.default({
-                size: [labelWidth, pageHeight],
+                size: [labelWidth, labelHeight],
                 margins: { top: 0, bottom: 0, left: 0, right: 0 },
-                autoFirstPage: true,
+                autoFirstPage: false,
             });
             const chunks = [];
             doc.on("data", (chunk) => chunks.push(chunk));
             doc.on("end", () => resolve(Buffer.concat(chunks)));
             doc.on("error", reject);
-            for (let i = 0; i < totalLabels; i++) {
-                await drawLabelRotated(doc, labelsData[i], 0, labelHeight * i, labelWidth, labelHeight, labelConfig);
+            for (let i = 0; i < labelsData.length; i++) {
+                doc.addPage({
+                    size: [labelWidth, labelHeight],
+                    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                });
+                await drawLabelThermal(doc, labelsData[i], 0, 0, labelWidth, labelHeight, labelConfig);
             }
             doc.end();
         }
