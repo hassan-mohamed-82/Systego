@@ -188,6 +188,7 @@ const creategroup = async (req, res) => {
         throw new BadRequest_1.BadRequest("Customer group with this name already exists");
     }
     const group = new customer_1.CustomerGroupModel({ name, status });
+    await group.save();
     (0, response_1.SuccessResponse)(res, {
         message: "Customer group created successfully",
         group
