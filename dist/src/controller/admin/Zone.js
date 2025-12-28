@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateZone = exports.deleteZone = exports.getZoneById = exports.getZones = exports.createzone = void 0;
+exports.getCountriesWithCities = exports.updateZone = exports.deleteZone = exports.getZoneById = exports.getZones = exports.createzone = void 0;
 const Zone_1 = require("../../models/schema/admin/Zone");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -70,3 +70,11 @@ const updateZone = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Zone updated successfully", zone });
 };
 exports.updateZone = updateZone;
+const getCountriesWithCities = async (req, res) => {
+    const countries = await Country_1.CountryModel.find().populate("cities");
+    (0, response_1.SuccessResponse)(res, {
+        message: "Countries with cities fetched successfully",
+        countries,
+    });
+};
+exports.getCountriesWithCities = getCountriesWithCities;

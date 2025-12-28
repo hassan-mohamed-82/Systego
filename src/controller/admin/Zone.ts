@@ -64,3 +64,12 @@ export const updateZone=async(req:Request,res:Response)=>{
     if(!zone) throw new NotFound("Zone not found");
     SuccessResponse(res,{message:"Zone updated successfully",zone});
 }
+
+export const getCountriesWithCities = async (req: Request, res: Response) => {
+  const countries = await CountryModel.find().populate("cities");
+
+  SuccessResponse(res, {
+    message: "Countries with cities fetched successfully",
+    countries,
+  });
+};

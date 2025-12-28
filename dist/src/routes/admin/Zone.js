@@ -8,6 +8,7 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
 const route = (0, express_1.Router)();
 route.post("/", (0, haspremission_1.authorizePermissions)("zone", "Add"), (0, validation_1.validate)(Zone_2.createZoneSchema), (0, catchAsync_1.catchAsync)(Zone_1.createzone));
+route.get("/countries", (0, haspremission_1.authorizePermissions)("zone", "View"), (0, catchAsync_1.catchAsync)(Zone_1.getCountriesWithCities));
 route.get("/", (0, haspremission_1.authorizePermissions)("zone", "View"), (0, catchAsync_1.catchAsync)(Zone_1.getZones));
 route.get("/:id", (0, haspremission_1.authorizePermissions)("zone", "View"), (0, catchAsync_1.catchAsync)(Zone_1.getZoneById));
 route.put("/:id", (0, haspremission_1.authorizePermissions)("zone", "Edit"), (0, validation_1.validate)(Zone_2.updateZoneSchema), (0, catchAsync_1.catchAsync)(Zone_1.updateZone));

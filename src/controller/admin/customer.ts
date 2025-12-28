@@ -3,6 +3,7 @@ import { CustomerModel, CustomerGroupModel } from '../../models/schema/admin/POS
 import { BadRequest } from '../../Errors/BadRequest';
 import { NotFound } from '../../Errors';
 import { SuccessResponse } from '../../utils/response';
+import { CountryModel } from '../../models/schema/admin/Country';
 
 // Create Customer
 export const createCustomer = async (req: Request, res: Response) => {

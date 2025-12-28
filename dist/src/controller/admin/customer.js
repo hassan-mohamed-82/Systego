@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deletegroup = exports.updategroup = exports.getgroupbyid = exports.getallgroups = exports.customerandDuecustomers = exports.deleteCustomer = exports.updateCustomer = exports.getDueCustomers = exports.getCustomerById = exports.getCustomers = exports.createCustomer = void 0;
+exports.creategroup = exports.deletegroup = exports.updategroup = exports.getgroupbyid = exports.getallgroups = exports.customerandDuecustomers = exports.deleteCustomer = exports.updateCustomer = exports.getDueCustomers = exports.getCustomerById = exports.getCustomers = exports.createCustomer = void 0;
 const customer_1 = require("../../models/schema/admin/POS/customer");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -159,3 +159,20 @@ const deletegroup = async (req, res) => {
     });
 };
 exports.deletegroup = deletegroup;
+const creategroup = async (req, res) => {
+    const { name, status } = req.body;
+    if (!name || !status) {
+        throw new BadRequest_1.BadRequest("Name and status are required");
+    }
+    // Validate if there's existing group
+    const existingGroup = await customer_1.CustomerGroupModel.findOne({ name });
+    if (existingGroup) {
+        throw new BadRequest_1.BadRequest("Customer group with this name already exists");
+    }
+    const group = new customer_1.CustomerGroupModel({ name, status });
+    (0, response_1.SuccessResponse)(res, {
+        message: "Customer group created successfully",
+        group
+    });
+};
+exports.creategroup = creategroup;
