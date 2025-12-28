@@ -6,10 +6,10 @@ import { BadRequest } from "../../Errors/BadRequest";
 
 
 export const createDiscount = async (req: Request, res: Response) => {
-    const { name, description, amount, type, status } = req.body;
+    const { name, amount, type, status } = req.body;
     const existingDiscount = await DiscountModel.findOne({ name });
     if (existingDiscount) throw new BadRequest("Discount already exists");
-    const discount = await DiscountModel.create({ name, description, amount, type, status });
+    const discount = await DiscountModel.create({ name, amount, type, status });
     SuccessResponse(res, { message: "Discount created successfully", discount });
 };
 

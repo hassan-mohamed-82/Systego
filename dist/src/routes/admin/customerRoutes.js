@@ -10,6 +10,7 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const router = express_1.default.Router();
 router.post('/', (0, haspremission_1.authorizePermissions)("POS", "Add"), (0, haspremission_1.authorizePermissions)("customer", "Add"), (0, catchAsync_1.catchAsync)(customer_1.createCustomer));
 router.get('/', (0, haspremission_1.authorizePermissions)("customer", "View"), (0, catchAsync_1.catchAsync)(customer_1.getCustomers));
+router.get('/countries', (0, haspremission_1.authorizePermissions)("customer", "View"), (0, catchAsync_1.catchAsync)(customer_1.getCountriesWithCities));
 router.get('/groups', (0, haspremission_1.authorizePermissions)("customer_group", "View"), (0, catchAsync_1.catchAsync)(customer_1.getallgroups));
 router.get('/groups/:id', (0, haspremission_1.authorizePermissions)("customer_group", "View"), (0, catchAsync_1.catchAsync)(customer_1.getgroupbyid));
 router.get('/:id', (0, haspremission_1.authorizePermissions)("customer", "View"), (0, catchAsync_1.catchAsync)(customer_1.getCustomerById));

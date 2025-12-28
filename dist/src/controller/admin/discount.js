@@ -6,11 +6,11 @@ const response_1 = require("../../utils/response");
 const Errors_1 = require("../../Errors");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const createDiscount = async (req, res) => {
-    const { name, description, amount, type, status } = req.body;
+    const { name, amount, type, status } = req.body;
     const existingDiscount = await Discount_1.DiscountModel.findOne({ name });
     if (existingDiscount)
         throw new BadRequest_1.BadRequest("Discount already exists");
-    const discount = await Discount_1.DiscountModel.create({ name, description, amount, type, status });
+    const discount = await Discount_1.DiscountModel.create({ name, amount, type, status });
     (0, response_1.SuccessResponse)(res, { message: "Discount created successfully", discount });
 };
 exports.createDiscount = createDiscount;

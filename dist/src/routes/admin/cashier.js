@@ -6,6 +6,7 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
 const router = (0, express_1.Router)();
 router.post("/", (0, haspremission_1.authorizePermissions)("cashier", "Add"), (0, catchAsync_1.catchAsync)(cashier_1.createCashier));
+router.get("/finitialaccount", (0, haspremission_1.authorizePermissions)("cashier", "View"), (0, catchAsync_1.catchAsync)(cashier_1.getBankAccounts));
 router.get("/", (0, haspremission_1.authorizePermissions)("cashier", "View"), (0, catchAsync_1.catchAsync)(cashier_1.getCashiers));
 router.put("/:id", (0, haspremission_1.authorizePermissions)("cashier", "Edit"), (0, catchAsync_1.catchAsync)(cashier_1.updateCashier));
 router.delete("/:id", (0, haspremission_1.authorizePermissions)("cashier", "Delete"), (0, catchAsync_1.catchAsync)(cashier_1.deleteCashier));
