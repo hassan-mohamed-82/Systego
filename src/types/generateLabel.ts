@@ -10,6 +10,7 @@ export interface LabelConfig {
   showPromotionalPrice: boolean;
   showBusinessName: boolean;
   showBrand: boolean;
+  showBarcode: boolean;
   productNameSize: number;
   priceSize: number;
   promotionalPriceSize: number;
@@ -35,7 +36,7 @@ export interface LabelSize {
   id: string;
   name: string;
   description: string;
-  paperType: "A4" | "Letter" | "Thermal" | "Roll";
+  paperType: "A4" | "Thermal" | "Roll";
   labelsPerSheet: number;
   labelSize: string;
   recommended: boolean;
@@ -46,4 +47,13 @@ export interface GenerateLabelsRequest {
   products: LabelProduct[];
   labelConfig: LabelConfig;
   paperSize: string;
+}
+
+export interface LabelData {
+  productName: string;
+  brandName: string;
+  businessName: string;
+  price: number;
+  promotionalPrice: number | null;
+  barcode: string;
 }

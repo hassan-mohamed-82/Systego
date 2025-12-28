@@ -61,7 +61,7 @@ const createCustomer = async (req, res) => {
 };
 exports.createCustomer = createCustomer;
 const getCustomers = async (req, res) => {
-    const customers = await customer_1.CustomerModel.find();
+    const customers = await customer_1.CustomerModel.find().populate('country', 'name').populate('city', 'name').populate('customer_group_id', 'name status');
     (0, response_1.SuccessResponse)(res, {
         message: "Customers fetched successfully",
         customers
@@ -69,7 +69,7 @@ const getCustomers = async (req, res) => {
 };
 exports.getCustomers = getCustomers;
 const getCustomerById = async (req, res) => {
-    const customer = await customer_1.CustomerModel.findById(req.params.id);
+    const customer = await customer_1.CustomerModel.findById(req.params.id).populate('country', 'name').populate('city', 'name').populate('customer_group_id', 'name status');
     if (!customer) {
         throw new Errors_1.NotFound("Customer not found");
     }
