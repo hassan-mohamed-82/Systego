@@ -5,6 +5,7 @@ const cashier_1 = require("../../models/schema/admin/cashier");
 const response_1 = require("../../utils/response");
 const Errors_1 = require("../../Errors");
 const Financial_Account_1 = require("../../models/schema/admin/Financial_Account");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const createCashier = async (req, res) => {
     const { name, ar_name, warehouse_id, status, bankAccounts } = req.body;
     if (!name || !ar_name || !warehouse_id) {
@@ -95,9 +96,12 @@ exports.updateCashier = updateCashier;
 // جلب كل الـ Bank Accounts (للاختيار منها)
 const getBankAccounts = async (req, res) => {
     const bankAccounts = await Financial_Account_1.BankAccountModel.find({ status: true, in_POS: true }).select("name balance status in_POS");
+    // الـ Warehouse مش محتاج populate - هو نفسه الـ model
+    const warehouse = await Warehouse_1.WarehouseModel.find().select("name");
     (0, response_1.SuccessResponse)(res, {
         message: "Bank accounts fetched successfully",
         bankAccounts,
+        warehouse,
     });
 };
 exports.getBankAccounts = getBankAccounts;

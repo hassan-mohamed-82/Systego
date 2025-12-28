@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.creategroup = exports.deletegroup = exports.updategroup = exports.getgroupbyid = exports.getallgroups = exports.customerandDuecustomers = exports.deleteCustomer = exports.updateCustomer = exports.getDueCustomers = exports.getCustomerById = exports.getCustomers = exports.createCustomer = void 0;
+exports.getCountriesWithCities = exports.creategroup = exports.deletegroup = exports.updategroup = exports.getgroupbyid = exports.getallgroups = exports.customerandDuecustomers = exports.deleteCustomer = exports.updateCustomer = exports.getDueCustomers = exports.getCustomerById = exports.getCustomers = exports.createCustomer = void 0;
 const customer_1 = require("../../models/schema/admin/POS/customer");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
+const Country_1 = require("../../models/schema/admin/Country");
 // Create Customer
 const createCustomer = async (req, res) => {
     const { name, email, phone_number, address, country, city, customer_group_id, is_Due, amount_Due, } = req.body;
@@ -60,7 +61,7 @@ const createCustomer = async (req, res) => {
 };
 exports.createCustomer = createCustomer;
 const getCustomers = async (req, res) => {
-    const customers = await customer_1.CustomerModel.find();
+    const customers = await customer_1.CustomerModel.find().populate('country', 'name').populate('city', 'name').populate('customer_group_id', 'name status');
     (0, response_1.SuccessResponse)(res, {
         message: "Customers fetched successfully",
         customers
@@ -68,7 +69,7 @@ const getCustomers = async (req, res) => {
 };
 exports.getCustomers = getCustomers;
 const getCustomerById = async (req, res) => {
-    const customer = await customer_1.CustomerModel.findById(req.params.id);
+    const customer = await customer_1.CustomerModel.findById(req.params.id).populate('country', 'name').populate('city', 'name').populate('customer_group_id', 'name status');
     if (!customer) {
         throw new Errors_1.NotFound("Customer not found");
     }
@@ -176,3 +177,11 @@ const creategroup = async (req, res) => {
     });
 };
 exports.creategroup = creategroup;
+const getCountriesWithCities = async (req, res) => {
+    const countries = await Country_1.CountryModel.find().populate("cities");
+    (0, response_1.SuccessResponse)(res, {
+        message: "Countries with cities fetched successfully",
+        countries,
+    });
+};
+exports.getCountriesWithCities = getCountriesWithCities;

@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 export const createCashier = async (req: Request, res: Response) => {
   const { name, ar_name, warehouse_id, status, bankAccounts } = req.body;
@@ -39,6 +40,7 @@ export const getCashiers = async (req: Request, res: Response) => {
     .populate("warehouse_id", "name")
     .populate("bankAccounts", "name balance status in_POS")
     .populate("warehouseUsers", "username email role status"); // الـ virtual
+
 
   SuccessResponse(res, {
     message: "Cashiers fetched successfully",
@@ -109,8 +111,13 @@ export const getBankAccounts = async (req: Request, res: Response) => {
   const bankAccounts = await BankAccountModel.find({ status: true, in_POS: true }).select(
     "name balance status in_POS"
   );
+  
+  // الـ Warehouse مش محتاج populate - هو نفسه الـ model
+  const warehouse = await WarehouseModel.find().select("name");
+  
   SuccessResponse(res, {
     message: "Bank accounts fetched successfully",
     bankAccounts,
+    warehouse,
   });
 };
