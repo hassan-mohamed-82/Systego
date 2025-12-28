@@ -2,15 +2,18 @@ import PDFDocument from "pdfkit";
 import bwipjs from "bwip-js";
 import { ProductModel } from "../models/schema/admin/products";
 import { ProductPriceModel } from "../models/schema/admin/product_price";
+import { LabelProduct, LabelConfig, LabelData, PaperConfig } from "../types/generateLabel";
 import { NotFound } from "../Errors/NotFound";
-import { PaperConfig, LabelConfig, LabelData } from "../types/generateLabel";
 
+// تحويل من مليمتر إلى نقاط PDF
 const mmToPoints = (mm: number): number => mm * 2.83465;
 
-// ============================================
-// Paper Configurations
-// ============================================
+// تعريف نوع الـ align
+type TextAlign = "center" | "left" | "right" | "justify";
+
+// إعدادات أحجام الورق
 export const PAPER_CONFIGS: Record<string, PaperConfig> = {
+  // أحجام حرارية (Thermal)
   "100x150": {
     labelsPerSheet: 1,
     sheetWidth: 100,
@@ -115,6 +118,7 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapX: 0,
     gapY: 0,
   },
+  // أحجام A4
   "a4_65": {
     labelsPerSheet: 65,
     sheetWidth: 210,
@@ -169,158 +173,164 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
   },
 };
 
-// ============================================
-// Generate Barcode
-// ============================================
-const generateBarcodeBuffer = async (text: string): Promise<Buffer> => {
-  return await bwipjs.toBuffer({
-    bcid: "code128",
-    text: text,
-    scale: 1,
-    height: 5,
-    includetext: true,
-    textxalign: "center",
-    textsize: 4,
-    rotate: "L",
-  });
+// توليد صورة الباركود
+const generateBarcodeBuffer = async (
+  text: string,
+  maxWidth: number,
+  maxHeight: number
+): Promise<Buffer> => {
+  try {
+    const buffer = await bwipjs.toBuffer({
+      bcid: "code128",
+      text: text,
+      scale: 1.5,
+      height: 7,
+      includetext: true,
+      textxalign: "center",
+      textsize: 6,
+      rotate: "L",
+    });
+    return buffer;
+  } catch (error) {
+    throw new Error(`Failed to generate barcode: ${error}`);
+  }
 };
 
-// ============================================
-// Draw Label - Rotated for Thermal Printer
-// ============================================
+// رسم نص مع تدوير
+const drawRotatedText = (
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  options: { fontSize: number; font?: string; color?: string; align?: TextAlign }
+): void => {
+  doc.save();
+  doc.translate(x, y);
+  doc.rotate(90);
+  doc.fontSize(options.fontSize);
+  if (options.color) doc.fillColor(options.color);
+  doc.text(text, 0, 0, { align: options.align || "left" });
+  doc.restore();
+};
+
+// رسم Label مع تدوير (للطابعات الحرارية)
 const drawLabelRotated = async (
   doc: PDFKit.PDFDocument,
-  data: LabelData,
-  labelX: number,
-  labelY: number,
-  labelWidth: number,
-  labelHeight: number,
+  labelData: LabelData,
+  width: number,
+  height: number,
   config: LabelConfig
 ): Promise<void> => {
   const padding = 2;
-  const contentWidth = labelHeight - padding * 2;
-  const contentHeight = labelWidth - padding * 2;
 
-  let currentX = labelX + padding;
+  // أحجام الخطوط المكبرة
+  const businessNameSize = 5;
+  const productNameSize = 6;
+  const brandSize = 5;
+  const priceSize = 8;
 
-  let elementsCount = 0;
-  if (config.showBusinessName && data.businessName) elementsCount++;
-  if (config.showProductName && data.productName) elementsCount++;
-  if (config.showBrand && data.brandName) elementsCount++;
-  if (config.showPrice && data.price) elementsCount++;
+  const lineSpacing = 2;
 
-  const barcodeWidth = config.showBarcode && data.barcode ? contentHeight * 0.35 : 0;
-  const textAreaWidth = contentHeight - barcodeWidth;
-  const lineSpacing = elementsCount > 0 ? textAreaWidth / elementsCount : 8;
+  // تدوير الصفحة 90 درجة
+  doc.save();
+  doc.translate(width, 0);
+  doc.rotate(90);
 
-  // ============ Barcode ============
-  if (config.showBarcode && data.barcode && barcodeWidth > 10) {
-    try {
-      const barcodeBuffer = await generateBarcodeBuffer(data.barcode);
-      const barcodeImgWidth = barcodeWidth - 2;
-      const barcodeImgHeight = contentWidth * 0.8;
-      const barcodeY = labelY + (labelHeight - barcodeImgHeight) / 2;
+  const drawWidth = height;
+  const drawHeight = width;
 
-      doc.image(barcodeBuffer, currentX, barcodeY, {
-        fit: [barcodeImgWidth, barcodeImgHeight],
-        align: "center",
-        valign: "center",
-      });
-      currentX += barcodeWidth;
-    } catch (err) {
-      console.error("Barcode error:", err);
-      currentX += barcodeWidth;
-    }
-  }
+  let currentY = padding;
 
-  // ============ Price ============
-  if (config.showPrice && data.price) {
-    const fontSize = 5;
-    let priceText = `${data.price}`;
-    let priceColor = "black";
+  const centerAlign: TextAlign = "center";
 
-    if (
-      config.showPromotionalPrice &&
-      data.promotionalPrice &&
-      data.promotionalPrice < data.price
-    ) {
-      priceText = `${data.promotionalPrice}`;
-      priceColor = "red";
-    }
-
-    doc.save();
-    doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-    doc.rotate(90);
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(priceColor);
-    doc.text(priceText, -contentWidth / 2, -fontSize / 2, {
-      width: contentWidth,
-      align: "center",
-      lineBreak: false,
+  // Business Name
+  if (config.showBusinessName && labelData.businessName) {
+    doc.fontSize(businessNameSize).fillColor("black");
+    doc.text(labelData.businessName, padding, currentY, {
+      width: drawWidth - padding * 2,
+      align: centerAlign,
     });
-    doc.restore();
-    currentX += lineSpacing;
+    currentY += businessNameSize + lineSpacing;
   }
 
-  // ============ Brand ============
-  if (config.showBrand && data.brandName) {
-    const fontSize = 3;
-    doc.save();
-    doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-    doc.rotate(90);
-    doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.brandName, -contentWidth / 2, -fontSize / 2, {
-      width: contentWidth,
-      align: "center",
-      lineBreak: false,
-    });
-    doc.restore();
-    currentX += lineSpacing;
-  }
-
-  // ============ Product Name ============
-  if (config.showProductName && data.productName) {
-    const fontSize = 4;
-    const maxChars = Math.floor(contentWidth / (fontSize * 0.4));
+  // Product Name
+  if (config.showProductName && labelData.productName) {
+    const maxChars = Math.floor((drawWidth - padding * 2) / (productNameSize * 0.5));
     const displayName =
-      data.productName.length > maxChars
-        ? data.productName.substring(0, maxChars - 2) + ".."
-        : data.productName;
+      labelData.productName.length > maxChars
+        ? labelData.productName.substring(0, maxChars - 2) + ".."
+        : labelData.productName;
 
-    doc.save();
-    doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-    doc.rotate(90);
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    doc.text(displayName, -contentWidth / 2, -fontSize / 2, {
-      width: contentWidth,
-      align: "center",
-      lineBreak: false,
+    doc.fontSize(productNameSize).fillColor("black");
+    doc.text(displayName, padding, currentY, {
+      width: drawWidth - padding * 2,
+      align: centerAlign,
     });
-    doc.restore();
-    currentX += lineSpacing;
+    currentY += productNameSize + lineSpacing;
   }
 
-  // ============ Business Name ============
-  if (config.showBusinessName && data.businessName) {
-    const fontSize = 3;
-    doc.save();
-    doc.translate(currentX + lineSpacing / 2, labelY + labelHeight / 2);
-    doc.rotate(90);
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    doc.text(data.businessName, -contentWidth / 2, -fontSize / 2, {
-      width: contentWidth,
-      align: "center",
-      lineBreak: false,
+  // Brand
+  if (config.showBrand && labelData.brandName) {
+    doc.fontSize(brandSize).fillColor("gray");
+    doc.text(labelData.brandName, padding, currentY, {
+      width: drawWidth - padding * 2,
+      align: centerAlign,
     });
-    doc.restore();
+    currentY += brandSize + lineSpacing;
   }
+
+  // Price
+  if (config.showPrice) {
+    const priceText =
+      labelData.promotionalPrice && labelData.promotionalPrice < labelData.price
+        ? `${labelData.promotionalPrice}`
+        : `${labelData.price}`;
+
+    doc.fontSize(priceSize).fillColor("black");
+    doc.text(priceText, padding, currentY, {
+      width: drawWidth - padding * 2,
+      align: centerAlign,
+    });
+    currentY += priceSize + lineSpacing;
+  }
+
+  // Barcode
+  if (config.showBarcode && labelData.barcode) {
+    try {
+      const remainingHeight = drawHeight - currentY - padding;
+      const barcodeMaxWidth = drawWidth - padding * 2;
+      const barcodeMaxHeight = Math.min(remainingHeight, 20);
+
+      const barcodeBuffer = await generateBarcodeBuffer(
+        labelData.barcode,
+        barcodeMaxWidth,
+        barcodeMaxHeight
+      );
+
+      const barcodeWidth = Math.min(barcodeMaxWidth * 0.9, 60);
+      const barcodeHeight = Math.min(barcodeMaxHeight * 0.9, 15);
+      const barcodeX = (drawWidth - barcodeWidth) / 2;
+
+      doc.image(barcodeBuffer, barcodeX, currentY, {
+        width: barcodeWidth,
+        height: barcodeHeight,
+      });
+    } catch (error) {
+      doc.fontSize(4).fillColor("black");
+      doc.text(labelData.barcode, padding, currentY, {
+        width: drawWidth - padding * 2,
+        align: centerAlign,
+      });
+    }
+  }
+
+  doc.restore();
 };
 
-// ============================================
-// Draw Label - Normal for A4
-// ============================================
+// رسم Label عادي (لـ A4)
 const drawLabelNormal = async (
   doc: PDFKit.PDFDocument,
-  data: LabelData,
+  labelData: LabelData,
   x: number,
   y: number,
   width: number,
@@ -328,154 +338,125 @@ const drawLabelNormal = async (
   config: LabelConfig
 ): Promise<void> => {
   const padding = 2;
-  const innerX = x + padding;
   const innerWidth = width - padding * 2;
-  const innerHeight = height - padding * 2;
+
+  const businessNameSize = 5;
+  const productNameSize = 6;
+  const brandSize = 5;
+  const priceSize = 8;
+
   let currentY = y + padding;
+  const lineSpacing = 1;
 
-  let elementsCount = 0;
-  if (config.showBusinessName && data.businessName) elementsCount++;
-  if (config.showProductName && data.productName) elementsCount++;
-  if (config.showBrand && data.brandName) elementsCount++;
-  if (config.showPrice && data.price) elementsCount++;
-
-  const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.4 : 0;
-  const textAreaHeight = innerHeight - barcodeHeight;
-  const lineHeight = elementsCount > 0 ? textAreaHeight / elementsCount : 10;
+  const centerAlign: TextAlign = "center";
 
   // Business Name
-  if (config.showBusinessName && data.businessName) {
-    const fontSize = Math.min(5, lineHeight * 0.6);
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    doc.text(data.businessName, innerX, currentY, {
+  if (config.showBusinessName && labelData.businessName) {
+    doc.fontSize(businessNameSize).fillColor("black");
+    doc.text(labelData.businessName, x + padding, currentY, {
       width: innerWidth,
-      align: "center",
-      lineBreak: false,
+      align: centerAlign,
     });
-    currentY += lineHeight;
+    currentY += businessNameSize + lineSpacing;
   }
 
   // Product Name
-  if (config.showProductName && data.productName) {
-    const fontSize = Math.min(6, lineHeight * 0.65);
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    const maxChars = Math.floor(innerWidth / (fontSize * 0.4));
+  if (config.showProductName && labelData.productName) {
+    const maxChars = Math.floor(innerWidth / (productNameSize * 0.5));
     const displayName =
-      data.productName.length > maxChars
-        ? data.productName.substring(0, maxChars - 2) + ".."
-        : data.productName;
-    doc.text(displayName, innerX, currentY, {
+      labelData.productName.length > maxChars
+        ? labelData.productName.substring(0, maxChars - 2) + ".."
+        : labelData.productName;
+
+    doc.fontSize(productNameSize).fillColor("black");
+    doc.text(displayName, x + padding, currentY, {
       width: innerWidth,
-      align: "center",
-      lineBreak: false,
+      align: centerAlign,
     });
-    currentY += lineHeight;
+    currentY += productNameSize + lineSpacing;
   }
 
   // Brand
-  if (config.showBrand && data.brandName) {
-    const fontSize = Math.min(4, lineHeight * 0.5);
-    doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.brandName, innerX, currentY, {
+  if (config.showBrand && labelData.brandName) {
+    doc.fontSize(brandSize).fillColor("gray");
+    doc.text(labelData.brandName, x + padding, currentY, {
       width: innerWidth,
-      align: "center",
-      lineBreak: false,
+      align: centerAlign,
     });
-    doc.fillColor("black");
-    currentY += lineHeight;
+    currentY += brandSize + lineSpacing;
   }
 
   // Price
-  if (config.showPrice && data.price) {
-    const fontSize = Math.min(7, lineHeight * 0.7);
-    if (
-      config.showPromotionalPrice &&
-      data.promotionalPrice &&
-      data.promotionalPrice < data.price
-    ) {
-      doc.fontSize(fontSize * 0.6).font("Helvetica").fillColor("gray");
-      doc.text(`${data.price}`, innerX, currentY, {
-        width: innerWidth / 2,
-        align: "right",
-        lineBreak: false,
-      });
-      doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("red");
-      doc.text(`${data.promotionalPrice}`, innerX + innerWidth / 2 + 2, currentY, {
-        width: innerWidth / 2,
-        align: "left",
-        lineBreak: false,
-      });
-      doc.fillColor("black");
-    } else {
-      doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-      doc.text(`${data.price}`, innerX, currentY, {
-        width: innerWidth,
-        align: "center",
-        lineBreak: false,
-      });
-    }
-    currentY += lineHeight;
+  if (config.showPrice) {
+    const priceText =
+      labelData.promotionalPrice && labelData.promotionalPrice < labelData.price
+        ? `${labelData.promotionalPrice}`
+        : `${labelData.price}`;
+
+    doc.fontSize(priceSize).fillColor("black");
+    doc.text(priceText, x + padding, currentY, {
+      width: innerWidth,
+      align: centerAlign,
+    });
+    currentY += priceSize + lineSpacing;
   }
 
   // Barcode
-  if (config.showBarcode && data.barcode && barcodeHeight > 10) {
+  if (config.showBarcode && labelData.barcode) {
     try {
-      const barcodeBuffer = await bwipjs.toBuffer({
-        bcid: "code128",
-        text: data.barcode,
-        scale: 1,
-        height: 5,
-        includetext: true,
-        textxalign: "center",
-        textsize: 4,
-        rotate: "N",
-      });
-      const barcodeImgWidth = Math.min(innerWidth * 0.8, 80);
-      const barcodeImgHeight = barcodeHeight - 4;
-      const barcodeX = innerX + (innerWidth - barcodeImgWidth) / 2;
+      const remainingHeight = y + height - currentY - padding;
+      const barcodeBuffer = await generateBarcodeBuffer(
+        labelData.barcode,
+        innerWidth,
+        remainingHeight
+      );
+
+      const barcodeWidth = Math.min(innerWidth * 0.9, 50);
+      const barcodeHeight = Math.min(remainingHeight * 0.8, 12);
+      const barcodeX = x + (width - barcodeWidth) / 2;
+
       doc.image(barcodeBuffer, barcodeX, currentY, {
-        fit: [barcodeImgWidth, barcodeImgHeight],
-        align: "center",
-        valign: "center",
+        width: barcodeWidth,
+        height: barcodeHeight,
       });
-    } catch (err) {
-      console.error("Barcode error:", err);
+    } catch (error) {
+      doc.fontSize(4).fillColor("black");
+      doc.text(labelData.barcode, x + padding, currentY, {
+        width: innerWidth,
+        align: centerAlign,
+      });
     }
   }
 };
 
-// ============================================
-// Create PDF - Thermal Printer
-// ============================================
+// إنشاء PDF للطابعات الحرارية (كل label في صفحة منفصلة)
 const createPDFThermal = async (
   labelsData: LabelData[],
-  labelConfig: LabelConfig,
-  paperConfig: PaperConfig
+  paperConfig: PaperConfig,
+  labelConfig: LabelConfig
 ): Promise<Buffer> => {
   return new Promise(async (resolve, reject) => {
     try {
-      const totalLabels = labelsData.length;
       const labelWidth = mmToPoints(paperConfig.labelWidth);
       const labelHeight = mmToPoints(paperConfig.labelHeight);
-      const pageHeight = labelHeight * totalLabels;
 
       const doc = new PDFDocument({
-        size: [labelWidth, pageHeight],
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-        autoFirstPage: true,
+        autoFirstPage: false,
       });
 
       const chunks: Buffer[] = [];
       doc.on("data", (chunk) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
 
-      for (let i = 0; i < totalLabels; i++) {
+      for (let i = 0; i < labelsData.length; i++) {
+        doc.addPage({
+          size: [labelWidth, labelHeight],
+          margin: 0,
+        });
+
         await drawLabelRotated(
           doc,
           labelsData[i],
-          0,
-          labelHeight * i,
           labelWidth,
           labelHeight,
           labelConfig
@@ -489,49 +470,54 @@ const createPDFThermal = async (
   });
 };
 
-// ============================================
-// Create PDF - A4
-// ============================================
+// إنشاء PDF لـ A4
 const createPDFA4 = async (
   labelsData: LabelData[],
-  labelConfig: LabelConfig,
-  paperConfig: PaperConfig
+  paperConfig: PaperConfig,
+  labelConfig: LabelConfig
 ): Promise<Buffer> => {
   return new Promise(async (resolve, reject) => {
     try {
+      const sheetWidth = mmToPoints(paperConfig.sheetWidth);
+      const sheetHeight = mmToPoints(paperConfig.sheetHeight);
+      const labelWidth = mmToPoints(paperConfig.labelWidth);
+      const labelHeight = mmToPoints(paperConfig.labelHeight);
+      const marginTop = mmToPoints(paperConfig.marginTop);
+      const marginLeft = mmToPoints(paperConfig.marginLeft);
+      const gapX = mmToPoints(paperConfig.gapX);
+      const gapY = mmToPoints(paperConfig.gapY);
+
       const doc = new PDFDocument({
-        size: [mmToPoints(paperConfig.sheetWidth), mmToPoints(paperConfig.sheetHeight)],
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-        autoFirstPage: false,
+        size: [sheetWidth, sheetHeight],
+        margin: 0,
       });
 
       const chunks: Buffer[] = [];
       doc.on("data", (chunk) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
 
       let labelIndex = 0;
-      const totalLabels = labelsData.length;
 
-      while (labelIndex < totalLabels) {
-        doc.addPage();
-        for (let row = 0; row < paperConfig.rows && labelIndex < totalLabels; row++) {
-          for (let col = 0; col < paperConfig.columns && labelIndex < totalLabels; col++) {
-            const x = mmToPoints(
-              paperConfig.marginLeft + col * (paperConfig.labelWidth + paperConfig.gapX)
-            );
-            const y = mmToPoints(
-              paperConfig.marginTop + row * (paperConfig.labelHeight + paperConfig.gapY)
-            );
+      while (labelIndex < labelsData.length) {
+        if (labelIndex > 0) {
+          doc.addPage();
+        }
+
+        for (let row = 0; row < paperConfig.rows && labelIndex < labelsData.length; row++) {
+          for (let col = 0; col < paperConfig.columns && labelIndex < labelsData.length; col++) {
+            const x = marginLeft + col * (labelWidth + gapX);
+            const y = marginTop + row * (labelHeight + gapY);
+
             await drawLabelNormal(
               doc,
               labelsData[labelIndex],
               x,
               y,
-              mmToPoints(paperConfig.labelWidth),
-              mmToPoints(paperConfig.labelHeight),
+              labelWidth,
+              labelHeight,
               labelConfig
             );
+
             labelIndex++;
           }
         }
@@ -544,37 +530,39 @@ const createPDFA4 = async (
   });
 };
 
-// ============================================
-// Main Function
-// ============================================
+// الدالة الرئيسية لتوليد PDF
 export const generateLabelsPDF = async (
-  products: { productId: string; productPriceId: string; quantity: number }[],
+  products: LabelProduct[],
   labelConfig: LabelConfig,
   paperSize: string
 ): Promise<Buffer> => {
   const paperConfig = PAPER_CONFIGS[paperSize];
+
   if (!paperConfig) {
-    throw new NotFound(
-      `Paper size not found. Available: ${Object.keys(PAPER_CONFIGS).join(", ")}`
-    );
+    throw new NotFound(`Paper size "${paperSize}" not found`);
   }
 
   const labelsData: LabelData[] = [];
 
   for (const item of products) {
     const product = await ProductModel.findById(item.productId).populate("brandId");
-    if (!product) throw new NotFound(`Product not found: ${item.productId}`);
+    if (!product) {
+      throw new NotFound(`Product not found: ${item.productId}`);
+    }
 
     const productPrice = await ProductPriceModel.findById(item.productPriceId);
-    if (!productPrice) throw new NotFound(`Product price not found: ${item.productPriceId}`);
+    if (!productPrice) {
+      throw new NotFound(`Product price not found: ${item.productPriceId}`);
+    }
 
     const priceDoc = productPrice as any;
+
     const labelData: LabelData = {
-      productName: product.name,
+      productName: product.name || "",
       brandName: (product.brandId as any)?.name || "",
       businessName: "WegoStation",
-      price: priceDoc.price,
-      promotionalPrice: priceDoc.promotionalPrice || null,
+      price: priceDoc.price || 0,
+      promotionalPrice: priceDoc.promotionalPrice || undefined,
       barcode: priceDoc.code || "",
     };
 
@@ -584,10 +572,28 @@ export const generateLabelsPDF = async (
   }
 
   if (labelsData.length === 0) {
-    throw new NotFound("No valid products found to generate labels");
+    throw new NotFound("No labels to generate");
   }
 
-  return paperSize.startsWith("a4_")
-    ? await createPDFA4(labelsData, labelConfig, paperConfig)
-    : await createPDFThermal(labelsData, labelConfig, paperConfig);
+  if (paperSize.startsWith("a4_")) {
+    return createPDFA4(labelsData, paperConfig, labelConfig);
+  } else {
+    return createPDFThermal(labelsData, paperConfig, labelConfig);
+  }
+};
+
+// توليد باركود EAN-13
+export const generateEAN13Barcode = (): string => {
+  let code = "";
+  for (let i = 0; i < 12; i++) {
+    code += Math.floor(Math.random() * 10).toString();
+  }
+
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+
+  return code + checkDigit;
 };
