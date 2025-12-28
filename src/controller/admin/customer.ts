@@ -81,14 +81,14 @@ export const createCustomer = async (req: Request, res: Response) => {
 
 
 export const getCustomers = async (req: Request, res: Response) => {
-    const customers = await CustomerModel.find().populate('country' ,'name').populate('city','name').populate('customer_group_id','name status');
+    const customers = await CustomerModel.find().populate('country', 'name').populate('city', 'name').populate('customer_group_id', 'name status');
     SuccessResponse(res, {
         message: "Customers fetched successfully",
         customers
     });
 }
 export const getCustomerById = async (req: Request, res: Response) => {
-    const customer = await CustomerModel.findById(req.params.id).populate('country' ,'name').populate('city','name').populate('customer_group_id','name status');
+    const customer = await CustomerModel.findById(req.params.id).populate('country', 'name').populate('city', 'name').populate('customer_group_id', 'name status');
     if (!customer) {
         throw new NotFound("Customer not found");
     }
@@ -216,6 +216,8 @@ export const creategroup = async (req: Request, res: Response) => {
 
 
     const group = new CustomerGroupModel({ name, status });
+    await group.save();
+
     SuccessResponse(res, {
         message: "Customer group created successfully",
         group
@@ -223,11 +225,11 @@ export const creategroup = async (req: Request, res: Response) => {
 }
 
 export const getCountriesWithCities = async (req: Request, res: Response) => {
-  const countries = await CountryModel.find().populate("cities");
+    const countries = await CountryModel.find().populate("cities");
 
-  SuccessResponse(res, {
-    message: "Countries with cities fetched successfully",
-    countries,
-  });
+    SuccessResponse(res, {
+        message: "Countries with cities fetched successfully",
+        countries,
+    });
 };
 
