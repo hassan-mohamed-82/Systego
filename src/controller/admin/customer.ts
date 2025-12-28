@@ -199,3 +199,13 @@ export const creategroup = async (req: Request, res: Response) => {
         group
     });
 }
+
+export const getCountriesWithCities = async (req: Request, res: Response) => {
+  const countries = await CountryModel.find().populate("cities");
+
+  SuccessResponse(res, {
+    message: "Countries with cities fetched successfully",
+    countries,
+  });
+};
+
