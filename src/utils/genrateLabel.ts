@@ -170,7 +170,7 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 };
 
 // ============================================
-// Generate Barcode - بدون rotation
+// Generate Barcode
 // ============================================
 const generateBarcodeBuffer = async (text: string): Promise<Buffer> => {
   return await bwipjs.toBuffer({
@@ -185,7 +185,7 @@ const generateBarcodeBuffer = async (text: string): Promise<Buffer> => {
 };
 
 // ============================================
-// Draw Label - Thermal (الباركود تحت)
+// Draw Label - Thermal
 // ============================================
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
@@ -196,14 +196,15 @@ const drawLabelThermal = async (
   labelHeight: number,
   config: LabelConfig
 ): Promise<void> => {
-  const padding = 4;
-  const innerWidth = labelWidth - padding * 2;
-  const innerHeight = labelHeight - padding * 2;
+  const paddingX = 8;
+  const paddingTop = 10;
+  const paddingBottom = 8;
+  const innerWidth = labelWidth - paddingX * 2;
+  const innerHeight = labelHeight - paddingTop - paddingBottom;
 
-  let currentY = labelY + padding;
-
-  // حساب المساحات
-  const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.35 : 0;
+  // حساب مساحة الباركود
+  const barcodeHeight =
+    config.showBarcode && data.barcode ? innerHeight * 0.32 : 0;
   const textAreaHeight = innerHeight - barcodeHeight;
 
   // عد العناصر النصية
@@ -214,18 +215,19 @@ const drawLabelThermal = async (
   if (config.showBusinessName && data.businessName) textElements++;
 
   const lineHeight = textElements > 0 ? textAreaHeight / textElements : 15;
+  let currentY = labelY + paddingTop;
 
   // ============ Product Name ============
   if (config.showProductName && data.productName) {
-    const fontSize = Math.min(config.productNameSize || 14, lineHeight * 0.7);
-    const maxChars = Math.floor(innerWidth / (fontSize * 0.6));
+    const fontSize = Math.min(config.productNameSize || 14, lineHeight * 0.65);
+    const maxChars = Math.floor(innerWidth / (fontSize * 0.55));
     const displayName =
       data.productName.length > maxChars
         ? data.productName.substring(0, maxChars - 2) + ".."
         : data.productName;
 
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    doc.text(displayName, labelX + padding, currentY, {
+    doc.text(displayName, labelX + paddingX, currentY, {
       width: innerWidth,
       align: "center",
     });
@@ -234,9 +236,9 @@ const drawLabelThermal = async (
 
   // ============ Brand ============
   if (config.showBrand && data.brandName) {
-    const fontSize = Math.min(config.brandSize || 10, lineHeight * 0.6);
+    const fontSize = Math.min(config.brandSize || 10, lineHeight * 0.55);
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.brandName, labelX + padding, currentY, {
+    doc.text(data.brandName, labelX + paddingX, currentY, {
       width: innerWidth,
       align: "center",
     });
@@ -245,7 +247,7 @@ const drawLabelThermal = async (
 
   // ============ Price ============
   if (config.showPrice && data.price) {
-    const fontSize = Math.min(config.priceSize || 16, lineHeight * 0.8);
+    const fontSize = Math.min(config.priceSize || 16, lineHeight * 0.75);
     let priceText = `${data.price}`;
     let priceColor: string = "black";
 
@@ -259,7 +261,7 @@ const drawLabelThermal = async (
     }
 
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(priceColor);
-    doc.text(priceText, labelX + padding, currentY, {
+    doc.text(priceText, labelX + paddingX, currentY, {
       width: innerWidth,
       align: "center",
     });
@@ -270,21 +272,20 @@ const drawLabelThermal = async (
   if (config.showBusinessName && data.businessName) {
     const fontSize = Math.min(config.businessNameSize || 10, lineHeight * 0.5);
     doc.fontSize(fontSize).font("Helvetica").fillColor("black");
-    doc.text(data.businessName, labelX + padding, currentY, {
+    doc.text(data.businessName, labelX + paddingX, currentY, {
       width: innerWidth,
       align: "center",
     });
-    currentY += lineHeight;
   }
 
-  // ============ Barcode (في الأسفل) ============
+  // ============ Barcode ============
   if (config.showBarcode && data.barcode && barcodeHeight > 15) {
     try {
       const barcodeBuffer = await generateBarcodeBuffer(data.barcode);
-      const barcodeImgWidth = innerWidth * 0.85;
+      const barcodeImgWidth = innerWidth * 0.8;
       const barcodeImgHeight = barcodeHeight - 5;
-      const barcodeX = labelX + (labelWidth - barcodeImgWidth) / 2;
-      const barcodeY = labelY + labelHeight - barcodeHeight - padding;
+      const barcodeX = labelX + paddingX + (innerWidth - barcodeImgWidth) / 2;
+      const barcodeY = labelY + labelHeight - paddingBottom - barcodeHeight;
 
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         fit: [barcodeImgWidth, barcodeImgHeight],
@@ -424,7 +425,7 @@ const drawLabelNormal = async (
 };
 
 // ============================================
-// Create PDF - Thermal Printer (صفحة لكل ملصق)
+// Create PDF - Thermal Printer
 // ============================================
 const createPDFThermal = async (
   labelsData: LabelData[],
