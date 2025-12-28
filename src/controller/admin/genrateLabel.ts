@@ -94,7 +94,6 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
       recommended: true,
       useCase: "أدوية - منتجات صغيرة",
     },
-
     // A4 Sheets
     {
       id: "a4_65",

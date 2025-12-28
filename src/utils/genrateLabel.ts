@@ -16,7 +16,6 @@ const mmToPoints = (mm: number): number => mm * 2.83465;
 export const PAPER_CONFIGS: Record<string, PaperConfig> = {
   // ==================== Thermal Labels ====================
 
-  // شحن - بوليصات (الأكثر شيوعاً)
   "100x150": {
     labelsPerSheet: 1,
     sheetWidth: 100,
@@ -31,7 +30,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // شحن مربع
   "100x100": {
     labelsPerSheet: 1,
     sheetWidth: 100,
@@ -46,7 +44,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // منتجات كبيرة
   "100x50": {
     labelsPerSheet: 1,
     sheetWidth: 100,
@@ -61,7 +58,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // باركود كبير
   "80x50": {
     labelsPerSheet: 1,
     sheetWidth: 80,
@@ -76,7 +72,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // طابعات الكاشير
   "58x40": {
     labelsPerSheet: 1,
     sheetWidth: 58,
@@ -91,7 +86,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // باركود متوسط
   "50x30": {
     labelsPerSheet: 1,
     sheetWidth: 50,
@@ -106,7 +100,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // باركود صغير
   "50x25": {
     labelsPerSheet: 1,
     sheetWidth: 50,
@@ -121,7 +114,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // صيدليات
   "38x25": {
     labelsPerSheet: 1,
     sheetWidth: 38,
@@ -138,7 +130,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 
   // ==================== A4 Sheets ====================
 
-  // 65 ملصق - باركود صغير
   "a4_65": {
     labelsPerSheet: 65,
     sheetWidth: 210,
@@ -153,7 +144,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // 24 ملصق - منتجات متوسطة
   "a4_24": {
     labelsPerSheet: 24,
     sheetWidth: 210,
@@ -168,7 +158,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 2.5,
   },
 
-  // 21 ملصق
   "a4_21": {
     labelsPerSheet: 21,
     sheetWidth: 210,
@@ -183,7 +172,6 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapY: 0,
   },
 
-  // 14 ملصق - عريض
   "a4_14": {
     labelsPerSheet: 14,
     sheetWidth: 210,
@@ -204,11 +192,30 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 // ============================================
 const generateBarcodeBuffer = async (
   text: string,
-  maxWidth: number,
-  maxHeight: number
+  labelWidth: number
 ): Promise<Buffer> => {
-  const scale = Math.max(1, Math.min(3, Math.floor(maxWidth / 30)));
-  const height = Math.max(4, Math.min(12, Math.floor(maxHeight / 4)));
+  // حساب الـ scale بناءً على عرض الـ label
+  let scale = 1.5;
+  let height = 8;
+  let textsize = 7;
+
+  if (labelWidth >= 100) {
+    scale = 2.5;
+    height = 12;
+    textsize = 10;
+  } else if (labelWidth >= 80) {
+    scale = 2;
+    height = 10;
+    textsize = 9;
+  } else if (labelWidth >= 50) {
+    scale = 1.5;
+    height = 8;
+    textsize = 8;
+  } else {
+    scale = 1.2;
+    height = 6;
+    textsize = 6;
+  }
 
   return await bwipjs.toBuffer({
     bcid: "code128",
@@ -217,7 +224,8 @@ const generateBarcodeBuffer = async (
     height: height,
     includetext: true,
     textxalign: "center",
-    textsize: Math.max(6, Math.min(10, scale * 3)),
+    textsize: textsize,
+    rotate: "N",
   });
 };
 
@@ -231,21 +239,21 @@ const drawLabel = async (
   y: number,
   width: number,
   height: number,
-  config: LabelConfig
+  config: LabelConfig,
+  labelWidthMM: number
 ): Promise<void> => {
-  const padding = Math.min(4, width * 0.03);
+  const padding = Math.max(2, width * 0.02);
   const innerX = x + padding;
   const innerWidth = width - padding * 2;
-  const innerHeight = height - padding * 2;
 
   let currentY = y + padding;
 
   // حساب الـ scale factor بناءً على حجم الـ label
-  const scaleFactor = Math.min(width / 150, height / 80, 1);
+  const scaleFactor = Math.min(width / 140, height / 70, 1);
 
   // ============ Business Name ============
   if (config.showBusinessName && data.businessName) {
-    const fontSize = Math.max(5, Math.min(config.businessNameSize * scaleFactor, 10));
+    const fontSize = Math.max(4, Math.min(config.businessNameSize * scaleFactor, 9));
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
 
     doc.text(data.businessName, innerX, currentY, {
@@ -254,15 +262,15 @@ const drawLabel = async (
       lineBreak: false,
     });
 
-    currentY += fontSize + 2;
+    currentY += fontSize + 1;
   }
 
   // ============ Product Name ============
   if (config.showProductName && data.productName) {
-    const fontSize = Math.max(5, Math.min(config.productNameSize * scaleFactor, 11));
+    const fontSize = Math.max(4, Math.min(config.productNameSize * scaleFactor, 10));
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
 
-    const maxChars = Math.floor(innerWidth / (fontSize * 0.5));
+    const maxChars = Math.floor(innerWidth / (fontSize * 0.45));
     const displayName =
       data.productName.length > maxChars
         ? data.productName.substring(0, maxChars - 2) + ".."
@@ -274,12 +282,12 @@ const drawLabel = async (
       lineBreak: false,
     });
 
-    currentY += fontSize + 2;
+    currentY += fontSize + 1;
   }
 
   // ============ Brand ============
   if (config.showBrand && data.brandName) {
-    const fontSize = Math.max(4, Math.min(config.brandSize * scaleFactor, 8));
+    const fontSize = Math.max(3, Math.min(config.brandSize * scaleFactor, 7));
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
 
     doc.text(data.brandName, innerX, currentY, {
@@ -289,75 +297,71 @@ const drawLabel = async (
     });
 
     doc.fillColor("black");
-    currentY += fontSize + 2;
+    currentY += fontSize + 1;
   }
 
   // ============ Price ============
   if (config.showPrice && data.price) {
-    const fontSize = Math.max(6, Math.min(config.priceSize * scaleFactor, 14));
+    const fontSize = Math.max(5, Math.min(config.priceSize * scaleFactor, 12));
 
     if (
       config.showPromotionalPrice &&
       data.promotionalPrice &&
       data.promotionalPrice < data.price
     ) {
-      const oldPriceSize = fontSize * 0.7;
-      const halfWidth = innerWidth / 2 - 4;
+      // سعر مشطوب + سعر العرض
+      const oldFontSize = fontSize * 0.7;
 
-      // السعر الأصلي (مشطوب)
-      doc.fontSize(oldPriceSize).font("Helvetica").fillColor("gray");
-      const oldPriceText = `${data.price}`;
-      const oldPriceWidth = doc.widthOfString(oldPriceText);
-
-      doc.text(oldPriceText, innerX, currentY, {
-        width: halfWidth,
+      doc.fontSize(oldFontSize).font("Helvetica").fillColor("gray");
+      doc.text(`${data.price}`, innerX, currentY, {
+        width: innerWidth / 2 - 2,
         align: "right",
+        lineBreak: false,
       });
 
-      // خط على السعر القديم
-      const strikeY = currentY + oldPriceSize / 2;
-      const strikeStartX = innerX + halfWidth - oldPriceWidth - 2;
-      doc
-        .moveTo(strikeStartX, strikeY)
-        .lineTo(strikeStartX + oldPriceWidth, strikeY)
-        .strokeColor("gray")
-        .lineWidth(0.5)
-        .stroke();
-
-      // سعر العرض
       doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("red");
-      doc.text(`${data.promotionalPrice}`, innerX + halfWidth + 8, currentY, {
-        width: halfWidth,
+      doc.text(`${data.promotionalPrice}`, innerX + innerWidth / 2 + 2, currentY, {
+        width: innerWidth / 2 - 2,
         align: "left",
+        lineBreak: false,
       });
 
       doc.fillColor("black");
-      currentY += fontSize + 2;
+      currentY += fontSize + 1;
     } else {
       doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
       doc.text(`${data.price}`, innerX, currentY, {
         width: innerWidth,
         align: "center",
+        lineBreak: false,
       });
-      currentY += fontSize + 2;
+      currentY += fontSize + 1;
     }
   }
 
   // ============ Barcode ============
   if (config.showBarcode && data.barcode) {
     const remainingHeight = height - (currentY - y) - padding;
-    const barcodeHeight = Math.min(remainingHeight * 0.9, innerHeight * 0.4);
 
-    if (barcodeHeight > 15) {
+    if (remainingHeight > 15) {
       try {
-        const barcodeBuffer = await generateBarcodeBuffer(
-          data.barcode,
-          innerWidth,
-          barcodeHeight
-        );
+        const barcodeBuffer = await generateBarcodeBuffer(data.barcode, labelWidthMM);
 
-        const barcodeImgWidth = Math.min(innerWidth * 0.9, 120);
-        const barcodeImgHeight = Math.min(barcodeHeight, 40);
+        // حساب أبعاد الباركود
+        let barcodeImgWidth: number;
+        let barcodeImgHeight: number;
+
+        if (labelWidthMM >= 100) {
+          barcodeImgWidth = Math.min(innerWidth * 0.8, 200);
+          barcodeImgHeight = Math.min(remainingHeight * 0.9, 50);
+        } else if (labelWidthMM >= 50) {
+          barcodeImgWidth = Math.min(innerWidth * 0.9, 120);
+          barcodeImgHeight = Math.min(remainingHeight * 0.9, 35);
+        } else {
+          barcodeImgWidth = Math.min(innerWidth * 0.95, 80);
+          barcodeImgHeight = Math.min(remainingHeight * 0.9, 25);
+        }
+
         const barcodeX = innerX + (innerWidth - barcodeImgWidth) / 2;
 
         doc.image(barcodeBuffer, barcodeX, currentY, {
@@ -366,10 +370,11 @@ const drawLabel = async (
           valign: "center",
         });
       } catch (err) {
-        console.error("Barcode generation error:", err);
-        const fontSize = Math.max(5, 7 * scaleFactor);
-        doc.fontSize(fontSize).font("Helvetica");
-        doc.text(data.barcode, innerX, currentY + 5, {
+        console.error("Barcode error:", err);
+        // fallback - اكتب الرقم
+        const fontSize = Math.max(5, 6 * scaleFactor);
+        doc.fontSize(fontSize).font("Helvetica").fillColor("black");
+        doc.text(data.barcode, innerX, currentY, {
           width: innerWidth,
           align: "center",
         });
@@ -422,7 +427,8 @@ const createPDF = async (
               y,
               mmToPoints(paperConfig.labelWidth),
               mmToPoints(paperConfig.labelHeight),
-              labelConfig
+              labelConfig,
+              paperConfig.labelWidth
             );
 
             labelIndex++;

@@ -120,10 +120,27 @@ const customerandDuecustomers = async (req, res) => {
 };
 exports.customerandDuecustomers = customerandDuecustomers;
 const getallgroups = async (req, res) => {
-    const groups = await customer_1.CustomerGroupModel.find();
+    // Get all customer groups
+    const customerGroups = await customer_1.CustomerGroupModel.find();
+    // For each group, find all customers that belong to it
+    const groupsWithCustomers = await Promise.all(customerGroups.map(async (group) => {
+        const customers = await customer_1.CustomerModel.find({ customer_group_id: group._id })
+            .populate([
+            { path: 'country', select: 'name code' },
+            { path: 'city', select: 'name' }
+        ]);
+        return {
+            _id: group._id,
+            name: group.name,
+            status: group.status,
+            createdAt: group.createdAt,
+            updatedAt: group.updatedAt,
+            customers: customers
+        };
+    }));
     (0, response_1.SuccessResponse)(res, {
         message: "Customer groups fetched successfully",
-        groups
+        groups: groupsWithCustomers
     });
 };
 exports.getallgroups = getallgroups;
