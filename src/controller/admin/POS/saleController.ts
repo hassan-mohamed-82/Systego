@@ -469,27 +469,16 @@ export const createSale = async (req: Request, res: Response) => {
     .populate("options_id", "name ar_name price")
     .lean();
 
-  // ✅ إخفاء السعر للهدايا في الـ Receipt
-  const receiptItems = fullItems.map((item: any) => {
-    if (item.isGift) {
-      return {
-        ...item,
-        price: null,
-        subtotal: null,
-      };
-    }
-    return item;
-  });
-
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`
       : "Sale created successfully",
     store: STORE_INFO,
     sale: fullSale,
-    items: receiptItems,
+    items: fullItems,
   });
 };
+
 
 
 export const getSales = async (req: Request, res: Response)=> {
