@@ -193,7 +193,7 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 };
 
 // ==================================================================
-// Thermal Label Drawing - كل شيء في صفحة واحدة مظبوط
+// Thermal Label Drawing
 // ==================================================================
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
@@ -208,20 +208,17 @@ const drawLabelThermal = async (
   const innerHeight = labelHeight - paddingY * 2;
 
   // حساب توزيع المساحات بنسب مئوية من الارتفاع الكلي
-  const businessNameHeight = innerHeight * 0.10;  // 10%
-  const brandHeight = innerHeight * 0.08;         // 8%
-  const productNameHeight = innerHeight * 0.15;   // 15%
-  const barcodeHeight = innerHeight * 0.45;       // 45%
-  const priceHeight = innerHeight * 0.22;         // 22%
+  const businessNameHeight = innerHeight * 0.10;
+  const brandHeight = innerHeight * 0.08;
+  const productNameHeight = innerHeight * 0.15;
+  const barcodeHeight = innerHeight * 0.45;
+  const priceHeight = innerHeight * 0.22;
 
   let currentY = paddingY;
 
   // 1. اسم المحل (فوق خالص)
   if (config.showBusinessName && data.businessName) {
-    doc
-      .fontSize(8)
-      .font("Helvetica-Bold")
-      .fillColor("#333333");
+    doc.fontSize(8).font("Helvetica-Bold").fillColor("#333333");
     doc.text(data.businessName, paddingX, currentY, {
       width: innerWidth,
       align: "center",
@@ -232,10 +229,7 @@ const drawLabelThermal = async (
 
   // 2. البراند
   if (config.showBrand && data.brandName) {
-    doc
-      .fontSize(6)
-      .font("Helvetica")
-      .fillColor("#666666");
+    doc.fontSize(6).font("Helvetica").fillColor("#666666");
     doc.text(data.brandName, paddingX, currentY, {
       width: innerWidth,
       align: "center",
@@ -252,10 +246,7 @@ const drawLabelThermal = async (
         ? data.productName.substring(0, maxChars - 2) + ".."
         : data.productName;
 
-    doc
-      .fontSize(10)
-      .font("Helvetica-Bold")
-      .fillColor("black");
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("black");
     doc.text(displayName, paddingX, currentY, {
       width: innerWidth,
       align: "center",
@@ -264,7 +255,7 @@ const drawLabelThermal = async (
     currentY += productNameHeight;
   }
 
-  // 4. الباركود (في النص - أكبر جزء)
+  // 4. الباركود (في النص)
   if (config.showBarcode && data.barcode) {
     try {
       const barcodeBuffer = await bwipjs.toBuffer({
@@ -293,7 +284,7 @@ const drawLabelThermal = async (
     }
   }
 
-  // 5. السعر (تحت - كبير وواضح)
+  // 5. السعر (تحت)
   if (config.showPrice && data.price) {
     const isPromo =
       config.showPromotionalPrice &&
@@ -303,10 +294,7 @@ const drawLabelThermal = async (
     const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
     const color = isPromo ? "red" : "black";
 
-    doc
-      .fontSize(14)
-      .font("Helvetica-Bold")
-      .fillColor(color);
+    doc.fontSize(14).font("Helvetica-Bold").fillColor(color);
     doc.text(priceText, paddingX, currentY, {
       width: innerWidth,
       align: "center",
@@ -427,7 +415,7 @@ const drawLabelA4 = async (
 };
 
 // ==================================================================
-// Create Thermal PDF - صفحة واحدة لكل منتج فريد
+// Create Thermal PDF - صفحة لكل label حسب الكمية
 // ==================================================================
 const createPDFThermal = async (
   labelsData: LabelData[],
@@ -451,13 +439,8 @@ const createPDFThermal = async (
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      // تجميع الـ labels الفريدة فقط (بدون تكرار)
-      const uniqueLabels = [
-        ...new Map(labelsData.map((item) => [item.barcode, item])).values(),
-      ];
-
-      // صفحة واحدة لكل منتج فريد
-      for (const labelData of uniqueLabels) {
+      // صفحة لكل label حسب الكمية المطلوبة
+      for (const labelData of labelsData) {
         doc.addPage({
           size: [labelWidth, labelHeight],
           margin: 0,
@@ -571,6 +554,7 @@ export const generateLabelsPDF = async (
       barcode: priceDoc.code || "",
     };
 
+    // إضافة الـ label حسب الكمية المطلوبة
     for (let i = 0; i < item.quantity; i++) {
       labelsData.push(labelData);
     }
