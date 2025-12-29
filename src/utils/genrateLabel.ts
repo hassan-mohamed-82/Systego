@@ -246,7 +246,7 @@ const drawLabelThermal = async (
 
   // Product Name
   if (config.showProductName && data.productName) {
-    const fontSize = 7;
+    const fontSize = config.productNameSize || 7;
     const maxChars = 20;
     const displayName =
       data.productName.length > maxChars
@@ -264,7 +264,7 @@ const drawLabelThermal = async (
 
   // Brand
   if (config.showBrand && data.brandName) {
-    const fontSize = 5;
+    const fontSize = config.brandSize || 5;
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
     doc.text(data.brandName, padding, currentY, {
       width: innerWidth,
@@ -276,18 +276,16 @@ const drawLabelThermal = async (
 
   // Price
   if (config.showPrice && data.price) {
-    const fontSize = 8;
-    let priceText = `${data.price}`;
-    let priceColor: string = "black";
-
-    if (
+    const isPromo =
       config.showPromotionalPrice &&
       data.promotionalPrice &&
-      data.promotionalPrice < data.price
-    ) {
-      priceText = `${data.promotionalPrice}`;
-      priceColor = "red";
-    }
+      data.promotionalPrice < data.price;
+    
+    const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
+    const priceColor = isPromo ? "red" : "black";
+    const fontSize = isPromo
+      ? config.promotionalPriceSize || 8
+      : config.priceSize || 8;
 
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(priceColor);
     doc.text(priceText, padding, currentY, {
@@ -300,7 +298,7 @@ const drawLabelThermal = async (
 
   // Business Name
   if (config.showBusinessName && data.businessName) {
-    const fontSize = 5;
+    const fontSize = config.businessNameSize || 5;
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
     doc.text(data.businessName, padding, currentY, {
       width: innerWidth,
@@ -338,7 +336,7 @@ const drawLabelA4 = async (
   const lineHeight = elementsCount > 0 ? textAreaHeight / elementsCount : mmToPoints(4);
 
   if (config.showBusinessName && data.businessName) {
-    const fontSize = 6;
+    const fontSize = config.businessNameSize || 6;
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
     doc.text(data.businessName, innerX, currentY, {
       width: innerWidth,
@@ -349,7 +347,7 @@ const drawLabelA4 = async (
   }
 
   if (config.showProductName && data.productName) {
-    const fontSize = 7;
+    const fontSize = config.productNameSize || 7;
     const maxChars = 20;
     const displayName =
       data.productName.length > maxChars
@@ -365,7 +363,7 @@ const drawLabelA4 = async (
   }
 
   if (config.showBrand && data.brandName) {
-    const fontSize = 5;
+    const fontSize = config.brandSize || 5;
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
     doc.text(data.brandName, innerX, currentY, {
       width: innerWidth,
@@ -376,15 +374,14 @@ const drawLabelA4 = async (
   }
 
   if (config.showPrice && data.price) {
-    const fontSize = 8;
-    const price =
-      config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price
-        ? data.promotionalPrice
-        : data.price;
-    const color =
-      config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price
-        ? "red"
-        : "black";
+    const isPromo =
+      config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
+
+    const price = isPromo ? data.promotionalPrice : data.price;
+    const color = isPromo ? "red" : "black";
+    const fontSize = isPromo
+      ? config.promotionalPriceSize || 8
+      : config.priceSize || 8;
 
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(color);
     doc.text(`${price}`, innerX, currentY, {
