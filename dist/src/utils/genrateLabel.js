@@ -198,8 +198,16 @@ exports.PAPER_CONFIGS = {
 // Thermal Label Drawing
 // ==================================================================
 const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
-    const paddingX = mmToPoints(2);
-    const paddingY = mmToPoints(1.5);
+    // Reference size for scaling (100x150mm in points)
+    const refWidth = mmToPoints(100);
+    const refHeight = mmToPoints(150);
+    // Calculate scale factors based on actual vs reference size
+    const scaleX = labelWidth / refWidth;
+    const scaleY = labelHeight / refHeight;
+    const scale = Math.min(scaleX, scaleY); // Use minimum to ensure everything fits
+    // Dynamic padding based on scale
+    const paddingX = mmToPoints(2) * scaleX;
+    const paddingY = mmToPoints(1.5) * scaleY;
     const innerWidth = labelWidth - paddingX * 2;
     const innerHeight = labelHeight - paddingY * 2;
     // حساب توزيع المساحات بنسب مئوية من الارتفاع الكلي
@@ -208,10 +216,21 @@ const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
     const productNameHeight = innerHeight * 0.15;
     const barcodeHeight = innerHeight * 0.45;
     const priceHeight = innerHeight * 0.22;
+    // Dynamic font sizes based on scale (with minimum sizes for readability)
+    const businessNameFontSize = Math.max(4, Math.round(8 * scale));
+    const brandFontSize = Math.max(3, Math.round(6 * scale));
+    const productNameFontSize = Math.max(5, Math.round(10 * scale));
+    const priceFontSize = Math.max(6, Math.round(14 * scale));
+    // Dynamic barcode parameters
+    const barcodeScale = Math.max(1, Math.round(2 * scale));
+    const barcodeTextSize = Math.max(4, Math.round(8 * scale));
+    const barcodeModuleHeight = Math.max(6, Math.round(12 * scale));
+    // Dynamic max characters for product name (smaller labels = fewer chars)
+    const maxChars = Math.max(10, Math.round(20 * scaleX));
     let currentY = paddingY;
     // 1. اسم المحل (فوق خالص)
     if (config.showBusinessName && data.businessName) {
-        doc.fontSize(8).font("Helvetica-Bold").fillColor("#333333");
+        doc.fontSize(businessNameFontSize).font("Helvetica-Bold").fillColor("#333333");
         doc.text(data.businessName, paddingX, currentY, {
             width: innerWidth,
             align: "center",
@@ -221,7 +240,7 @@ const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
     }
     // 2. البراند
     if (config.showBrand && data.brandName) {
-        doc.fontSize(6).font("Helvetica").fillColor("#666666");
+        doc.fontSize(brandFontSize).font("Helvetica").fillColor("#666666");
         doc.text(data.brandName, paddingX, currentY, {
             width: innerWidth,
             align: "center",
@@ -231,11 +250,10 @@ const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
     }
     // 3. اسم المنتج
     if (config.showProductName && data.productName) {
-        const maxChars = 20;
         const displayName = data.productName.length > maxChars
             ? data.productName.substring(0, maxChars - 2) + ".."
             : data.productName;
-        doc.fontSize(10).font("Helvetica-Bold").fillColor("black");
+        doc.fontSize(productNameFontSize).font("Helvetica-Bold").fillColor("black");
         doc.text(displayName, paddingX, currentY, {
             width: innerWidth,
             align: "center",
@@ -249,11 +267,11 @@ const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
             const barcodeBuffer = await bwip_js_1.default.toBuffer({
                 bcid: "code128",
                 text: data.barcode,
-                scale: 2,
-                height: 12,
+                scale: barcodeScale,
+                height: barcodeModuleHeight,
                 includetext: true,
                 textxalign: "center",
-                textsize: 8,
+                textsize: barcodeTextSize,
             });
             const barcodeImgWidth = innerWidth * 0.80;
             const barcodeImgHeight = barcodeHeight * 0.85;
@@ -276,7 +294,7 @@ const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
             data.promotionalPrice < data.price;
         const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
         const color = isPromo ? "red" : "black";
-        doc.fontSize(14).font("Helvetica-Bold").fillColor(color);
+        doc.fontSize(priceFontSize).font("Helvetica-Bold").fillColor(color);
         doc.text(priceText, paddingX, currentY, {
             width: innerWidth,
             align: "center",
