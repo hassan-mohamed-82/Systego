@@ -11,7 +11,6 @@ const product_price_1 = require("../models/schema/admin/product_price");
 const NotFound_1 = require("../Errors/NotFound");
 const mmToPoints = (mm) => (mm / 25.4) * 72;
 exports.PAPER_CONFIGS = {
-    // ... (نفس إعدادات الورق، لا تغيير هنا)
     "100x150": {
         labelsPerSheet: 1,
         sheetWidth: 100,
@@ -196,108 +195,94 @@ exports.PAPER_CONFIGS = {
     },
 };
 // ==================================================================
-// START: === الكود المعدل هنا ===
+// Thermal Label Drawing
 // ==================================================================
 const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
-    const padding = mmToPoints(2);
+    const padding = mmToPoints(3);
     const innerWidth = labelWidth - padding * 2;
     const innerHeight = labelHeight - padding * 2;
-    // 1. رسم الباركود أولاً
-    const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.3 : 0; // تقليل الارتفاع قليلاً
+    let currentY = padding;
+    const lineGap = mmToPoints(1.5);
+    // 1. اسم المحل (فوق خالص)
+    if (config.showBusinessName && data.businessName) {
+        const fontSize = config.businessNameSize || 8;
+        doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
+        doc.text(data.businessName, padding, currentY, {
+            width: innerWidth,
+            align: "center",
+            lineBreak: false,
+        });
+        currentY += doc.heightOfString(data.businessName, { width: innerWidth }) + lineGap * 0.5;
+    }
+    // 2. البراند
+    if (config.showBrand && data.brandName) {
+        const fontSize = config.brandSize || 7;
+        doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
+        doc.text(data.brandName, padding, currentY, {
+            width: innerWidth,
+            align: "center",
+            lineBreak: false,
+        });
+        currentY += doc.heightOfString(data.brandName, { width: innerWidth }) + lineGap * 0.5;
+    }
+    // 3. اسم المنتج
+    if (config.showProductName && data.productName) {
+        const fontSize = config.productNameSize || 10;
+        const maxChars = 30;
+        const displayName = data.productName.length > maxChars
+            ? data.productName.substring(0, maxChars - 2) + ".."
+            : data.productName;
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
+        doc.text(displayName, padding, currentY, {
+            width: innerWidth,
+            align: "center",
+            lineBreak: false,
+        });
+        currentY += doc.heightOfString(displayName, { width: innerWidth }) + lineGap;
+    }
+    // 4. الباركود (في النص)
     if (config.showBarcode && data.barcode) {
         try {
             const barcodeBuffer = await bwip_js_1.default.toBuffer({
                 bcid: "code128",
                 text: data.barcode,
-                scale: 2,
-                height: 8,
+                scale: 3,
+                height: 10,
                 includetext: true,
                 textxalign: "center",
-                textsize: 6,
+                textsize: 8,
             });
-            const barcodeImgWidth = innerWidth * 0.7;
-            const barcodeImgHeight = barcodeHeight - mmToPoints(1);
-            const barcodeX = padding + (innerWidth - barcodeImgWidth) / 2; // توسيط أفقي
-            const barcodeY = padding;
-            doc.image(barcodeBuffer, barcodeX, barcodeY, {
+            const barcodeImgWidth = innerWidth * 0.85;
+            const barcodeImgHeight = innerHeight * 0.30;
+            const barcodeX = padding + (innerWidth - barcodeImgWidth) / 2;
+            doc.image(barcodeBuffer, barcodeX, currentY, {
                 fit: [barcodeImgWidth, barcodeImgHeight],
                 align: "center",
             });
+            currentY += barcodeImgHeight + lineGap;
         }
         catch (err) {
             console.error("Barcode error:", err);
         }
     }
-    // 2. تجميع كل النصوص لحساب ارتفاعها وتوسيطها
-    const textBlockY_start = padding + barcodeHeight;
-    const textBlockHeight = innerHeight - barcodeHeight;
-    const textElements = [];
-    const lineGap = mmToPoints(0.5); // مسافة صغيرة بين السطور
-    if (config.showProductName && data.productName) {
-        const maxChars = 25;
-        const displayName = data.productName.length > maxChars
-            ? data.productName.substring(0, maxChars - 2) + ".."
-            : data.productName;
-        textElements.push({
-            text: displayName,
-            size: config.productNameSize || 7,
-            font: "Helvetica-Bold",
-            color: "black",
-        });
-    }
-    if (config.showBrand && data.brandName) {
-        textElements.push({
-            text: data.brandName,
-            size: config.brandSize || 5,
-            font: "Helvetica",
-            color: "gray",
-        });
-    }
+    // 5. السعر (تحت خالص)
     if (config.showPrice && data.price) {
         const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
-        textElements.push({
-            text: isPromo ? `${data.promotionalPrice}` : `${data.price}`,
-            size: isPromo ? config.promotionalPriceSize || 8 : config.priceSize || 8,
-            font: "Helvetica-Bold",
-            color: isPromo ? "red" : "black",
-        });
-    }
-    if (config.showBusinessName && data.businessName) {
-        textElements.push({
-            text: data.businessName,
-            size: config.businessNameSize || 5,
-            font: "Helvetica",
-            color: "gray",
-        });
-    }
-    // حساب الارتفاع الإجمالي الفعلي لكتلة النصوص
-    let totalTextHeight = 0;
-    for (const el of textElements) {
-        doc.fontSize(el.size).font(el.font);
-        totalTextHeight += doc.heightOfString(el.text, { width: innerWidth });
-    }
-    totalTextHeight += Math.max(0, textElements.length - 1) * lineGap;
-    // تحديد نقطة البداية Y لتوسيط كتلة النصوص عمودياً
-    let currentY = textBlockY_start + (textBlockHeight - totalTextHeight) / 2;
-    if (currentY < textBlockY_start) {
-        currentY = textBlockY_start;
-    }
-    // رسم النصوص واحداً تلو الآخر
-    for (const el of textElements) {
-        doc.fontSize(el.size).font(el.font).fillColor(el.color);
-        doc.text(el.text, padding, currentY, {
+        const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
+        const fontSize = isPromo ? config.promotionalPriceSize || 14 : config.priceSize || 14;
+        const color = isPromo ? "red" : "black";
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(color);
+        doc.text(priceText, padding, currentY, {
             width: innerWidth,
             align: "center",
             lineBreak: false,
         });
-        currentY += doc.heightOfString(el.text, { width: innerWidth }) + lineGap;
     }
 };
 // ==================================================================
-// END: === نهاية الكود المعدل ===
+// A4 Label Drawing
 // ==================================================================
 const drawLabelA4 = async (doc, data, x, y, width, height, config) => {
-    // ... (لا تغيير هنا)
     const padding = mmToPoints(1.5);
     const innerX = x + padding;
     const innerY = y + padding;
@@ -354,9 +339,7 @@ const drawLabelA4 = async (doc, data, x, y, width, height, config) => {
         const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
         const price = isPromo ? data.promotionalPrice : data.price;
         const color = isPromo ? "red" : "black";
-        const fontSize = isPromo
-            ? config.promotionalPriceSize || 8
-            : config.priceSize || 8;
+        const fontSize = isPromo ? config.promotionalPriceSize || 8 : config.priceSize || 8;
         doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(color);
         doc.text(`${price}`, innerX, currentY, {
             width: innerWidth,
@@ -390,6 +373,9 @@ const drawLabelA4 = async (doc, data, x, y, width, height, config) => {
         }
     }
 };
+// ==================================================================
+// Create Thermal PDF
+// ==================================================================
 const createPDFThermal = async (labelsData, labelConfig, paperConfig) => {
     return new Promise(async (resolve, reject) => {
         try {
@@ -419,8 +405,10 @@ const createPDFThermal = async (labelsData, labelConfig, paperConfig) => {
         }
     });
 };
+// ==================================================================
+// Create A4 PDF
+// ==================================================================
 const createPDFA4 = async (labelsData, labelConfig, paperConfig) => {
-    // ... (لا تغيير هنا)
     return new Promise(async (resolve, reject) => {
         try {
             const sheetWidth = mmToPoints(paperConfig.sheetWidth);
@@ -458,8 +446,10 @@ const createPDFA4 = async (labelsData, labelConfig, paperConfig) => {
         }
     });
 };
+// ==================================================================
+// Generate Labels PDF (Main Export)
+// ==================================================================
 const generateLabelsPDF = async (products, labelConfig, paperSize) => {
-    // ... (لا تغيير هنا)
     const paperConfig = exports.PAPER_CONFIGS[paperSize];
     if (!paperConfig) {
         throw new NotFound_1.NotFound(`Paper size not found. Available: ${Object.keys(exports.PAPER_CONFIGS).join(", ")}`);
