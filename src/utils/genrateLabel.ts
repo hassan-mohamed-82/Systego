@@ -193,7 +193,7 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 };
 
 // ==================================================================
-// Thermal Label Drawing - كل شيء في صفحة واحدة
+// Thermal Label Drawing - كل شيء في صفحة واحدة مظبوط
 // ==================================================================
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
@@ -202,92 +202,112 @@ const drawLabelThermal = async (
   labelHeight: number,
   config: LabelConfig
 ): Promise<void> => {
-  const padding = mmToPoints(2);
-  const innerWidth = labelWidth - padding * 2;
+  const paddingX = mmToPoints(2);
+  const paddingY = mmToPoints(1.5);
+  const innerWidth = labelWidth - paddingX * 2;
+  const innerHeight = labelHeight - paddingY * 2;
 
-  let currentY = padding;
+  // حساب توزيع المساحات بنسب مئوية من الارتفاع الكلي
+  const businessNameHeight = innerHeight * 0.10;  // 10%
+  const brandHeight = innerHeight * 0.08;         // 8%
+  const productNameHeight = innerHeight * 0.15;   // 15%
+  const barcodeHeight = innerHeight * 0.45;       // 45%
+  const priceHeight = innerHeight * 0.22;         // 22%
+
+  let currentY = paddingY;
 
   // 1. اسم المحل (فوق خالص)
   if (config.showBusinessName && data.businessName) {
-    const fontSize = config.businessNameSize || 7;
-    doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.businessName, padding, currentY, {
+    doc
+      .fontSize(8)
+      .font("Helvetica-Bold")
+      .fillColor("#333333");
+    doc.text(data.businessName, paddingX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
     });
-    currentY += mmToPoints(3);
+    currentY += businessNameHeight;
   }
 
   // 2. البراند
   if (config.showBrand && data.brandName) {
-    const fontSize = config.brandSize || 6;
-    doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.brandName, padding, currentY, {
+    doc
+      .fontSize(6)
+      .font("Helvetica")
+      .fillColor("#666666");
+    doc.text(data.brandName, paddingX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
     });
-    currentY += mmToPoints(3);
+    currentY += brandHeight;
   }
 
   // 3. اسم المنتج
   if (config.showProductName && data.productName) {
-    const fontSize = config.productNameSize || 9;
-    const maxChars = 25;
+    const maxChars = 20;
     const displayName =
       data.productName.length > maxChars
         ? data.productName.substring(0, maxChars - 2) + ".."
         : data.productName;
 
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    doc.text(displayName, padding, currentY, {
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .fillColor("black");
+    doc.text(displayName, paddingX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
     });
-    currentY += mmToPoints(5);
+    currentY += productNameHeight;
   }
 
-  // 4. الباركود (في النص)
+  // 4. الباركود (في النص - أكبر جزء)
   if (config.showBarcode && data.barcode) {
     try {
       const barcodeBuffer = await bwipjs.toBuffer({
         bcid: "code128",
         text: data.barcode,
         scale: 2,
-        height: 8,
+        height: 12,
         includetext: true,
         textxalign: "center",
-        textsize: 7,
+        textsize: 8,
       });
 
-      const barcodeImgWidth = innerWidth * 0.75;
-      const barcodeImgHeight = mmToPoints(12);
-      const barcodeX = padding + (innerWidth - barcodeImgWidth) / 2;
+      const barcodeImgWidth = innerWidth * 0.80;
+      const barcodeImgHeight = barcodeHeight * 0.85;
+      const barcodeX = paddingX + (innerWidth - barcodeImgWidth) / 2;
 
       doc.image(barcodeBuffer, barcodeX, currentY, {
         fit: [barcodeImgWidth, barcodeImgHeight],
         align: "center",
       });
 
-      currentY += barcodeImgHeight + mmToPoints(3);
+      currentY += barcodeHeight;
     } catch (err) {
       console.error("Barcode error:", err);
+      currentY += barcodeHeight;
     }
   }
 
-  // 5. السعر (تحت)
+  // 5. السعر (تحت - كبير وواضح)
   if (config.showPrice && data.price) {
     const isPromo =
-      config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
+      config.showPromotionalPrice &&
+      data.promotionalPrice &&
+      data.promotionalPrice < data.price;
 
     const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
-    const fontSize = isPromo ? config.promotionalPriceSize || 12 : config.priceSize || 12;
     const color = isPromo ? "red" : "black";
 
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(color);
-    doc.text(priceText, padding, currentY, {
+    doc
+      .fontSize(14)
+      .font("Helvetica-Bold")
+      .fillColor(color);
+    doc.text(priceText, paddingX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
