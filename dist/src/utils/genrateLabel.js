@@ -197,116 +197,146 @@ exports.PAPER_CONFIGS = {
 // ==================================================================
 // Thermal Label Drawing
 // ==================================================================
+// ==================================================================
+// "Shrink-to-Fit" Thermal Label Drawing
+// ==================================================================
 const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
-    // 1. Setup Margins
-    // Use a small 5% margin, but ensure it's not too huge on large labels
     const margin = Math.min(labelWidth, labelHeight) * 0.05;
     const innerWidth = labelWidth - (margin * 2);
-    const startX = margin;
-    let currentY = margin;
-    // 2. Helper: Get Font Size (Manual Config -> Fallback to Auto)
-    // This checks if you sent a size in config. If not, it calculates one based on height percentage.
-    const resolveFontSize = (manualSize, autoPercent, min, max) => {
+    const availableHeight = labelHeight - (margin * 2);
+    // --------------------------------------------------------
+    // STEP 1: PRE-CALCULATE HEIGHTS (Without Drawing)
+    // --------------------------------------------------------
+    // Helper to resolve font size (User Preference OR Auto)
+    const getFontSize = (manualSize, defaultPercent) => {
         if (manualSize && manualSize > 0)
             return manualSize;
-        const calculated = labelHeight * autoPercent;
-        return Math.max(min, Math.min(max, calculated));
+        return Math.max(6, labelHeight * defaultPercent); // Fallback to auto
     };
-    // --- DRAW: BUSINESS NAME ---
+    // We store the calculated heights here to use them later
+    const layout = {
+        business: { height: 0, fontSize: 0 },
+        brand: { height: 0, fontSize: 0 },
+        product: { height: 0, fontSize: 0 },
+        price: { height: 0, fontSize: 0 },
+        barcode: { height: 0 }
+    };
+    // 1. Measure Business Name
     if (config.showBusinessName && data.businessName) {
-        const fontSize = resolveFontSize(config.businessNameSize, 0.08, 6, 14);
-        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
-        // Calculate how much height this text actually takes
-        const textHeight = doc.heightOfString(data.businessName, { width: innerWidth });
-        doc.text(data.businessName, startX, currentY, {
-            width: innerWidth,
-            align: "center",
-            lineBreak: false, // Force single line if preferred, or remove to allow wrapping
-            ellipsis: true
-        });
-        currentY += textHeight + 2; // Add padding
+        layout.business.fontSize = getFontSize(config.businessNameSize, 0.08);
+        doc.fontSize(layout.business.fontSize).font("Helvetica-Bold");
+        layout.business.height = doc.heightOfString(data.businessName, { width: innerWidth }) + 2;
     }
-    // --- DRAW: BRAND NAME ---
+    // 2. Measure Brand
     if (config.showBrand && data.brandName) {
-        const fontSize = resolveFontSize(config.brandSize, 0.06, 5, 10);
-        doc.fontSize(fontSize).font("Helvetica").fillColor("#444444");
-        const textHeight = doc.heightOfString(data.brandName, { width: innerWidth });
-        doc.text(data.brandName, startX, currentY, {
-            width: innerWidth,
-            align: "center",
-            lineBreak: false,
-            ellipsis: true
-        });
-        currentY += textHeight + 2;
+        layout.brand.fontSize = getFontSize(config.brandSize, 0.06);
+        doc.fontSize(layout.brand.fontSize).font("Helvetica");
+        layout.brand.height = doc.heightOfString(data.brandName, { width: innerWidth }) + 2;
     }
-    // --- DRAW: PRODUCT NAME ---
+    // 3. Measure Product Name
     if (config.showProductName && data.productName) {
-        const fontSize = resolveFontSize(config.productNameSize, 0.12, 7, 16);
-        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
-        // Allow product name to wrap to a second line if needed
-        const options = {
-            width: innerWidth,
-            align: "center",
-            lineBreak: true,
-            ellipsis: true
-        };
-        const textHeight = doc.heightOfString(data.productName, options);
-        doc.text(data.productName, startX, currentY, options);
-        currentY += textHeight + 4; // Slightly more padding after product name
+        layout.product.fontSize = getFontSize(config.productNameSize, 0.12);
+        doc.fontSize(layout.product.fontSize).font("Helvetica-Bold");
+        layout.product.height = doc.heightOfString(data.productName, { width: innerWidth }) + 4;
     }
-    // --- CALCULATE REMAINING SPACE ---
-    const bottomMargin = margin;
-    let remainingHeight = labelHeight - bottomMargin - currentY;
-    // --- DRAW: PRICE (Bottom Priority) ---
-    let priceHeight = 0;
+    // 4. Measure Price
     if (config.showPrice && data.price) {
         const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
-        const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
-        // Choose size based on whether it is promo or normal
         const manualSize = isPromo ? config.promotionalPriceSize : config.priceSize;
-        const fontSize = resolveFontSize(manualSize, 0.15, 8, 24);
-        doc.fontSize(fontSize).font("Helvetica-Bold");
-        priceHeight = doc.heightOfString(priceText, { width: innerWidth });
-        // Check if we have enough vertical space to draw the price
-        if (remainingHeight > priceHeight) {
-            // Position price at the bottom
-            const priceY = labelHeight - bottomMargin - priceHeight;
-            doc.fillColor("black"); // Always black for thermal
-            doc.text(priceText, startX, priceY, {
-                width: innerWidth,
-                align: "center"
-            });
-            // Reserve this space so barcode doesn't overwrite it
-            remainingHeight -= (priceHeight + 2);
-        }
+        layout.price.fontSize = getFontSize(manualSize, 0.15);
+        doc.fontSize(layout.price.fontSize).font("Helvetica-Bold");
+        const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
+        layout.price.height = doc.heightOfString(priceText, { width: innerWidth }) + 2;
     }
-    // --- DRAW: BARCODE (Fill Remaining Space) ---
-    if (config.showBarcode && data.barcode && remainingHeight > 10) {
+    // 5. Measure Barcode (We assign it a "Target" height)
+    // We want the barcode to be at least 25% of the label or 30 points, whichever is reasonable
+    if (config.showBarcode && data.barcode) {
+        const targetBarcodeHeight = Math.max(20, labelHeight * 0.25);
+        layout.barcode.height = targetBarcodeHeight;
+    }
+    // --------------------------------------------------------
+    // STEP 2: CALCULATE SCALING FACTOR
+    // --------------------------------------------------------
+    const totalRequiredHeight = layout.business.height +
+        layout.brand.height +
+        layout.product.height +
+        layout.barcode.height +
+        layout.price.height;
+    // If required height > available height, we shrink EVERYTHING (< 1.0)
+    // If we have extra space, we stay at 1.0 (we don't stretch)
+    let scaleFactor = 1;
+    if (totalRequiredHeight > availableHeight) {
+        scaleFactor = availableHeight / totalRequiredHeight;
+    }
+    // --------------------------------------------------------
+    // STEP 3: DRAW WITH SCALING
+    // --------------------------------------------------------
+    let currentY = margin;
+    // If we are scaling down, center the block vertically? No, usually start from top.
+    // Actually, if scaleFactor is 1 (plenty of space), let's center vertically for better looks.
+    if (scaleFactor === 1) {
+        const extraSpace = availableHeight - totalRequiredHeight;
+        currentY += extraSpace / 2;
+    }
+    // --- DRAW: BUSINESS ---
+    if (layout.business.height > 0) {
+        const finalFontSize = layout.business.fontSize * scaleFactor;
+        doc.fontSize(finalFontSize).font("Helvetica-Bold").fillColor("black");
+        doc.text(data.businessName, margin, currentY, { width: innerWidth, align: "center", lineBreak: false, ellipsis: true });
+        currentY += layout.business.height * scaleFactor;
+    }
+    // --- DRAW: BRAND ---
+    if (layout.brand.height > 0) {
+        const finalFontSize = layout.brand.fontSize * scaleFactor;
+        doc.fontSize(finalFontSize).font("Helvetica").fillColor("#444444");
+        doc.text(data.brandName, margin, currentY, { width: innerWidth, align: "center", lineBreak: false, ellipsis: true });
+        currentY += layout.brand.height * scaleFactor;
+    }
+    // --- DRAW: PRODUCT ---
+    if (layout.product.height > 0) {
+        const finalFontSize = layout.product.fontSize * scaleFactor;
+        doc.fontSize(finalFontSize).font("Helvetica-Bold").fillColor("black");
+        doc.text(data.productName, margin, currentY, { width: innerWidth, align: "center", lineBreak: true, ellipsis: true });
+        currentY += layout.product.height * scaleFactor;
+    }
+    // --- DRAW: BARCODE ---
+    if (layout.barcode.height > 0) {
         try {
-            const barcodeHeight = remainingHeight - 4; // Leave small buffer
-            // Only draw if there is actually enough height for a readable barcode
-            if (barcodeHeight > 5) {
+            // Calculate final barcode height after scaling
+            const finalBarcodeHeight = layout.barcode.height * scaleFactor;
+            // Only draw if it's not microscopic (e.g., > 5 points)
+            if (finalBarcodeHeight > 5) {
                 const pngBuffer = await bwip_js_1.default.toBuffer({
                     bcid: "code128",
                     text: data.barcode,
-                    scale: 2,
-                    height: 10, // Abstract height, we control fit below
+                    scale: 2, // Keep generation scale high for quality
+                    height: 10,
                     includetext: true,
                     textxalign: "center",
-                    textsize: 6 // Text inside barcode
+                    textsize: 6
                 });
+                // We fit the image into the scaled height
                 const maxWidth = innerWidth * 0.9;
-                // Fit the image into the remaining space
-                doc.image(pngBuffer, startX + (innerWidth - maxWidth) / 2, currentY, {
-                    fit: [maxWidth, barcodeHeight],
+                doc.image(pngBuffer, margin + (innerWidth - maxWidth) / 2, currentY, {
+                    fit: [maxWidth, finalBarcodeHeight],
                     align: "center",
                     valign: "center"
                 });
             }
+            currentY += finalBarcodeHeight;
         }
         catch (err) {
-            console.error("Barcode generation error:", err);
+            console.error("Barcode Error", err);
         }
+    }
+    // --- DRAW: PRICE ---
+    if (layout.price.height > 0) {
+        const finalFontSize = layout.price.fontSize * scaleFactor;
+        doc.fontSize(finalFontSize).font("Helvetica-Bold").fillColor("black");
+        const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
+        const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
+        doc.text(priceText, margin, currentY, { width: innerWidth, align: "center" });
+        // currentY += layout.price.height * scaleFactor; // Not needed as it's the last element
     }
 };
 // ==================================================================
