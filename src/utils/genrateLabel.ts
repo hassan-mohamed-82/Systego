@@ -193,7 +193,7 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 };
 
 // ==================================================================
-// Thermal Label Drawing
+// Thermal Label Drawing - كل شيء في صفحة واحدة
 // ==================================================================
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
@@ -202,41 +202,39 @@ const drawLabelThermal = async (
   labelHeight: number,
   config: LabelConfig
 ): Promise<void> => {
-  const padding = mmToPoints(3);
+  const padding = mmToPoints(2);
   const innerWidth = labelWidth - padding * 2;
-  const innerHeight = labelHeight - padding * 2;
 
   let currentY = padding;
-  const lineGap = mmToPoints(1.5);
 
   // 1. اسم المحل (فوق خالص)
   if (config.showBusinessName && data.businessName) {
-    const fontSize = config.businessNameSize || 8;
+    const fontSize = config.businessNameSize || 7;
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
     doc.text(data.businessName, padding, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
     });
-    currentY += doc.heightOfString(data.businessName, { width: innerWidth }) + lineGap * 0.5;
+    currentY += mmToPoints(3);
   }
 
   // 2. البراند
   if (config.showBrand && data.brandName) {
-    const fontSize = config.brandSize || 7;
+    const fontSize = config.brandSize || 6;
     doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
     doc.text(data.brandName, padding, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
     });
-    currentY += doc.heightOfString(data.brandName, { width: innerWidth }) + lineGap * 0.5;
+    currentY += mmToPoints(3);
   }
 
   // 3. اسم المنتج
   if (config.showProductName && data.productName) {
-    const fontSize = config.productNameSize || 10;
-    const maxChars = 30;
+    const fontSize = config.productNameSize || 9;
+    const maxChars = 25;
     const displayName =
       data.productName.length > maxChars
         ? data.productName.substring(0, maxChars - 2) + ".."
@@ -248,7 +246,7 @@ const drawLabelThermal = async (
       align: "center",
       lineBreak: false,
     });
-    currentY += doc.heightOfString(displayName, { width: innerWidth }) + lineGap;
+    currentY += mmToPoints(5);
   }
 
   // 4. الباركود (في النص)
@@ -257,15 +255,15 @@ const drawLabelThermal = async (
       const barcodeBuffer = await bwipjs.toBuffer({
         bcid: "code128",
         text: data.barcode,
-        scale: 3,
-        height: 10,
+        scale: 2,
+        height: 8,
         includetext: true,
         textxalign: "center",
-        textsize: 8,
+        textsize: 7,
       });
 
-      const barcodeImgWidth = innerWidth * 0.85;
-      const barcodeImgHeight = innerHeight * 0.30;
+      const barcodeImgWidth = innerWidth * 0.75;
+      const barcodeImgHeight = mmToPoints(12);
       const barcodeX = padding + (innerWidth - barcodeImgWidth) / 2;
 
       doc.image(barcodeBuffer, barcodeX, currentY, {
@@ -273,19 +271,19 @@ const drawLabelThermal = async (
         align: "center",
       });
 
-      currentY += barcodeImgHeight + lineGap;
+      currentY += barcodeImgHeight + mmToPoints(3);
     } catch (err) {
       console.error("Barcode error:", err);
     }
   }
 
-  // 5. السعر (تحت خالص)
+  // 5. السعر (تحت)
   if (config.showPrice && data.price) {
     const isPromo =
       config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
 
     const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
-    const fontSize = isPromo ? config.promotionalPriceSize || 14 : config.priceSize || 14;
+    const fontSize = isPromo ? config.promotionalPriceSize || 12 : config.priceSize || 12;
     const color = isPromo ? "red" : "black";
 
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(color);
@@ -409,7 +407,7 @@ const drawLabelA4 = async (
 };
 
 // ==================================================================
-// Create Thermal PDF
+// Create Thermal PDF - صفحة واحدة لكل منتج فريد
 // ==================================================================
 const createPDFThermal = async (
   labelsData: LabelData[],
@@ -433,7 +431,13 @@ const createPDFThermal = async (
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      for (const labelData of labelsData) {
+      // تجميع الـ labels الفريدة فقط (بدون تكرار)
+      const uniqueLabels = [
+        ...new Map(labelsData.map((item) => [item.barcode, item])).values(),
+      ];
+
+      // صفحة واحدة لكل منتج فريد
+      for (const labelData of uniqueLabels) {
         doc.addPage({
           size: [labelWidth, labelHeight],
           margin: 0,
