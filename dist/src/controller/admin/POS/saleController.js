@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.payDue = exports.getDueSales = exports.getSalePendingById = exports.getShiftCompletedSales = exports.getsalePending = exports.getAllSales = exports.getSales = exports.createSale = void 0;
+exports.payDue = exports.getDueSales = exports.getSalePendingById = exports.getShiftCompletedSales = exports.getsalePending = exports.getSales = exports.getAllSales = exports.createSale = void 0;
 const Sale_1 = require("../../../models/schema/admin/POS/Sale");
 const Warehouse_1 = require("../../../models/schema/admin/Warehouse");
 const Errors_1 = require("../../../Errors");
@@ -393,25 +393,72 @@ const createSale = async (req, res) => {
     });
 };
 exports.createSale = createSale;
-const getSales = async (req, res) => {
+const getAllSales = async (req, res) => {
     const sales = await Sale_1.SaleModel.find()
-        .populate('customer_id', 'name email phone_number')
-        .populate('warehouse_id', 'name location')
-        .populate('order_tax', 'name rate')
-        .populate('order_discount', 'name rate')
-        .populate('coupon_id', 'code discount_amount')
-        .populate('gift_card_id', 'code amount')
+        .select("reference grand_total paid_amount remaining_amount Due order_pending date createdAt")
+        .populate("customer_id", "name")
+        .populate("Due_customer_id", "name")
+        .populate("warehouse_id", "name")
+        .populate("cashier_id", "name")
         .lean();
     (0, response_1.SuccessResponse)(res, { sales });
 };
-exports.getSales = getSales;
-const getAllSales = async (req, res) => {
-    const sales = await Sale_1.SaleModel.find()
-        .select('grand_total')
-        .populate('customer_id', 'name');
-    (0, response_1.SuccessResponse)(res, { sales });
-};
 exports.getAllSales = getAllSales;
+const getSales = async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("Invalid sale id");
+    }
+    const sale = await Sale_1.SaleModel.findById(id)
+        .populate("customer_id", "name email phone_number")
+        .populate("Due_customer_id", "name email phone_number")
+        .populate("warehouse_id", "name location")
+        .populate("order_tax", "name amount type")
+        .populate("order_discount", "name amount type")
+        .populate("coupon_id", "coupon_code amount type")
+        .populate("gift_card_id", "code amount")
+        .populate("cashier_id", "name email")
+        .populate("shift_id", "start_time status")
+        .populate("account_id", "name type balance")
+        .lean();
+    if (!sale) {
+        throw new Errors_1.NotFound("Sale not found");
+    }
+    const items = await Sale_1.ProductSalesModel.find({ sale_id: sale._id })
+        .populate("product_id", "name ar_name image price")
+        .populate("product_price_id", "price code quantity")
+        .populate("bundle_id", "name price")
+        .populate("options_id", "name ar_name price")
+        .lean();
+    // ✅ إخفاء السعر للهدايا فقط
+    const processedItems = items.map((item) => {
+        if (item.isGift) {
+            if (item.product_id && !item.isBundle) {
+                return {
+                    ...item,
+                    price: null,
+                    subtotal: null,
+                    product_id: { ...item.product_id, price: null },
+                    product_price_id: item.product_price_id
+                        ? { ...item.product_price_id, price: null }
+                        : null,
+                    options_id: item.options_id?.map((opt) => ({ ...opt, price: null })) || [],
+                };
+            }
+            if (item.bundle_id && item.isBundle) {
+                return {
+                    ...item,
+                    price: null,
+                    subtotal: null,
+                    bundle_id: { ...item.bundle_id, price: null },
+                };
+            }
+        }
+        return item;
+    });
+    (0, response_1.SuccessResponse)(res, { sale, items: processedItems });
+};
+exports.getSales = getSales;
 const getsalePending = async (req, res) => {
     // 1) هات كل الـ sales الـ pending
     const sales = await Sale_1.SaleModel.find({ order_pending: 1 }) // 1 = pending
