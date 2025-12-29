@@ -8,6 +8,7 @@ import { PaperConfig, LabelConfig, LabelData } from "../types/generateLabel";
 const mmToPoints = (mm: number): number => (mm / 25.4) * 72;
 
 export const PAPER_CONFIGS: Record<string, PaperConfig> = {
+  // ... (نفس إعدادات الورق، لا تغيير هنا)
   "100x150": {
     labelsPerSheet: 1,
     sheetWidth: 100,
@@ -192,6 +193,9 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
   },
 };
 
+// ==================================================================
+// START: === الكود المعدل هنا ===
+// ==================================================================
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
   data: LabelData,
@@ -203,20 +207,8 @@ const drawLabelThermal = async (
   const innerWidth = labelWidth - padding * 2;
   const innerHeight = labelHeight - padding * 2;
 
-  const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.35 : 0;
-  const textAreaHeight = innerHeight - barcodeHeight;
-
-  let textElements = 0;
-  if (config.showProductName && data.productName) textElements++;
-  if (config.showBrand && data.brandName) textElements++;
-  if (config.showPrice && data.price) textElements++;
-  if (config.showBusinessName && data.businessName) textElements++;
-
-  const lineHeight = textElements > 0 ? textAreaHeight / textElements : mmToPoints(4);
-
-  let currentY = padding;
-
-  // Barcode
+  // 1. رسم الباركود أولاً
+  const barcodeHeight = config.showBarcode && data.barcode ? innerHeight * 0.3 : 0; // تقليل الارتفاع قليلاً
   if (config.showBarcode && data.barcode) {
     try {
       const barcodeBuffer = await bwipjs.toBuffer({
@@ -228,85 +220,94 @@ const drawLabelThermal = async (
         textxalign: "center",
         textsize: 6,
       });
-      const barcodeImgWidth = innerWidth * 0.65;
-      const barcodeImgHeight = barcodeHeight - mmToPoints(0.5);
-      const barcodeX = padding + (innerWidth - barcodeImgWidth) / 2;
+      const barcodeImgWidth = innerWidth * 0.7;
+      const barcodeImgHeight = barcodeHeight - mmToPoints(1);
+      const barcodeX = padding + (innerWidth - barcodeImgWidth) / 2; // توسيط أفقي
+      const barcodeY = padding;
 
-      doc.image(barcodeBuffer, barcodeX, currentY, {
+      doc.image(barcodeBuffer, barcodeX, barcodeY, {
         fit: [barcodeImgWidth, barcodeImgHeight],
         align: "center",
-        valign: "center",
       });
-      currentY += barcodeHeight;
     } catch (err) {
       console.error("Barcode error:", err);
-      currentY += barcodeHeight;
     }
   }
 
-  // Product Name
+  // 2. تجميع كل النصوص لحساب ارتفاعها وتوسيطها
+  const textBlockY_start = padding + barcodeHeight;
+  const textBlockHeight = innerHeight - barcodeHeight;
+  const textElements: { text: string; size: number; font: string; color: string }[] = [];
+  const lineGap = mmToPoints(0.5); // مسافة صغيرة بين السطور
+
   if (config.showProductName && data.productName) {
-    const fontSize = config.productNameSize || 7;
-    const maxChars = 20;
+    const maxChars = 25;
     const displayName =
       data.productName.length > maxChars
         ? data.productName.substring(0, maxChars - 2) + ".."
         : data.productName;
-
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("black");
-    doc.text(displayName, padding, currentY, {
-      width: innerWidth,
-      align: "center",
-      lineBreak: false,
+    textElements.push({
+      text: displayName,
+      size: config.productNameSize || 7,
+      font: "Helvetica-Bold",
+      color: "black",
     });
-    currentY += lineHeight;
   }
-
-  // Brand
   if (config.showBrand && data.brandName) {
-    const fontSize = config.brandSize || 5;
-    doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.brandName, padding, currentY, {
-      width: innerWidth,
-      align: "center",
-      lineBreak: false,
+    textElements.push({
+      text: data.brandName,
+      size: config.brandSize || 5,
+      font: "Helvetica",
+      color: "gray",
     });
-    currentY += lineHeight;
   }
-
-  // Price
   if (config.showPrice && data.price) {
     const isPromo =
-      config.showPromotionalPrice &&
-      data.promotionalPrice &&
-      data.promotionalPrice < data.price;
-    
-    const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
-    const priceColor = isPromo ? "red" : "black";
-    const fontSize = isPromo
-      ? config.promotionalPriceSize || 8
-      : config.priceSize || 8;
-
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(priceColor);
-    doc.text(priceText, padding, currentY, {
-      width: innerWidth,
-      align: "center",
-      lineBreak: false,
+      config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
+    textElements.push({
+      text: isPromo ? `${data.promotionalPrice}` : `${data.price}`,
+      size: isPromo ? config.promotionalPriceSize || 8 : config.priceSize || 8,
+      font: "Helvetica-Bold",
+      color: isPromo ? "red" : "black",
     });
-    currentY += lineHeight;
+  }
+  if (config.showBusinessName && data.businessName) {
+    textElements.push({
+      text: data.businessName,
+      size: config.businessNameSize || 5,
+      font: "Helvetica",
+      color: "gray",
+    });
   }
 
-  // Business Name
-  if (config.showBusinessName && data.businessName) {
-    const fontSize = config.businessNameSize || 5;
-    doc.fontSize(fontSize).font("Helvetica").fillColor("gray");
-    doc.text(data.businessName, padding, currentY, {
+  // حساب الارتفاع الإجمالي الفعلي لكتلة النصوص
+  let totalTextHeight = 0;
+  for (const el of textElements) {
+    doc.fontSize(el.size).font(el.font);
+    totalTextHeight += doc.heightOfString(el.text, { width: innerWidth });
+  }
+  totalTextHeight += Math.max(0, textElements.length - 1) * lineGap;
+
+  // تحديد نقطة البداية Y لتوسيط كتلة النصوص عمودياً
+  let currentY = textBlockY_start + (textBlockHeight - totalTextHeight) / 2;
+  if (currentY < textBlockY_start) {
+    currentY = textBlockY_start;
+  }
+
+  // رسم النصوص واحداً تلو الآخر
+  for (const el of textElements) {
+    doc.fontSize(el.size).font(el.font).fillColor(el.color);
+    doc.text(el.text, padding, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
     });
+    currentY += doc.heightOfString(el.text, { width: innerWidth }) + lineGap;
   }
 };
+// ==================================================================
+// END: === نهاية الكود المعدل ===
+// ==================================================================
 
 const drawLabelA4 = async (
   doc: PDFKit.PDFDocument,
@@ -317,6 +318,7 @@ const drawLabelA4 = async (
   height: number,
   config: LabelConfig
 ): Promise<void> => {
+  // ... (لا تغيير هنا)
   const padding = mmToPoints(1.5);
   const innerX = x + padding;
   const innerY = y + padding;
@@ -461,6 +463,7 @@ const createPDFA4 = async (
   labelConfig: LabelConfig,
   paperConfig: PaperConfig
 ): Promise<Buffer> => {
+  // ... (لا تغيير هنا)
   return new Promise(async (resolve, reject) => {
     try {
       const sheetWidth = mmToPoints(paperConfig.sheetWidth);
@@ -522,6 +525,7 @@ export const generateLabelsPDF = async (
   labelConfig: LabelConfig,
   paperSize: string
 ): Promise<Buffer> => {
+  // ... (لا تغيير هنا)
   const paperConfig = PAPER_CONFIGS[paperSize];
   if (!paperConfig) {
     throw new NotFound(
