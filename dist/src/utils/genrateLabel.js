@@ -198,108 +198,127 @@ exports.PAPER_CONFIGS = {
 // Thermal Label Drawing
 // ==================================================================
 const drawLabelThermal = async (doc, data, labelWidth, labelHeight, config) => {
-    // Reference size for scaling (100x150mm in points)
-    const refWidth = mmToPoints(100);
-    const refHeight = mmToPoints(150);
-    // Calculate scale factors based on actual vs reference size
-    const scaleX = labelWidth / refWidth;
-    const scaleY = labelHeight / refHeight;
-    const scale = Math.min(scaleX, scaleY); // Use minimum to ensure everything fits
-    // Dynamic padding based on scale
-    const paddingX = mmToPoints(2) * scaleX;
-    const paddingY = mmToPoints(1.5) * scaleY;
-    const innerWidth = labelWidth - paddingX * 2;
-    const innerHeight = labelHeight - paddingY * 2;
-    // حساب توزيع المساحات بنسب مئوية من الارتفاع الكلي
-    const businessNameHeight = innerHeight * 0.10;
-    const brandHeight = innerHeight * 0.08;
-    const productNameHeight = innerHeight * 0.15;
-    const barcodeHeight = innerHeight * 0.45;
-    const priceHeight = innerHeight * 0.22;
-    // Dynamic font sizes based on scale (with minimum sizes for readability)
-    const businessNameFontSize = Math.max(4, Math.round(8 * scale));
-    const brandFontSize = Math.max(3, Math.round(6 * scale));
-    const productNameFontSize = Math.max(5, Math.round(10 * scale));
-    const priceFontSize = Math.max(6, Math.round(14 * scale));
-    // Dynamic barcode parameters
-    const barcodeScale = Math.max(1, Math.round(2 * scale));
-    const barcodeTextSize = Math.max(4, Math.round(8 * scale));
-    const barcodeModuleHeight = Math.max(6, Math.round(12 * scale));
-    // Dynamic max characters for product name (smaller labels = fewer chars)
-    const maxChars = Math.max(10, Math.round(20 * scaleX));
-    let currentY = paddingY;
-    // 1. اسم المحل (فوق خالص)
+    // 1. Setup Margins & Working Area
+    // Use smaller margins for small labels (e.g. 50x25)
+    const margin = Math.min(labelWidth, labelHeight) * 0.05;
+    const innerWidth = labelWidth - (margin * 2);
+    const startX = margin;
+    let currentY = margin;
+    // 2. Count Active Elements to Distribute Space
+    // We determine which elements are active to calculate how much vertical space we have
+    const activeElements = [
+        config.showBusinessName && data.businessName,
+        config.showBrand && data.brandName,
+        config.showProductName && data.productName,
+        config.showPrice && data.price,
+        config.showBarcode && data.barcode
+    ].filter(Boolean).length;
+    if (activeElements === 0)
+        return;
+    // 3. Dynamic Font Sizing Strategy
+    // Fonts are calculated as a percentage of the TOTAL label height, clamped to min/max values
+    const getFontSize = (percent, min, max) => {
+        const calculated = labelHeight * percent;
+        return Math.max(min, Math.min(max, calculated));
+    };
+    // --- DRAW: BUSINESS NAME ---
     if (config.showBusinessName && data.businessName) {
-        doc.fontSize(businessNameFontSize).font("Helvetica-Bold").fillColor("#333333");
-        doc.text(data.businessName, paddingX, currentY, {
+        const fontSize = getFontSize(0.08, 6, 14); // 8% of height
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
+        const textHeight = doc.heightOfString(data.businessName, { width: innerWidth });
+        doc.text(data.businessName, startX, currentY, {
             width: innerWidth,
             align: "center",
             lineBreak: false,
+            ellipsis: true
         });
-        currentY += businessNameHeight;
+        currentY += textHeight + 2; // Add small padding
     }
-    // 2. البراند
+    // --- DRAW: BRAND NAME ---
     if (config.showBrand && data.brandName) {
-        doc.fontSize(brandFontSize).font("Helvetica").fillColor("#666666");
-        doc.text(data.brandName, paddingX, currentY, {
+        const fontSize = getFontSize(0.06, 5, 10); // 6% of height
+        doc.fontSize(fontSize).font("Helvetica").fillColor("#444444");
+        const textHeight = doc.heightOfString(data.brandName, { width: innerWidth });
+        doc.text(data.brandName, startX, currentY, {
             width: innerWidth,
             align: "center",
             lineBreak: false,
+            ellipsis: true
         });
-        currentY += brandHeight;
+        currentY += textHeight + 2;
     }
-    // 3. اسم المنتج
+    // --- DRAW: PRODUCT NAME ---
     if (config.showProductName && data.productName) {
-        const displayName = data.productName.length > maxChars
-            ? data.productName.substring(0, maxChars - 2) + ".."
-            : data.productName;
-        doc.fontSize(productNameFontSize).font("Helvetica-Bold").fillColor("black");
-        doc.text(displayName, paddingX, currentY, {
+        // Product name gets slightly larger emphasis
+        const fontSize = getFontSize(0.12, 7, 16);
+        doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
+        // We allow max 2 lines for product name if space permits
+        const options = {
             width: innerWidth,
             align: "center",
-            lineBreak: false,
-        });
-        currentY += productNameHeight;
+            lineBreak: true,
+            height: fontSize * 2.2, // Limit height to roughly 2 lines
+            ellipsis: true
+        };
+        const textHeight = Math.min(doc.heightOfString(data.productName, options), fontSize * 2.2);
+        doc.text(data.productName, startX, currentY, options);
+        currentY += textHeight + 4; // Extra padding after product name
     }
-    // 4. الباركود (في النص)
-    if (config.showBarcode && data.barcode) {
+    // --- CALCULATE REMAINING SPACE ---
+    // We need to know how much space is left for Barcode and Price
+    const bottomMargin = margin;
+    let remainingHeight = labelHeight - bottomMargin - currentY;
+    // --- DRAW: PRICE (Bottom Priority) ---
+    // We draw price first logic-wise to reserve its space, or draw it at the very bottom
+    let priceHeight = 0;
+    if (config.showPrice && data.price) {
+        const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
+        const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
+        const fontSize = getFontSize(0.15, 8, 24); // Price is usually large
+        doc.fontSize(fontSize).font("Helvetica-Bold");
+        priceHeight = doc.heightOfString(priceText, { width: innerWidth });
+        // Ensure we have space
+        if (remainingHeight > priceHeight) {
+            // Draw Price at the very bottom of the label area
+            const priceY = labelHeight - bottomMargin - priceHeight;
+            doc.fillColor(isPromo ? "black" : "black"); // Thermal printers only print black
+            doc.text(priceText, startX, priceY, {
+                width: innerWidth,
+                align: "center"
+            });
+            // Reduce remaining height for the barcode
+            remainingHeight -= (priceHeight + 2);
+        }
+    }
+    // --- DRAW: BARCODE (Fill Remaining Space) ---
+    if (config.showBarcode && data.barcode && remainingHeight > 10) {
         try {
-            const barcodeBuffer = await bwip_js_1.default.toBuffer({
+            // Barcode takes whatever vertical space is left between (Product Name) and (Price)
+            // We leave a small buffer
+            const barcodeHeight = remainingHeight - 4;
+            // Generate barcode with bwip-js
+            // scaleX/Y logic helps resolution but we strictly fit by dimensions
+            const pngBuffer = await bwip_js_1.default.toBuffer({
                 bcid: "code128",
                 text: data.barcode,
-                scale: barcodeScale,
-                height: barcodeModuleHeight,
+                scale: 2, // Higher scale for better resolution, then we shrink it down
+                height: 10, // arbitrary abstract height
                 includetext: true,
                 textxalign: "center",
-                textsize: barcodeTextSize,
+                textsize: 6
             });
-            const barcodeImgWidth = innerWidth * 0.80;
-            const barcodeImgHeight = barcodeHeight * 0.85;
-            const barcodeX = paddingX + (innerWidth - barcodeImgWidth) / 2;
-            doc.image(barcodeBuffer, barcodeX, currentY, {
-                fit: [barcodeImgWidth, barcodeImgHeight],
+            // Maintain Aspect Ratio manually to prevent squishing
+            // We prioritize fitting the WIDTH first, then limit by HEIGHT
+            const maxWidth = innerWidth * 0.9;
+            doc.image(pngBuffer, startX + (innerWidth - maxWidth) / 2, currentY, {
+                fit: [maxWidth, barcodeHeight],
                 align: "center",
+                valign: "center"
             });
-            currentY += barcodeHeight;
         }
         catch (err) {
-            console.error("Barcode error:", err);
-            currentY += barcodeHeight;
+            console.error("Barcode generation error:", err);
         }
-    }
-    // 5. السعر (تحت)
-    if (config.showPrice && data.price) {
-        const isPromo = config.showPromotionalPrice &&
-            data.promotionalPrice &&
-            data.promotionalPrice < data.price;
-        const priceText = isPromo ? `${data.promotionalPrice}` : `${data.price}`;
-        const color = isPromo ? "red" : "black";
-        doc.fontSize(priceFontSize).font("Helvetica-Bold").fillColor(color);
-        doc.text(priceText, paddingX, currentY, {
-            width: innerWidth,
-            align: "center",
-            lineBreak: false,
-        });
     }
 };
 // ==================================================================
