@@ -469,13 +469,22 @@ export const createSale = async (req: Request, res: Response) => {
     .populate("options_id", "name ar_name price")
     .lean();
 
+  // ✅ إخفاء الأسعار للمنتجات الهدايا
+  const formattedItems = fullItems.map((item: any) => {
+    if (item.isGift) {
+      const { price, subtotal, ...rest } = item;
+      return rest;
+    }
+    return item;
+  });
+
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`
       : "Sale created successfully",
     store: STORE_INFO,
     sale: fullSale,
-    items: fullItems,
+    items: formattedItems,
   });
 };
 
