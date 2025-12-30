@@ -9,27 +9,45 @@ import { LabelSize } from "../../types/generateLabel";
 // ============================================
 export const getAvailableLabelSizes = async (req: Request, res: Response) => {
   const labelSizes: LabelSize[] = [
-     
-   
     {
       id: "100x50",
-      name: "100×50mm (منتجات كبيرة)",
-      description: "منتجات كبيرة",
+      name: "100×50mm (كراتين كبيرة)",
+      description: "كراتين كبيرة",
       paperType: "Thermal",
       labelsPerSheet: 1,
       labelSize: "100mm × 50mm",
       recommended: false,
-      useCase: "كراتين - منتجات كبيرة",
+      useCase: "كراتين - شحن",
     },
     {
       id: "80x50",
-      name: "80×50mm (باركود كبير)",
-      description: "باركود كبير",
+      name: "80×50mm (منتجات كبيرة)",
+      description: "منتجات كبيرة",
       paperType: "Thermal",
       labelsPerSheet: 1,
       labelSize: "80mm × 50mm",
       recommended: false,
       useCase: "منتجات كبيرة",
+    },
+    {
+      id: "70x40",
+      name: "70×40mm (باركود واضح)",
+      description: "باركود واضح",
+      paperType: "Thermal",
+      labelsPerSheet: 1,
+      labelSize: "70mm × 40mm",
+      recommended: true,
+      useCase: "منتجات متوسطة - باركود كبير",
+    },
+    {
+      id: "60x40",
+      name: "60×40mm (الأكثر استخداماً)",
+      description: "الأكثر استخداماً",
+      paperType: "Thermal",
+      labelsPerSheet: 1,
+      labelSize: "60mm × 40mm",
+      recommended: true,
+      useCase: "منتجات متوسطة - باركود واضح",
     },
     {
       id: "57x45",
@@ -43,7 +61,7 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
     },
     {
       id: "57x40",
-      name: "57×40mm(طابعات الكاشير)",
+      name: "57×40mm (طابعات الكاشير)",
       description: "طابعات الكاشير",
       paperType: "Roll",
       labelsPerSheet: 1,
@@ -63,7 +81,7 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
     },
     {
       id: "50x25",
-      name: "50×25mm  (باركود صغير)",
+      name: "50×25mm (باركود صغير)",
       description: "باركود صغير",
       paperType: "Thermal",
       labelsPerSheet: 1,
@@ -91,10 +109,6 @@ export const getAvailableLabelSizes = async (req: Request, res: Response) => {
       recommended: true,
       useCase: "أدوية - منتجات صغيرة",
     },
-  
- 
-   
-  
   ];
 
   SuccessResponse(res, { labelSizes });

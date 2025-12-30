@@ -8,8 +8,6 @@ import { PaperConfig, LabelConfig, LabelData } from "../types/generateLabel";
 const mmToPoints = (mm: number): number => (mm / 25.4) * 72;
 
 export const PAPER_CONFIGS: Record<string, PaperConfig> = {
-
-
   "100x50": {
     labelsPerSheet: 1,
     sheetWidth: 100,
@@ -29,6 +27,32 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     sheetHeight: 50,
     labelWidth: 80,
     labelHeight: 50,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    gapX: 0,
+    gapY: 0,
+  },
+  "70x40": {
+    labelsPerSheet: 1,
+    sheetWidth: 70,
+    sheetHeight: 40,
+    labelWidth: 70,
+    labelHeight: 40,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    gapX: 0,
+    gapY: 0,
+  },
+  "60x40": {
+    labelsPerSheet: 1,
+    sheetWidth: 60,
+    sheetHeight: 40,
+    labelWidth: 60,
+    labelHeight: 40,
     columns: 1,
     rows: 1,
     marginTop: 0,
@@ -101,20 +125,23 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
     gapX: 0,
     gapY: 0,
   },
-
+  "38x25": {
+    labelsPerSheet: 1,
+    sheetWidth: 38,
+    sheetHeight: 25,
+    labelWidth: 38,
+    labelHeight: 25,
+    columns: 1,
+    rows: 1,
+    marginTop: 0,
+    marginLeft: 0,
+    gapX: 0,
+    gapY: 0,
+  },
 };
 
 // ==================================================================
-// Thermal Label Drawing
-// ==================================================================
-// ==================================================================
-// "Shrink-to-Fit" Thermal Label Drawing
-// ==================================================================
-// ==================================================================
-// Improved Thermal Label Drawing
-// ==================================================================
-// ==================================================================
-// Thermal Label Drawing (With Currency & Big Barcode Text)
+// Thermal Label Drawing - Smart Layout
 // ==================================================================
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
@@ -123,157 +150,155 @@ const drawLabelThermal = async (
   labelHeight: number,
   config: LabelConfig
 ): Promise<void> => {
-  // 1. Setup Margins
-  const margin = Math.min(labelWidth, labelHeight) * 0.05;
-  const innerWidth = labelWidth - (margin * 2);
+  const margin = labelWidth * 0.04;
+  const innerWidth = labelWidth - margin * 2;
   const startX = margin;
+
+  // تحديد نوع الـ Layout بناءً على حجم الـ Label
+  const isSmallLabel = labelHeight < 80; // أقل من ~28mm
+  const isMediumLabel = labelHeight >= 80 && labelHeight < 120; // ~28mm - ~42mm
+  const isLargeLabel = labelHeight >= 120; // أكبر من ~42mm
+
+  // === حساب المساحات بناءً على الحجم ===
+  let headerPercent: number;
+  let barcodePercent: number;
+  let pricePercent: number;
+
+  if (isSmallLabel) {
+    headerPercent = 0.15;
+    barcodePercent = 0.55;
+    pricePercent = 0.30;
+  } else if (isMediumLabel) {
+    headerPercent = 0.12;
+    barcodePercent = 0.60;
+    pricePercent = 0.28;
+  } else {
+    headerPercent = 0.10;
+    barcodePercent = 0.65;
+    pricePercent = 0.25;
+  }
+
+  const headerHeight = labelHeight * headerPercent;
+  const priceHeight = labelHeight * pricePercent;
+  const barcodeAreaHeight = labelHeight * barcodePercent;
+
   let currentY = margin;
 
-  // 2. Count Active Elements
-  const activeElements = [
-    config.showBusinessName && data.businessName,
-    config.showBrand && data.brandName,
-    config.showProductName && data.productName,
-    config.showPrice && data.price,
-    config.showBarcode && data.barcode
-  ].filter(Boolean).length;
-
-  if (activeElements === 0) return;
-
-  // 3. Dynamic Font Helper
-  const getFontSize = (percent: number, min: number, max: number) => {
-    const calculated = labelHeight * percent;
-    return Math.max(min, Math.min(max, calculated));
-  };
-
-  // --- DRAW: BUSINESS NAME ---
+  // ===== 1. BUSINESS NAME (Header) =====
   if (config.showBusinessName && data.businessName) {
-    const fontSize = getFontSize(0.08, 6, 14);
+    const fontSize = Math.max(6, Math.min(14, labelHeight * 0.09));
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
-
-    const textHeight = doc.heightOfString(data.businessName, { width: innerWidth });
 
     doc.text(data.businessName, startX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
-      ellipsis: true
     });
 
-    currentY += textHeight + 2;
+    currentY = headerHeight * 0.8;
   }
 
-  // --- DRAW: BRAND NAME ---
-  if (config.showBrand && data.brandName) {
-    const fontSize = getFontSize(0.06, 5, 10);
-    doc.fontSize(fontSize).font("Helvetica").fillColor("#444444");
+  // ===== 2. PRODUCT NAME =====
+  if (config.showProductName && data.productName) {
+    const fontSize = Math.max(5, Math.min(10, labelHeight * 0.065));
+    doc.fontSize(fontSize).font("Helvetica").fillColor("#333333");
 
-    const textHeight = doc.heightOfString(data.brandName, { width: innerWidth });
+    // Truncate if too long
+    const maxLength = isSmallLabel ? 25 : 35;
+    const displayName =
+      data.productName.length > maxLength
+        ? data.productName.substring(0, maxLength - 2) + ".."
+        : data.productName;
+
+    doc.text(displayName, startX, currentY, {
+      width: innerWidth,
+      align: "center",
+      lineBreak: false,
+    });
+
+    currentY += fontSize + 3;
+  }
+
+  // ===== 3. BRAND NAME =====
+  if (config.showBrand && data.brandName) {
+    const fontSize = Math.max(4, Math.min(8, labelHeight * 0.05));
+    doc.fontSize(fontSize).font("Helvetica").fillColor("#666666");
 
     doc.text(data.brandName, startX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
-      ellipsis: true
     });
 
-    currentY += textHeight + 2;
+    currentY += fontSize + 2;
   }
 
-  // --- DRAW: PRODUCT NAME ---
-  if (config.showProductName && data.productName) {
-    const fontSize = getFontSize(0.12, 7, 16);
-    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
+  // ===== 4. BARCODE =====
+  if (config.showBarcode && data.barcode) {
+    try {
+      // حساب مساحة النص تحت الباركود
+      const barcodeTextFontSize = Math.max(8, Math.min(14, labelHeight * 0.10));
+      const barcodeTextHeight = barcodeTextFontSize + 4;
 
-    const options = {
-      width: innerWidth,
-      align: "center" as const,
-      lineBreak: true,
-      height: fontSize * 2.2,
-      ellipsis: true
-    };
+      // حساب ارتفاع صورة الباركود
+      const availableForBarcode = barcodeAreaHeight - barcodeTextHeight;
+      const barcodeImageHeight = Math.max(20, availableForBarcode * 0.85);
 
-    const textHeight = Math.min(doc.heightOfString(data.productName, options), fontSize * 2.2);
-
-    doc.text(data.productName, startX, currentY, options);
-
-    currentY += textHeight + 4;
-  }
-
-  // --- CALCULATE REMAINING SPACE ---
-  const bottomMargin = margin;
-  let remainingHeight = labelHeight - bottomMargin - currentY;
-
-  // --- DRAW: PRICE (With Currency) ---
-  let priceHeight = 0;
-  if (config.showPrice && data.price) {
-    const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
-
-    // ADDED: Currency "EGP"
-    const priceValue = isPromo ? data.promotionalPrice : data.price;
-    const priceText = `${priceValue} EGP`;
-
-    const fontSize = getFontSize(0.15, 8, 24);
-    doc.fontSize(fontSize).font("Helvetica-Bold");
-    priceHeight = doc.heightOfString(priceText, { width: innerWidth });
-
-    if (remainingHeight > priceHeight) {
-      const priceY = labelHeight - bottomMargin - priceHeight;
-
-      doc.fillColor("black");
-      doc.text(priceText, startX, priceY, {
-        width: innerWidth,
-        align: "center"
+      // Generate barcode image (بدون نص)
+      const pngBuffer = await bwipjs.toBuffer({
+        bcid: "code128",
+        text: data.barcode,
+        scale: 3,
+        height: Math.max(8, Math.floor(barcodeImageHeight / 4)),
+        includetext: false,
       });
 
-      remainingHeight -= (priceHeight + 2);
-    }
-  }
+      const barcodeWidth = innerWidth * 0.88;
+      const barcodeX = startX + (innerWidth - barcodeWidth) / 2;
 
-  // --- DRAW: BARCODE (Image + Big Text) ---
-  if (config.showBarcode && data.barcode && remainingHeight > 15) {
-    try {
-      // 1. Calculate space for the text under the barcode
-      // We want this text to be readable, say ~10-12px or 10% of height
-      const codeFontSize = Math.max(8, Math.min(12, labelHeight * 0.1));
-      doc.fontSize(codeFontSize).font("Helvetica");
-      const codeTextHeight = doc.heightOfString(data.barcode, { width: innerWidth });
+      // رسم صورة الباركود
+      doc.image(pngBuffer, barcodeX, currentY, {
+        fit: [barcodeWidth, barcodeImageHeight],
+        align: "center",
+        valign: "center",
+      });
 
-      // 2. The image takes the remaining space MINUS the text height
-      const barcodeImageHeight = remainingHeight - codeTextHeight - 2;
+      currentY += barcodeImageHeight + 2;
 
-      if (barcodeImageHeight > 5) {
-        // Generate ONLY the bars (includetext: false)
-        const pngBuffer = await bwipjs.toBuffer({
-          bcid: "code128",
-          text: data.barcode,
-          scale: 2,
-          height: 10,
-          includetext: false, // Turn off bwip-js text
-          textxalign: "center",
-        });
-
-        const maxWidth = innerWidth * 0.9;
-
-        // Draw the Bars
-        doc.image(pngBuffer, startX + (innerWidth - maxWidth) / 2, currentY, {
-          fit: [maxWidth, barcodeImageHeight],
-          align: "center",
-          valign: "center"
-        });
-
-        // Draw the Text (Big and Sharp)
-        const textY = currentY + barcodeImageHeight + 1;
-        doc.text(data.barcode, startX, textY, {
-          width: innerWidth,
-          align: "center"
-        });
-      }
+      // رسم رقم الباركود
+      doc.fontSize(barcodeTextFontSize).font("Helvetica").fillColor("#000000");
+      doc.text(data.barcode, startX, currentY, {
+        width: innerWidth,
+        align: "center",
+      });
     } catch (err) {
       console.error("Barcode generation error:", err);
     }
   }
+
+  // ===== 5. PRICE (Bottom) =====
+  if (config.showPrice && data.price) {
+    const isPromo =
+      config.showPromotionalPrice &&
+      data.promotionalPrice &&
+      data.promotionalPrice < data.price;
+
+    const priceValue = isPromo ? data.promotionalPrice : data.price;
+    const priceText = `${priceValue} EGP`;
+
+    const fontSize = Math.max(10, Math.min(22, labelHeight * 0.16));
+    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
+
+    // وضع السعر في أسفل الـ Label
+    const priceY = labelHeight - priceHeight + margin * 2;
+
+    doc.text(priceText, startX, priceY, {
+      width: innerWidth,
+      align: "center",
+    });
+  }
 };
+
 // ==================================================================
 // A4 Label Drawing
 // ==================================================================
@@ -351,7 +376,7 @@ const drawLabelA4 = async (
     const fontSize = isPromo ? config.promotionalPriceSize || 8 : config.priceSize || 8;
 
     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor(color);
-    doc.text(`${price}`, innerX, currentY, {
+    doc.text(`${price} EGP`, innerX, currentY, {
       width: innerWidth,
       align: "center",
       lineBreak: false,
@@ -386,7 +411,7 @@ const drawLabelA4 = async (
 };
 
 // ==================================================================
-// Create Thermal PDF - صفحة لكل label حسب الكمية
+// Create Thermal PDF
 // ==================================================================
 const createPDFThermal = async (
   labelsData: LabelData[],
@@ -410,7 +435,6 @@ const createPDFThermal = async (
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      // صفحة لكل label حسب الكمية المطلوبة
       for (const labelData of labelsData) {
         doc.addPage({
           size: [labelWidth, labelHeight],
@@ -525,7 +549,6 @@ export const generateLabelsPDF = async (
       barcode: priceDoc.code || "",
     };
 
-    // إضافة الـ label حسب الكمية المطلوبة
     for (let i = 0; i < item.quantity; i++) {
       labelsData.push(labelData);
     }
