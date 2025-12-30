@@ -1,4 +1,9 @@
 "use strict";
+// import { Request, Response } from "express";
+// import { generateLabelsPDF, PAPER_CONFIGS } from "../../utils/genrateLabel";
+// import { BadRequest } from "../../Errors/BadRequest";
+// import { SuccessResponse } from "../../utils/response";
+// import { LabelSize } from "../../types/generateLabel";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateLabelsController = exports.getAvailableLabelSizes = void 0;
 const genrateLabel_1 = require("../../utils/genrateLabel");
@@ -8,6 +13,8 @@ const response_1 = require("../../utils/response");
 // Get Available Label Sizes
 // ============================================
 const getAvailableLabelSizes = async (req, res) => {
+    // We added 'useRectangularLayout' to sizes that are wide/short 
+    // and benefit from the Grid layout (like the image you shared).
     const labelSizes = [
         {
             id: "100x50",
@@ -18,6 +25,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "100mm × 50mm",
             recommended: false,
             useCase: "كراتين - منتجات كبيرة",
+            // useRectangularLayout: true, // Supports the new layout
         },
         {
             id: "80x50",
@@ -28,6 +36,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "80mm × 50mm",
             recommended: false,
             useCase: "منتجات كبيرة",
+            // useRectangularLayout: true,
         },
         {
             id: "57x45",
@@ -38,6 +47,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "57mm × 45mm",
             recommended: true,
             useCase: "Xprinter XP-370B وما شابه",
+            // useRectangularLayout: true,
         },
         {
             id: "57x40",
@@ -48,6 +58,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "57mm × 40mm",
             recommended: true,
             useCase: "طابعات POS - فواتير",
+            // useRectangularLayout: true,
         },
         {
             id: "50x30",
@@ -58,6 +69,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "50mm × 30mm",
             recommended: true,
             useCase: "منتجات متوسطة",
+            // useRectangularLayout: true,
         },
         {
             id: "50x25",
@@ -68,6 +80,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "50mm × 25mm",
             recommended: false,
             useCase: "منتجات صغيرة",
+            // useRectangularLayout: true, // Ideally fits the image you sent
         },
         {
             id: "40x30",
@@ -78,6 +91,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "40mm × 30mm",
             recommended: false,
             useCase: "منتجات صغيرة",
+            // useRectangularLayout: true,
         },
         {
             id: "38x25",
@@ -88,6 +102,7 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "38mm × 25mm",
             recommended: true,
             useCase: "أدوية - منتجات صغيرة",
+            // useRectangularLayout: true,
         },
     ];
     (0, response_1.SuccessResponse)(res, { labelSizes });
@@ -97,6 +112,7 @@ exports.getAvailableLabelSizes = getAvailableLabelSizes;
 // Generate Labels PDF
 // ============================================
 const generateLabelsController = async (req, res) => {
+    // 1. Extract params, including the config from Frontend
     const { products, labelConfig, paperSize } = req.body;
     if (!products || !Array.isArray(products) || products.length === 0) {
         throw new BadRequest_1.BadRequest("Products array is required");
@@ -124,7 +140,12 @@ const generateLabelsController = async (req, res) => {
         promotionalPriceSize: 13,
         businessNameSize: 7,
         brandSize: 8,
+        // // Default to FALSE unless the frontend sends it specifically
+        // useRectangularLayout: false
     };
+    // 2. Merge defaults with user request
+    // If the Frontend sees "useRectangularLayout: true" in the size list, 
+    // it should send { useRectangularLayout: true } in labelConfig here.
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };
     const pdfBuffer = await (0, genrateLabel_1.generateLabelsPDF)(products, finalConfig, paperSize);
     res.setHeader("Content-Type", "application/pdf");
