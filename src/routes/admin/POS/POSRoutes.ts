@@ -11,7 +11,7 @@ router.post('/sales/complete', authorizePermissions("POS", "View"), catchAsync(g
 // ⚠️ Static routes MUST come before dynamic :id routes
 router.get("/sales/dues", authorizePermissions("POS", "View"), catchAsync(getDueSales));
 router.post("/sales/pay-due", authorizePermissions("POS", "Add"), catchAsync(payDue));
-router.get("/sales/pending/:sale_id", authorizePermissions("POS", "View"), catchAsync(getSalePendingById));
+router.get("/sales/sales/pending/:sale_id", authorizePermissions("POS", "View"), catchAsync(getSalePendingById));
 router.get("/sales/:id", authorizePermissions("POS", "View"), catchAsync(getSales));
 
 export default router;
