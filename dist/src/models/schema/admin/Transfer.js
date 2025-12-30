@@ -31,13 +31,19 @@ const TransferSchema = new mongoose_1.default.Schema({
         ref: "Warehouse",
         required: true
     },
-    // مصفوفة المنتجات اللي بتتحول
+    // مصفوفة المنتجات اللي بتتحول (مع الـ variations)
     products: [
         {
             productId: {
                 type: mongoose_1.default.Schema.Types.ObjectId,
                 ref: "Product",
                 required: true
+            },
+            // ✅ إضافة productPriceId لتحديد الـ variation (اختياري)
+            productPriceId: {
+                type: mongoose_1.default.Schema.Types.ObjectId,
+                ref: "ProductPrice",
+                default: null,
             },
             quantity: {
                 type: Number,
@@ -54,6 +60,11 @@ const TransferSchema = new mongoose_1.default.Schema({
                 ref: "Product",
                 required: true
             },
+            productPriceId: {
+                type: mongoose_1.default.Schema.Types.ObjectId,
+                ref: "ProductPrice",
+                default: null
+            },
             quantity: {
                 type: Number,
                 required: true,
@@ -65,13 +76,18 @@ const TransferSchema = new mongoose_1.default.Schema({
             },
         }
     ],
-    // مصفوفة المنتجات اللي بتترفض
+    // مصفوفة المنتجات اللي اتقبلت
     approved_products: [
         {
             productId: {
                 type: mongoose_1.default.Schema.Types.ObjectId,
                 ref: "Product",
                 required: true
+            },
+            productPriceId: {
+                type: mongoose_1.default.Schema.Types.ObjectId,
+                ref: "ProductPrice",
+                default: null
             },
             quantity: {
                 type: Number,

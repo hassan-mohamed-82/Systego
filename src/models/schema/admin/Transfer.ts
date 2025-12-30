@@ -4,44 +4,50 @@ import mongoose from "mongoose";
 const TransferSchema = new mongoose.Schema({
 
   reference: {
-      type: String,
-      trim: true,
-      unique: true,
-      maxlength: 8,
-      default: function () {
-        const now = new Date();
-        const month = String(now.getMonth() + 1).padStart(2, "0");
-        const day = String(now.getDate()).padStart(2, "0");
-        const datePart = `${month}${day}`;
-        const randomPart = Math.floor(1000 + Math.random() * 9000);
-        return `${datePart}${randomPart}`;
-      },
-  },
-  
-  date: { type: Date, default: Date.now },
-  fromWarehouseId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "Warehouse", 
-    required: true 
-  },
-  toWarehouseId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "Warehouse", 
-    required: true 
+    type: String,
+    trim: true,
+    unique: true,
+    maxlength: 8,
+    default: function () {
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      const datePart = `${month}${day}`;
+      const randomPart = Math.floor(1000 + Math.random() * 9000);
+      return `${datePart}${randomPart}`;
+    },
   },
 
-  // مصفوفة المنتجات اللي بتتحول
+  date: { type: Date, default: Date.now },
+  fromWarehouseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Warehouse",
+    required: true
+  },
+  toWarehouseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Warehouse",
+    required: true
+  },
+
+  // مصفوفة المنتجات اللي بتتحول (مع الـ variations)
   products: [
     {
-      productId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: "Product", 
-        required: true 
+      productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+        required: true
       },
-      quantity: { 
-        type: Number, 
-        required: true, 
-        min: 1 
+      // ✅ إضافة productPriceId لتحديد الـ variation (اختياري)
+      productPriceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProductPrice",
+        default: null,
+      },
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1
       }
     }
   ],
@@ -49,45 +55,55 @@ const TransferSchema = new mongoose.Schema({
   // مصفوفة المنتجات اللي بتترفض
   rejected_products: [
     {
-      productId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: "Product", 
-        required: true 
+      productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+        required: true
       },
-      quantity: { 
-        type: Number, 
-        required: true, 
-        min: 1 
+      productPriceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProductPrice",
+        default: null
       },
-      reason: { 
-        type: String, 
-        required: true, 
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1
+      },
+      reason: {
+        type: String,
+        required: true,
       },
     }
   ],
 
-  // مصفوفة المنتجات اللي بتترفض
+  // مصفوفة المنتجات اللي اتقبلت
   approved_products: [
     {
-      productId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: "Product", 
-        required: true 
+      productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+        required: true
       },
-      quantity: { 
-        type: Number, 
-        required: true, 
-        min: 1 
-      }, 
+      productPriceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProductPrice",
+        default: null
+      },
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1
+      },
     }
   ],
 
-  status: { 
-    type: String, 
-    enum: ["pending", "done", "rejected"], 
-    default: "pending" 
+  status: {
+    type: String,
+    enum: ["pending", "done", "rejected"],
+    default: "pending"
   },
- reason: { type: String, required: true },
+  reason: { type: String, required: true },
 
 });
 

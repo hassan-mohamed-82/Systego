@@ -7,6 +7,8 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const index_1 = require("../../Errors/index");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const response_1 = require("../../utils/response");
+const products_1 = require("../../models/schema/admin/products");
+const product_price_1 = require("../../models/schema/admin/product_price");
 const createTransfer = async (req, res) => {
     const { fromWarehouseId, toWarehouseId, products } = req.body;
     // ✅ تحقق من البيانات الأساسية
@@ -18,20 +20,47 @@ const createTransfer = async (req, res) => {
     const toWarehouse = await Warehouse_1.WarehouseModel.findById(toWarehouseId);
     if (!fromWarehouse || !toWarehouse)
         throw new index_1.NotFound("One or both warehouses not found");
-    // ✅ تحقق من كل منتج في التحويل
+    // ✅ تحقق من كل منتج في التحويل (مع دعم الـ variations)
     for (const item of products) {
-        const { productId, quantity } = item;
+        const { productId, productPriceId, quantity } = item;
         if (!productId || !quantity)
             throw new BadRequest_1.BadRequest("Each product must have productId and quantity");
-        const productInWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
+        // ✅ التحقق من وجود المنتج
+        const product = await products_1.ProductModel.findById(productId);
+        if (!product) {
+            throw new index_1.NotFound(`Product ${productId} not found`);
+        }
+        // ✅ لو فيه productPriceId، نتحقق من وجود الـ variation
+        if (productPriceId) {
+            const productPrice = await product_price_1.ProductPriceModel.findById(productPriceId);
+            if (!productPrice) {
+                throw new index_1.NotFound(`Product variation ${productPriceId} not found`);
+            }
+            // التأكد من أن الـ variation تابع للمنتج الصحيح
+            if (productPrice.productId.toString() !== productId) {
+                throw new BadRequest_1.BadRequest(`Product variation ${productPriceId} does not belong to product ${productId}`);
+            }
+        }
+        // ✅ البحث عن المنتج/الـ variation في المخزن المصدر
+        const query = {
             productId,
-            WarehouseId: fromWarehouseId,
-        });
+            warehouseId: fromWarehouseId,
+        };
+        // لو فيه productPriceId نضيفه للـ query
+        if (productPriceId) {
+            query.productPriceId = productPriceId;
+        }
+        else {
+            query.productPriceId = null; // المنتج الأساسي بدون variation
+        }
+        const productInWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne(query);
         if (!productInWarehouse) {
-            throw new index_1.NotFound(`Product ${productId} not found in the source warehouse`);
+            const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
+            throw new index_1.NotFound(`Product ${productId}${variationText} not found in the source warehouse`);
         }
         if (productInWarehouse.quantity < quantity) {
-            throw new BadRequest_1.BadRequest(`Insufficient quantity for product ${productId} in source warehouse`);
+            const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
+            throw new BadRequest_1.BadRequest(`Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${productInWarehouse.quantity}, Requested: ${quantity}`);
         }
         // خصم الكمية من المخزن المصدر مؤقتًا
         productInWarehouse.quantity -= quantity;
@@ -65,7 +94,8 @@ const getTransfersForWarehouse = async (req, res) => {
     })
         .populate("fromWarehouseId", "name")
         .populate("toWarehouseId", "name")
-        .populate("products.productId", "name productCode");
+        .populate("products.productId", "name productCode")
+        .populate("products.productPriceId", "price code");
     // ✳️ تقسيم التحويلات حسب الحالة
     const pending = transfers.filter((t) => t.status === "pending");
     const done = transfers.filter((t) => t.status === "done");
@@ -81,7 +111,12 @@ const getTransferById = async (req, res) => {
     const transfer = await Transfer_1.TransferModel.findById(id)
         .populate("fromWarehouseId", "name")
         .populate("toWarehouseId", "name")
-        .populate("products.productId", "name productCode");
+        .populate("products.productId", "name productCode")
+        .populate("products.productPriceId", "price code")
+        .populate("approved_products.productId", "name productCode")
+        .populate("approved_products.productPriceId", "price code")
+        .populate("rejected_products.productId", "name productCode")
+        .populate("rejected_products.productPriceId", "price code");
     if (!transfer)
         throw new index_1.NotFound("Transfer not found");
     (0, response_1.SuccessResponse)(res, {
@@ -103,21 +138,33 @@ const updateTransferStatus = async (req, res) => {
     // 🧩 3. التأكد من أن المستودع المستلم هو اللي بينفّذ التحديث
     if (transfer.toWarehouseId.toString() !== warehouseId)
         throw new BadRequest_1.BadRequest("Only the receiving warehouse can update this transfer");
-    // ✅ 4. استلام المنتجات المقبولة
+    // ✅ 4. استلام المنتجات المقبولة (مع دعم الـ variations)
     if (approved_products && approved_products.length > 0) {
         for (const item of approved_products) {
-            const { productId, quantity } = item;
-            let productInWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
+            const { productId, productPriceId, quantity } = item;
+            // بناء query للبحث عن المنتج/الـ variation في المخزن المستلم
+            const query = {
                 productId,
                 warehouseId,
-            });
+            };
+            // لو فيه productPriceId نضيفه للـ query
+            if (productPriceId) {
+                query.productPriceId = productPriceId;
+            }
+            else {
+                query.productPriceId = null;
+            }
+            let productInWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne(query);
             if (productInWarehouse) {
+                // لو المنتج/الـ variation موجود، نزود الكمية
                 productInWarehouse.quantity += quantity;
                 await productInWarehouse.save();
             }
             else {
+                // لو مش موجود، نضيفه كجديد
                 await Product_Warehouse_1.Product_WarehouseModel.create({
                     productId,
+                    productPriceId: productPriceId || null,
                     warehouseId,
                     quantity,
                 });
@@ -165,7 +212,8 @@ const gettransferin = async (req, res) => {
     const transfers = await Transfer_1.TransferModel.find({ toWarehouseId: warehouseId })
         .populate("fromWarehouseId", "name")
         .populate("toWarehouseId", "name")
-        .populate("products.productId", "name productCode");
+        .populate("products.productId", "name productCode")
+        .populate("products.productPriceId", "price code");
     const pending = transfers.filter((t) => t.status === "pending");
     const done = transfers.filter((t) => t.status === "done");
     (0, response_1.SuccessResponse)(res, {
@@ -184,7 +232,8 @@ const gettransferout = async (req, res) => {
     const transfers = await Transfer_1.TransferModel.find({ fromWarehouseId: warehouseId })
         .populate("fromWarehouseId", "name")
         .populate("toWarehouseId", "name")
-        .populate("products.productId", "name productCode");
+        .populate("products.productId", "name productCode")
+        .populate("products.productPriceId", "price code");
     const pending = transfers.filter((t) => t.status === "pending");
     const done = transfers.filter((t) => t.status === "done");
     (0, response_1.SuccessResponse)(res, {
@@ -199,7 +248,8 @@ const getalltransfers = async (req, res) => {
     const transfers = await Transfer_1.TransferModel.find()
         .populate("fromWarehouseId", "name")
         .populate("toWarehouseId", "name")
-        .populate("products.productId", "name productCode");
+        .populate("products.productId", "name productCode")
+        .populate("products.productPriceId", "price code");
     (0, response_1.SuccessResponse)(res, {
         message: "All transfers retrieved successfully",
         transfers,

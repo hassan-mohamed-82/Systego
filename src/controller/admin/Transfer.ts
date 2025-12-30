@@ -6,6 +6,7 @@ import { NotFound } from "../../Errors/index";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import { SuccessResponse } from "../../utils/response";
 import { ProductModel } from "../../models/schema/admin/products";
+import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
 
 export const createTransfer = async (req: Request, res: Response) => {
@@ -24,25 +25,55 @@ export const createTransfer = async (req: Request, res: Response) => {
   if (!fromWarehouse || !toWarehouse)
     throw new NotFound("One or both warehouses not found");
 
-  // ✅ تحقق من كل منتج في التحويل
+  // ✅ تحقق من كل منتج في التحويل (مع دعم الـ variations)
   for (const item of products) {
-    const { productId, quantity } = item;
+    const { productId, productPriceId, quantity } = item;
 
     if (!productId || !quantity)
       throw new BadRequest("Each product must have productId and quantity");
 
-    const productInWarehouse = await Product_WarehouseModel.findOne({
+    // ✅ التحقق من وجود المنتج
+    const product = await ProductModel.findById(productId);
+    if (!product) {
+      throw new NotFound(`Product ${productId} not found`);
+    }
+
+    // ✅ لو فيه productPriceId، نتحقق من وجود الـ variation
+    if (productPriceId) {
+      const productPrice = await ProductPriceModel.findById(productPriceId);
+      if (!productPrice) {
+        throw new NotFound(`Product variation ${productPriceId} not found`);
+      }
+      // التأكد من أن الـ variation تابع للمنتج الصحيح
+      if (productPrice.productId.toString() !== productId) {
+        throw new BadRequest(`Product variation ${productPriceId} does not belong to product ${productId}`);
+      }
+    }
+
+    // ✅ البحث عن المنتج/الـ variation في المخزن المصدر
+    const query: any = {
       productId,
-    WarehouseId: fromWarehouseId,
-    });
+      warehouseId: fromWarehouseId,
+    };
+
+    // لو فيه productPriceId نضيفه للـ query
+    if (productPriceId) {
+      query.productPriceId = productPriceId;
+    } else {
+      query.productPriceId = null; // المنتج الأساسي بدون variation
+    }
+
+    const productInWarehouse = await Product_WarehouseModel.findOne(query);
 
     if (!productInWarehouse) {
-      throw new NotFound(`Product ${productId} not found in the source warehouse`);
+      const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
+      throw new NotFound(`Product ${productId}${variationText} not found in the source warehouse`);
     }
 
     if (productInWarehouse.quantity < quantity) {
+      const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
       throw new BadRequest(
-        `Insufficient quantity for product ${productId} in source warehouse`
+        `Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${productInWarehouse.quantity}, Requested: ${quantity}`
       );
     }
 
@@ -50,8 +81,6 @@ export const createTransfer = async (req: Request, res: Response) => {
     productInWarehouse.quantity -= quantity;
     await productInWarehouse.save();
   }
-
-
 
   // ✅ إنشاء التحويل بعد التحقق من كل المنتجات
   const transfer = await TransferModel.create({
@@ -61,7 +90,7 @@ export const createTransfer = async (req: Request, res: Response) => {
     status: "pending",
   });
 
-  fromWarehouse.stock_Quantity -=transfer.products.reduce((acc: number, item: any) => acc + item.quantity, 0);
+  fromWarehouse.stock_Quantity -= transfer.products.reduce((acc: number, item: any) => acc + item.quantity, 0);
   await fromWarehouse.save();
 
   SuccessResponse(res, {
@@ -86,7 +115,8 @@ export const getTransfersForWarehouse = async (req: Request, res: Response) => {
   })
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("products.productId", "name productCode");
+    .populate("products.productId", "name productCode")
+    .populate("products.productPriceId", "price code");
 
   // ✳️ تقسيم التحويلات حسب الحالة
   const pending = transfers.filter((t) => t.status === "pending");
@@ -104,7 +134,12 @@ export const getTransferById = async (req: Request, res: Response) => {
   const transfer = await TransferModel.findById(id)
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("products.productId", "name productCode");
+    .populate("products.productId", "name productCode")
+    .populate("products.productPriceId", "price code")
+    .populate("approved_products.productId", "name productCode")
+    .populate("approved_products.productPriceId", "price code")
+    .populate("rejected_products.productId", "name productCode")
+    .populate("rejected_products.productPriceId", "price code");
 
   if (!transfer) throw new NotFound("Transfer not found");
 
@@ -131,22 +166,35 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   if (transfer.toWarehouseId.toString() !== warehouseId)
     throw new BadRequest("Only the receiving warehouse can update this transfer");
 
-  // ✅ 4. استلام المنتجات المقبولة
+  // ✅ 4. استلام المنتجات المقبولة (مع دعم الـ variations)
   if (approved_products && approved_products.length > 0) {
     for (const item of approved_products) {
-      const { productId, quantity } = item;
+      const { productId, productPriceId, quantity } = item;
 
-      let productInWarehouse = await Product_WarehouseModel.findOne({
+      // بناء query للبحث عن المنتج/الـ variation في المخزن المستلم
+      const query: any = {
         productId,
         warehouseId,
-      });
+      };
+
+      // لو فيه productPriceId نضيفه للـ query
+      if (productPriceId) {
+        query.productPriceId = productPriceId;
+      } else {
+        query.productPriceId = null;
+      }
+
+      let productInWarehouse = await Product_WarehouseModel.findOne(query);
 
       if (productInWarehouse) {
+        // لو المنتج/الـ variation موجود، نزود الكمية
         productInWarehouse.quantity += quantity;
         await productInWarehouse.save();
       } else {
+        // لو مش موجود، نضيفه كجديد
         await Product_WarehouseModel.create({
           productId,
+          productPriceId: productPriceId || null,
           warehouseId,
           quantity,
         });
@@ -206,7 +254,8 @@ export const gettransferin = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find({ toWarehouseId: warehouseId })
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("products.productId", "name productCode");
+    .populate("products.productId", "name productCode")
+    .populate("products.productPriceId", "price code");
 
   const pending = transfers.filter((t) => t.status === "pending");
   const done = transfers.filter((t) => t.status === "done");
@@ -229,7 +278,8 @@ export const gettransferout = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find({ fromWarehouseId: warehouseId })
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("products.productId", "name productCode");
+    .populate("products.productId", "name productCode")
+    .populate("products.productPriceId", "price code");
 
   const pending = transfers.filter((t) => t.status === "pending");
   const done = transfers.filter((t) => t.status === "done");
@@ -246,7 +296,8 @@ export const getalltransfers = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find()
     .populate("fromWarehouseId", "name")
     .populate("toWarehouseId", "name")
-    .populate("products.productId", "name productCode");
+    .populate("products.productId", "name productCode")
+    .populate("products.productPriceId", "price code");
 
   SuccessResponse(res, {
     message: "All transfers retrieved successfully",

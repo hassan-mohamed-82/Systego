@@ -12,6 +12,12 @@ const Product_WarehouseSchema = new mongoose_1.default.Schema({
         ref: "Product",
         required: true,
     },
+    // ✅ إضافة productPriceId لتتبع الـ variations (اختياري - لو null يعني المنتج الأساسي)
+    productPriceId: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "ProductPrice",
+        default: null,
+    },
     warehouseId: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: "Warehouse",
@@ -20,5 +26,6 @@ const Product_WarehouseSchema = new mongoose_1.default.Schema({
     quantity: { type: Number, required: true, default: 0 },
     low_stock: { type: Number, default: 0 },
 }, { timestamps: true });
-Product_WarehouseSchema.index({ productId: 1, warehouseId: 1 }, { unique: true });
+// ✅ تحديث الـ unique index ليشمل productPriceId
+Product_WarehouseSchema.index({ productId: 1, productPriceId: 1, warehouseId: 1 }, { unique: true });
 exports.Product_WarehouseModel = mongoose_1.default.model("Product_Warehouse", Product_WarehouseSchema);
