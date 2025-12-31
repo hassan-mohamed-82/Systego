@@ -17,9 +17,9 @@ export const priceSchema = Joi.object({
 
 export const createProductSchema = Joi.object({
   name: Joi.string().required(),
-  product_unit: objectId.required(),
-  sale_unit: objectId.required(),
-  purchase_unit: objectId.required(),
+  product_unit: objectId,
+  sale_unit: objectId,
+  purchase_unit: objectId,
   ar_name: Joi.string().required(),
   ar_description: Joi.string().required(),
   image: Joi.string().optional(), 

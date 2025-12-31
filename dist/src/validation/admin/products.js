@@ -19,9 +19,9 @@ exports.priceSchema = joi_1.default.object({
 });
 exports.createProductSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
-    product_unit: exports.objectId.required(),
-    sale_unit: exports.objectId.required(),
-    purchase_unit: exports.objectId.required(),
+    product_unit: exports.objectId,
+    sale_unit: exports.objectId,
+    purchase_unit: exports.objectId,
     ar_name: joi_1.default.string().required(),
     ar_description: joi_1.default.string().required(),
     image: joi_1.default.string().optional(),
