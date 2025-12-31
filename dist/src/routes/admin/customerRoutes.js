@@ -13,12 +13,12 @@ router.get('/', (0, haspremission_1.authorizePermissions)("customer", "View"), (
 router.get('/countries', (0, haspremission_1.authorizePermissions)("customer", "View"), (0, catchAsync_1.catchAsync)(customer_1.getCountriesWithCities));
 // Due customers route (must be before /:id)
 router.get('/due', (0, haspremission_1.authorizePermissions)("customer", "View"), (0, catchAsync_1.catchAsync)(customer_1.getDueCustomers));
-// Group Routes (must be before /:id to prevent "group" being treated as customer ID)
-router.post('/group', (0, haspremission_1.authorizePermissions)("customer_group", "Add"), (0, catchAsync_1.catchAsync)(customer_1.creategroup));
-router.get('/group', (0, haspremission_1.authorizePermissions)("customer_group", "View"), (0, catchAsync_1.catchAsync)(customer_1.getallgroups));
-router.get('/group/:id', (0, haspremission_1.authorizePermissions)("customer_group", "View"), (0, catchAsync_1.catchAsync)(customer_1.getgroupbyid));
-router.put('/group/:id', (0, haspremission_1.authorizePermissions)("customer_group", "Edit"), (0, catchAsync_1.catchAsync)(customer_1.updategroup));
-router.delete('/group/:id', (0, haspremission_1.authorizePermissions)("customer_group", "Delete"), (0, catchAsync_1.catchAsync)(customer_1.deletegroup));
+// Group Routes (must be before /:id to prevent "groups" being treated as customer ID)
+router.post('/groups', (0, haspremission_1.authorizePermissions)("customer_group", "Add"), (0, catchAsync_1.catchAsync)(customer_1.creategroup));
+router.get('/groups', (0, haspremission_1.authorizePermissions)("customer_group", "View"), (0, catchAsync_1.catchAsync)(customer_1.getallgroups));
+router.get('/groups/:id', (0, haspremission_1.authorizePermissions)("customer_group", "View"), (0, catchAsync_1.catchAsync)(customer_1.getgroupbyid));
+router.put('/groups/:id', (0, haspremission_1.authorizePermissions)("customer_group", "Edit"), (0, catchAsync_1.catchAsync)(customer_1.updategroup));
+router.delete('/groups/:id', (0, haspremission_1.authorizePermissions)("customer_group", "Delete"), (0, catchAsync_1.catchAsync)(customer_1.deletegroup));
 // Generic customer routes with :id parameter (must be LAST)
 router.get('/:id', (0, haspremission_1.authorizePermissions)("customer", "View"), (0, catchAsync_1.catchAsync)(customer_1.getCustomerById));
 router.put('/:id', (0, haspremission_1.authorizePermissions)("customer", "Edit"), (0, catchAsync_1.catchAsync)(customer_1.updateCustomer));
