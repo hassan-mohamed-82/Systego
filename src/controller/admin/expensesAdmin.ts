@@ -9,9 +9,9 @@ export const createExpenseAdmin = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     if (!userId) throw new UnauthorizedError("Unauthorized");
 
-    const { name, amount, Category_id, admin_id, note, financial_accountId } = req.body;
+    const { name, amount, Category_id, note, financial_accountId } = req.body;
 
-    if (!name || amount == null || !Category_id || !admin_id || !financial_accountId) {
+    if (!name || amount == null || !Category_id || !financial_accountId) {
         throw new BadRequest("Please provide all required fields");
     }
     if (amount <= 0) {
@@ -39,9 +39,9 @@ export const createExpenseAdmin = async (req: Request, res: Response) => {
         name,
         amount,
         Category_id,
-        admin_id,
         note,
-        financial_accountId
+        financial_accountId,
+        admin_id: userId
     })
 
     SuccessResponse(res, { message: "Expense created successfully", expense });
