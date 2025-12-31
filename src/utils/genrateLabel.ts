@@ -274,6 +274,8 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 //     }
 //   }
 // };
+
+
 // Draw Labels Rectangular
 const drawLabelThermal = async (
   doc: PDFKit.PDFDocument,
