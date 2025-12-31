@@ -7,19 +7,39 @@ import { SuccessResponse } from "../../utils/response";
 import { CityModels } from "../../models/schema/admin/City";
 import { CountryModel } from "../../models/schema/admin/Country";
 
-export const createzone=async(req:Request,res:Response)=>{
-    const {name,ar_name, cityId,countryId,cost}=req.body;
-    if(!name || !cityId || !countryId || !cost) throw new BadRequest("All fields are required");
-    const cityExists=await CityModels.findById(cityId);
-    if(!cityExists) throw new BadRequest("City not found");
-    const countryExists=await CountryModel.findById(countryId);
-    if(!countryExists) throw new BadRequest("Country not found");
-    const Zoneexists=await ZoneModel.findOne({name});
-    if(Zoneexists) throw new BadRequest("Zone already exists");
-    const totalshipingcost=cityExists.shipingCost+cost
-    const zone=await ZoneModel.create({name, ar_name, cityId,countryId,cost:totalshipingcost});
-    SuccessResponse(res,{message:"Zone created successfully",zone});
-}
+export const createzone = async (req: Request, res: Response) => {
+  const { name, ar_name, cityId, countryId, cost } = req.body;
+  
+  if (!name || !cityId || !countryId || cost === undefined) 
+    throw new BadRequest("All fields are required");
+
+  const cityExists = await CityModels.findById(cityId);
+  if (!cityExists) throw new BadRequest("City not found");
+
+  const countryExists = await CountryModel.findById(countryId);
+  if (!countryExists) throw new BadRequest("Country not found");
+
+  const Zoneexists = await ZoneModel.findOne({ name });
+  if (Zoneexists) throw new BadRequest("Zone already exists");
+
+  // ✅ تحويل القيم لأرقام قبل الجمع
+  const cityCost = Number(cityExists.shipingCost) || 0;
+  const zoneCost = Number(cost) || 0;
+  const totalshipingcost = cityCost + zoneCost;
+
+  console.log("City Cost:", cityCost, "Zone Cost:", zoneCost, "Total:", totalshipingcost);
+
+  const zone = await ZoneModel.create({
+    name,
+    ar_name,
+    cityId,
+    countryId,
+    cost: totalshipingcost
+  });
+
+  SuccessResponse(res, { message: "Zone created successfully", zone });
+};
+
 
 export const getZones = async (req: Request, res: Response) => {
   const zones = await ZoneModel.find()

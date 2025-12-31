@@ -9,7 +9,7 @@ const City_1 = require("../../models/schema/admin/City");
 const Country_1 = require("../../models/schema/admin/Country");
 const createzone = async (req, res) => {
     const { name, ar_name, cityId, countryId, cost } = req.body;
-    if (!name || !cityId || !countryId || !cost)
+    if (!name || !cityId || !countryId || cost === undefined)
         throw new BadRequest_1.BadRequest("All fields are required");
     const cityExists = await City_1.CityModels.findById(cityId);
     if (!cityExists)
@@ -20,8 +20,18 @@ const createzone = async (req, res) => {
     const Zoneexists = await Zone_1.ZoneModel.findOne({ name });
     if (Zoneexists)
         throw new BadRequest_1.BadRequest("Zone already exists");
-    const totalshipingcost = cityExists.shipingCost + cost;
-    const zone = await Zone_1.ZoneModel.create({ name, ar_name, cityId, countryId, cost: totalshipingcost });
+    // ✅ تحويل القيم لأرقام قبل الجمع
+    const cityCost = Number(cityExists.shipingCost) || 0;
+    const zoneCost = Number(cost) || 0;
+    const totalshipingcost = cityCost + zoneCost;
+    console.log("City Cost:", cityCost, "Zone Cost:", zoneCost, "Total:", totalshipingcost);
+    const zone = await Zone_1.ZoneModel.create({
+        name,
+        ar_name,
+        cityId,
+        countryId,
+        cost: totalshipingcost
+    });
     (0, response_1.SuccessResponse)(res, { message: "Zone created successfully", zone });
 };
 exports.createzone = createzone;
