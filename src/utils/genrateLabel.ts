@@ -105,179 +105,168 @@ export const PAPER_CONFIGS: Record<string, PaperConfig> = {
 };
 
 // ==================================================================
-// Thermal Label Drawing
-// ==================================================================
-// ==================================================================
-// "Shrink-to-Fit" Thermal Label Drawing
-// ==================================================================
-// ==================================================================
-// Improved Thermal Label Drawing
-// ==================================================================
-// ==================================================================
 // Thermal Label Drawing (With Currency & Big Barcode Text)
 // ==================================================================
-// const drawLabelThermal = async (
-//   doc: PDFKit.PDFDocument,
-//   data: LabelData,
-//   labelWidth: number,
-//   labelHeight: number,
-//   config: LabelConfig
-// ): Promise<void> => {
-//   // 1. Setup Margins
-//   const margin = Math.min(labelWidth, labelHeight) * 0.05;
-//   const innerWidth = labelWidth - (margin * 2);
-//   const startX = margin;
-//   let currentY = margin;
-
-//   // 2. Count Active Elements
-//   const activeElements = [
-//     config.showBusinessName && data.businessName,
-//     config.showBrand && data.brandName,
-//     config.showProductName && data.productName,
-//     config.showPrice && data.price,
-//     config.showBarcode && data.barcode
-//   ].filter(Boolean).length;
-
-//   if (activeElements === 0) return;
-
-//   // 3. Dynamic Font Helper
-//   const getFontSize = (percent: number, min: number, max: number) => {
-//     const calculated = labelHeight * percent;
-//     return Math.max(min, Math.min(max, calculated));
-//   };
-
-//   // --- DRAW: BUSINESS NAME ---
-//   if (config.showBusinessName && data.businessName) {
-//     const fontSize = getFontSize(0.08, 6, 14);
-//     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
-
-//     const textHeight = doc.heightOfString(data.businessName, { width: innerWidth });
-
-//     doc.text(data.businessName, startX, currentY, {
-//       width: innerWidth,
-//       align: "center",
-//       lineBreak: false,
-//       ellipsis: true
-//     });
-
-//     currentY += textHeight + 2;
-//   }
-
-//   // --- DRAW: BRAND NAME ---
-//   if (config.showBrand && data.brandName) {
-//     const fontSize = getFontSize(0.06, 5, 10);
-//     doc.fontSize(fontSize).font("Helvetica").fillColor("#444444");
-
-//     const textHeight = doc.heightOfString(data.brandName, { width: innerWidth });
-
-//     doc.text(data.brandName, startX, currentY, {
-//       width: innerWidth,
-//       align: "center",
-//       lineBreak: false,
-//       ellipsis: true
-//     });
-
-//     currentY += textHeight + 2;
-//   }
-
-//   // --- DRAW: PRODUCT NAME ---
-//   if (config.showProductName && data.productName) {
-//     const fontSize = getFontSize(0.12, 7, 16);
-//     doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
-
-//     const options = {
-//       width: innerWidth,
-//       align: "center" as const,
-//       lineBreak: true,
-//       height: fontSize * 2.2,
-//       ellipsis: true
-//     };
-
-//     const textHeight = Math.min(doc.heightOfString(data.productName, options), fontSize * 2.2);
-
-//     doc.text(data.productName, startX, currentY, options);
-
-//     currentY += textHeight + 4;
-//   }
-
-//   // --- CALCULATE REMAINING SPACE ---
-//   const bottomMargin = margin;
-//   let remainingHeight = labelHeight - bottomMargin - currentY;
-
-//   // --- DRAW: PRICE (With Currency) ---
-//   let priceHeight = 0;
-//   if (config.showPrice && data.price) {
-//     const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
-
-//     // ADDED: Currency "EGP"
-//     const priceValue = isPromo ? data.promotionalPrice : data.price;
-//     const priceText = `${priceValue} EGP`;
-
-//     const fontSize = getFontSize(0.15, 8, 24);
-//     doc.fontSize(fontSize).font("Helvetica-Bold");
-//     priceHeight = doc.heightOfString(priceText, { width: innerWidth });
-
-//     if (remainingHeight > priceHeight) {
-//       const priceY = labelHeight - bottomMargin - priceHeight;
-
-//       doc.fillColor("black");
-//       doc.text(priceText, startX, priceY, {
-//         width: innerWidth,
-//         align: "center"
-//       });
-
-//       remainingHeight -= (priceHeight + 2);
-//     }
-//   }
-
-//   // --- DRAW: BARCODE (Image + Big Text) ---
-//   if (config.showBarcode && data.barcode && remainingHeight > 15) {
-//     try {
-//       // 1. Calculate space for the text under the barcode
-//       // We want this text to be readable, say ~10-12px or 10% of height
-//       const codeFontSize = Math.max(8, Math.min(12, labelHeight * 0.1));
-//       doc.fontSize(codeFontSize).font("Helvetica");
-//       const codeTextHeight = doc.heightOfString(data.barcode, { width: innerWidth });
-
-//       // 2. The image takes the remaining space MINUS the text height
-//       const barcodeImageHeight = remainingHeight - codeTextHeight - 2;
-
-//       if (barcodeImageHeight > 5) {
-//         // Generate ONLY the bars (includetext: false)
-//         const pngBuffer = await bwipjs.toBuffer({
-//           bcid: "code128",
-//           text: data.barcode,
-//           scale: 2,
-//           height: 10,
-//           includetext: false, // Turn off bwip-js text
-//           textxalign: "center",
-//         });
-
-//         const maxWidth = innerWidth * 0.9;
-
-//         // Draw the Bars
-//         doc.image(pngBuffer, startX + (innerWidth - maxWidth) / 2, currentY, {
-//           fit: [maxWidth, barcodeImageHeight],
-//           align: "center",
-//           valign: "center"
-//         });
-
-//         // Draw the Text (Big and Sharp)
-//         const textY = currentY + barcodeImageHeight + 1;
-//         doc.text(data.barcode, startX, textY, {
-//           width: innerWidth,
-//           align: "center"
-//         });
-//       }
-//     } catch (err) {
-//       console.error("Barcode generation error:", err);
-//     }
-//   }
-// };
-
-
-// Draw Labels Rectangular
 const drawLabelThermal = async (
+  doc: PDFKit.PDFDocument,
+  data: LabelData,
+  labelWidth: number,
+  labelHeight: number,
+  config: LabelConfig
+): Promise<void> => {
+  // 1. Setup Margins
+  const margin = Math.min(labelWidth, labelHeight) * 0.05;
+  const innerWidth = labelWidth - (margin * 2);
+  const startX = margin;
+  let currentY = margin;
+
+  // 2. Count Active Elements
+  const activeElements = [
+    config.showBusinessName && data.businessName,
+    config.showBrand && data.brandName,
+    config.showProductName && data.productName,
+    config.showPrice && data.price,
+    config.showBarcode && data.barcode
+  ].filter(Boolean).length;
+
+  if (activeElements === 0) return;
+
+  // 3. Dynamic Font Helper
+  const getFontSize = (percent: number, min: number, max: number) => {
+    const calculated = labelHeight * percent;
+    return Math.max(min, Math.min(max, calculated));
+  };
+
+  // --- DRAW: BUSINESS NAME ---
+  if (config.showBusinessName && data.businessName) {
+    const fontSize = getFontSize(0.08, 6, 14);
+    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
+
+    const textHeight = doc.heightOfString(data.businessName, { width: innerWidth });
+
+    doc.text(data.businessName, startX, currentY, {
+      width: innerWidth,
+      align: "center",
+      lineBreak: false,
+      ellipsis: true
+    });
+
+    currentY += textHeight + 2;
+  }
+
+  // --- DRAW: BRAND NAME ---
+  if (config.showBrand && data.brandName) {
+    const fontSize = getFontSize(0.06, 5, 10);
+    doc.fontSize(fontSize).font("Helvetica").fillColor("#444444");
+
+    const textHeight = doc.heightOfString(data.brandName, { width: innerWidth });
+
+    doc.text(data.brandName, startX, currentY, {
+      width: innerWidth,
+      align: "center",
+      lineBreak: false,
+      ellipsis: true
+    });
+
+    currentY += textHeight + 2;
+  }
+
+  // --- DRAW: PRODUCT NAME ---
+  if (config.showProductName && data.productName) {
+    const fontSize = getFontSize(0.12, 7, 16);
+    doc.fontSize(fontSize).font("Helvetica-Bold").fillColor("#000000");
+
+    const options = {
+      width: innerWidth,
+      align: "center" as const,
+      lineBreak: true,
+      height: fontSize * 2.2,
+      ellipsis: true
+    };
+
+    const textHeight = Math.min(doc.heightOfString(data.productName, options), fontSize * 2.2);
+
+    doc.text(data.productName, startX, currentY, options);
+
+    currentY += textHeight + 4;
+  }
+
+  // --- CALCULATE REMAINING SPACE ---
+  const bottomMargin = margin;
+  let remainingHeight = labelHeight - bottomMargin - currentY;
+
+  // --- DRAW: PRICE (With Currency) ---
+  let priceHeight = 0;
+  if (config.showPrice && data.price) {
+    const isPromo = config.showPromotionalPrice && data.promotionalPrice && data.promotionalPrice < data.price;
+
+    // ADDED: Currency "EGP"
+    const priceValue = isPromo ? data.promotionalPrice : data.price;
+    const priceText = `${priceValue} EGP`;
+
+    const fontSize = getFontSize(0.15, 8, 24);
+    doc.fontSize(fontSize).font("Helvetica-Bold");
+    priceHeight = doc.heightOfString(priceText, { width: innerWidth });
+
+    if (remainingHeight > priceHeight) {
+      const priceY = labelHeight - bottomMargin - priceHeight;
+
+      doc.fillColor("black");
+      doc.text(priceText, startX, priceY, {
+        width: innerWidth,
+        align: "center"
+      });
+
+      remainingHeight -= (priceHeight + 2);
+    }
+  }
+
+  // --- DRAW: BARCODE (Image + Big Text) ---
+  if (config.showBarcode && data.barcode && remainingHeight > 15) {
+    try {
+      // 1. Calculate space for the text under the barcode
+      // We want this text to be readable, say ~10-12px or 10% of height
+      const codeFontSize = Math.max(8, Math.min(12, labelHeight * 0.1));
+      doc.fontSize(codeFontSize).font("Helvetica");
+      const codeTextHeight = doc.heightOfString(data.barcode, { width: innerWidth });
+
+      // 2. The image takes the remaining space MINUS the text height
+      const barcodeImageHeight = remainingHeight - codeTextHeight - 2;
+
+      if (barcodeImageHeight > 5) {
+        // Generate ONLY the bars (includetext: false)
+        const pngBuffer = await bwipjs.toBuffer({
+          bcid: "code128",
+          text: data.barcode,
+          scale: 2,
+          height: 10,
+          includetext: false, // Turn off bwip-js text
+          textxalign: "center",
+        });
+
+        const maxWidth = innerWidth * 0.9;
+
+        // Draw the Bars
+        doc.image(pngBuffer, startX + (innerWidth - maxWidth) / 2, currentY, {
+          fit: [maxWidth, barcodeImageHeight],
+          align: "center",
+          valign: "center"
+        });
+
+        // Draw the Text (Big and Sharp)
+        const textY = currentY + barcodeImageHeight + 1;
+        doc.text(data.barcode, startX, textY, {
+          width: innerWidth,
+          align: "center"
+        });
+      }
+    } catch (err) {
+      console.error("Barcode generation error:", err);
+    }
+  }
+};
+// Draw Labels Rectangular
+const drawLabelThermalRectangular = async (
   doc: PDFKit.PDFDocument,
   data: LabelData,
   labelWidth: number,
@@ -565,7 +554,7 @@ const createPDFThermal = async (
           margin: 0,
         });
 
-        await drawLabelThermal(doc, labelData, labelWidth, labelHeight, labelConfig);
+        await drawLabelThermalRectangular(doc, labelData, labelWidth, labelHeight, labelConfig);
         // await drawFunction(doc, labelData, labelWidth, labelHeight, labelConfig);
       }
 

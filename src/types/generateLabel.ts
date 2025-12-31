@@ -18,6 +18,7 @@ export interface LabelConfig {
   promotionalPriceSize?: number;
   businessNameSize?: number;
   brandSize?: number;
+  // useRectangularLayout?: boolean;
 }
 
 export interface PaperConfig {
@@ -43,6 +44,7 @@ export interface LabelSize {
   labelSize: string;
   recommended: boolean;
   useCase: string;
+  // useRectangularLayout: boolean;
 }
 
 export interface GenerateLabelsRequest {
