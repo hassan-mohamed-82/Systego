@@ -491,16 +491,19 @@ export const createSale = async (req: Request, res: Response) => {
 
 
 export const getAllSales = async (req: Request, res: Response) => {
-  const sales = await SaleModel.find()
+  const sales = await SaleModel.find({ order_pending: 0 }) // ✅ المكتملة بس
     .select("reference grand_total paid_amount remaining_amount Due order_pending date createdAt")
     .populate("customer_id", "name")
     .populate("Due_customer_id", "name")
     .populate("warehouse_id", "name")
     .populate("cashier_id", "name")
+    .sort({ createdAt: -1 })
     .lean();
 
   SuccessResponse(res, { sales });
 };
+
+
 
 export const getSales = async (req: Request, res: Response) => {
   const { id } = req.params;

@@ -402,12 +402,13 @@ const createSale = async (req, res) => {
 };
 exports.createSale = createSale;
 const getAllSales = async (req, res) => {
-    const sales = await Sale_1.SaleModel.find()
+    const sales = await Sale_1.SaleModel.find({ order_pending: 0 }) // ✅ المكتملة بس
         .select("reference grand_total paid_amount remaining_amount Due order_pending date createdAt")
         .populate("customer_id", "name")
         .populate("Due_customer_id", "name")
         .populate("warehouse_id", "name")
         .populate("cashier_id", "name")
+        .sort({ createdAt: -1 })
         .lean();
     (0, response_1.SuccessResponse)(res, { sales });
 };
