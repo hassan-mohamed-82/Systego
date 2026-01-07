@@ -43,7 +43,24 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
   const fullSale = await SaleModel.findById(sale._id)
     .populate("customer_id", "name email phone_number address")
     .populate("warehouse_id", "name ar_name")
-    .populate("cashier_id", "name ar_name")
+    .populate("cashier_id", "name ar_name email") // ✅ الـ User اللي عمل البيع
+    .populate({
+      // ✅ الشيفت مع بيانات الكاشير والكاشير مان
+      path: "shift_id",
+      select: " cashierman_id cashier_id",
+      populate: [
+        {
+          path: "cashierman_id",
+          select: "username ",
+          model: "User"
+        },
+        {
+          path: "cashier_id", 
+          select: "name ar_name code location",
+          model: "Cashier"
+        }
+      ]
+    })
     .populate("coupon_id", "code discount_type discount_value")
     .populate("gift_card_id", "code balance")
     .populate("order_tax", "name rate")
@@ -155,7 +172,23 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       note: saleData?.note,
       customer: saleData?.customer_id || null,
       warehouse: saleData?.warehouse_id || null,
-      cashier: saleData?.cashier_id || null,
+      
+      // ✅ الـ User اللي عمل البيع (من Sale مباشرة)
+      created_by: saleData?.cashier_id || null,
+      
+      // ✅ بيانات الشيفت كاملة
+      shift: saleData?.shift_id ? {
+        _id: saleData.shift_id._id,
+        start_time: saleData.shift_id.start_time,
+        end_time: saleData.shift_id.end_time,
+        status: saleData.shift_id.status,
+        total_sale_amount: saleData.shift_id.total_sale_amount,
+        // ✅ الـ User اللي شغال على الشيفت
+        cashierman: saleData.shift_id.cashierman_id || null,
+        // ✅ الكاشير (الجهاز/نقطة البيع)
+        cashier: saleData.shift_id.cashier_id || null,
+      } : null,
+
       coupon: saleData?.coupon_id || null,
       gift_card: saleData?.gift_card_id || null,
       tax: saleData?.order_tax || null,
@@ -177,6 +210,7 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
     total_returned_amount: totalReturnedAmount,
   });
 };
+
 
   // ═══════════════════════════════════════════════════════════
   // CREATE RETURN
@@ -208,7 +242,7 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       items,
       reason,  // 👈 reason للـ Return ككل
       note,
-      refund_account_id,
+      // refund_account_id,
       image,
     } = req.body;
   
@@ -335,27 +369,27 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       });
     }
   
-    if (refund_account_id) {
-      if (!mongoose.Types.ObjectId.isValid(refund_account_id)) {
-        throw new BadRequest("Invalid refund_account_id");
-      }
+    // if (refund_account_id) {
+    //   if (!mongoose.Types.ObjectId.isValid(refund_account_id)) {
+    //     throw new BadRequest("Invalid refund_account_id");
+    //   }
   
-      const bankAccount = await BankAccountModel.findOne({
-        _id: refund_account_id,
-        warehouseId: warehouseId,
-        status: true,
-      });
+    //   const bankAccount = await BankAccountModel.findOne({
+    //     _id: refund_account_id,
+    //     warehouseId: warehouseId,
+    //     status: true,
+    //   });
   
-      if (!bankAccount) {
-        throw new BadRequest("Refund account is not valid");
-      }
+    //   if (!bankAccount) {
+    //     throw new BadRequest("Refund account is not valid");
+    //   }
   
-      if (bankAccount.balance < totalReturnAmount) {
-        throw new BadRequest(
-          `Insufficient balance in refund account. Available: ${bankAccount.balance}, Required: ${totalReturnAmount}`
-        );
-      }
-    }
+    //   if (bankAccount.balance < totalReturnAmount) {
+    //     throw new BadRequest(
+    //       `Insufficient balance in refund account. Available: ${bankAccount.balance}, Required: ${totalReturnAmount}`
+    //     );
+    //   }
+    // }
   
     let image_url = "";
     if (image) {
@@ -371,7 +405,7 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       shift_id: openShift._id,
       items: returnItems,
       total_amount: totalReturnAmount,
-      refund_account_id: refund_account_id,
+      // refund_account_id: refund_account_id,
       reason: reason || "",  // 👈 reason للـ Return ككل
       note: note || "",
       image: image_url,
@@ -400,11 +434,11 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       }
     }
   
-    if (refund_account_id) {
-      await BankAccountModel.findByIdAndUpdate(refund_account_id, {
-        $inc: { balance: -totalReturnAmount },
-      });
-    }
+    // if (refund_account_id) {
+    //   await BankAccountModel.findByIdAndUpdate(refund_account_id, {
+    //     $inc: { balance: -totalReturnAmount },
+    //   });
+    // }
   
     const fullReturn = await ReturnModel.findById(returnDoc._id)
       .populate("sale_id", "reference grand_total date")

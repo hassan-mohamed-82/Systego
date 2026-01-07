@@ -12,7 +12,6 @@ const product_price_1 = require("../../../models/schema/admin/product_price");
 const mongoose_1 = __importDefault(require("mongoose"));
 const ReturnSale_1 = require("../../../models/schema/admin/POS/ReturnSale");
 const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
-const Financial_Account_1 = require("../../../models/schema/admin/Financial_Account");
 const products_1 = require("../../../models/schema/admin/products");
 const pandels_1 = require("../../../models/schema/admin/pandels");
 const handleImages_1 = require("../../../utils/handleImages");
@@ -40,7 +39,24 @@ const getSaleForReturn = async (req, res) => {
     const fullSale = await Sale_1.SaleModel.findById(sale._id)
         .populate("customer_id", "name email phone_number address")
         .populate("warehouse_id", "name ar_name")
-        .populate("cashier_id", "name ar_name")
+        .populate("cashier_id", "name ar_name email") // ✅ الـ User اللي عمل البيع
+        .populate({
+        // ✅ الشيفت مع بيانات الكاشير والكاشير مان
+        path: "shift_id",
+        select: " cashierman_id cashier_id",
+        populate: [
+            {
+                path: "cashierman_id",
+                select: "username ",
+                model: "User"
+            },
+            {
+                path: "cashier_id",
+                select: "name ar_name code location",
+                model: "Cashier"
+            }
+        ]
+    })
         .populate("coupon_id", "code discount_type discount_value")
         .populate("gift_card_id", "code balance")
         .populate("order_tax", "name rate")
@@ -136,7 +152,20 @@ const getSaleForReturn = async (req, res) => {
             note: saleData?.note,
             customer: saleData?.customer_id || null,
             warehouse: saleData?.warehouse_id || null,
-            cashier: saleData?.cashier_id || null,
+            // ✅ الـ User اللي عمل البيع (من Sale مباشرة)
+            created_by: saleData?.cashier_id || null,
+            // ✅ بيانات الشيفت كاملة
+            shift: saleData?.shift_id ? {
+                _id: saleData.shift_id._id,
+                start_time: saleData.shift_id.start_time,
+                end_time: saleData.shift_id.end_time,
+                status: saleData.shift_id.status,
+                total_sale_amount: saleData.shift_id.total_sale_amount,
+                // ✅ الـ User اللي شغال على الشيفت
+                cashierman: saleData.shift_id.cashierman_id || null,
+                // ✅ الكاشير (الجهاز/نقطة البيع)
+                cashier: saleData.shift_id.cashier_id || null,
+            } : null,
             coupon: saleData?.coupon_id || null,
             gift_card: saleData?.gift_card_id || null,
             tax: saleData?.order_tax || null,
@@ -177,7 +206,9 @@ const createReturn = async (req, res) => {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a return");
     }
     const { sale_id, items, reason, // 👈 reason للـ Return ككل
-    note, refund_account_id, image, } = req.body;
+    note, 
+    // refund_account_id,
+    image, } = req.body;
     if (!sale_id) {
         throw new BadRequest_1.BadRequest("sale_id is required");
     }
@@ -256,22 +287,24 @@ const createReturn = async (req, res) => {
             subtotal: itemSubtotal,
         });
     }
-    if (refund_account_id) {
-        if (!mongoose_1.default.Types.ObjectId.isValid(refund_account_id)) {
-            throw new BadRequest_1.BadRequest("Invalid refund_account_id");
-        }
-        const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
-            _id: refund_account_id,
-            warehouseId: warehouseId,
-            status: true,
-        });
-        if (!bankAccount) {
-            throw new BadRequest_1.BadRequest("Refund account is not valid");
-        }
-        if (bankAccount.balance < totalReturnAmount) {
-            throw new BadRequest_1.BadRequest(`Insufficient balance in refund account. Available: ${bankAccount.balance}, Required: ${totalReturnAmount}`);
-        }
-    }
+    // if (refund_account_id) {
+    //   if (!mongoose.Types.ObjectId.isValid(refund_account_id)) {
+    //     throw new BadRequest("Invalid refund_account_id");
+    //   }
+    //   const bankAccount = await BankAccountModel.findOne({
+    //     _id: refund_account_id,
+    //     warehouseId: warehouseId,
+    //     status: true,
+    //   });
+    //   if (!bankAccount) {
+    //     throw new BadRequest("Refund account is not valid");
+    //   }
+    //   if (bankAccount.balance < totalReturnAmount) {
+    //     throw new BadRequest(
+    //       `Insufficient balance in refund account. Available: ${bankAccount.balance}, Required: ${totalReturnAmount}`
+    //     );
+    //   }
+    // }
     let image_url = "";
     if (image) {
         image_url = await (0, handleImages_1.saveBase64Image)(image, Date.now().toString(), req, "return");
@@ -285,7 +318,7 @@ const createReturn = async (req, res) => {
         shift_id: openShift._id,
         items: returnItems,
         total_amount: totalReturnAmount,
-        refund_account_id: refund_account_id,
+        // refund_account_id: refund_account_id,
         reason: reason || "", // 👈 reason للـ Return ككل
         note: note || "",
         image: image_url,
@@ -312,11 +345,11 @@ const createReturn = async (req, res) => {
             }
         }
     }
-    if (refund_account_id) {
-        await Financial_Account_1.BankAccountModel.findByIdAndUpdate(refund_account_id, {
-            $inc: { balance: -totalReturnAmount },
-        });
-    }
+    // if (refund_account_id) {
+    //   await BankAccountModel.findByIdAndUpdate(refund_account_id, {
+    //     $inc: { balance: -totalReturnAmount },
+    //   });
+    // }
     const fullReturn = await ReturnSale_1.ReturnModel.findById(returnDoc._id)
         .populate("sale_id", "reference grand_total date")
         .populate("customer_id", "name email phone_number")
