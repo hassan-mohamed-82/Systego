@@ -4,6 +4,8 @@ export const optionSchema = Joi.string(); // مجرد ObjectId
 
 export const createPurchaseItemOptionSchema = Joi.object({
   product_price_id: Joi.string().optional(),
+    expiry_date: Joi.date().optional(),
+
   option_id: Joi.string().required(),
   quantity: Joi.number().optional()
 });
@@ -11,6 +13,7 @@ export const createPurchaseItemOptionSchema = Joi.object({
 
 export const createPurchaseItemVariationSchema = Joi.object({
   product_price_id: Joi.string().optional(),
+  expiry_date: Joi.date().optional(),
   quantity: Joi.number().required(),
   options: Joi.array().items(Joi.object({
     option_id: Joi.string().required()
