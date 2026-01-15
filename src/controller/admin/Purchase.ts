@@ -13,7 +13,7 @@ import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
 import { VariationModel } from "../../models/schema/admin/Variation";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
-import { ProductPriceModel } from "../../models/schema/admin/product_price";
+import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
 
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
@@ -970,5 +970,112 @@ export const getExpiredProducts = async (req: Request, res: Response) => {
     message: "Expired products retrieved successfully",
     count: formattedProducts.length,
     products: formattedProducts
+  });
+};
+
+export const selection = async (req: Request, res: Response): Promise<void> => {
+  const { warehouseId } = req.query;
+
+  // جلب البيانات الأساسية بشكل متوازي لتحسين الأداء
+  const [warehouse, supplier, tax, financial, products, variations] = await Promise.all([
+    WarehouseModel.find().lean(),
+    SupplierModel.find().lean(),
+    TaxesModel.find().lean(),
+    BankAccountModel.find({ status: "true" }).lean(),
+    ProductModel.find()
+      .populate("categoryId")
+      .populate("brandId")
+      .populate("taxesId")
+      .lean(),
+    VariationModel.find().lean(),
+  ]);
+
+  // جلب كل stocks و prices مرة واحدة بدلاً من كل منتج على حدة (تحسين الأداء)
+  const productIds = products.map((p: any) => p._id);
+
+  const stockQuery = warehouseId
+    ? { productId: { $in: productIds }, warehouseId }
+    : { productId: { $in: productIds } };
+
+  const [allStocks, allPrices] = await Promise.all([
+    Product_WarehouseModel.find(stockQuery)
+      .populate("warehouseId", "name address")
+      .lean(),
+    ProductPriceModel.find({ productId: { $in: productIds } }).lean(),
+  ]);
+
+  // جلب كل الـ price options مرة واحدة
+  const priceIds = allPrices.map((p: any) => p._id);
+  const allPriceOptions = await ProductPriceOptionModel.find({
+    product_price_id: { $in: priceIds },
+  })
+    .populate({
+      path: "option_id",
+      select: "_id name variationId",
+    })
+    .lean();
+
+  // تجميع البيانات لكل منتج
+  const formattedProducts = products.map((product: any) => {
+    // فلترة الـ stocks الخاصة بهذا المنتج
+    const stocks = allStocks.filter(
+      (s: any) => s.productId.toString() === product._id.toString()
+    );
+    const totalQuantity = stocks.reduce((sum: number, s: any) => sum + s.quantity, 0);
+
+    // فلترة الـ prices الخاصة بهذا المنتج
+    const productPrices = allPrices.filter(
+      (p: any) => p.productId.toString() === product._id.toString()
+    );
+
+    // تنسيق الأسعار مع الـ variations
+    const formattedPrices = productPrices.map((price: any) => {
+      const options = allPriceOptions.filter(
+        (po: any) => po.product_price_id.toString() === price._id.toString()
+      );
+
+      const groupedOptions: Record<string, any[]> = {};
+
+      for (const po of options) {
+        const option = (po as any).option_id;
+        if (!option?._id) continue;
+
+        const variation = variations.find(
+          (v: any) => v._id.toString() === option.variationId?.toString()
+        );
+
+        if (variation) {
+          const varName = (variation as any).name;
+          if (!groupedOptions[varName]) groupedOptions[varName] = [];
+          groupedOptions[varName].push(option);
+        }
+      }
+
+      const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+        name: varName,
+        options: groupedOptions[varName],
+      }));
+
+      return {
+        ...price,
+        variations: variationsArray,
+      };
+    });
+
+    return {
+      ...product,
+      totalQuantity,
+      stocks,
+      prices: formattedPrices,
+    };
+  });
+
+  // إرجاع كل البيانات
+  SuccessResponse(res, {
+    warehouse,
+    supplier,
+    tax,
+    financial,
+    products: formattedProducts,
   });
 };
