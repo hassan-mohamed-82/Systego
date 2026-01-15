@@ -109,10 +109,11 @@ const createPurchase = async (req, res) => {
             throw new NotFound_1.NotFound(`Product not found: ${product_id}`);
         // التحقق من تاريخ الانتهاء
         if (product.exp_ability) {
-            if (!p.date_of_expiery) {
+            const expiryDateValue = p.expiry_date || p.date_of_expiery;
+            if (!expiryDateValue) {
                 throw new BadRequest_1.BadRequest(`Expiry date is required for product: ${product.name}`);
             }
-            const expiryDate = new Date(p.date_of_expiery);
+            const expiryDate = new Date(expiryDateValue);
             const today = new Date();
             expiryDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
@@ -145,7 +146,7 @@ const createPurchase = async (req, res) => {
             unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
             tax: p.tax || 0,
             item_type: "product",
-            date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
+            date_of_expiery: product.exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
         });
         // لو في Variations
         if (hasVariations) {
@@ -511,10 +512,11 @@ const updatePurchase = async (req, res) => {
         if (!product)
             throw new NotFound_1.NotFound(`Product not found: ${product_id}`);
         if (product.exp_ability) {
-            if (!p.date_of_expiery) {
+            const expiryDateValue = p.expiry_date || p.date_of_expiery;
+            if (!expiryDateValue) {
                 throw new BadRequest_1.BadRequest(`Expiry date is required for product: ${product.name}`);
             }
-            const expiryDate = new Date(p.date_of_expiery);
+            const expiryDate = new Date(expiryDateValue);
             const today = new Date();
             expiryDate.setHours(0, 0, 0, 0);
             today.setHours(0, 0, 0, 0);
@@ -542,7 +544,7 @@ const updatePurchase = async (req, res) => {
             unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
             tax: p.tax || 0,
             item_type: "product",
-            date_of_expiery: product.exp_ability ? p.date_of_expiery : undefined,
+            date_of_expiery: product.exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
         });
         // لو في Variations
         if (hasVariations) {

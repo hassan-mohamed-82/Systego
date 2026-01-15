@@ -7,7 +7,7 @@ import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { PurchaseInvoiceModel } from "../../models/schema/admin/PurchaseInvoice";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { SupplierModel } from "../../models/schema/admin/suppliers";
-import {  CurrencyModel } from "../../models/schema/admin/Currency";
+import { CurrencyModel } from "../../models/schema/admin/Currency";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
@@ -134,10 +134,11 @@ export const createPurchase = async (req: Request, res: Response) => {
 
     // التحقق من تاريخ الانتهاء
     if ((product as any).exp_ability) {
-      if (!p.date_of_expiery) {
+      const expiryDateValue = p.expiry_date || p.date_of_expiery;
+      if (!expiryDateValue) {
         throw new BadRequest(`Expiry date is required for product: ${(product as any).name}`);
       }
-      const expiryDate = new Date(p.date_of_expiery);
+      const expiryDate = new Date(expiryDateValue);
       const today = new Date();
       expiryDate.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
@@ -174,7 +175,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
       tax: p.tax || 0,
       item_type: "product",
-      date_of_expiery: (product as any).exp_ability ? p.date_of_expiery : undefined,
+      date_of_expiery: (product as any).exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
     });
 
     // لو في Variations
@@ -596,10 +597,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
     if (!product) throw new NotFound(`Product not found: ${product_id}`);
 
     if ((product as any).exp_ability) {
-      if (!p.date_of_expiery) {
+      const expiryDateValue = p.expiry_date || p.date_of_expiery;
+      if (!expiryDateValue) {
         throw new BadRequest(`Expiry date is required for product: ${(product as any).name}`);
       }
-      const expiryDate = new Date(p.date_of_expiery);
+      const expiryDate = new Date(expiryDateValue);
       const today = new Date();
       expiryDate.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
@@ -630,7 +632,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
       unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
       tax: p.tax || 0,
       item_type: "product",
-      date_of_expiery: (product as any).exp_ability ? p.date_of_expiery : undefined,
+      date_of_expiery: (product as any).exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
     });
 
     // لو في Variations
@@ -977,7 +979,7 @@ export const selection = async (req: Request, res: Response): Promise<void> => {
   const { warehouseId } = req.query;
 
   // جلب البيانات الأساسية بشكل متوازي لتحسين الأداء
-  const [warehouse, supplier, tax,currency, financial, products, variations] = await Promise.all([
+  const [warehouse, supplier, tax, currency, financial, products, variations] = await Promise.all([
     WarehouseModel.find().lean(),
     SupplierModel.find().lean(),
     TaxesModel.find().lean(),
