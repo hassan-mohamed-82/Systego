@@ -7,6 +7,8 @@ const Purchase_2 = require("../../validation/admin/Purchase");
 const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
 const route = (0, express_1.Router)();
+// Selection route - حطه في الأول عشان مايتعارضش مع /:id
+route.get("/selection", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.selection));
 route.post("/", (0, haspremission_1.authorizePermissions)("purchase", "Add"), (0, validation_1.validate)(Purchase_2.createPurchaseSchema), (0, catchAsync_1.catchAsync)(Purchase_1.createPurchase));
 route.get("/low-stock", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.getLowStockProducts));
 route.get("/critical-expiry", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.getCriticalExpiryProducts));

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getExpiredProducts = exports.getExpiringProducts = exports.getCriticalExpiryProducts = exports.getLowStockProducts = exports.updatePurchase = exports.getPurchaseById = exports.getAllPurchases = exports.createPurchase = void 0;
+exports.selection = exports.getExpiredProducts = exports.getExpiringProducts = exports.getCriticalExpiryProducts = exports.getLowStockProducts = exports.updatePurchase = exports.getPurchaseById = exports.getAllPurchases = exports.createPurchase = void 0;
 const Purchase_1 = require("../../models/schema/admin/Purchase");
 const purchase_item_1 = require("../../models/schema/admin/purchase_item");
 const purchase_due_payment_1 = require("../../models/schema/admin/purchase_due_payment");
@@ -9,9 +9,11 @@ const Financial_Account_1 = require("../../models/schema/admin/Financial_Account
 const PurchaseInvoice_1 = require("../../models/schema/admin/PurchaseInvoice");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const suppliers_1 = require("../../models/schema/admin/suppliers");
+const Currency_1 = require("../../models/schema/admin/Currency");
 const Taxes_1 = require("../../models/schema/admin/Taxes");
 const category_1 = require("../../models/schema/admin/category");
 const products_1 = require("../../models/schema/admin/products");
+const Variation_1 = require("../../models/schema/admin/Variation");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const response_1 = require("../../utils/response");
@@ -34,8 +36,8 @@ const createPurchase = async (req, res) => {
             throw new BadRequest_1.BadRequest("Tax not found");
     }
     // ========== Payment Validation ==========
-    const totalPaidNow = financials.reduce((sum, f) => sum + (f.payment_amount || 0), 0);
-    const totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const totalPaidNow = financials.reduce((sum, f) => sum + Number(f.payment_amount || 0), 0);
+    const totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + Number(d.amount || 0), 0);
     const totalPayments = totalPaidNow + totalDuePayments;
     // التحقق من حالة الدفع
     if (payment_status === "full") {
@@ -851,3 +853,90 @@ const getExpiredProducts = async (req, res) => {
     });
 };
 exports.getExpiredProducts = getExpiredProducts;
+const selection = async (req, res) => {
+    const { warehouseId } = req.query;
+    // جلب البيانات الأساسية بشكل متوازي لتحسين الأداء
+    const [warehouse, supplier, tax, currency, financial, products, variations] = await Promise.all([
+        Warehouse_1.WarehouseModel.find().lean(),
+        suppliers_1.SupplierModel.find().lean(),
+        Taxes_1.TaxesModel.find().lean(),
+        Currency_1.CurrencyModel.find().lean(),
+        Financial_Account_1.BankAccountModel.find({ status: "true" }).lean(),
+        products_1.ProductModel.find()
+            .populate("categoryId")
+            .populate("brandId")
+            .populate("taxesId")
+            .lean(),
+        Variation_1.VariationModel.find().lean(),
+    ]);
+    // جلب كل stocks و prices مرة واحدة بدلاً من كل منتج على حدة (تحسين الأداء)
+    const productIds = products.map((p) => p._id);
+    const stockQuery = warehouseId
+        ? { productId: { $in: productIds }, warehouseId }
+        : { productId: { $in: productIds } };
+    const [allStocks, allPrices] = await Promise.all([
+        Product_Warehouse_1.Product_WarehouseModel.find(stockQuery)
+            .populate("warehouseId", "name address")
+            .lean(),
+        product_price_1.ProductPriceModel.find({ productId: { $in: productIds } }).lean(),
+    ]);
+    // جلب كل الـ price options مرة واحدة
+    const priceIds = allPrices.map((p) => p._id);
+    const allPriceOptions = await product_price_1.ProductPriceOptionModel.find({
+        product_price_id: { $in: priceIds },
+    })
+        .populate({
+        path: "option_id",
+        select: "_id name variationId",
+    })
+        .lean();
+    // تجميع البيانات لكل منتج
+    const formattedProducts = products.map((product) => {
+        // فلترة الـ stocks الخاصة بهذا المنتج
+        const stocks = allStocks.filter((s) => s.productId.toString() === product._id.toString());
+        const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+        // فلترة الـ prices الخاصة بهذا المنتج
+        const productPrices = allPrices.filter((p) => p.productId.toString() === product._id.toString());
+        // تنسيق الأسعار مع الـ variations
+        const formattedPrices = productPrices.map((price) => {
+            const options = allPriceOptions.filter((po) => po.product_price_id.toString() === price._id.toString());
+            const groupedOptions = {};
+            for (const po of options) {
+                const option = po.option_id;
+                if (!option?._id)
+                    continue;
+                const variation = variations.find((v) => v._id.toString() === option.variationId?.toString());
+                if (variation) {
+                    const varName = variation.name;
+                    if (!groupedOptions[varName])
+                        groupedOptions[varName] = [];
+                    groupedOptions[varName].push(option);
+                }
+            }
+            const variationsArray = Object.keys(groupedOptions).map((varName) => ({
+                name: varName,
+                options: groupedOptions[varName],
+            }));
+            return {
+                ...price,
+                variations: variationsArray,
+            };
+        });
+        return {
+            ...product,
+            totalQuantity,
+            stocks,
+            prices: formattedPrices,
+        };
+    });
+    // إرجاع كل البيانات
+    (0, response_1.SuccessResponse)(res, {
+        warehouse,
+        supplier,
+        currency,
+        tax,
+        financial,
+        products: formattedProducts,
+    });
+};
+exports.selection = selection;
