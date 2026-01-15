@@ -7,7 +7,7 @@ import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { PurchaseInvoiceModel } from "../../models/schema/admin/PurchaseInvoice";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { SupplierModel } from "../../models/schema/admin/suppliers";
-import { CurrencyModel } from "../../models/schema/admin/Currency";
+import {  CurrencyModel } from "../../models/schema/admin/Currency";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
@@ -977,10 +977,11 @@ export const selection = async (req: Request, res: Response): Promise<void> => {
   const { warehouseId } = req.query;
 
   // جلب البيانات الأساسية بشكل متوازي لتحسين الأداء
-  const [warehouse, supplier, tax, financial, products, variations] = await Promise.all([
+  const [warehouse, supplier, tax,currency, financial, products, variations] = await Promise.all([
     WarehouseModel.find().lean(),
     SupplierModel.find().lean(),
     TaxesModel.find().lean(),
+    CurrencyModel.find().lean(),
     BankAccountModel.find({ status: "true" }).lean(),
     ProductModel.find()
       .populate("categoryId")
@@ -1074,6 +1075,7 @@ export const selection = async (req: Request, res: Response): Promise<void> => {
   SuccessResponse(res, {
     warehouse,
     supplier,
+    currency,
     tax,
     financial,
     products: formattedProducts,
