@@ -56,8 +56,8 @@ export const createPurchase = async (req: Request, res: Response) => {
   }
 
   // ========== Payment Validation ==========
-  const totalPaidNow = financials.reduce((sum: number, f: any) => sum + (f.payment_amount || 0), 0);
-  const totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
+  const totalPaidNow = financials.reduce((sum: number, f: any) => sum + Number(f.payment_amount || 0), 0);
+  const totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
   const totalPayments = totalPaidNow + totalDuePayments;
 
   // التحقق من حالة الدفع
