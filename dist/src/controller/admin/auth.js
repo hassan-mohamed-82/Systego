@@ -5,14 +5,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.signup = exports.login = void 0;
 const User_1 = require("../../models/schema/admin/User");
+const roles_1 = require("../../models/schema/admin/roles");
+const CashierShift_1 = require("../../models/schema/admin/POS/CashierShift");
 const auth_1 = require("../../utils/auth");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Errors_1 = require("../../Errors");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
+const constant_1 = require("../../types/constant");
 const handleImages_1 = require("../../utils/handleImages");
-const CashierShift_1 = require("../../models/schema/admin/POS/CashierShift");
 const login = async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -22,29 +24,71 @@ const login = async (req, res, next) => {
     if (!user) {
         throw new NotFound_1.NotFound("User not found");
     }
+    // تحقق من الـ status
+    if (user.status !== "active") {
+        throw new Errors_1.UnauthorizedError("Your account is not active. Please contact admin.");
+    }
     const isMatch = await bcryptjs_1.default.compare(password, user.password_hash);
     if (!isMatch) {
         throw new Errors_1.UnauthorizedError("Invalid email or password");
     }
-    const mappedPermissions = (user.permissions || []).map((p) => ({
-        module: p.module,
-        actions: (p.actions || []).map((a) => ({
-            id: a._id.toString(),
-            action: a.action,
-        })),
-    }));
+    // جيب الـ permissions بناءً على نوع الـ User
+    let mappedPermissions = [];
+    let roleName = null;
+    if (user.role === "superadmin") {
+        // ✅ Superadmin - كل الـ permissions
+        mappedPermissions = constant_1.MODULES.map((mod) => ({
+            module: mod,
+            actions: constant_1.ACTION_NAMES.map((actionName, index) => ({
+                id: `superadmin_${mod}_${index}`,
+                action: actionName,
+            })),
+        }));
+    }
+    else if (user.role_id) {
+        // ✅ Admin عادي - جيب الـ permissions من الـ Role
+        const roleData = await roles_1.RoleModel.findById(user.role_id).lean();
+        if (!roleData) {
+            throw new Errors_1.UnauthorizedError("User role not found. Please contact admin.");
+        }
+        if (roleData.status !== "active") {
+            throw new Errors_1.UnauthorizedError("Your role is not active. Please contact admin.");
+        }
+        roleName = roleData.name;
+        // ✅ جيب permissions من الـ Role
+        const rolePermissions = (roleData.permissions || []).map((p) => ({
+            module: p.module,
+            actions: (p.actions || []).map((a) => ({
+                id: a._id?.toString() || '',
+                action: a.action || '',
+            })),
+        }));
+        // ✅ جيب permissions الخاصة بالـ User (override)
+        const userPermissions = (user.permissions || []).map((p) => ({
+            module: p.module,
+            actions: (p.actions || []).map((a) => ({
+                id: a._id?.toString() || '',
+                action: a.action || '',
+            })),
+        }));
+        // ✅ Merge: Role permissions + User permissions (User overrides Role)
+        mappedPermissions = mergePermissions(rolePermissions, userPermissions);
+    }
     // ✅ التحقق من وجود شيفت مفتوح
     const openShift = await CashierShift_1.CashierShift.findOne({
         cashierman_id: user._id,
         status: "open",
     });
+    // ✅ Generate Token
     const token = (0, auth_1.generateToken)({
         _id: user._id,
         username: user.username,
         role: user.role,
+        role_id: user.role_id || null,
         warehouse_id: user.warehouse_id || null,
         permissions: mappedPermissions,
     });
+    // ✅ Response
     (0, response_1.SuccessResponse)(res, {
         message: "Login successful",
         token,
@@ -54,15 +98,48 @@ const login = async (req, res, next) => {
             email: user.email,
             status: user.status,
             role: user.role,
+            role_id: user.role_id || null,
+            role_name: roleName || (user.role === "superadmin" ? "Super Admin" : null),
             warehouse_id: user.warehouse_id
                 ? user.warehouse_id.toString()
                 : null,
             permissions: mappedPermissions,
         },
-        hasOpenShift: !!openShift, // ✅ true أو false بس
+        hasOpenShift: !!openShift,
     });
 };
 exports.login = login;
+// ✅ Helper: Merge Role permissions with User permissions
+function mergePermissions(rolePermissions, userPermissions) {
+    const permissionMap = new Map();
+    // أضف Role permissions أولاً
+    rolePermissions.forEach((p) => {
+        if (!permissionMap.has(p.module)) {
+            permissionMap.set(p.module, new Map());
+        }
+        p.actions.forEach((a) => {
+            permissionMap.get(p.module).set(a.action, a);
+        });
+    });
+    // أضف/Override بـ User permissions
+    userPermissions.forEach((p) => {
+        if (!permissionMap.has(p.module)) {
+            permissionMap.set(p.module, new Map());
+        }
+        p.actions.forEach((a) => {
+            permissionMap.get(p.module).set(a.action, a);
+        });
+    });
+    // حوّل لـ Array
+    const result = [];
+    permissionMap.forEach((actionsMap, module) => {
+        result.push({
+            module,
+            actions: Array.from(actionsMap.values()),
+        });
+    });
+    return result;
+}
 const signup = async (req, res) => {
     const data = req.body;
     // ✅ check if user already exists

@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSelectionData = exports.deleteUser = exports.updateUser = exports.getUserPermissions = exports.getUserById = exports.getAllUsers = exports.createUser = void 0;
+exports.getSelectionData = exports.deleteUser = exports.updateUser = exports.getUserPermissions = exports.getUserById = exports.getAllUsers = exports.formatUserResponse = exports.createUser = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const User_1 = require("../../models/schema/admin/User");
@@ -18,8 +18,8 @@ const constant_1 = require("../../types/constant");
 // Create User
 // =========================
 const createUser = async (req, res, next) => {
-    const { username, email, password, company_name, phone, image_base64, warehouse_id, role_id, role = "admin", // superadmin أو admin
-    status = "active", } = req.body;
+    const { username, email, password, company_name, phone, image_base64, warehouse_id, role_id, role = "admin", status = "active", permissions = [], // ✅ صلاحيات إضافية خاصة بالـ User
+     } = req.body;
     // Validation
     if (!username || !email || !password) {
         throw new Errors_1.BadRequest("username, email, and password are required");
@@ -69,7 +69,7 @@ const createUser = async (req, res, next) => {
     if (image_base64) {
         image_url = await (0, handleImages_1.saveBase64Image)(image_base64, username, req, "users");
     }
-    // Create user
+    // ✅ Create user
     const user = await User_1.UserModel.create({
         username,
         email,
@@ -77,19 +77,47 @@ const createUser = async (req, res, next) => {
         company_name,
         phone,
         image_url,
-        warehouse_id: warehouse_id || undefined,
-        role_id: role === "admin" ? role_id : undefined,
+        warehouse_id: warehouse_id || null,
+        role_id: role_id || null,
         role,
         status,
+        permissions, // ✅ صلاحيات إضافية (اختياري)
     });
     await user.populate("role_id", "name");
     await user.populate("warehouse_id", "name");
     (0, response_1.SuccessResponse)(res, {
         message: "User created successfully",
-        user: formatUserResponse(user),
+        user: (0, exports.formatUserResponse)(user),
     });
 };
 exports.createUser = createUser;
+// ✅ Helper: Format User Response
+const formatUserResponse = (user) => {
+    return {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone || null,
+        company_name: user.company_name || null,
+        image_url: user.image_url || null,
+        status: user.status,
+        role: user.role,
+        role_id: user.role_id?._id || user.role_id || null,
+        role_name: user.role_id?.name || (user.role === "superadmin" ? "Super Admin" : null),
+        warehouse_id: user.warehouse_id?._id || user.warehouse_id || null,
+        warehouse_name: user.warehouse_id?.name || null,
+        permissions: (user.permissions || []).map((p) => ({
+            module: p.module,
+            actions: (p.actions || []).map((a) => ({
+                id: a._id?.toString() || '',
+                action: a.action || '',
+            })),
+        })),
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+    };
+};
+exports.formatUserResponse = formatUserResponse;
 // =========================
 // Get All Users
 // =========================
@@ -119,7 +147,7 @@ const getAllUsers = async (req, res, next) => {
     (0, response_1.SuccessResponse)(res, {
         message: "Users fetched successfully",
         count: users.length,
-        users: users.map((user) => formatUserResponse(user)),
+        users: users.map((user) => (0, exports.formatUserResponse)(user)),
     });
 };
 exports.getAllUsers = getAllUsers;
@@ -296,7 +324,7 @@ const updateUser = async (req, res, next) => {
     await user.populate("warehouse_id", "name");
     (0, response_1.SuccessResponse)(res, {
         message: "User updated successfully",
-        user: formatUserResponse(user),
+        user: (0, exports.formatUserResponse)(user),
     });
 };
 exports.updateUser = updateUser;
@@ -318,28 +346,8 @@ exports.deleteUser = deleteUser;
 // =========================
 // Helper Functions
 // =========================
-function formatUserResponse(user) {
-    return {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        role_id: user.role_id
-            ? { id: user.role_id._id || user.role_id, name: user.role_id.name || null }
-            : null,
-        status: user.status,
-        company_name: user.company_name,
-        phone: user.phone,
-        image_url: user.image_url,
-        warehouse: user.warehouse_id
-            ? { id: user.warehouse_id._id || user.warehouse_id, name: user.warehouse_id.name || null }
-            : null,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-    };
-}
 function formatUserResponseDetailed(user) {
-    const base = formatUserResponse(user);
+    const base = (0, exports.formatUserResponse)(user);
     // لو superadmin
     if (user.role === "superadmin") {
         return {

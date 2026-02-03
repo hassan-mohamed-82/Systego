@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { UserModel } from "../../models/schema/admin/User";
+import { RoleModel } from "../../models/schema/admin/roles";
+import { CashierShift } from "../../models/schema/admin/POS/CashierShift";
 import { generateToken } from "../../utils/auth";
 import bcrypt from "bcryptjs";
 import { ConflictError, UnauthorizedError } from "../../Errors";
@@ -7,13 +9,8 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { SuccessResponse } from "../../utils/response";
 import { AppUser, UserPermission } from "../../types/custom";
-import { sendEmail } from "../../utils/sendEmails";
-import { randomInt } from "crypto";
-import { saveBase64Image } from "../../utils/handleImages"
-import { RoleModel } from "../../models/schema/admin/roles";
-import { ActionModel } from "../../models/schema/admin/Action";
-import { CashierShift } from "../../models/schema/admin/POS/CashierShift";
-
+import { MODULES, ACTION_NAMES } from "../../types/constant";
+import { saveBase64Image } from "../../utils/handleImages";
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   const { email, password } = req.body;
@@ -28,19 +25,65 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new NotFound("User not found");
   }
 
+  // تحقق من الـ status
+  if (user.status !== "active") {
+    throw new UnauthorizedError("Your account is not active. Please contact admin.");
+  }
+
   const isMatch = await bcrypt.compare(password, user.password_hash as string);
   if (!isMatch) {
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  const mappedPermissions: UserPermission[] =
-    (user.permissions || []).map((p) => ({
-      module: p.module,
-      actions: (p.actions || []).map((a) => ({
-        id: a._id.toString(),
-        action: a.action,
+  // جيب الـ permissions بناءً على نوع الـ User
+  let mappedPermissions: UserPermission[] = [];
+  let roleName: string | null = null;
+
+  if (user.role === "superadmin") {
+    // ✅ Superadmin - كل الـ permissions
+    mappedPermissions = MODULES.map((mod) => ({
+      module: mod,
+      actions: ACTION_NAMES.map((actionName, index) => ({
+        id: `superadmin_${mod}_${index}`,
+        action: actionName,
       })),
     }));
+
+  } else if (user.role_id) {
+    // ✅ Admin عادي - جيب الـ permissions من الـ Role
+    const roleData = await RoleModel.findById(user.role_id).lean();
+
+    if (!roleData) {
+      throw new UnauthorizedError("User role not found. Please contact admin.");
+    }
+
+    if (roleData.status !== "active") {
+      throw new UnauthorizedError("Your role is not active. Please contact admin.");
+    }
+
+    roleName = roleData.name;
+
+    // ✅ جيب permissions من الـ Role
+    const rolePermissions = (roleData.permissions || []).map((p: any) => ({
+      module: p.module,
+      actions: (p.actions || []).map((a: any) => ({
+        id: a._id?.toString() || '',
+        action: a.action || '',
+      })),
+    }));
+
+    // ✅ جيب permissions الخاصة بالـ User (override)
+    const userPermissions = (user.permissions || []).map((p: any) => ({
+      module: p.module,
+      actions: (p.actions || []).map((a: any) => ({
+        id: a._id?.toString() || '',
+        action: a.action || '',
+      })),
+    }));
+
+    // ✅ Merge: Role permissions + User permissions (User overrides Role)
+    mappedPermissions = mergePermissions(rolePermissions, userPermissions);
+  }
 
   // ✅ التحقق من وجود شيفت مفتوح
   const openShift = await CashierShift.findOne({
@@ -48,14 +91,17 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     status: "open",
   });
 
+  // ✅ Generate Token
   const token = generateToken({
     _id: user._id!,
     username: user.username,
     role: user.role,
-    warehouse_id: (user as any).warehouse_id || null,
+    role_id: user.role_id || null,
+    warehouse_id: user.warehouse_id || null,
     permissions: mappedPermissions,
   });
 
+  // ✅ Response
   SuccessResponse(res, {
     message: "Login successful",
     token,
@@ -65,16 +111,55 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       email: user.email,
       status: user.status,
       role: user.role,
-      warehouse_id: (user as any).warehouse_id
-        ? (user as any).warehouse_id.toString()
+      role_id: user.role_id || null,
+      role_name: roleName || (user.role === "superadmin" ? "Super Admin" : null),
+      warehouse_id: user.warehouse_id
+        ? user.warehouse_id.toString()
         : null,
       permissions: mappedPermissions,
     },
-    hasOpenShift: !!openShift,  // ✅ true أو false بس
+    hasOpenShift: !!openShift,
   });
 };
 
+// ✅ Helper: Merge Role permissions with User permissions
+function mergePermissions(
+  rolePermissions: UserPermission[],
+  userPermissions: UserPermission[]
+): UserPermission[] {
+  const permissionMap = new Map<string, Map<string, { id: string; action: string }>>();
 
+  // أضف Role permissions أولاً
+  rolePermissions.forEach((p) => {
+    if (!permissionMap.has(p.module)) {
+      permissionMap.set(p.module, new Map());
+    }
+    p.actions.forEach((a) => {
+      permissionMap.get(p.module)!.set(a.action, a);
+    });
+  });
+
+  // أضف/Override بـ User permissions
+  userPermissions.forEach((p) => {
+    if (!permissionMap.has(p.module)) {
+      permissionMap.set(p.module, new Map());
+    }
+    p.actions.forEach((a) => {
+      permissionMap.get(p.module)!.set(a.action, a);
+    });
+  });
+
+  // حوّل لـ Array
+  const result: UserPermission[] = [];
+  permissionMap.forEach((actionsMap, module) => {
+    result.push({
+      module,
+      actions: Array.from(actionsMap.values()),
+    });
+  });
+
+  return result;
+}
 export const signup = async (req: Request, res: Response) => {
   const data = req.body;
 
@@ -127,7 +212,7 @@ export const signup = async (req: Request, res: Response) => {
     res,
     {
       message: "User Signup Successfully. Please login.",
-      },
+    },
     201
   );
 };

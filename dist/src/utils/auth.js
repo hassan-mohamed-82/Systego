@@ -13,6 +13,7 @@ const generateToken = (payload) => {
         id: payload._id.toString(),
         name: payload.username,
         role: payload.role,
+        role_id: payload.role_id ? payload.role_id.toString() : null,
         permissions: payload.permissions,
         warehouse_id: payload.warehouse_id
             ? payload.warehouse_id.toString()
@@ -27,6 +28,7 @@ const verifyToken = (token) => {
             id: decoded.id,
             name: decoded.name,
             role: decoded.role,
+            role_id: decoded.role_id,
             warehouse_id: decoded.warehouse_id,
             permissions: (decoded.permissions || []),
         };

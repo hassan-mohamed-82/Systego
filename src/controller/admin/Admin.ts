@@ -14,6 +14,7 @@ import { MODULES, ACTION_NAMES } from "../../types/constant";
 // =========================
 // Create User
 // =========================
+
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const {
     username,
@@ -24,8 +25,9 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     image_base64,
     warehouse_id,
     role_id,
-    role = "admin",  // superadmin أو admin
+    role = "admin",
     status = "active",
+    permissions = [],  // ✅ صلاحيات إضافية خاصة بالـ User
   } = req.body;
 
   // Validation
@@ -88,7 +90,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     image_url = await saveBase64Image(image_base64, username, req, "users");
   }
 
-  // Create user
+  // ✅ Create user
   const user = await UserModel.create({
     username,
     email,
@@ -96,10 +98,11 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     company_name,
     phone,
     image_url,
-    warehouse_id: warehouse_id || undefined,
-    role_id: role === "admin" ? role_id : undefined,
+    warehouse_id: warehouse_id || null,
+    role_id: role_id || null,
     role,
     status,
+    permissions,  // ✅ صلاحيات إضافية (اختياري)
   });
 
   await user.populate("role_id", "name");
@@ -111,6 +114,32 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   });
 };
 
+// ✅ Helper: Format User Response
+export const formatUserResponse = (user: any) => {
+  return {
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    phone: user.phone || null,
+    company_name: user.company_name || null,
+    image_url: user.image_url || null,
+    status: user.status,
+    role: user.role,
+    role_id: user.role_id?._id || user.role_id || null,
+    role_name: user.role_id?.name || (user.role === "superadmin" ? "Super Admin" : null),
+    warehouse_id: user.warehouse_id?._id || user.warehouse_id || null,
+    warehouse_name: user.warehouse_id?.name || null,
+    permissions: (user.permissions || []).map((p: any) => ({
+      module: p.module,
+      actions: (p.actions || []).map((a: any) => ({
+        id: a._id?.toString() || '',
+        action: a.action || '',
+      })),
+    })),
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+};
 // =========================
 // Get All Users
 // =========================
@@ -382,26 +411,6 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
 // =========================
 // Helper Functions
 // =========================
-function formatUserResponse(user: any) {
-  return {
-    id: user._id,
-    username: user.username,
-    email: user.email,
-    role: user.role,
-    role_id: user.role_id
-      ? { id: user.role_id._id || user.role_id, name: user.role_id.name || null }
-      : null,
-    status: user.status,
-    company_name: user.company_name,
-    phone: user.phone,
-    image_url: user.image_url,
-    warehouse: user.warehouse_id
-      ? { id: user.warehouse_id._id || user.warehouse_id, name: user.warehouse_id.name || null }
-      : null,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
-}
 
 function formatUserResponseDetailed(user: any) {
   const base = formatUserResponse(user);

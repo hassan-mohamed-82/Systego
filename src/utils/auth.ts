@@ -10,6 +10,7 @@ export const generateToken = (payload: {
   _id: mongoose.Types.ObjectId;
   username: string;
   role: string;
+  role_id: mongoose.Types.ObjectId | null;
   warehouse_id: mongoose.Types.ObjectId | null;
   permissions: UserPermission[];
 }) => {
@@ -18,6 +19,7 @@ export const generateToken = (payload: {
       id: payload._id.toString(),
       name: payload.username,
       role: payload.role,
+      role_id: payload.role_id ? payload.role_id.toString() : null,
       permissions: payload.permissions,
       warehouse_id: payload.warehouse_id
         ? payload.warehouse_id.toString()
@@ -39,6 +41,7 @@ export const verifyToken = (token: string): JwtUserPayload => {
       id: decoded.id as string,
       name: decoded.name as string,
       role: decoded.role as "superadmin" | "admin",
+      role_id: decoded.role_id as string | undefined,
       warehouse_id: decoded.warehouse_id as string | undefined,
       permissions: (decoded.permissions || []) as UserPermission[],
     };

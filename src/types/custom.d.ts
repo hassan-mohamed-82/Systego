@@ -25,8 +25,10 @@ export interface AppUser {
   status: "active" | "inactive";
 
   role: "superadmin" | "admin";
+  role_id?: Types.ObjectId;
 
-  warehouseId?: Types.ObjectId;
+  warehouse_id?: Types.ObjectId;
+  warehouseId?: Types.ObjectId; // deprecated, use warehouse_id
 
   company_name?: string;
   phone?: string;
@@ -47,6 +49,7 @@ export interface JwtUserPayload {
   id: string;
   name: string;
   role: "superadmin" | "admin";
+  role_id?: string;
   permissions: UserPermission[];
   warehouse_id?: string;
 }
@@ -63,4 +66,4 @@ declare global {
   }
 }
 
-export {};
+export { };
