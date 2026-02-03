@@ -99,7 +99,6 @@ const ReturnSchema = new Schema(
 
 ReturnSchema.index({ sale_id: 1 });
 ReturnSchema.index({ customer_id: 1 });
-ReturnSchema.index({ reference: 1 });
 ReturnSchema.index({ sale_reference: 1 });
 
 export const ReturnModel = mongoose.model("Return", ReturnSchema);

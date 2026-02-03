@@ -117,6 +117,5 @@ const ReturnSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 ReturnSchema.index({ sale_id: 1 });
 ReturnSchema.index({ customer_id: 1 });
-ReturnSchema.index({ reference: 1 });
 ReturnSchema.index({ sale_reference: 1 });
 exports.ReturnModel = mongoose_1.default.model("Return", ReturnSchema);

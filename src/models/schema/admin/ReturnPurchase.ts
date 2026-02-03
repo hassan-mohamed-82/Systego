@@ -65,7 +65,6 @@ const ReturnPurchaseSchema = new Schema({
 });
 ReturnPurchaseSchema.index({ purchase_id: 1 });
 ReturnPurchaseSchema.index({ supplier_id: 1 });
-ReturnPurchaseSchema.index({ reference: 1 });
 ReturnPurchaseSchema.index({ purchase_reference: 1 });
 
 export const ReturnPurchaseModel = mongoose.model("ReturnPurchase", ReturnPurchaseSchema);
