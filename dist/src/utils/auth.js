@@ -8,13 +8,13 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const Errors_1 = require("../Errors");
 dotenv_1.default.config();
+// ✅ Token خفيف - بدون permissions
 const generateToken = (payload) => {
     return jsonwebtoken_1.default.sign({
         id: payload._id.toString(),
         name: payload.username,
         role: payload.role,
         role_id: payload.role_id ? payload.role_id.toString() : null,
-        permissions: payload.permissions,
         warehouse_id: payload.warehouse_id
             ? payload.warehouse_id.toString()
             : null,
@@ -30,7 +30,6 @@ const verifyToken = (token) => {
             role: decoded.role,
             role_id: decoded.role_id,
             warehouse_id: decoded.warehouse_id,
-            permissions: (decoded.permissions || []),
         };
     }
     catch {

@@ -2,27 +2,25 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authorizePermissions = void 0;
 const unauthorizedError_1 = require("../Errors/unauthorizedError");
-const authorizePermissions = (moduleName, actionName) => {
+const authorizePermissions = (module, action) => {
     return (req, res, next) => {
         const user = req.user;
         if (!user) {
-            throw new unauthorizedError_1.UnauthorizedError("Unauthorized");
+            throw new unauthorizedError_1.UnauthorizedError("Not authenticated");
         }
+        // Superadmin bypasses all checks
         if (user.role === "superadmin") {
             return next();
         }
-        if (user.role !== "admin") {
-            throw new unauthorizedError_1.UnauthorizedError("You are not authorized to access this resource");
+        const modulePermission = user.permissions?.find((p) => p.module === module);
+        if (!modulePermission) {
+            throw new unauthorizedError_1.UnauthorizedError(`No access to ${module} module`);
         }
-        const perm = user.permissions?.find((p) => p.module === moduleName);
-        if (!perm) {
-            throw new unauthorizedError_1.UnauthorizedError(`No access to module: ${moduleName}`);
-        }
-        const hasAction = perm.actions?.some((a) => a.action === actionName);
+        const hasAction = modulePermission.actions.some((a) => a.action === action);
         if (!hasAction) {
-            throw new unauthorizedError_1.UnauthorizedError(`No permission: ${actionName} on ${moduleName}`);
+            throw new unauthorizedError_1.UnauthorizedError(`No permission to ${action} in ${module}`);
         }
-        return next();
+        next();
     };
 };
 exports.authorizePermissions = authorizePermissions;

@@ -18,21 +18,16 @@ const constant_1 = require("../../types/constant");
 // Create User
 // =========================
 const createUser = async (req, res, next) => {
-    const { username, email, password, company_name, phone, image_base64, warehouse_id, role_id, role = "admin", status = "active", permissions = [], // ✅ صلاحيات إضافية خاصة بالـ User
-     } = req.body;
-    // Validation
+    const { username, email, password, company_name, phone, image_base64, warehouse_id, role_id, role = "admin", status = "active", permissions = [], } = req.body;
     if (!username || !email || !password) {
         throw new Errors_1.BadRequest("username, email, and password are required");
     }
-    // لو admin عادي، لازم يكون فيه role_id
     if (role === "admin" && !role_id) {
         throw new Errors_1.BadRequest("role_id is required for admin users");
     }
-    // لو superadmin، مش محتاج role_id
     if (role === "superadmin" && role_id) {
         throw new Errors_1.BadRequest("superadmin doesn't need role_id");
     }
-    // تحقق من الـ Role لو admin
     if (role === "admin" && role_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(role_id)) {
             throw new Errors_1.BadRequest("Invalid role_id");
@@ -45,7 +40,6 @@ const createUser = async (req, res, next) => {
             throw new Errors_1.BadRequest("Selected role is not active");
         }
     }
-    // تحقق من الـ Warehouse
     if (warehouse_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(warehouse_id)) {
             throw new Errors_1.BadRequest("Invalid warehouse_id");
@@ -55,21 +49,17 @@ const createUser = async (req, res, next) => {
             throw new Errors_1.BadRequest("Warehouse does not exist");
         }
     }
-    // تحقق من وجود اليوزر
     const existingUser = await User_1.UserModel.findOne({
         $or: [{ email }, { username }],
     });
     if (existingUser) {
         throw new Errors_1.BadRequest("User with this email or username already exists");
     }
-    // Hash password
     const password_hash = await bcryptjs_1.default.hash(password, 10);
-    // Handle image
     let image_url;
     if (image_base64) {
         image_url = await (0, handleImages_1.saveBase64Image)(image_base64, username, req, "users");
     }
-    // ✅ Create user
     const user = await User_1.UserModel.create({
         username,
         email,
@@ -81,7 +71,7 @@ const createUser = async (req, res, next) => {
         role_id: role_id || null,
         role,
         status,
-        permissions, // ✅ صلاحيات إضافية (اختياري)
+        permissions,
     });
     await user.populate("role_id", "name");
     await user.populate("warehouse_id", "name");
@@ -91,7 +81,6 @@ const createUser = async (req, res, next) => {
     });
 };
 exports.createUser = createUser;
-// ✅ Helper: Format User Response
 const formatUserResponse = (user) => {
     return {
         id: user._id,
@@ -109,8 +98,8 @@ const formatUserResponse = (user) => {
         permissions: (user.permissions || []).map((p) => ({
             module: p.module,
             actions: (p.actions || []).map((a) => ({
-                id: a._id?.toString() || '',
-                action: a.action || '',
+                id: a._id?.toString() || "",
+                action: a.action || "",
             })),
         })),
         createdAt: user.createdAt,
