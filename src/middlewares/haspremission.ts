@@ -1,37 +1,32 @@
-// src/middlewares/authorizePermissions.ts
-import { NextFunction, Response, RequestHandler } from "express";
-import { AuthenticatedRequest } from "../types/custom";
-import { ModuleName, ActionName } from "../types/constant";
+import { Request, Response, NextFunction } from "express";
 import { UnauthorizedError } from "../Errors/unauthorizedError";
-export const authorizePermissions = (
-  moduleName: ModuleName,
-  actionName: ActionName
-): RequestHandler => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+import { ModuleName, ActionName } from "../types/constant";
+
+export const authorizePermissions = (module: ModuleName, action: ActionName) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
 
     if (!user) {
-      throw new UnauthorizedError("Unauthorized");
+      throw new UnauthorizedError("Not authenticated");
     }
 
+    // Superadmin bypasses all checks
     if (user.role === "superadmin") {
       return next();
     }
 
-    if (user.role !== "admin") {
-      throw new UnauthorizedError("You are not authorized to access this resource");
+    const modulePermission = user.permissions?.find((p) => p.module === module);
+
+    if (!modulePermission) {
+      throw new UnauthorizedError(`No access to ${module} module`);
     }
 
-    const perm = user.permissions?.find((p) => p.module === moduleName);
-    if (!perm) {
-      throw new UnauthorizedError(`No access to module: ${moduleName}`);
-    }
+    const hasAction = modulePermission.actions.some((a) => a.action === action);
 
-    const hasAction = perm.actions?.some((a) => a.action === actionName);
     if (!hasAction) {
-      throw new UnauthorizedError(`No permission: ${actionName} on ${moduleName}`);
+      throw new UnauthorizedError(`No permission to ${action} in ${module}`);
     }
 
-    return next();
+    next();
   };
 };

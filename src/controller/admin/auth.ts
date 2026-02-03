@@ -25,7 +25,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new NotFound("User not found");
   }
 
-  // تحقق من الـ status
   if (user.status !== "active") {
     throw new UnauthorizedError("Your account is not active. Please contact admin.");
   }
@@ -35,12 +34,11 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // جيب الـ permissions بناءً على نوع الـ User
+  // ✅ جيب الـ permissions للـ Response (Frontend)
   let mappedPermissions: UserPermission[] = [];
   let roleName: string | null = null;
 
   if (user.role === "superadmin") {
-    // ✅ Superadmin - كل الـ permissions
     mappedPermissions = MODULES.map((mod) => ({
       module: mod,
       actions: ACTION_NAMES.map((actionName, index) => ({
@@ -48,9 +46,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         action: actionName,
       })),
     }));
-
   } else if (user.role_id) {
-    // ✅ Admin عادي - جيب الـ permissions من الـ Role
     const roleData = await RoleModel.findById(user.role_id).lean();
 
     if (!roleData) {
@@ -63,45 +59,40 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     roleName = roleData.name;
 
-    // ✅ جيب permissions من الـ Role
     const rolePermissions = (roleData.permissions || []).map((p: any) => ({
       module: p.module,
       actions: (p.actions || []).map((a: any) => ({
-        id: a._id?.toString() || '',
-        action: a.action || '',
+        id: a._id?.toString() || "",
+        action: a.action || "",
       })),
     }));
 
-    // ✅ جيب permissions الخاصة بالـ User (override)
     const userPermissions = (user.permissions || []).map((p: any) => ({
       module: p.module,
       actions: (p.actions || []).map((a: any) => ({
-        id: a._id?.toString() || '',
-        action: a.action || '',
+        id: a._id?.toString() || "",
+        action: a.action || "",
       })),
     }));
 
-    // ✅ Merge: Role permissions + User permissions (User overrides Role)
     mappedPermissions = mergePermissions(rolePermissions, userPermissions);
   }
 
-  // ✅ التحقق من وجود شيفت مفتوح
   const openShift = await CashierShift.findOne({
     cashierman_id: user._id,
     status: "open",
   });
 
-  // ✅ Generate Token
+  // ✅ Token خفيف - بدون permissions
   const token = generateToken({
     _id: user._id!,
     username: user.username,
     role: user.role,
     role_id: user.role_id || null,
     warehouse_id: user.warehouse_id || null,
-    permissions: mappedPermissions,
   });
 
-  // ✅ Response
+  // ✅ الـ permissions في الـ Response بس
   SuccessResponse(res, {
     message: "Login successful",
     token,
@@ -113,23 +104,20 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       role: user.role,
       role_id: user.role_id || null,
       role_name: roleName || (user.role === "superadmin" ? "Super Admin" : null),
-      warehouse_id: user.warehouse_id
-        ? user.warehouse_id.toString()
-        : null,
+      warehouse_id: user.warehouse_id ? user.warehouse_id.toString() : null,
       permissions: mappedPermissions,
     },
     hasOpenShift: !!openShift,
   });
 };
 
-// ✅ Helper: Merge Role permissions with User permissions
+// ✅ Helper
 function mergePermissions(
   rolePermissions: UserPermission[],
   userPermissions: UserPermission[]
 ): UserPermission[] {
   const permissionMap = new Map<string, Map<string, { id: string; action: string }>>();
 
-  // أضف Role permissions أولاً
   rolePermissions.forEach((p) => {
     if (!permissionMap.has(p.module)) {
       permissionMap.set(p.module, new Map());
@@ -139,7 +127,6 @@ function mergePermissions(
     });
   });
 
-  // أضف/Override بـ User permissions
   userPermissions.forEach((p) => {
     if (!permissionMap.has(p.module)) {
       permissionMap.set(p.module, new Map());
@@ -149,7 +136,6 @@ function mergePermissions(
     });
   });
 
-  // حوّل لـ Array
   const result: UserPermission[] = [];
   permissionMap.forEach((actionsMap, module) => {
     result.push({

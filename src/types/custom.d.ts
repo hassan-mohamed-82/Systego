@@ -15,53 +15,51 @@ export interface UserPermission {
 }
 
 /** شكل اليوزر في Mongo */
-export interface AppUser {
-  _id?: Types.ObjectId;
-  id?: string;
-
-  username: string;
-  email: string;
-  password_hash: string;
-  status: "active" | "inactive";
-
-  role: "superadmin" | "admin";
-  role_id?: Types.ObjectId;
-
-  warehouse_id?: Types.ObjectId;
-  warehouseId?: Types.ObjectId; // deprecated, use warehouse_id
-
-  company_name?: string;
-  phone?: string;
-  image_url?: string;
-  address?: string;
-  vat_number?: string;
-  state?: string;
-  postal_code?: string;
-
-  permissions?: {
-    module: ModuleName;
-    actions: { _id: Types.ObjectId; action: ActionName }[];
-  }[];
-}
-
-/** اللي جوه الـ JWT */
 export interface JwtUserPayload {
   id: string;
   name: string;
   role: "superadmin" | "admin";
-  role_id?: string;
+  role_id: string | null;
+  warehouse_id: string | null;
+}
+
+export interface UserPermission {
+  module: string;
+  actions: {
+    id: string;
+    action: string;
+  }[];
+}
+
+export interface AuthenticatedUser extends JwtUserPayload {
   permissions: UserPermission[];
-  warehouse_id?: string;
 }
 
-export interface AuthenticatedRequest extends Request {
-  user?: JwtUserPayload;
+export interface AppUser {
+  _id: any;
+  username: string;
+  email: string;
+  password_hash: string;
+  company_name?: string;
+  phone?: string;
+  role_id?: any;
+  role: "superadmin" | "admin";
+  permissions: {
+    module: string;
+    actions: { _id: any; action: string }[];
+  }[];
+  status: "active" | "inactive";
+  image_url?: string;
+  warehouse_id?: any;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
+// ✅ Extend Express Request
 declare global {
   namespace Express {
     interface Request {
-      user?: JwtUserPayload;
+      user?: AuthenticatedUser;
     }
   }
 }

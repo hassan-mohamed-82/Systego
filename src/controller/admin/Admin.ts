@@ -15,6 +15,7 @@ import { MODULES, ACTION_NAMES } from "../../types/constant";
 // Create User
 // =========================
 
+
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const {
     username,
@@ -27,25 +28,21 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     role_id,
     role = "admin",
     status = "active",
-    permissions = [],  // ✅ صلاحيات إضافية خاصة بالـ User
+    permissions = [],
   } = req.body;
 
-  // Validation
   if (!username || !email || !password) {
     throw new BadRequest("username, email, and password are required");
   }
 
-  // لو admin عادي، لازم يكون فيه role_id
   if (role === "admin" && !role_id) {
     throw new BadRequest("role_id is required for admin users");
   }
 
-  // لو superadmin، مش محتاج role_id
   if (role === "superadmin" && role_id) {
     throw new BadRequest("superadmin doesn't need role_id");
   }
 
-  // تحقق من الـ Role لو admin
   if (role === "admin" && role_id) {
     if (!mongoose.Types.ObjectId.isValid(role_id)) {
       throw new BadRequest("Invalid role_id");
@@ -61,7 +58,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     }
   }
 
-  // تحقق من الـ Warehouse
   if (warehouse_id) {
     if (!mongoose.Types.ObjectId.isValid(warehouse_id)) {
       throw new BadRequest("Invalid warehouse_id");
@@ -72,7 +68,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     }
   }
 
-  // تحقق من وجود اليوزر
   const existingUser = await UserModel.findOne({
     $or: [{ email }, { username }],
   });
@@ -81,16 +76,13 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     throw new BadRequest("User with this email or username already exists");
   }
 
-  // Hash password
   const password_hash = await bcrypt.hash(password, 10);
 
-  // Handle image
   let image_url: string | undefined;
   if (image_base64) {
     image_url = await saveBase64Image(image_base64, username, req, "users");
   }
 
-  // ✅ Create user
   const user = await UserModel.create({
     username,
     email,
@@ -102,7 +94,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     role_id: role_id || null,
     role,
     status,
-    permissions,  // ✅ صلاحيات إضافية (اختياري)
+    permissions,
   });
 
   await user.populate("role_id", "name");
@@ -114,7 +106,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   });
 };
 
-// ✅ Helper: Format User Response
 export const formatUserResponse = (user: any) => {
   return {
     id: user._id,
@@ -132,14 +123,16 @@ export const formatUserResponse = (user: any) => {
     permissions: (user.permissions || []).map((p: any) => ({
       module: p.module,
       actions: (p.actions || []).map((a: any) => ({
-        id: a._id?.toString() || '',
-        action: a.action || '',
+        id: a._id?.toString() || "",
+        action: a.action || "",
       })),
     })),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
 };
+
+
 // =========================
 // Get All Users
 // =========================

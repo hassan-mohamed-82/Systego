@@ -2,17 +2,17 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { UnauthorizedError } from "../Errors";
-import { JwtUserPayload, UserPermission } from "../types/custom";
+import { JwtUserPayload } from "../types/custom";
 
 dotenv.config();
 
+// ✅ Token خفيف - بدون permissions
 export const generateToken = (payload: {
   _id: mongoose.Types.ObjectId;
   username: string;
   role: string;
   role_id: mongoose.Types.ObjectId | null;
   warehouse_id: mongoose.Types.ObjectId | null;
-  permissions: UserPermission[];
 }) => {
   return jwt.sign(
     {
@@ -20,7 +20,6 @@ export const generateToken = (payload: {
       name: payload.username,
       role: payload.role,
       role_id: payload.role_id ? payload.role_id.toString() : null,
-      permissions: payload.permissions,
       warehouse_id: payload.warehouse_id
         ? payload.warehouse_id.toString()
         : null,
@@ -41,9 +40,8 @@ export const verifyToken = (token: string): JwtUserPayload => {
       id: decoded.id as string,
       name: decoded.name as string,
       role: decoded.role as "superadmin" | "admin",
-      role_id: decoded.role_id as string | undefined,
-      warehouse_id: decoded.warehouse_id as string | undefined,
-      permissions: (decoded.permissions || []) as UserPermission[],
+      role_id: decoded.role_id as string | null,
+      warehouse_id: decoded.warehouse_id as string | null,
     };
   } catch {
     throw new UnauthorizedError("Invalid token");
