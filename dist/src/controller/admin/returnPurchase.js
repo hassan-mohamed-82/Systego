@@ -391,7 +391,7 @@ const getPurchaseReturns = async (req, res) => {
         purchaseObjectId = id;
     }
     else {
-        const purchase = await Purchase_1.PurchaseModel.findOne({ reference: id });
+        const purchase = await Purchase_1.PurchaseModel.findOne({ _id: id });
         if (!purchase) {
             throw new Errors_1.NotFound("Purchase not found");
         }

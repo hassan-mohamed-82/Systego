@@ -488,7 +488,7 @@ export const getPurchaseReturns = async (req: Request, res: Response) => {
     if (mongoose.Types.ObjectId.isValid(id)) {
         purchaseObjectId = id;
     } else {
-        const purchase = await PurchaseModel.findOne({ reference: id });
+        const purchase = await PurchaseModel.findOne({ _id: id });
         if (!purchase) {
             throw new NotFound("Purchase not found");
         }
