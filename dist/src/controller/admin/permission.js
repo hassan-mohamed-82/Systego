@@ -37,7 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRolesForSelection = exports.deleteRole = exports.updateRolePermissions = exports.getRolePermissions = exports.updateRole = exports.getRoleById = exports.getAllRoles = exports.createRole = void 0;
+exports.getModulesAndActions = exports.getRolesForSelection = exports.deleteRole = exports.updateRolePermissions = exports.getRolePermissions = exports.updateRole = exports.getRoleById = exports.getAllRoles = exports.createRole = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const roles_1 = require("../../models/schema/admin/roles");
 const Errors_1 = require("../../Errors");
@@ -500,4 +500,35 @@ function normalizePermissions(permissions) {
         };
     })
         .filter((p) => p.actions.length > 0);
+}
+// =========================
+// Get All Modules & Actions (For Frontend Permissions UI)
+// =========================
+const getModulesAndActions = async (req, res, next) => {
+    const modules = constant_1.MODULES.map((moduleName, index) => ({
+        id: index + 1,
+        name: moduleName,
+        label: formatModuleName(moduleName),
+        actions: constant_1.ACTION_NAMES.map((actionName, actionIndex) => ({
+            id: actionIndex + 1,
+            name: actionName,
+        })),
+    }));
+    (0, response_1.SuccessResponse)(res, {
+        message: "Modules and actions fetched successfully",
+        modules,
+        actions: constant_1.ACTION_NAMES,
+        summary: {
+            totalModules: constant_1.MODULES.length,
+            totalActions: constant_1.ACTION_NAMES.length,
+            totalPermissions: constant_1.MODULES.length * constant_1.ACTION_NAMES.length,
+        },
+    });
+};
+exports.getModulesAndActions = getModulesAndActions;
+function formatModuleName(name) {
+    return name
+        .split("_")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(" ");
 }

@@ -7,6 +7,7 @@ const router = (0, express_1.Router)();
 // Apply authentication to all routes
 // Selection (for dropdown)
 router.get("/selection", (0, catchAsync_1.catchAsync)(permission_1.getRolesForSelection));
+router.get("/modules-actions", (0, catchAsync_1.catchAsync)(permission_1.getModulesAndActions));
 // CRUD
 router.post("/", (0, catchAsync_1.catchAsync)(permission_1.createRole));
 router.get("/", (0, catchAsync_1.catchAsync)(permission_1.getAllRoles));

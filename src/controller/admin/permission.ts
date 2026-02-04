@@ -584,3 +584,40 @@ function normalizePermissions(permissions: IncomingPermission[]) {
     .filter((p) => p.actions.length > 0);
 }
 
+// =========================
+// Get All Modules & Actions (For Frontend Permissions UI)
+// =========================
+export const getModulesAndActions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const modules = MODULES.map((moduleName, index) => ({
+    id: index + 1,
+    name: moduleName,
+    label: formatModuleName(moduleName),
+    actions: ACTION_NAMES.map((actionName, actionIndex) => ({
+      id: actionIndex + 1,
+      name: actionName,
+    })),
+  }));
+
+  SuccessResponse(res, {
+    message: "Modules and actions fetched successfully",
+    modules,
+    actions: ACTION_NAMES,
+    summary: {
+      totalModules: MODULES.length,
+      totalActions: ACTION_NAMES.length,
+      totalPermissions: MODULES.length * ACTION_NAMES.length,
+    },
+  });
+};
+
+function formatModuleName(name: string): string {
+  return name
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+

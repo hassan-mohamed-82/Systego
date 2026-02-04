@@ -5,6 +5,7 @@ import {
   getRolePermissions,
   getRolesForSelection,
   createRole,
+  getModulesAndActions,
   updateRole,
   //updateRolePermissions,
   //toggleRolePermissionAction,
@@ -20,7 +21,7 @@ const router = Router();
 
 // Selection (for dropdown)
 router.get("/selection", catchAsync(getRolesForSelection));
-
+router.get("/modules-actions", catchAsync(getModulesAndActions));
 // CRUD
 router.post("/", catchAsync(createRole));
 router.get("/", catchAsync(getAllRoles));
