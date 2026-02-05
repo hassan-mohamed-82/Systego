@@ -6,6 +6,7 @@ exports.MODULES = [
     "user",
     "category",
     "product",
+    "permission",
     "warehouse",
     "payment_method",
     "brand",

@@ -6,7 +6,7 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const getAllNotifications = async (req, res) => {
-    const notifications = await Notfication_1.NotificationModel.find().sort({ createdAt: -1 });
+    const notifications = await Notfication_1.NotificationModel.find().populate('productId').sort({ createdAt: -1 });
     if (!notifications || notifications.length === 0)
         throw new Errors_1.NotFound("No notifications found");
     const unreadCount = await Notfication_1.NotificationModel.countDocuments({ isRead: false });
@@ -17,7 +17,7 @@ const getNotificationById = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Notification ID is required");
-    const notifications = await Notfication_1.NotificationModel.findById(id);
+    const notifications = await Notfication_1.NotificationModel.findById(id).populate('productId');
     if (!notifications)
         throw new Errors_1.NotFound("Notification not found");
     notifications.isRead = true;
