@@ -43,6 +43,13 @@ export const createTransferSchema = Joi.object({
       "array.min": "At least one product must be provided",
       "any.required": "Products are required",
     }),
+
+  reason: Joi.string()
+    .required()
+    .messages({
+      "any.required": "Reason for transfer is required",
+      "string.empty": "Reason cannot be empty",
+    }),
 });
 
 
