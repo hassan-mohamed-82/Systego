@@ -44,6 +44,12 @@ exports.createTransferSchema = joi_1.default.object({
         "array.min": "At least one product must be provided",
         "any.required": "Products are required",
     }),
+    reason: joi_1.default.string()
+        .required()
+        .messages({
+        "any.required": "Reason for transfer is required",
+        "string.empty": "Reason cannot be empty",
+    }),
 });
 // ✅ فاليديشن لتأكيد الاستلام أو الرفض
 exports.updateTransferStatusSchema = joi_1.default.object({

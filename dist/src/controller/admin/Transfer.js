@@ -10,7 +10,7 @@ const response_1 = require("../../utils/response");
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const createTransfer = async (req, res) => {
-    const { fromWarehouseId, toWarehouseId, products } = req.body;
+    const { fromWarehouseId, toWarehouseId, products, reason } = req.body;
     // ✅ تحقق من البيانات الأساسية
     if (!fromWarehouseId || !toWarehouseId)
         throw new BadRequest_1.BadRequest("Both warehouses are required");
@@ -71,6 +71,7 @@ const createTransfer = async (req, res) => {
         fromWarehouseId,
         toWarehouseId,
         products,
+        reason,
         status: "pending",
     });
     fromWarehouse.stock_Quantity -= transfer.products.reduce((acc, item) => acc + item.quantity, 0);
