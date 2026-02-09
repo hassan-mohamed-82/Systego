@@ -10,7 +10,7 @@ import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
 
 export const createTransfer = async (req: Request, res: Response) => {
-  const { fromWarehouseId, toWarehouseId, products } = req.body;
+  const { fromWarehouseId, toWarehouseId, products, reason } = req.body;
 
   // ✅ تحقق من البيانات الأساسية
   if (!fromWarehouseId || !toWarehouseId)
@@ -87,6 +87,7 @@ export const createTransfer = async (req: Request, res: Response) => {
     fromWarehouseId,
     toWarehouseId,
     products,
+    reason,
     status: "pending",
   });
 
