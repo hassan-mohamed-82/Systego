@@ -17,7 +17,6 @@ export const createTaxes = async (req: Request, res: Response) => {
 };
 export const getTaxes = async (req: Request, res: Response) => {
     const taxes = await TaxesModel.find();
-    if (!taxes || taxes.length === 0) throw new NotFound("No taxes found");
     SuccessResponse(res, { message: "Get taxes successfully", taxes });
 }
 
