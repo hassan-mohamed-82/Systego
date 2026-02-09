@@ -7,4 +7,6 @@ const haspremission_1 = require("../../middlewares/haspremission");
 const router = (0, express_1.Router)();
 router.get("/", (0, haspremission_1.authorizePermissions)("notification", "View"), (0, catchAsync_1.catchAsync)(Notfication_1.getAllNotifications));
 router.get("/:id", (0, haspremission_1.authorizePermissions)("notification", "View"), (0, catchAsync_1.catchAsync)(Notfication_1.getNotificationById));
+router.put("/read-all", (0, haspremission_1.authorizePermissions)("notification", "Edit"), (0, catchAsync_1.catchAsync)(Notfication_1.markAllNotificationsAsRead));
+router.put("/:id/read", (0, haspremission_1.authorizePermissions)("notification", "Edit"), (0, catchAsync_1.catchAsync)(Notfication_1.markNotificationAsRead));
 exports.default = router;

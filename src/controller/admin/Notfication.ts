@@ -21,3 +21,22 @@ export const getNotificationById = async (req: Request, res: Response) => {
   await notifications.save();
   SuccessResponse(res, { message: "Get notification successfully", notifications });
 };
+
+export const markNotificationAsRead = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) throw new BadRequest("Notification ID is required");
+
+  const notification = await NotificationModel.findById(id);
+  if (!notification) throw new NotFound("Notification not found");
+
+  notification.isRead = true;
+  await notification.save();
+
+  SuccessResponse(res, { message: "Notification marked as read successfully" });
+};
+
+export const markAllNotificationsAsRead = async (req: Request, res: Response) => {
+  await NotificationModel.updateMany({ isRead: false }, { isRead: true });
+
+  SuccessResponse(res, { message: "All notifications marked as read successfully" });
+};

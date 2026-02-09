@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getNotificationById = exports.getAllNotifications = void 0;
+exports.markAllNotificationsAsRead = exports.markNotificationAsRead = exports.getNotificationById = exports.getAllNotifications = void 0;
 const Notfication_1 = require("../../models/schema/admin/Notfication");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
@@ -25,3 +25,20 @@ const getNotificationById = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Get notification successfully", notifications });
 };
 exports.getNotificationById = getNotificationById;
+const markNotificationAsRead = async (req, res) => {
+    const { id } = req.params;
+    if (!id)
+        throw new BadRequest_1.BadRequest("Notification ID is required");
+    const notification = await Notfication_1.NotificationModel.findById(id);
+    if (!notification)
+        throw new Errors_1.NotFound("Notification not found");
+    notification.isRead = true;
+    await notification.save();
+    (0, response_1.SuccessResponse)(res, { message: "Notification marked as read successfully" });
+};
+exports.markNotificationAsRead = markNotificationAsRead;
+const markAllNotificationsAsRead = async (req, res) => {
+    await Notfication_1.NotificationModel.updateMany({ isRead: false }, { isRead: true });
+    (0, response_1.SuccessResponse)(res, { message: "All notifications marked as read successfully" });
+};
+exports.markAllNotificationsAsRead = markAllNotificationsAsRead;
