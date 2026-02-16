@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 const TransferSchema = new mongoose.Schema({
 
   reference: {
@@ -30,7 +29,6 @@ const TransferSchema = new mongoose.Schema({
     required: true
   },
 
-  // مصفوفة المنتجات اللي بتتحول (مع الـ variations)
   products: [
     {
       productId: {
@@ -38,7 +36,6 @@ const TransferSchema = new mongoose.Schema({
         ref: "Product",
         required: true
       },
-      // ✅ إضافة productPriceId لتحديد الـ variation (اختياري)
       productPriceId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "ProductPrice",
@@ -52,7 +49,7 @@ const TransferSchema = new mongoose.Schema({
     }
   ],
 
-  // مصفوفة المنتجات اللي بتترفض
+  // ✅ عدلت الـ reason يكون اختياري
   rejected_products: [
     {
       productId: {
@@ -72,12 +69,11 @@ const TransferSchema = new mongoose.Schema({
       },
       reason: {
         type: String,
-        required: true,
+        default: "No reason provided",  // ✅ التغيير هنا
       },
     }
   ],
 
-  // مصفوفة المنتجات اللي اتقبلت
   approved_products: [
     {
       productId: {
@@ -103,15 +99,18 @@ const TransferSchema = new mongoose.Schema({
     enum: ["pending", "received", "rejected"],
     default: "pending"
   },
-  reason: { type: String, required: true },
+  
+  reason: { 
+    type: String, 
+    default: ""  // ✅ عدلت من required: true لـ default
+  },
 
 });
-
 
 TransferSchema.pre("save", async function (next) {
   if (!this.reference) {
     const count = await mongoose.model("Transfer").countDocuments();
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // مثال: 20251029
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     this.reference = `TRF-${date}-${count + 1}`;
   }
   next();
