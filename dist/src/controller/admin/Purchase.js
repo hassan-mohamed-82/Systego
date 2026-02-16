@@ -23,7 +23,6 @@ const handleImages_1 = require("../../utils/handleImages");
 const Materials_1 = require("../../models/schema/admin/Materials");
 const createPurchase = async (req, res) => {
     const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials = [], note, } = req.body;
-    // ✅ خليها let عشان نقدر نعدل عليها
     let purchase_due_payment = req.body.purchase_due_payment || [];
     // ========== Validations ==========
     const existingWarehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
@@ -40,7 +39,6 @@ const createPurchase = async (req, res) => {
     // ========== Payment Validation ==========
     const totalPaidNow = financials.reduce((sum, f) => sum + Number(f.payment_amount || 0), 0);
     let totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-    // ✅ تاريخ افتراضي للدفع المؤجل (بعد 30 يوم)
     const getDefaultDueDate = () => {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 30);
@@ -127,7 +125,6 @@ const createPurchase = async (req, res) => {
         const product = await products_1.ProductModel.findById(product_id);
         if (!product)
             throw new NotFound_1.NotFound(`Product not found: ${product_id}`);
-        // التحقق من تاريخ الانتهاء
         if (product.exp_ability) {
             const expiryDateValue = p.expiry_date || p.date_of_expiery;
             if (!expiryDateValue) {
@@ -141,7 +138,6 @@ const createPurchase = async (req, res) => {
                 throw new BadRequest_1.BadRequest(`Expiry date cannot be in the past for product: ${product.name}`);
             }
         }
-        // حساب الكمية
         let totalQuantity = Number(p.quantity) || 0;
         const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
         if (hasVariations) {
@@ -168,7 +164,6 @@ const createPurchase = async (req, res) => {
             item_type: "product",
             date_of_expiery: product.exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
         });
-        // لو في Variations
         if (hasVariations) {
             for (const v of p.variations) {
                 if (!v.product_price_id) {
@@ -189,22 +184,18 @@ const createPurchase = async (req, res) => {
                 });
             }
         }
-        // تحديث كمية الـ Product الرئيسي
         await products_1.ProductModel.findByIdAndUpdate(product._id, {
             $inc: { quantity: totalQuantity },
         });
-        // Update category
         const category = await category_1.CategoryModel.findById(product.categoryId);
         if (category) {
             category.product_quantity += totalQuantity;
             await category.save();
         }
-        // Update warehouse
         if (warehouse) {
             warehouse.stock_Quantity += totalQuantity;
             await warehouse.save();
         }
-        // Update product-warehouse
         let productWarehouse = await Product_Warehouse_1.Product_WarehouseModel.findOne({
             productId: product_id,
             warehouseId: warehouse_id,

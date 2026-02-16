@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PurchaseDuePaymentModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const PurchaseDuePaymentSchema = new mongoose_1.Schema({
-    purchase_id: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "Purchase" }],
+    purchase_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Purchase" },
     amount: { type: Number, required: true },
     date: { type: Date, required: true, default: Date.now },
 }, { timestamps: true });
