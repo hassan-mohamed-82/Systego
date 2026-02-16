@@ -61,6 +61,13 @@ export const createPurchase = async (req: Request, res: Response) => {
   const totalPaidNow = financials.reduce((sum: number, f: any) => sum + Number(f.payment_amount || 0), 0);
   let totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
 
+  // ✅ تاريخ افتراضي للدفع المؤجل (بعد 30 يوم)
+  const getDefaultDueDate = () => {
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 30);
+    return dueDate;
+  };
+
   if (payment_status === "full") {
     if (totalPaidNow !== grand_total) {
       throw new BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
@@ -75,7 +82,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     if (purchase_due_payment.length === 0) {
       purchase_due_payment.push({
         amount: grand_total,
-        date: null
+        date: getDefaultDueDate()
       });
       totalDuePayments = grand_total;
     } else if (totalDuePayments !== grand_total) {
@@ -94,7 +101,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     if (purchase_due_payment.length === 0) {
       purchase_due_payment.push({
         amount: remaining,
-        date: null
+        date: getDefaultDueDate()
       });
       totalDuePayments = remaining;
     } else {
@@ -126,8 +133,6 @@ export const createPurchase = async (req: Request, res: Response) => {
     grand_total,
     tax_id,
     note,
-    paid_amount: totalPaidNow,
-    remaining_amount: grand_total - totalPaidNow,
   });
 
   let warehouse = await WarehouseModel.findById(warehouse_id);
@@ -166,11 +171,11 @@ export const createPurchase = async (req: Request, res: Response) => {
     }
 
     // حساب الكمية
-    let totalQuantity = p.quantity ?? 0;
+    let totalQuantity = Number(p.quantity) || 0;
     const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
 
     if (hasVariations) {
-      totalQuantity = p.variations.reduce((sum: number, v: any) => sum + (v.quantity ?? 0), 0);
+      totalQuantity = p.variations.reduce((sum: number, v: any) => sum + (Number(v.quantity) || 0), 0);
     }
 
     const existingPurchaseItem = await PurchaseItemModel.findOne({ warehouse_id, product_id });
@@ -209,14 +214,14 @@ export const createPurchase = async (req: Request, res: Response) => {
         }
 
         await ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
-          $inc: { quantity: v.quantity ?? 0 },
+          $inc: { quantity: Number(v.quantity) || 0 },
         });
 
         await PurchaseItemOptionModel.create({
           purchase_item_id: purchaseItem._id,
           product_price_id: v.product_price_id,
           option_id: v.option_id,
-          quantity: v.quantity || 0,
+          quantity: Number(v.quantity) || 0,
         });
       }
     }
@@ -292,13 +297,13 @@ export const createPurchase = async (req: Request, res: Response) => {
     for (const ele of financials) {
       await PurchaseInvoiceModel.create({
         financial_id: ele.financial_id,
-        amount: ele.payment_amount,
+        amount: Number(ele.payment_amount) || 0,
         purchase_id: purchase._id,
       });
 
       const financial = await BankAccountModel.findById(ele.financial_id);
       if (financial) {
-        (financial as any).balance -= ele.payment_amount;
+        (financial as any).balance -= Number(ele.payment_amount) || 0;
         await financial.save();
       }
     }
@@ -340,7 +345,6 @@ export const createPurchase = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Purchase created successfully", purchase: fullPurchase });
 };
-
 export const getAllPurchases = async (req: Request, res: Response) => {
   const { page = 1, limit = 10, warehouse_id, supplier_id } = req.query;
 

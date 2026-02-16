@@ -40,6 +40,12 @@ const createPurchase = async (req, res) => {
     // ========== Payment Validation ==========
     const totalPaidNow = financials.reduce((sum, f) => sum + Number(f.payment_amount || 0), 0);
     let totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    // ✅ تاريخ افتراضي للدفع المؤجل (بعد 30 يوم)
+    const getDefaultDueDate = () => {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        return dueDate;
+    };
     if (payment_status === "full") {
         if (totalPaidNow !== grand_total) {
             throw new BadRequest_1.BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
@@ -55,7 +61,7 @@ const createPurchase = async (req, res) => {
         if (purchase_due_payment.length === 0) {
             purchase_due_payment.push({
                 amount: grand_total,
-                date: null
+                date: getDefaultDueDate()
             });
             totalDuePayments = grand_total;
         }
@@ -74,7 +80,7 @@ const createPurchase = async (req, res) => {
         if (purchase_due_payment.length === 0) {
             purchase_due_payment.push({
                 amount: remaining,
-                date: null
+                date: getDefaultDueDate()
             });
             totalDuePayments = remaining;
         }
@@ -103,8 +109,6 @@ const createPurchase = async (req, res) => {
         grand_total,
         tax_id,
         note,
-        paid_amount: totalPaidNow,
-        remaining_amount: grand_total - totalPaidNow,
     });
     let warehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     // ========== Process Products ==========
@@ -138,10 +142,10 @@ const createPurchase = async (req, res) => {
             }
         }
         // حساب الكمية
-        let totalQuantity = p.quantity ?? 0;
+        let totalQuantity = Number(p.quantity) || 0;
         const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
         if (hasVariations) {
-            totalQuantity = p.variations.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
+            totalQuantity = p.variations.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0);
         }
         const existingPurchaseItem = await purchase_item_1.PurchaseItemModel.findOne({ warehouse_id, product_id });
         if (!existingPurchaseItem && warehouse) {
@@ -175,13 +179,13 @@ const createPurchase = async (req, res) => {
                     throw new NotFound_1.NotFound(`ProductPrice not found: ${v.product_price_id}`);
                 }
                 await product_price_1.ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
-                    $inc: { quantity: v.quantity ?? 0 },
+                    $inc: { quantity: Number(v.quantity) || 0 },
                 });
                 await purchase_item_option_1.PurchaseItemOptionModel.create({
                     purchase_item_id: purchaseItem._id,
                     product_price_id: v.product_price_id,
                     option_id: v.option_id,
-                    quantity: v.quantity || 0,
+                    quantity: Number(v.quantity) || 0,
                 });
             }
         }
@@ -249,12 +253,12 @@ const createPurchase = async (req, res) => {
         for (const ele of financials) {
             await PurchaseInvoice_1.PurchaseInvoiceModel.create({
                 financial_id: ele.financial_id,
-                amount: ele.payment_amount,
+                amount: Number(ele.payment_amount) || 0,
                 purchase_id: purchase._id,
             });
             const financial = await Financial_Account_1.BankAccountModel.findById(ele.financial_id);
             if (financial) {
-                financial.balance -= ele.payment_amount;
+                financial.balance -= Number(ele.payment_amount) || 0;
                 await financial.save();
             }
         }
