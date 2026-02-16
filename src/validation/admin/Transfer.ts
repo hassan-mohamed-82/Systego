@@ -51,14 +51,7 @@ export const createTransferSchema = Joi.object({
       "string.empty": "Reason cannot be empty",
     }),
 
-  status: Joi.string()
-    .valid("pending", "received", "rejected")
-    .required()
-    .messages({
-      "any.required": "Status is required",
-      "string.base": "Status must be a string",
-      "string.valid": "Status must be 'pending', 'received', or 'rejected'",
-    }),
+
 });
 
 
