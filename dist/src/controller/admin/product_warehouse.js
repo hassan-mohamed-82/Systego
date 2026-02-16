@@ -267,18 +267,16 @@ const transferStock = async (req, res) => {
     else {
         fromQuery.productPriceId = null;
     }
-    // ✅ الحل: Atomic Update - الخصم والتحقق في أمر واحد
+    // ✅ Atomic Update - الخصم والتحقق في أمر واحد
     const fromStock = await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({
         ...fromQuery,
-        quantity: { $gte: quantity } // ✅ شرط: الكمية >= المطلوب
+        quantity: { $gte: quantity }
     }, {
         $inc: { quantity: -quantity }
     }, {
-        new: true // يرجع الـ document بعد التحديث
+        new: true
     });
-    // ❌ لو مرجعش حاجة يبقى الكمية مش كافية
     if (!fromStock) {
-        // نشيك هل المنتج موجود أصلاً ولا لأ
         const existingStock = await Product_Warehouse_1.Product_WarehouseModel.findOne(fromQuery);
         if (!existingStock) {
             const variationText = productPriceId ? " (this variation)" : "";
@@ -297,6 +295,9 @@ const transferStock = async (req, res) => {
     else {
         toQuery.productPriceId = null;
     }
+    // ✅ شيك لو المنتج موجود في المخزن الوجهة قبل الـ upsert
+    const existingToStock = await Product_Warehouse_1.Product_WarehouseModel.findOne(toQuery);
+    const isNewProductInWarehouse = !existingToStock;
     // ✅ إضافة للمخزن الوجهة (upsert)
     const toStock = await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate(toQuery, {
         $inc: { quantity: quantity },
@@ -308,15 +309,26 @@ const transferStock = async (req, res) => {
         }
     }, {
         new: true,
-        upsert: true // لو مش موجود، أنشئه
+        upsert: true
     });
-    // تحديث عدد المنتجات في المخزن الجديد لو اتعمل upsert
-    // (ممكن تستخدم middleware أو تشيك لو الـ document جديد)
+    // ✅ تحديث المخزن المصدر
+    // شيك لو الكمية وصلت صفر، نقلل عدد المنتجات
+    const updatedFromStock = await Product_Warehouse_1.Product_WarehouseModel.findById(fromStock._id);
+    const fromStockBecameZero = updatedFromStock && updatedFromStock.quantity === 0;
     await Warehouse_1.WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
-        $inc: { stock_Quantity: -quantity },
+        $inc: {
+            stock_Quantity: -quantity,
+            // ✅ لو الكمية وصلت صفر، نقلل عدد المنتجات
+            ...(fromStockBecameZero ? { number_of_products: -1 } : {})
+        },
     });
+    // ✅ تحديث المخزن الوجهة
     await Warehouse_1.WarehouseModel.findByIdAndUpdate(toWarehouseId, {
-        $inc: { stock_Quantity: quantity },
+        $inc: {
+            stock_Quantity: quantity,
+            // ✅ لو منتج جديد، نزود عدد المنتجات
+            ...(isNewProductInWarehouse ? { number_of_products: 1 } : {})
+        },
     });
     // Populate للـ response
     const populatedFromStock = await Product_Warehouse_1.Product_WarehouseModel.findById(fromStock._id)
