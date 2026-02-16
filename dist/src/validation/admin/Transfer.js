@@ -59,31 +59,30 @@ exports.updateTransferStatusSchema = joi_1.default.object({
         "any.required": "Receiving warehouse ID is required",
         "string.empty": "Receiving warehouse ID cannot be empty",
     }),
-    status: joi_1.default.string()
-        .valid("received", "rejected")
-        .required()
+    approved_products: joi_1.default.array()
+        .items(joi_1.default.object({
+        productId: joi_1.default.string().required(),
+        productPriceId: joi_1.default.string().allow(null, "").optional(),
+        quantity: joi_1.default.number().positive().required(),
+    }))
+        .optional()
         .messages({
-        "any.required": "Status is required",
-        "any.only": "Status must be either 'received' or 'rejected'",
+        "array.base": "Approved products must be an array",
     }),
-    // في حالة الرفض ممكن نرسل منتجات مرفوضة
-    rejectedProducts: joi_1.default.array()
-        .items(joi_1.default.string())
-        .when("status", {
-        is: "rejected",
-        then: joi_1.default.required(),
-        otherwise: joi_1.default.forbidden(),
-    })
+    rejected_products: joi_1.default.array()
+        .items(joi_1.default.object({
+        productId: joi_1.default.string().required(),
+        productPriceId: joi_1.default.string().allow(null, "").optional(),
+        quantity: joi_1.default.number().positive().required(),
+        reason: joi_1.default.string().optional(),
+    }))
+        .optional()
         .messages({
-        "any.required": "rejectedProducts is required when rejecting a transfer",
+        "array.base": "Rejected products must be an array",
     }),
     reason: joi_1.default.string()
         .allow("")
-        .when("status", {
-        is: "rejected",
-        then: joi_1.default.optional(),
-        otherwise: joi_1.default.forbidden(),
-    })
+        .optional()
         .messages({
         "string.base": "Reason must be a string",
     }),

@@ -98,11 +98,17 @@ const endShiftWithReport = async (req, res) => {
     }).sort({ start_time: -1 });
     if (!shift)
         throw new Errors_1.NotFound("No open cashier shift found");
-    // 3) المبيعات المكتملة في الشيفت ده
+    // ✅ تحقق إن الشيفت مش قديم (أكتر من 24 ساعة)
+    const shiftAge = Date.now() - new Date(shift.start_time || Date.now()).getTime();
+    const maxShiftDuration = 24 * 60 * 60 * 1000;
+    if (shiftAge > maxShiftDuration) {
+        throw new BadRequest_1.BadRequest("Your shift has expired (more than 24 hours). Please contact admin to close it.");
+    }
+    // 3) المبيعات المكتملة في الشيفت ده فقط
     const completedSales = await Sale_1.SaleModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
-        order_pending: 0, // بس الـ completed
+        order_pending: 0,
     })
         .select("_id grand_total")
         .lean();
@@ -115,7 +121,6 @@ const endShiftWithReport = async (req, res) => {
             {
                 $match: {
                     sale_id: { $in: saleIds },
-                    status: "completed",
                 },
             },
             { $unwind: "$financials" },
@@ -127,7 +132,9 @@ const endShiftWithReport = async (req, res) => {
             },
         ]);
         paymentsByAccount = paymentsAgg.reduce((acc, row) => {
-            acc[row._id.toString()] = row.totalAmount;
+            if (row._id) {
+                acc[row._id.toString()] = row.totalAmount;
+            }
             return acc;
         }, {});
     }
@@ -146,24 +153,27 @@ const endShiftWithReport = async (req, res) => {
         },
     ]);
     const expensesByAccount = expensesAgg.reduce((acc, row) => {
-        if (!row._id)
-            return acc;
-        acc[row._id.toString()] = row.totalAmount;
+        if (row._id) {
+            acc[row._id.toString()] = row.totalAmount;
+        }
         return acc;
     }, {});
     const totalExpenses = Object.values(expensesByAccount).reduce((sum, v) => sum + v, 0);
     const netCashInDrawer = totalSales - totalExpenses;
-    // 6) هات بيانات الحسابات المالية اللي اتستخدمت في المبيعات أو المصروفات
+    // 6) هات بيانات الحسابات المالية اللي اتستخدمت
     const allAccountIds = Array.from(new Set([
         ...Object.keys(paymentsByAccount),
         ...Object.keys(expensesByAccount),
     ])).filter((id) => !!id);
-    const accountObjectIds = allAccountIds.map((id) => new mongoose_1.default.Types.ObjectId(id));
-    const accounts = await Financial_Account_1.BankAccountModel.find({
-        _id: { $in: accountObjectIds },
-    })
-        .select("name type")
-        .lean();
+    let accounts = [];
+    if (allAccountIds.length > 0) {
+        const accountObjectIds = allAccountIds.map((id) => new mongoose_1.default.Types.ObjectId(id));
+        accounts = await Financial_Account_1.BankAccountModel.find({
+            _id: { $in: accountObjectIds },
+        })
+            .select("name type")
+            .lean();
+    }
     const accountsMap = new Map(accounts.map((a) => [a._id.toString(), a]));
     // 7) بناء الـ summary ديناميك لكل حساب مالي
     const accountRows = allAccountIds.map((id) => {
@@ -178,7 +188,7 @@ const endShiftWithReport = async (req, res) => {
             net: salesAmount - expensesAmount,
         };
     });
-    // 8) مصروفات مفصلة (لو محتاج تبينها تحت)
+    // 8) مصروفات مفصلة
     const expenses = await expenses_1.ExpenseModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
@@ -196,7 +206,6 @@ const endShiftWithReport = async (req, res) => {
             }
             : null,
     }));
-    // 👈 مفيش قفل شيفت هنا (لا status, لا end_time, لا cashier_active)
     const report = {
         financialSummary: {
             totals: {
@@ -204,7 +213,7 @@ const endShiftWithReport = async (req, res) => {
                 totalExpenses,
                 netCashInDrawer,
             },
-            accounts: accountRows, // Vodafone Cash, Instapay, Cash ... حسب الداتا
+            accounts: accountRows,
         },
         ordersSummary: {
             totalOrders,

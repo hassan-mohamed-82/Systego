@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { CashierShift } from '../../../models/schema/admin/POS/CashierShift'; 
-import { SaleModel } from '../../../models/schema/admin/POS/Sale'; 
+import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
+import { SaleModel } from '../../../models/schema/admin/POS/Sale';
 import { SuccessResponse } from '../../../utils/response';
 import { NotFound, UnauthorizedError } from '../../../Errors';
 import { BadRequest } from '../../../Errors/BadRequest';
@@ -91,11 +91,11 @@ export const startcashierShift = async (req: Request, res: Response) => {
 
 
 export const endShiftWithReport = async (req: Request, res: Response) => {
-const { password } = req.body;
+  const { password } = req.body;
   const jwtUser = req.user;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
-  const userId      = jwtUser.id;
+  const userId = jwtUser.id;
   const warehouseId = (jwtUser as any)?.warehouse_id;
 
   // 1) هات اليوزر وتأكد من الباسورد
@@ -115,21 +115,31 @@ const { password } = req.body;
 
   if (!shift) throw new NotFound("No open cashier shift found");
 
-  // 3) المبيعات المكتملة في الشيفت ده
+  // ✅ تحقق إن الشيفت مش قديم (أكتر من 24 ساعة)
+  const shiftAge = Date.now() - new Date((shift as any).start_time || Date.now()).getTime();
+  const maxShiftDuration = 24 * 60 * 60 * 1000;
+
+  if (shiftAge > maxShiftDuration) {
+    throw new BadRequest(
+      "Your shift has expired (more than 24 hours). Please contact admin to close it."
+    );
+  }
+
+  // 3) المبيعات المكتملة في الشيفت ده فقط
   const completedSales = await SaleModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
-    order_pending: 0, // بس الـ completed
+    order_pending: 0,
   })
     .select("_id grand_total")
     .lean();
 
-  const totalSales  = completedSales.reduce(
+  const totalSales = completedSales.reduce(
     (sum, s: any) => sum + (s.grand_total || 0),
     0
   );
   const totalOrders = completedSales.length;
-  const saleIds     = completedSales.map((s: any) => s._id);
+  const saleIds = completedSales.map((s: any) => s._id);
 
   // 4) إجمالي المدفوعات من PaymentModel مجمعة حسب الحساب المالي
   interface PaymentsAggRow {
@@ -144,7 +154,6 @@ const { password } = req.body;
       {
         $match: {
           sale_id: { $in: saleIds },
-          status: "completed",
         },
       },
       { $unwind: "$financials" },
@@ -158,7 +167,9 @@ const { password } = req.body;
 
     paymentsByAccount = paymentsAgg.reduce(
       (acc: Record<string, number>, row: PaymentsAggRow) => {
-        acc[row._id.toString()] = row.totalAmount;
+        if (row._id) {
+          acc[row._id.toString()] = row.totalAmount;
+        }
         return acc;
       },
       {}
@@ -188,8 +199,9 @@ const { password } = req.body;
 
   const expensesByAccount = expensesAgg.reduce(
     (acc: Record<string, number>, row: ExpensesAggRow) => {
-      if (!row._id) return acc;
-      acc[row._id.toString()] = row.totalAmount;
+      if (row._id) {
+        acc[row._id.toString()] = row.totalAmount;
+      }
       return acc;
     },
     {}
@@ -202,7 +214,7 @@ const { password } = req.body;
 
   const netCashInDrawer = totalSales - totalExpenses;
 
-  // 6) هات بيانات الحسابات المالية اللي اتستخدمت في المبيعات أو المصروفات
+  // 6) هات بيانات الحسابات المالية اللي اتستخدمت
   const allAccountIds = Array.from(
     new Set([
       ...Object.keys(paymentsByAccount),
@@ -210,15 +222,18 @@ const { password } = req.body;
     ])
   ).filter((id) => !!id);
 
-  const accountObjectIds = allAccountIds.map(
-    (id) => new mongoose.Types.ObjectId(id)
-  );
+  let accounts: any[] = [];
+  if (allAccountIds.length > 0) {
+    const accountObjectIds = allAccountIds.map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
 
-  const accounts = await BankAccountModel.find({
-    _id: { $in: accountObjectIds },
-  })
-    .select("name type")
-    .lean();
+    accounts = await BankAccountModel.find({
+      _id: { $in: accountObjectIds },
+    })
+      .select("name type")
+      .lean();
+  }
 
   const accountsMap = new Map(
     accounts.map((a: any) => [a._id.toString(), a])
@@ -227,7 +242,7 @@ const { password } = req.body;
   // 7) بناء الـ summary ديناميك لكل حساب مالي
   const accountRows = allAccountIds.map((id) => {
     const acc = accountsMap.get(id);
-    const salesAmount    = paymentsByAccount[id] || 0;
+    const salesAmount = paymentsByAccount[id] || 0;
     const expensesAmount = expensesByAccount[id] || 0;
 
     return {
@@ -239,7 +254,7 @@ const { password } = req.body;
     };
   });
 
-  // 8) مصروفات مفصلة (لو محتاج تبينها تحت)
+  // 8) مصروفات مفصلة
   const expenses = await ExpenseModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
@@ -253,13 +268,11 @@ const { password } = req.body;
     amount: -e.amount,
     account: e.financial_accountId
       ? {
-          id: e.financial_accountId._id,
-          name: e.financial_accountId.name,
-        }
+        id: e.financial_accountId._id,
+        name: e.financial_accountId.name,
+      }
       : null,
   }));
-
-  // 👈 مفيش قفل شيفت هنا (لا status, لا end_time, لا cashier_active)
 
   const report = {
     financialSummary: {
@@ -268,7 +281,7 @@ const { password } = req.body;
         totalExpenses,
         netCashInDrawer,
       },
-      accounts: accountRows, // Vodafone Cash, Instapay, Cash ... حسب الداتا
+      accounts: accountRows,
     },
     ordersSummary: {
       totalOrders,
@@ -285,14 +298,12 @@ const { password } = req.body;
     report,
   });
 };
-
-
 export const endshiftcashier = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
   const cashierman_id = jwtUser.id;               // User من الـ JWT
-  const warehouseId   = jwtUser.warehouse_id;
+  const warehouseId = jwtUser.warehouse_id;
 
   if (!cashierman_id) {
     throw new NotFound("Cashier user not found in token");
@@ -320,7 +331,7 @@ export const endshiftcashier = async (req: Request, res: Response) => {
 
   // ✅ نقفل الشيفت (لو عندك داتا قديمة ناقصة cashier_id استخدم الاختيار اللي تحت)
   shift.end_time = new Date();
-  shift.status   = "closed";
+  shift.status = "closed";
   await shift.save(); // أو الخيار B تحت
 
   // ✅ نرجع الكاشير متاح تاني في نفس الـ warehouse
@@ -344,7 +355,7 @@ export const endshiftcashier = async (req: Request, res: Response) => {
 
 
 
-export const getCashierUsers = async (req: Request, res: Response ) => {
+export const getCashierUsers = async (req: Request, res: Response) => {
   // 1️⃣ هات Position اللي اسمه Cashier
   const cashierPosition = await PositionModel.findOne({ name: "Cashier" });
 
