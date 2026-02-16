@@ -98,13 +98,18 @@ const endShiftWithReport = async (req, res) => {
     }).sort({ start_time: -1 });
     if (!shift)
         throw new Errors_1.NotFound("No open cashier shift found");
+    // ✅ بداية اليوم الحالي (12:00 AM)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    // ✅ استخدم الأحدث: بداية الشيفت أو بداية اليوم
     const shiftStartTime = new Date(shift.start_time || Date.now());
-    // 3) المبيعات المكتملة في الشيفت ده فقط
+    const filterFromDate = shiftStartTime > todayStart ? shiftStartTime : todayStart;
+    // 3) المبيعات المكتملة في الشيفت ده فقط (من بداية اليوم أو الشيفت)
     const completedSales = await Sale_1.SaleModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
         order_pending: 0,
-        createdAt: { $gte: shiftStartTime },
+        createdAt: { $gte: filterFromDate },
     })
         .select("_id grand_total")
         .lean();
@@ -139,7 +144,7 @@ const endShiftWithReport = async (req, res) => {
             $match: {
                 shift_id: shift._id,
                 cashier_id: user._id,
-                createdAt: { $gte: shiftStartTime },
+                createdAt: { $gte: filterFromDate },
             },
         },
         {
@@ -189,7 +194,7 @@ const endShiftWithReport = async (req, res) => {
     const expenses = await expenses_1.ExpenseModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
-        createdAt: { $gte: shiftStartTime },
+        createdAt: { $gte: filterFromDate },
     })
         .populate("financial_accountId", "name")
         .lean();
