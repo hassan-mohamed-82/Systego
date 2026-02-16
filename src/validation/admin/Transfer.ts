@@ -62,33 +62,36 @@ export const updateTransferStatusSchema = Joi.object({
       "string.empty": "Receiving warehouse ID cannot be empty",
     }),
 
-  status: Joi.string()
-    .valid("received", "rejected")
-    .required()
+  approved_products: Joi.array()
+    .items(
+      Joi.object({
+        productId: Joi.string().required(),
+        productPriceId: Joi.string().allow(null, "").optional(),
+        quantity: Joi.number().positive().required(),
+      })
+    )
+    .optional()
     .messages({
-      "any.required": "Status is required",
-      "any.only": "Status must be either 'received' or 'rejected'",
+      "array.base": "Approved products must be an array",
     }),
 
-  // في حالة الرفض ممكن نرسل منتجات مرفوضة
-  rejectedProducts: Joi.array()
-    .items(Joi.string())
-    .when("status", {
-      is: "rejected",
-      then: Joi.required(),
-      otherwise: Joi.forbidden(),
-    })
+  rejected_products: Joi.array()
+    .items(
+      Joi.object({
+        productId: Joi.string().required(),
+        productPriceId: Joi.string().allow(null, "").optional(),
+        quantity: Joi.number().positive().required(),
+        reason: Joi.string().optional(),
+      })
+    )
+    .optional()
     .messages({
-      "any.required": "rejectedProducts is required when rejecting a transfer",
+      "array.base": "Rejected products must be an array",
     }),
 
   reason: Joi.string()
     .allow("")
-    .when("status", {
-      is: "rejected",
-      then: Joi.optional(),
-      otherwise: Joi.forbidden(),
-    })
+    .optional()
     .messages({
       "string.base": "Reason must be a string",
     }),
