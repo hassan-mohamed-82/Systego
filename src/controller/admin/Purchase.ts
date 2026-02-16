@@ -39,9 +39,11 @@ export const createPurchase = async (req: Request, res: Response) => {
     purchase_items = [],
     purchase_materials = [],
     financials = [],
-    purchase_due_payment = [],
     note,
   } = req.body;
+
+  // ✅ خليها let عشان نقدر نعدل عليها
+  let purchase_due_payment = req.body.purchase_due_payment || [];
 
   // ========== Validations ==========
   const existingWarehouse = await WarehouseModel.findById(warehouse_id);
@@ -57,12 +59,9 @@ export const createPurchase = async (req: Request, res: Response) => {
 
   // ========== Payment Validation ==========
   const totalPaidNow = financials.reduce((sum: number, f: any) => sum + Number(f.payment_amount || 0), 0);
-  const totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
-  const totalPayments = totalPaidNow + totalDuePayments;
+  let totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
 
-  // التحقق من حالة الدفع
   if (payment_status === "full") {
-    // لازم يدفع كل المبلغ دلوقتي
     if (totalPaidNow !== grand_total) {
       throw new BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
     }
@@ -70,23 +69,40 @@ export const createPurchase = async (req: Request, res: Response) => {
       throw new BadRequest("Full payment should not have due payments");
     }
   } else if (payment_status === "later") {
-    // مفيش دفع دلوقتي، كله لاحقاً
     if (totalPaidNow > 0) {
       throw new BadRequest("Later payment should not have immediate payments");
     }
-    if (totalDuePayments !== grand_total) {
+    if (purchase_due_payment.length === 0) {
+      purchase_due_payment.push({
+        amount: grand_total,
+        date: null
+      });
+      totalDuePayments = grand_total;
+    } else if (totalDuePayments !== grand_total) {
       throw new BadRequest(`Due payments must equal grand_total. Expected: ${grand_total}, Received: ${totalDuePayments}`);
     }
   } else if (payment_status === "partial") {
-    // دفع جزء دلوقتي + الباقي لاحقاً
     if (totalPaidNow <= 0) {
       throw new BadRequest("Partial payment requires immediate payment");
     }
     if (totalPaidNow >= grand_total) {
       throw new BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
     }
-    if (totalPayments !== grand_total) {
-      throw new BadRequest(`Total payments must equal grand_total. Expected: ${grand_total}, Received: ${totalPayments}`);
+    
+    const remaining = grand_total - totalPaidNow;
+    
+    if (purchase_due_payment.length === 0) {
+      purchase_due_payment.push({
+        amount: remaining,
+        date: null
+      });
+      totalDuePayments = remaining;
+    } else {
+      if (totalDuePayments !== remaining) {
+        throw new BadRequest(
+          `Due payments must equal remaining amount. Expected: ${remaining}, Received: ${totalDuePayments}`
+        );
+      }
     }
   }
 
@@ -110,6 +126,8 @@ export const createPurchase = async (req: Request, res: Response) => {
     grand_total,
     tax_id,
     note,
+    paid_amount: totalPaidNow,
+    remaining_amount: grand_total - totalPaidNow,
   });
 
   let warehouse = await WarehouseModel.findById(warehouse_id);
@@ -181,7 +199,6 @@ export const createPurchase = async (req: Request, res: Response) => {
     // لو في Variations
     if (hasVariations) {
       for (const v of p.variations) {
-        // التحقق من وجود product_price_id
         if (!v.product_price_id) {
           throw new BadRequest("product_price_id is required for variations");
         }
@@ -191,12 +208,10 @@ export const createPurchase = async (req: Request, res: Response) => {
           throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
         }
 
-        // تحديث كمية الـ ProductPrice
         await ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
           $inc: { quantity: v.quantity ?? 0 },
         });
 
-        // إنشاء PurchaseItemOption
         await PurchaseItemOptionModel.create({
           purchase_item_id: purchaseItem._id,
           product_price_id: v.product_price_id,

@@ -22,7 +22,9 @@ const NotFound_1 = require("../../Errors/NotFound");
 const handleImages_1 = require("../../utils/handleImages");
 const Materials_1 = require("../../models/schema/admin/Materials");
 const createPurchase = async (req, res) => {
-    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials = [], purchase_due_payment = [], note, } = req.body;
+    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials = [], note, } = req.body;
+    // ✅ خليها let عشان نقدر نعدل عليها
+    let purchase_due_payment = req.body.purchase_due_payment || [];
     // ========== Validations ==========
     const existingWarehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     if (!existingWarehouse)
@@ -37,11 +39,8 @@ const createPurchase = async (req, res) => {
     }
     // ========== Payment Validation ==========
     const totalPaidNow = financials.reduce((sum, f) => sum + Number(f.payment_amount || 0), 0);
-    const totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-    const totalPayments = totalPaidNow + totalDuePayments;
-    // التحقق من حالة الدفع
+    let totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + Number(d.amount || 0), 0);
     if (payment_status === "full") {
-        // لازم يدفع كل المبلغ دلوقتي
         if (totalPaidNow !== grand_total) {
             throw new BadRequest_1.BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
         }
@@ -50,24 +49,39 @@ const createPurchase = async (req, res) => {
         }
     }
     else if (payment_status === "later") {
-        // مفيش دفع دلوقتي، كله لاحقاً
         if (totalPaidNow > 0) {
             throw new BadRequest_1.BadRequest("Later payment should not have immediate payments");
         }
-        if (totalDuePayments !== grand_total) {
+        if (purchase_due_payment.length === 0) {
+            purchase_due_payment.push({
+                amount: grand_total,
+                date: null
+            });
+            totalDuePayments = grand_total;
+        }
+        else if (totalDuePayments !== grand_total) {
             throw new BadRequest_1.BadRequest(`Due payments must equal grand_total. Expected: ${grand_total}, Received: ${totalDuePayments}`);
         }
     }
     else if (payment_status === "partial") {
-        // دفع جزء دلوقتي + الباقي لاحقاً
         if (totalPaidNow <= 0) {
             throw new BadRequest_1.BadRequest("Partial payment requires immediate payment");
         }
         if (totalPaidNow >= grand_total) {
             throw new BadRequest_1.BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
         }
-        if (totalPayments !== grand_total) {
-            throw new BadRequest_1.BadRequest(`Total payments must equal grand_total. Expected: ${grand_total}, Received: ${totalPayments}`);
+        const remaining = grand_total - totalPaidNow;
+        if (purchase_due_payment.length === 0) {
+            purchase_due_payment.push({
+                amount: remaining,
+                date: null
+            });
+            totalDuePayments = remaining;
+        }
+        else {
+            if (totalDuePayments !== remaining) {
+                throw new BadRequest_1.BadRequest(`Due payments must equal remaining amount. Expected: ${remaining}, Received: ${totalDuePayments}`);
+            }
         }
     }
     // ========== Save Image ==========
@@ -89,6 +103,8 @@ const createPurchase = async (req, res) => {
         grand_total,
         tax_id,
         note,
+        paid_amount: totalPaidNow,
+        remaining_amount: grand_total - totalPaidNow,
     });
     let warehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
     // ========== Process Products ==========
@@ -151,7 +167,6 @@ const createPurchase = async (req, res) => {
         // لو في Variations
         if (hasVariations) {
             for (const v of p.variations) {
-                // التحقق من وجود product_price_id
                 if (!v.product_price_id) {
                     throw new BadRequest_1.BadRequest("product_price_id is required for variations");
                 }
@@ -159,11 +174,9 @@ const createPurchase = async (req, res) => {
                 if (!productPrice) {
                     throw new NotFound_1.NotFound(`ProductPrice not found: ${v.product_price_id}`);
                 }
-                // تحديث كمية الـ ProductPrice
                 await product_price_1.ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
                     $inc: { quantity: v.quantity ?? 0 },
                 });
-                // إنشاء PurchaseItemOption
                 await purchase_item_option_1.PurchaseItemOptionModel.create({
                     purchase_item_id: purchaseItem._id,
                     product_price_id: v.product_price_id,
