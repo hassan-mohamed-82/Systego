@@ -98,17 +98,13 @@ const endShiftWithReport = async (req, res) => {
     }).sort({ start_time: -1 });
     if (!shift)
         throw new Errors_1.NotFound("No open cashier shift found");
-    // ✅ تحقق إن الشيفت مش قديم (أكتر من 24 ساعة)
-    const shiftAge = Date.now() - new Date(shift.start_time || Date.now()).getTime();
-    const maxShiftDuration = 24 * 60 * 60 * 1000;
-    if (shiftAge > maxShiftDuration) {
-        throw new BadRequest_1.BadRequest("Your shift has expired (more than 24 hours). Please contact admin to close it.");
-    }
+    const shiftStartTime = new Date(shift.start_time || Date.now());
     // 3) المبيعات المكتملة في الشيفت ده فقط
     const completedSales = await Sale_1.SaleModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
         order_pending: 0,
+        createdAt: { $gte: shiftStartTime },
     })
         .select("_id grand_total")
         .lean();
@@ -143,6 +139,7 @@ const endShiftWithReport = async (req, res) => {
             $match: {
                 shift_id: shift._id,
                 cashier_id: user._id,
+                createdAt: { $gte: shiftStartTime },
             },
         },
         {
@@ -192,6 +189,7 @@ const endShiftWithReport = async (req, res) => {
     const expenses = await expenses_1.ExpenseModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
+        createdAt: { $gte: shiftStartTime },
     })
         .populate("financial_accountId", "name")
         .lean();

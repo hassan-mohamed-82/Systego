@@ -115,21 +115,14 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
 
   if (!shift) throw new NotFound("No open cashier shift found");
 
-  // ✅ تحقق إن الشيفت مش قديم (أكتر من 24 ساعة)
-  const shiftAge = Date.now() - new Date((shift as any).start_time || Date.now()).getTime();
-  const maxShiftDuration = 24 * 60 * 60 * 1000;
-
-  if (shiftAge > maxShiftDuration) {
-    throw new BadRequest(
-      "Your shift has expired (more than 24 hours). Please contact admin to close it."
-    );
-  }
+const shiftStartTime = new Date(shift.start_time || Date.now());
 
   // 3) المبيعات المكتملة في الشيفت ده فقط
   const completedSales = await SaleModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
     order_pending: 0,
+    createdAt: { $gte: shiftStartTime },
   })
     .select("_id grand_total")
     .lean();
@@ -187,6 +180,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
       $match: {
         shift_id: shift._id,
         cashier_id: user._id,
+        createdAt: { $gte: shiftStartTime },
       },
     },
     {
@@ -258,6 +252,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
   const expenses = await ExpenseModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
+    createdAt: { $gte: shiftStartTime },
   })
     .populate("financial_accountId", "name")
     .lean();
@@ -268,9 +263,9 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     amount: -e.amount,
     account: e.financial_accountId
       ? {
-        id: e.financial_accountId._id,
-        name: e.financial_accountId.name,
-      }
+          id: e.financial_accountId._id,
+          name: e.financial_accountId.name,
+        }
       : null,
   }));
 
@@ -298,6 +293,8 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     report,
   });
 };
+
+
 export const endshiftcashier = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
