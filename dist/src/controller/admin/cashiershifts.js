@@ -12,23 +12,51 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const expenses_1 = require("../../models/schema/admin/POS/expenses");
 const mongoose_1 = __importDefault(require("mongoose"));
 const getAllCashierShifts = async (req, res) => {
-    // ممكن تضيف فلاتر من query لو حبيت (status, cashierman_id, ...إلخ)
     const { status, cashierman_id, cashier_id } = req.query;
     const filter = {};
     if (status)
-        filter.status = status; // "open" أو "closed"
+        filter.status = status;
     if (cashierman_id)
         filter.cashierman_id = cashierman_id;
     if (cashier_id)
         filter.cashier_id = cashier_id;
     const shifts = await CashierShift_1.CashierShift.find(filter)
-        .populate("cashierman_id", "username email role") // اليوزر
-        .populate("cashier_id", "name code") // الكاشير (الدراج)
+        .populate("cashierman_id", "username email role")
+        .populate("cashier_id", "name code")
         .sort({ start_time: -1 })
         .lean();
+    // ✅ حساب القيم لكل شيفت
+    const shiftsWithTotals = await Promise.all(shifts.map(async (shift) => {
+        const shiftStartTime = new Date(shift.start_time || Date.now());
+        // مبيعات الشيفت
+        const sales = await Sale_1.SaleModel.find({
+            shift_id: shift._id,
+            order_pending: 0,
+            createdAt: { $gte: shiftStartTime },
+        })
+            .select("grand_total")
+            .lean();
+        // مصروفات الشيفت
+        const expenses = await expenses_1.ExpenseModel.find({
+            shift_id: shift._id,
+            createdAt: { $gte: shiftStartTime },
+        })
+            .select("amount")
+            .lean();
+        const totalSales = sales.reduce((sum, s) => sum + (s.grand_total || 0), 0);
+        const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const netCashInDrawer = totalSales - totalExpenses;
+        return {
+            ...shift,
+            total_sale_amount: totalSales,
+            total_expenses: totalExpenses,
+            net_cash_in_drawer: netCashInDrawer,
+            orders_count: sales.length,
+        };
+    }));
     return (0, response_1.SuccessResponse)(res, {
         message: "Cashier shifts fetched successfully",
-        shifts,
+        shifts: shiftsWithTotals,
     });
 };
 exports.getAllCashierShifts = getAllCashierShifts;
@@ -45,9 +73,16 @@ const getCashierShiftDetails = async (req, res) => {
     if (!shift) {
         throw new Errors_1.NotFound("Cashier shift not found");
     }
-    // 2) كل المبيعات في الشيفت ده (Pending + Completed)
+    // ✅ حساب الـ filterFromDate
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const shiftStartTime = new Date(shift.start_time || Date.now());
+    const filterFromDate = shiftStartTime > todayStart ? shiftStartTime : todayStart;
+    // 2) كل المبيعات في الشيفت ده
     const sales = await Sale_1.SaleModel.find({
         shift_id: shift._id,
+        order_pending: 0,
+        createdAt: { $gte: shiftStartTime },
     })
         .populate("customer_id", "name email phone_number")
         .populate("warehouse_id", "name location")
@@ -81,11 +116,12 @@ const getCashierShiftDetails = async (req, res) => {
     // 4) مصروفات الشيفت
     const expenses = await expenses_1.ExpenseModel.find({
         shift_id: shift._id,
+        createdAt: { $gte: shiftStartTime },
     })
         .populate("Category_id", "name")
         .populate("financial_accountId", "name")
         .lean();
-    // 5) Summary (لو حابب تحسب من الداتا مش من قيم الشيفت المخزّنة)
+    // 5) Summary محسوب من الداتا
     const totalSales = sales.reduce((sum, s) => sum + (s.grand_total || 0), 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const netCashInDrawer = totalSales - totalExpenses;
@@ -95,9 +131,15 @@ const getCashierShiftDetails = async (req, res) => {
         netCashInDrawer,
         ordersCount: sales.length,
     };
+    // ✅ رجع الشيفت بالقيم المحسوبة
     return (0, response_1.SuccessResponse)(res, {
         message: "Cashier shift details fetched successfully",
-        shift,
+        shift: {
+            ...shift,
+            total_sale_amount: totalSales,
+            total_expenses: totalExpenses,
+            net_cash_in_drawer: netCashInDrawer,
+        },
         summary,
         sales: salesWithItems,
         expenses,
