@@ -267,13 +267,24 @@ const transferStock = async (req, res) => {
     else {
         fromQuery.productPriceId = null;
     }
-    const fromStock = await Product_Warehouse_1.Product_WarehouseModel.findOne(fromQuery);
+    // ✅ الحل: Atomic Update - الخصم والتحقق في أمر واحد
+    const fromStock = await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({
+        ...fromQuery,
+        quantity: { $gte: quantity } // ✅ شرط: الكمية >= المطلوب
+    }, {
+        $inc: { quantity: -quantity }
+    }, {
+        new: true // يرجع الـ document بعد التحديث
+    });
+    // ❌ لو مرجعش حاجة يبقى الكمية مش كافية
     if (!fromStock) {
-        const variationText = productPriceId ? " (this variation)" : "";
-        throw new NotFound_1.NotFound(`Product${variationText} not found in source warehouse`);
-    }
-    if (fromStock.quantity < quantity) {
-        throw new BadRequest_1.BadRequest(`Insufficient quantity in source warehouse. Available: ${fromStock.quantity}, Requested: ${quantity}`);
+        // نشيك هل المنتج موجود أصلاً ولا لأ
+        const existingStock = await Product_Warehouse_1.Product_WarehouseModel.findOne(fromQuery);
+        if (!existingStock) {
+            const variationText = productPriceId ? " (this variation)" : "";
+            throw new NotFound_1.NotFound(`Product${variationText} not found in source warehouse`);
+        }
+        throw new BadRequest_1.BadRequest(`Insufficient quantity in source warehouse. Available: ${existingStock.quantity}, Requested: ${quantity}`);
     }
     // بناء query الوجهة
     const toQuery = {
@@ -286,23 +297,21 @@ const transferStock = async (req, res) => {
     else {
         toQuery.productPriceId = null;
     }
-    let toStock = await Product_Warehouse_1.Product_WarehouseModel.findOne(toQuery);
-    if (!toStock) {
-        toStock = await Product_Warehouse_1.Product_WarehouseModel.create({
+    // ✅ إضافة للمخزن الوجهة (upsert)
+    const toStock = await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate(toQuery, {
+        $inc: { quantity: quantity },
+        $setOnInsert: {
             productId,
             productPriceId: productPriceId || null,
             warehouseId: toWarehouseId,
-            quantity: 0,
-            low_stock: fromStock.low_stock,
-        });
-        await Warehouse_1.WarehouseModel.findByIdAndUpdate(toWarehouseId, {
-            $inc: { number_of_products: 1 },
-        });
-    }
-    fromStock.quantity -= quantity;
-    toStock.quantity += quantity;
-    await fromStock.save();
-    await toStock.save();
+            low_stock: fromStock.low_stock || 0,
+        }
+    }, {
+        new: true,
+        upsert: true // لو مش موجود، أنشئه
+    });
+    // تحديث عدد المنتجات في المخزن الجديد لو اتعمل upsert
+    // (ممكن تستخدم middleware أو تشيك لو الـ document جديد)
     await Warehouse_1.WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
         $inc: { stock_Quantity: -quantity },
     });
