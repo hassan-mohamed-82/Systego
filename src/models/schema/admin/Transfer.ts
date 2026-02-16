@@ -100,7 +100,7 @@ const TransferSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["pending", "done", "rejected"],
+    enum: ["pending", "received", "rejected"],
     default: "pending"
   },
   reason: { type: String, required: true },

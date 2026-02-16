@@ -52,12 +52,12 @@ export const createTransferSchema = Joi.object({
     }),
 
   status: Joi.string()
-    .valid("pending", "done", "rejected")
+    .valid("pending", "received", "rejected")
     .required()
     .messages({
       "any.required": "Status is required",
       "string.base": "Status must be a string",
-      "string.valid": "Status must be 'pending', 'done', or 'rejected'",
+      "string.valid": "Status must be 'pending', 'received', or 'rejected'",
     }),
 });
 
@@ -106,11 +106,11 @@ export const updateTransferStatusSchema = Joi.object({
     }),
 
   status: Joi.string()
-    .valid("done", "rejected")
+    .valid("received", "rejected")
     .required()
     .messages({
       "any.required": "Status is required",
       "string.base": "Status must be a string",
-      "string.valid": "Status must be 'approved' or 'rejected'",
+      "string.valid": "Status must be 'received' or 'rejected'",
     }),
 });

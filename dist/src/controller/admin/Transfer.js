@@ -99,11 +99,11 @@ const getTransfersForWarehouse = async (req, res) => {
         .populate("products.productPriceId", "price code");
     // ✳️ تقسيم التحويلات حسب الحالة
     const pending = transfers.filter((t) => t.status === "pending");
-    const done = transfers.filter((t) => t.status === "done");
+    const received = transfers.filter((t) => t.status === "received");
     (0, response_1.SuccessResponse)(res, {
         message: "Transfers retrieved successfully",
         pending,
-        done
+        received
     });
 };
 exports.getTransfersForWarehouse = getTransfersForWarehouse;
@@ -181,7 +181,7 @@ const updateTransferStatus = async (req, res) => {
     }
     // ⚙️ 6. تحديد الحالة الجديدة للتحويل
     if (approved_products && approved_products.length > 0) {
-        transfer.status = "done";
+        transfer.status = "received";
     }
     else if (rejected_products && rejected_products.length > 0) {
         transfer.status = "rejected";
@@ -216,11 +216,11 @@ const gettransferin = async (req, res) => {
         .populate("products.productId", "name productCode")
         .populate("products.productPriceId", "price code");
     const pending = transfers.filter((t) => t.status === "pending");
-    const done = transfers.filter((t) => t.status === "done");
+    const received = transfers.filter((t) => t.status === "received");
     (0, response_1.SuccessResponse)(res, {
         message: "Incoming transfers retrieved successfully",
         pending,
-        done
+        received
     });
 };
 exports.gettransferin = gettransferin;
@@ -236,11 +236,11 @@ const gettransferout = async (req, res) => {
         .populate("products.productId", "name productCode")
         .populate("products.productPriceId", "price code");
     const pending = transfers.filter((t) => t.status === "pending");
-    const done = transfers.filter((t) => t.status === "done");
+    const received = transfers.filter((t) => t.status === "received");
     (0, response_1.SuccessResponse)(res, {
         message: "Outgoing transfers retrieved successfully",
         pending,
-        done
+        received
     });
 };
 exports.gettransferout = gettransferout;

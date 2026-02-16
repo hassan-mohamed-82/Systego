@@ -121,12 +121,12 @@ export const getTransfersForWarehouse = async (req: Request, res: Response) => {
 
   // ✳️ تقسيم التحويلات حسب الحالة
   const pending = transfers.filter((t) => t.status === "pending");
-  const done = transfers.filter((t) => t.status === "done");
+  const received = transfers.filter((t) => t.status === "received");
 
   SuccessResponse(res, {
     message: "Transfers retrieved successfully",
     pending,
-    done
+    received
   });
 };
 export const getTransferById = async (req: Request, res: Response) => {
@@ -214,7 +214,7 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
 
   // ⚙️ 6. تحديد الحالة الجديدة للتحويل
   if (approved_products && approved_products.length > 0) {
-    transfer.status = "done";
+    transfer.status = "received";
   } else if (rejected_products && rejected_products.length > 0) {
     transfer.status = "rejected";
   }
@@ -259,12 +259,12 @@ export const gettransferin = async (req: Request, res: Response) => {
     .populate("products.productPriceId", "price code");
 
   const pending = transfers.filter((t) => t.status === "pending");
-  const done = transfers.filter((t) => t.status === "done");
+  const received = transfers.filter((t) => t.status === "received");
 
   SuccessResponse(res, {
     message: "Incoming transfers retrieved successfully",
     pending,
-    done
+    received
   });
 };
 
@@ -283,11 +283,11 @@ export const gettransferout = async (req: Request, res: Response) => {
     .populate("products.productPriceId", "price code");
 
   const pending = transfers.filter((t) => t.status === "pending");
-  const done = transfers.filter((t) => t.status === "done");
+  const received = transfers.filter((t) => t.status === "received");
   SuccessResponse(res, {
     message: "Outgoing transfers retrieved successfully",
     pending,
-    done
+    received
   });
 };
 
