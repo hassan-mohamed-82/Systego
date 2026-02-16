@@ -104,7 +104,7 @@ const endShiftWithReport = async (req, res) => {
     // ✅ استخدم الأحدث: بداية الشيفت أو بداية اليوم
     const shiftStartTime = new Date(shift.start_time || Date.now());
     const filterFromDate = shiftStartTime > todayStart ? shiftStartTime : todayStart;
-    // 3) المبيعات المكتملة في الشيفت ده فقط (من بداية اليوم أو الشيفت)
+    // 3) المبيعات المكتملة في الشيفت ده فقط
     const completedSales = await Sale_1.SaleModel.find({
         shift_id: shift._id,
         cashier_id: user._id,
@@ -226,9 +226,16 @@ const endShiftWithReport = async (req, res) => {
             total: totalExpenses,
         },
     };
+    // ✅ حدّث الـ shift object بالقيم المحسوبة
+    const shiftData = shift.toObject ? shift.toObject() : shift;
     return (0, response_1.SuccessResponse)(res, {
         message: "Shift report preview (shift is still open)",
-        shift,
+        shift: {
+            ...shiftData,
+            total_sale_amount: totalSales,
+            total_expenses: totalExpenses,
+            net_cash_in_drawer: netCashInDrawer,
+        },
         report,
     });
 };
