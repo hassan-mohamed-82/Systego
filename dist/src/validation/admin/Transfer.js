@@ -50,14 +50,6 @@ exports.createTransferSchema = joi_1.default.object({
         "any.required": "Reason for transfer is required",
         "string.empty": "Reason cannot be empty",
     }),
-    status: joi_1.default.string()
-        .valid("pending", "received", "rejected")
-        .required()
-        .messages({
-        "any.required": "Status is required",
-        "string.base": "Status must be a string",
-        "string.valid": "Status must be 'pending', 'received', or 'rejected'",
-    }),
 });
 // ✅ فاليديشن لتأكيد الاستلام أو الرفض
 exports.updateTransferStatusSchema = joi_1.default.object({
