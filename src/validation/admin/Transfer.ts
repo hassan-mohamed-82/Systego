@@ -50,6 +50,15 @@ export const createTransferSchema = Joi.object({
       "any.required": "Reason for transfer is required",
       "string.empty": "Reason cannot be empty",
     }),
+
+  status: Joi.string()
+    .valid("pending", "approved", "rejected")
+    .required()
+    .messages({
+      "any.required": "Status is required",
+      "string.base": "Status must be a string",
+      "string.valid": "Status must be 'pending', 'approved', or 'rejected'",
+    }),
 });
 
 
@@ -94,5 +103,14 @@ export const updateTransferStatusSchema = Joi.object({
     .optional()
     .messages({
       "string.base": "Reason must be a string",
+    }),
+
+  status: Joi.string()
+    .valid("approved", "rejected")
+    .required()
+    .messages({
+      "any.required": "Status is required",
+      "string.base": "Status must be a string",
+      "string.valid": "Status must be 'approved' or 'rejected'",
     }),
 });
