@@ -46,6 +46,10 @@ export const createFinancialSchema = Joi.object({
   payment_amount: Joi.number().required(),
 });
 
+export const createInstallmentSchema = Joi.object({
+  date: Joi.date().required(),
+  amount: Joi.number().required(),
+});
 
 export const createPurchaseSchema = Joi.object({
   date: Joi.string().required(),
@@ -54,7 +58,7 @@ export const createPurchaseSchema = Joi.object({
   receipt_img: Joi.string().optional(),
   // currency_id: Joi.string().optional(),
   tax_id: Joi.string().optional(),
-  payment_status: Joi.string().valid( "partial", "full", "later").required(),
+  payment_status: Joi.string().valid("partial", "full", "later").required(),
   exchange_rate: Joi.number().required(),
   total: Joi.number().required(),
   shipping_cost: Joi.number().required(),
@@ -65,6 +69,7 @@ export const createPurchaseSchema = Joi.object({
   purchase_materials: Joi.array().optional(), // Adding this to allow materials
   financials: Joi.array().items(createFinancialSchema).optional(),
   purchase_due_payment: Joi.array().items(createPurchaseDuePaymentSchema).optional(),
+  installments: Joi.array().items(createInstallmentSchema).optional(),
 });
 
 // ___________________ Update _________________________
@@ -99,4 +104,5 @@ export const updatePurchaseSchema = Joi.object({
   shiping_cost: Joi.number().optional(),
   discount: Joi.number().optional(),
   purchase_items: Joi.array().items(updatePurchaseItemSchema).optional(),
+  installments: Joi.array().optional(),
 });
