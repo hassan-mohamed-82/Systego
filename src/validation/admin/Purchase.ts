@@ -92,14 +92,13 @@ export const updatePurchaseItemSchema = Joi.object({
   subtotal: Joi.number().optional(),
   options: Joi.array().items(updatePurchaseItemOptionSchema).optional(),
 });
-
 export const updatePurchaseSchema = Joi.object({
-  date: Joi.string().optional(),
-  warehouse_id: Joi.string().optional(),
-  supplier_id: Joi.string().optional(),
-  receipt_img: Joi.string().optional(),
-  currency_id: Joi.string().optional(),
-  tax_id: Joi.string().optional(),
+  date: Joi.string().allow("").optional(),
+  warehouse_id: Joi.string().allow("").optional(),
+  supplier_id: Joi.string().allow("").optional(),
+  receipt_img: Joi.string().allow("").optional(),
+  currency_id: Joi.string().allow("").optional(),
+  tax_id: Joi.string().allow("").optional(),
   exchange_rate: Joi.number().optional(),
   shiping_cost: Joi.number().optional(),
   discount: Joi.number().optional(),

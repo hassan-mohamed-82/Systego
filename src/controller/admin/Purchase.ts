@@ -601,9 +601,9 @@ export const updatePurchase = async (req: Request, res: Response) => {
   await PurchaseInstallmentModel.deleteMany({ purchase_id: id });
 
   // ========== Update Purchase ==========
-  (existingPurchase as any).date = date ?? (existingPurchase as any).date;
-  (existingPurchase as any).warehouse_id = warehouse_id ?? (existingPurchase as any).warehouse_id;
-  (existingPurchase as any).supplier_id = supplier_id ?? (existingPurchase as any).supplier_id;
+  if (date) (existingPurchase as any).date = date;
+  if (warehouse_id) (existingPurchase as any).warehouse_id = warehouse_id;
+  if (supplier_id) (existingPurchase as any).supplier_id = supplier_id;
   (existingPurchase as any).receipt_img = imageUrl ?? (existingPurchase as any).receipt_img;
   (existingPurchase as any).payment_status = finalPaymentStatus;
   (existingPurchase as any).exchange_rate = exchange_rate ?? (existingPurchase as any).exchange_rate;
@@ -611,7 +611,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
   (existingPurchase as any).discount = discount ?? (existingPurchase as any).discount;
   (existingPurchase as any).shipping_cost = shipping_cost ?? (existingPurchase as any).shipping_cost;
   (existingPurchase as any).grand_total = finalGrandTotal;
-  if (tax_id !== undefined) (existingPurchase as any).tax_id = tax_id;
+  if (tax_id !== undefined) (existingPurchase as any).tax_id = tax_id || null;
   if (note !== undefined) (existingPurchase as any).note = note;
 
   await existingPurchase.save();
