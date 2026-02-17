@@ -33,9 +33,23 @@ const createcategory = async (req, res) => {
 };
 exports.createcategory = createcategory;
 const getCategories = async (req, res) => {
-    const categories = await category_1.CategoryModel.find({}).populate("parentId", "name");
-    const ParentCategories = categories.filter(cat => !cat.parentId);
-    (0, response_1.SuccessResponse)(res, { message: "get categories successfully", categories, ParentCategories });
+    const categories = await category_1.CategoryModel.find({}).populate("parentId", "name").lean();
+    // ✅ احسب العدد الفعلي لكل category
+    const categoriesWithCorrectCount = await Promise.all(categories.map(async (cat) => {
+        const actualProductCount = await products_1.ProductModel.countDocuments({
+            categoryId: cat._id
+        });
+        return {
+            ...cat,
+            product_quantity: actualProductCount
+        };
+    }));
+    const ParentCategories = categoriesWithCorrectCount.filter(cat => !cat.parentId);
+    (0, response_1.SuccessResponse)(res, {
+        message: "get categories successfully",
+        categories: categoriesWithCorrectCount,
+        ParentCategories
+    });
 };
 exports.getCategories = getCategories;
 const getCategoryById = async (req, res) => {
