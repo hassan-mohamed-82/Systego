@@ -4,6 +4,7 @@ exports.selection = exports.getExpiredProducts = exports.getExpiringProducts = e
 const Purchase_1 = require("../../models/schema/admin/Purchase");
 const purchase_item_1 = require("../../models/schema/admin/purchase_item");
 const purchase_due_payment_1 = require("../../models/schema/admin/purchase_due_payment");
+const PurchaseInstallment_1 = require("../../models/schema/admin/PurchaseInstallment");
 const purchase_item_option_1 = require("../../models/schema/admin/purchase_item_option");
 const Financial_Account_1 = require("../../models/schema/admin/Financial_Account");
 const PurchaseInvoice_1 = require("../../models/schema/admin/PurchaseInvoice");
@@ -22,7 +23,7 @@ const NotFound_1 = require("../../Errors/NotFound");
 const handleImages_1 = require("../../utils/handleImages");
 const Materials_1 = require("../../models/schema/admin/Materials");
 const createPurchase = async (req, res) => {
-    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials = [], note, } = req.body;
+    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, purchase_items = [], purchase_materials = [], financials = [], note, installments = [] } = req.body;
     let purchase_due_payment = req.body.purchase_due_payment || [];
     // ========== Validations ==========
     const existingWarehouse = await Warehouse_1.WarehouseModel.findById(warehouse_id);
@@ -39,6 +40,7 @@ const createPurchase = async (req, res) => {
     // ========== Payment Validation ==========
     const totalPaidNow = financials.reduce((sum, f) => sum + Number(f.payment_amount || 0), 0);
     let totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    const totalInstallments = installments.reduce((sum, i) => sum + Number(i.amount || 0), 0);
     const getDefaultDueDate = () => {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 30);
@@ -48,8 +50,8 @@ const createPurchase = async (req, res) => {
         if (totalPaidNow !== grand_total) {
             throw new BadRequest_1.BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
         }
-        if (purchase_due_payment.length > 0) {
-            throw new BadRequest_1.BadRequest("Full payment should not have due payments");
+        if (purchase_due_payment.length > 0 || installments.length > 0) {
+            throw new BadRequest_1.BadRequest("Full payment should not have due payments or installments");
         }
     }
     else if (payment_status === "later") {
@@ -75,7 +77,12 @@ const createPurchase = async (req, res) => {
             throw new BadRequest_1.BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
         }
         const remaining = grand_total - totalPaidNow;
-        if (purchase_due_payment.length === 0) {
+        if (installments.length > 0) {
+            if (totalInstallments !== remaining) {
+                throw new BadRequest_1.BadRequest(`Installments must equal remaining amount. Expected: ${remaining}, Received: ${totalInstallments}`);
+            }
+        }
+        else if (purchase_due_payment.length === 0) {
             purchase_due_payment.push({
                 amount: remaining,
                 date: getDefaultDueDate()
@@ -264,6 +271,17 @@ const createPurchase = async (req, res) => {
             });
         }
     }
+    // ========== Create Installments (التقسيط) ==========
+    if (installments && Array.isArray(installments) && installments.length > 0) {
+        for (const inst of installments) {
+            await PurchaseInstallment_1.PurchaseInstallmentModel.create({
+                purchase_id: purchase._id,
+                amount: inst.amount,
+                date: inst.date,
+                status: "pending"
+            });
+        }
+    }
     // ========== Get Full Purchase ==========
     const fullPurchase = await Purchase_1.PurchaseModel.findById(purchase._id)
         .populate({
@@ -285,7 +303,8 @@ const createPurchase = async (req, res) => {
         .populate("supplier_id")
         .populate("tax_id")
         .populate("invoices")
-        .populate("duePayments");
+        .populate("duePayments")
+        .populate("installments");
     (0, response_1.SuccessResponse)(res, { message: "Purchase created successfully", purchase: fullPurchase });
 };
 exports.createPurchase = createPurchase;
@@ -318,6 +337,7 @@ const getAllPurchases = async (req, res) => {
     })
         .populate("invoices")
         .populate("duePayments")
+        .populate("installments")
         .sort({ createdAt: -1 });
     // تقسيم حسب الـ payment_status
     const fullPayments = allPurchases.filter((p) => p.payment_status === "full");
@@ -360,7 +380,8 @@ const getPurchaseById = async (req, res) => {
         ],
     })
         .populate("invoices")
-        .populate("duePayments");
+        .populate("duePayments")
+        .populate("installments");
     if (!purchase)
         throw new NotFound_1.NotFound("Purchase not found");
     (0, response_1.SuccessResponse)(res, { purchase });
@@ -393,13 +414,14 @@ const updatePurchase = async (req, res) => {
     const finalPaymentStatus = payment_status ?? existingPurchase.payment_status;
     const totalPaidNow = financials.reduce((sum, f) => sum + (f.payment_amount || 0), 0);
     const totalDuePayments = purchase_due_payment.reduce((sum, d) => sum + (d.amount || 0), 0);
-    const totalPayments = totalPaidNow + totalDuePayments;
+    const totalInstallments = installments.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+    const totalPayments = totalPaidNow + totalDuePayments + totalInstallments;
     if (finalPaymentStatus === "full") {
         if (totalPaidNow !== finalGrandTotal) {
             throw new BadRequest_1.BadRequest(`Full payment required. Expected: ${finalGrandTotal}, Received: ${totalPaidNow}`);
         }
-        if (purchase_due_payment.length > 0) {
-            throw new BadRequest_1.BadRequest("Full payment should not have due payments");
+        if (purchase_due_payment.length > 0 || installments.length > 0) {
+            throw new BadRequest_1.BadRequest("Full payment should not have due payments or installments");
         }
     }
     else if (finalPaymentStatus === "later") {
@@ -487,6 +509,8 @@ const updatePurchase = async (req, res) => {
     await PurchaseInvoice_1.PurchaseInvoiceModel.deleteMany({ purchase_id: id });
     // Delete old due payments
     await purchase_due_payment_1.PurchaseDuePaymentModel.deleteMany({ purchase_id: id });
+    // Delete old installments
+    await PurchaseInstallment_1.PurchaseInstallmentModel.deleteMany({ purchase_id: id });
     // ========== Update Purchase ==========
     existingPurchase.date = date ?? existingPurchase.date;
     existingPurchase.warehouse_id = warehouse_id ?? existingPurchase.warehouse_id;
@@ -655,6 +679,17 @@ const updatePurchase = async (req, res) => {
             });
         }
     }
+    // ========== Create New Installments ==========
+    if (installments && Array.isArray(installments) && installments.length > 0) {
+        for (const inst of installments) {
+            await PurchaseInstallment_1.PurchaseInstallmentModel.create({
+                purchase_id: existingPurchase._id,
+                amount: inst.amount,
+                date: inst.date,
+                status: "pending"
+            });
+        }
+    }
     const fullPurchase = await Purchase_1.PurchaseModel.findById(existingPurchase._id)
         .populate({
         path: "items",
@@ -675,7 +710,8 @@ const updatePurchase = async (req, res) => {
         .populate("supplier_id")
         .populate("tax_id")
         .populate("invoices")
-        .populate("duePayments");
+        .populate("duePayments")
+        .populate("installments");
     (0, response_1.SuccessResponse)(res, { message: "Purchase updated successfully", purchase: fullPurchase });
 };
 exports.updatePurchase = updatePurchase;

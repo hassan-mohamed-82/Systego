@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { PurchaseModel } from "../../models/schema/admin/Purchase";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import { PurchaseDuePaymentModel } from "../../models/schema/admin/purchase_due_payment";
+import { PurchaseInstallmentModel } from "../../models/schema/admin/PurchaseInstallment";
 import { PurchaseItemOptionModel } from "../../models/schema/admin/purchase_item_option";
 import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { PurchaseInvoiceModel } from "../../models/schema/admin/PurchaseInvoice";
@@ -40,6 +41,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     purchase_materials = [],
     financials = [],
     note,
+    installments = []
   } = req.body;
 
   let purchase_due_payment = req.body.purchase_due_payment || [];
@@ -59,6 +61,7 @@ export const createPurchase = async (req: Request, res: Response) => {
   // ========== Payment Validation ==========
   const totalPaidNow = financials.reduce((sum: number, f: any) => sum + Number(f.payment_amount || 0), 0);
   let totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+  const totalInstallments = installments.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
 
   const getDefaultDueDate = () => {
     const dueDate = new Date();
@@ -70,8 +73,8 @@ export const createPurchase = async (req: Request, res: Response) => {
     if (totalPaidNow !== grand_total) {
       throw new BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
     }
-    if (purchase_due_payment.length > 0) {
-      throw new BadRequest("Full payment should not have due payments");
+    if (purchase_due_payment.length > 0 || installments.length > 0) {
+      throw new BadRequest("Full payment should not have due payments or installments");
     }
   } else if (payment_status === "later") {
     if (totalPaidNow > 0) {
@@ -93,10 +96,14 @@ export const createPurchase = async (req: Request, res: Response) => {
     if (totalPaidNow >= grand_total) {
       throw new BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
     }
-    
+
     const remaining = grand_total - totalPaidNow;
-    
-    if (purchase_due_payment.length === 0) {
+
+    if (installments.length > 0) {
+      if (totalInstallments !== remaining) {
+        throw new BadRequest(`Installments must equal remaining amount. Expected: ${remaining}, Received: ${totalInstallments}`);
+      }
+    } else if (purchase_due_payment.length === 0) {
       purchase_due_payment.push({
         amount: remaining,
         date: getDefaultDueDate()
@@ -311,6 +318,18 @@ export const createPurchase = async (req: Request, res: Response) => {
     }
   }
 
+  // ========== Create Installments (التقسيط) ==========
+  if (installments && Array.isArray(installments) && installments.length > 0) {
+    for (const inst of installments) {
+      await PurchaseInstallmentModel.create({
+        purchase_id: purchase._id,
+        amount: inst.amount,
+        date: inst.date,
+        status: "pending"
+      });
+    }
+  }
+
   // ========== Get Full Purchase ==========
   const fullPurchase = await PurchaseModel.findById(purchase._id)
     .populate({
@@ -332,7 +351,8 @@ export const createPurchase = async (req: Request, res: Response) => {
     .populate("supplier_id")
     .populate("tax_id")
     .populate("invoices")
-    .populate("duePayments");
+    .populate("duePayments")
+    .populate("installments");
 
   SuccessResponse(res, { message: "Purchase created successfully", purchase: fullPurchase });
 };
@@ -367,6 +387,7 @@ export const getAllPurchases = async (req: Request, res: Response) => {
     })
     .populate("invoices")
     .populate("duePayments")
+    .populate("installments")
     .sort({ createdAt: -1 });
 
   // تقسيم حسب الـ payment_status
@@ -413,7 +434,8 @@ export const getPurchaseById = async (req: Request, res: Response) => {
       ],
     })
     .populate("invoices")
-    .populate("duePayments");
+    .populate("duePayments")
+    .populate("installments");
 
   if (!purchase) throw new NotFound("Purchase not found");
 
@@ -439,6 +461,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     purchase_materials = [],
     financials = [],
     purchase_due_payment = [],
+    installments = []
   } = req.body;
 
   const existingPurchase = await PurchaseModel.findById(id);
@@ -466,14 +489,15 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
   const totalPaidNow = financials.reduce((sum: number, f: any) => sum + (f.payment_amount || 0), 0);
   const totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
-  const totalPayments = totalPaidNow + totalDuePayments;
+  const totalInstallments = installments.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
+  const totalPayments = totalPaidNow + totalDuePayments + totalInstallments;
 
   if (finalPaymentStatus === "full") {
     if (totalPaidNow !== finalGrandTotal) {
       throw new BadRequest(`Full payment required. Expected: ${finalGrandTotal}, Received: ${totalPaidNow}`);
     }
-    if (purchase_due_payment.length > 0) {
-      throw new BadRequest("Full payment should not have due payments");
+    if (purchase_due_payment.length > 0 || installments.length > 0) {
+      throw new BadRequest("Full payment should not have due payments or installments");
     }
   } else if (finalPaymentStatus === "later") {
     if (totalPaidNow > 0) {
@@ -572,6 +596,9 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
   // Delete old due payments
   await PurchaseDuePaymentModel.deleteMany({ purchase_id: id });
+
+  // Delete old installments
+  await PurchaseInstallmentModel.deleteMany({ purchase_id: id });
 
   // ========== Update Purchase ==========
   (existingPurchase as any).date = date ?? (existingPurchase as any).date;
@@ -762,6 +789,18 @@ export const updatePurchase = async (req: Request, res: Response) => {
     }
   }
 
+  // ========== Create New Installments ==========
+  if (installments && Array.isArray(installments) && installments.length > 0) {
+    for (const inst of installments) {
+      await PurchaseInstallmentModel.create({
+        purchase_id: existingPurchase._id,
+        amount: inst.amount,
+        date: inst.date,
+        status: "pending"
+      });
+    }
+  }
+
   const fullPurchase = await PurchaseModel.findById(existingPurchase._id)
     .populate({
       path: "items",
@@ -782,7 +821,8 @@ export const updatePurchase = async (req: Request, res: Response) => {
     .populate("supplier_id")
     .populate("tax_id")
     .populate("invoices")
-    .populate("duePayments");
+    .populate("duePayments")
+    .populate("installments");
 
   SuccessResponse(res, { message: "Purchase updated successfully", purchase: fullPurchase });
 };

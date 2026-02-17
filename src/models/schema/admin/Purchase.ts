@@ -66,6 +66,12 @@ PurchaseSchema.virtual("invoices", {
   foreignField: "purchase_id",
 });
 
+PurchaseSchema.virtual("installments", {
+  ref: "PurchaseInstallment",
+  localField: "_id",
+  foreignField: "purchase_id",
+});
+
 PurchaseSchema.virtual("duePayments", {
   ref: "PurchaseDuePayment",
   localField: "_id",
