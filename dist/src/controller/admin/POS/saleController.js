@@ -46,7 +46,7 @@ const createSale = async (req, res) => {
     if (!openShift) {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
-    const { customer_id, order_pending = 0, coupon_id, gift_card_id, order_tax, order_discount, products, bundles, shipping = 0, tax_rate = 0, tax_amount = 0, discount = 0, grand_total, note, financials, Due = 0, } = req.body;
+    const { customer_id, order_pending = 0, coupon_id, gift_card_id, order_tax, order_discount, products, bundles, shipping = 0, tax_rate = 0, discount = 0, note, financials, Due = 0, } = req.body;
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
         throw new Errors_1.NotFound("Warehouse not found");
@@ -59,30 +59,72 @@ const createSale = async (req, res) => {
     const isPending = normalizedOrderPending === 1;
     const isDue = Number(Due) === 1;
     // ═══════════════════════════════════════════════════════════
-    // ✅ PROCESS PRODUCTS & APPLY WHOLESALE PRICE
+    // ✅ PROCESS PRODUCTS & APPLY WHOLESALE PRICE (من الـ Database)
     // ═══════════════════════════════════════════════════════════
     const processedProducts = [];
     let productsTotal = 0;
     if (products && products.length > 0) {
         for (const p of products) {
             const { product_id, product_price_id, quantity } = p;
-            let finalPrice = Number(p.price);
+            let finalPrice = 0;
+            let originalPrice = 0;
             let isWholesale = false;
-            // ✅ شيك على سعر الجملة للمنتجات بدون Variation
-            if (!product_price_id && product_id) {
-                const product = await products_1.ProductModel.findById(product_id);
-                if (product) {
-                    const minQtyForWholesale = product.start_quantaty || 0;
-                    const wholesalePrice = product.whole_price;
-                    // ✅ طبّق سعر الجملة لو الكمية >= الحد الأدنى
-                    if (wholesalePrice &&
-                        wholesalePrice > 0 &&
-                        minQtyForWholesale > 0 &&
-                        quantity >= minQtyForWholesale) {
-                        finalPrice = wholesalePrice;
-                        isWholesale = true;
+            if (product_price_id) {
+                // ═══════════════════════════════════════════════════
+                // ✅ منتج مع Variation
+                // ═══════════════════════════════════════════════════
+                const priceDoc = await product_price_1.ProductPriceModel.findById(product_price_id);
+                if (!priceDoc) {
+                    throw new Errors_1.NotFound(`Product price ${product_price_id} not found`);
+                }
+                originalPrice = priceDoc.price || 0;
+                finalPrice = originalPrice;
+                // شيك على whole_price من المنتج الأساسي
+                if (product_id) {
+                    const product = await products_1.ProductModel.findById(product_id);
+                    if (product) {
+                        const minQty = product.start_quantaty || 0;
+                        const wholesalePrice = product.whole_price;
+                        // ✅ لو الكمية >= الحد وفيه سعر جملة
+                        if (wholesalePrice && wholesalePrice > 0 && minQty > 0 && quantity >= minQty) {
+                            // احسب نسبة الخصم وطبقها على سعر الـ Variation
+                            const discountRatio = wholesalePrice / (product.price || 1);
+                            finalPrice = Math.round(originalPrice * discountRatio * 100) / 100;
+                            isWholesale = true;
+                            console.log(`✅ Wholesale (Variation): Ratio ${discountRatio}, Final: ${finalPrice}`);
+                        }
                     }
                 }
+            }
+            else if (product_id) {
+                // ═══════════════════════════════════════════════════
+                // ✅ منتج بدون Variation
+                // ═══════════════════════════════════════════════════
+                const product = await products_1.ProductModel.findById(product_id);
+                if (!product) {
+                    throw new Errors_1.NotFound(`Product ${product_id} not found`);
+                }
+                originalPrice = product.price || 0;
+                finalPrice = originalPrice;
+                const minQtyForWholesale = product.start_quantaty || 0;
+                const wholesalePrice = product.whole_price;
+                // ✅ طبّق سعر الجملة
+                if (wholesalePrice &&
+                    wholesalePrice > 0 &&
+                    minQtyForWholesale > 0 &&
+                    quantity >= minQtyForWholesale) {
+                    finalPrice = wholesalePrice;
+                    isWholesale = true;
+                    console.log(`✅ Wholesale applied: ${product.name} - ${originalPrice} → ${finalPrice}, Qty: ${quantity}, Min: ${minQtyForWholesale}`);
+                }
+                else {
+                    console.log(`ℹ️ No wholesale: ${product.name} - Qty: ${quantity}, Min: ${minQtyForWholesale}, WholesalePrice: ${wholesalePrice}`);
+                }
+            }
+            // ✅ لو السعر لسه 0، استخدم اللي جاي من الـ Frontend
+            if (finalPrice === 0) {
+                finalPrice = Number(p.price) || 0;
+                originalPrice = finalPrice;
             }
             const finalSubtotal = finalPrice * quantity;
             processedProducts.push({
@@ -91,7 +133,7 @@ const createSale = async (req, res) => {
                 quantity: p.quantity,
                 price: finalPrice,
                 subtotal: finalSubtotal,
-                original_price: p.price,
+                original_price: originalPrice,
                 is_wholesale: isWholesale,
                 options_id: p.options_id,
                 isGift: p.isGift,
@@ -102,7 +144,7 @@ const createSale = async (req, res) => {
         }
     }
     // ═══════════════════════════════════════════════════════════
-    // ✅ CALCULATE FINAL GRAND TOTAL
+    // ✅ PROCESS BUNDLES
     // ═══════════════════════════════════════════════════════════
     let bundlesTotal = 0;
     if (bundles && bundles.length > 0) {
@@ -112,19 +154,26 @@ const createSale = async (req, res) => {
             }
         }
     }
-    // احسب الـ Grand Total الجديد
+    // ═══════════════════════════════════════════════════════════
+    // ✅ CALCULATE FINAL GRAND TOTAL
+    // ═══════════════════════════════════════════════════════════
     const subtotal = productsTotal + bundlesTotal;
     const taxAmountCalc = (subtotal * Number(tax_rate)) / 100;
-    const calculatedGrandTotal = subtotal + taxAmountCalc + Number(shipping) - Number(discount);
-    // ✅ استخدم الـ calculated أو الـ original (حسب ما تحب)
-    const finalGrandTotal = calculatedGrandTotal; // أو grand_total لو عايز تثق بالـ Frontend
+    const finalGrandTotal = subtotal + taxAmountCalc + Number(shipping) - Number(discount);
+    console.log(`📊 Sale Calculation:`);
+    console.log(`   Products Total: ${productsTotal}`);
+    console.log(`   Bundles Total: ${bundlesTotal}`);
+    console.log(`   Subtotal: ${subtotal}`);
+    console.log(`   Tax (${tax_rate}%): ${taxAmountCalc}`);
+    console.log(`   Shipping: ${shipping}`);
+    console.log(`   Discount: ${discount}`);
+    console.log(`   Final Grand Total: ${finalGrandTotal}`);
     if (finalGrandTotal <= 0) {
         throw new BadRequest_1.BadRequest("Grand total must be greater than 0");
     }
     // ═══════════════════════════════════════════════════════════
-    // باقي الـ Validations (Customer, Financials, etc.)
-    // ═══════════════════════════════════════════════════════════
     // Customer Validation
+    // ═══════════════════════════════════════════════════════════
     let customer = null;
     if (customer_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(customer_id)) {
@@ -157,10 +206,10 @@ const createSale = async (req, res) => {
             return { account_id: accId, amount: amt };
         });
         totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
-        // ✅ قارن مع الـ finalGrandTotal المحسوب
-        if (Number(totalPaidFromLines.toFixed(2)) !==
-            Number(Number(finalGrandTotal).toFixed(2))) {
-            throw new BadRequest_1.BadRequest(`Sum of payments (${totalPaidFromLines}) must equal grand_total (${finalGrandTotal})`);
+        // ✅ مقارنة مع tolerance للـ rounding
+        const tolerance = 0.01;
+        if (Math.abs(totalPaidFromLines - finalGrandTotal) > tolerance) {
+            throw new BadRequest_1.BadRequest(`Sum of payments (${totalPaidFromLines.toFixed(2)}) must equal grand_total (${finalGrandTotal.toFixed(2)})`);
         }
         for (const line of paymentLines) {
             const bankAccount = await Financial_Account_1.BankAccountModel.findOne({
@@ -174,7 +223,9 @@ const createSale = async (req, res) => {
             }
         }
     }
-    // Coupon, Tax, Discount, Gift Card Validations...
+    // ═══════════════════════════════════════════════════════════
+    // Coupon, Tax, Discount, Gift Card Validations
+    // ═══════════════════════════════════════════════════════════
     let coupon = null;
     if (coupon_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(coupon_id)) {
@@ -239,7 +290,7 @@ const createSale = async (req, res) => {
                 throw new Errors_1.NotFound("Product price (variation) not found");
             }
             if ((priceDoc.quantity ?? 0) < quantity) {
-                throw new BadRequest_1.BadRequest(`Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`);
+                throw new BadRequest_1.BadRequest(`Not enough stock for variation, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`);
             }
         }
         else {
@@ -254,7 +305,7 @@ const createSale = async (req, res) => {
                 throw new Errors_1.NotFound(`Product ${product_id} not found in warehouse ${warehouseId}`);
             }
             if ((warehouseStock.quantity ?? 0) < quantity) {
-                throw new BadRequest_1.BadRequest(`Not enough stock for product in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`);
+                throw new BadRequest_1.BadRequest(`Not enough stock in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`);
             }
         }
     }
@@ -347,7 +398,6 @@ const createSale = async (req, res) => {
     // ✅ STOCK DEDUCTION & PAYMENTS
     // ═══════════════════════════════════════════════════════════
     if (!isPending) {
-        // Payment Processing
         if (!isDue && paymentLines.length > 0) {
             await payment_1.PaymentModel.create({
                 sale_id: sale._id,
@@ -362,7 +412,6 @@ const createSale = async (req, res) => {
                 });
             }
         }
-        // ✅ خصم كميات المنتجات
         for (const p of processedProducts) {
             if (p.product_price_id) {
                 await product_price_1.ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
@@ -382,7 +431,6 @@ const createSale = async (req, res) => {
                 });
             }
         }
-        // خصم كميات الـ Bundles
         if (bundles && bundles.length > 0) {
             for (const b of bundles) {
                 const bundleDoc = await pandels_1.PandelModel.findById(b.bundle_id).populate("productsId");
@@ -400,13 +448,11 @@ const createSale = async (req, res) => {
                 }
             }
         }
-        // Coupon Update
         if (!isDue && coupon) {
             await coupons_1.CouponModel.findByIdAndUpdate(coupon._id, {
                 $inc: { available: -1 },
             });
         }
-        // Gift Card Update
         if (!isDue && giftCard && totalPaidFromLines > 0) {
             await giftCard_1.GiftCardModel.findByIdAndUpdate(giftCard._id, {
                 $inc: { amount: -totalPaidFromLines },
@@ -434,7 +480,6 @@ const createSale = async (req, res) => {
         .populate("bundle_id", "name price")
         .populate("options_id", "name ar_name price")
         .lean();
-    // ✅ إخفاء الأسعار للمنتجات الهدايا
     const formattedItems = fullItems.map((item) => {
         if (item.isGift) {
             const { price, subtotal, ...rest } = item;
@@ -450,6 +495,15 @@ const createSale = async (req, res) => {
         sale: fullSale,
         items: formattedItems,
         wholesale_applied: processedProducts.some(p => p.is_wholesale),
+        pricing_details: {
+            products_total: productsTotal,
+            bundles_total: bundlesTotal,
+            subtotal: subtotal,
+            tax_amount: taxAmountCalc,
+            shipping: Number(shipping),
+            discount: Number(discount),
+            grand_total: finalGrandTotal,
+        },
     });
 };
 exports.createSale = createSale;
