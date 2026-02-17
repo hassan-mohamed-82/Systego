@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.selection = exports.getExpiredProducts = exports.getExpiringProducts = exports.getCriticalExpiryProducts = exports.getLowStockProducts = exports.updatePurchase = exports.getPurchaseById = exports.getAllPurchases = exports.createPurchase = void 0;
+exports.payInstallment = exports.selection = exports.getExpiredProducts = exports.getExpiringProducts = exports.getCriticalExpiryProducts = exports.getLowStockProducts = exports.updatePurchase = exports.getPurchaseById = exports.getAllPurchases = exports.createPurchase = void 0;
 const Purchase_1 = require("../../models/schema/admin/Purchase");
 const purchase_item_1 = require("../../models/schema/admin/purchase_item");
 const purchase_due_payment_1 = require("../../models/schema/admin/purchase_due_payment");
@@ -389,7 +389,7 @@ const getPurchaseById = async (req, res) => {
 exports.getPurchaseById = getPurchaseById;
 const updatePurchase = async (req, res) => {
     const { id } = req.params;
-    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, note, purchase_items = [], purchase_materials = [], financials = [], purchase_due_payment = [], } = req.body;
+    const { date, warehouse_id, supplier_id, receipt_img, payment_status, exchange_rate, total, discount, shipping_cost, grand_total, tax_id, note, purchase_items = [], purchase_materials = [], financials = [], purchase_due_payment = [], installments = [] } = req.body;
     const existingPurchase = await Purchase_1.PurchaseModel.findById(id);
     if (!existingPurchase)
         throw new NotFound_1.NotFound("Purchase not found");
@@ -986,3 +986,33 @@ const selection = async (req, res) => {
     });
 };
 exports.selection = selection;
+const payInstallment = async (req, res) => {
+    const { id } = req.params;
+    const { financial_id } = req.body;
+    if (!financial_id)
+        throw new BadRequest_1.BadRequest("financial_id is required");
+    const installment = await PurchaseInstallment_1.PurchaseInstallmentModel.findById(id);
+    if (!installment)
+        throw new NotFound_1.NotFound("Installment not found");
+    if (installment.status === "paid")
+        throw new BadRequest_1.BadRequest("Installment is already paid");
+    const financial = await Financial_Account_1.BankAccountModel.findById(financial_id);
+    if (!financial)
+        throw new NotFound_1.NotFound("Financial account not found");
+    // Create Invoice
+    await PurchaseInvoice_1.PurchaseInvoiceModel.create({
+        financial_id,
+        amount: installment.amount,
+        purchase_id: installment.purchase_id,
+    });
+    // Deduct from Balance
+    if (financial) {
+        financial.balance -= installment.amount;
+        await financial.save();
+    }
+    // Update Installment
+    installment.status = "paid";
+    await installment.save();
+    (0, response_1.SuccessResponse)(res, { message: "Installment paid successfully", installment });
+};
+exports.payInstallment = payInstallment;

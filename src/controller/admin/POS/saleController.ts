@@ -79,14 +79,92 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("At least one product or bundle is required");
   }
 
-  if (!grand_total || Number(grand_total) <= 0) {
-    throw new BadRequest("Grand total must be greater than 0");
-  }
-
   const normalizedOrderPending = Number(order_pending) === 0 ? 0 : 1;
   const isPending = normalizedOrderPending === 1;
   const isDue = Number(Due) === 1;
 
+  // ═══════════════════════════════════════════════════════════
+  // ✅ PROCESS PRODUCTS & APPLY WHOLESALE PRICE
+  // ═══════════════════════════════════════════════════════════
+  const processedProducts: any[] = [];
+  let productsTotal = 0;
+
+  if (products && products.length > 0) {
+    for (const p of products as any[]) {
+      const { product_id, product_price_id, quantity } = p;
+      
+      let finalPrice = Number(p.price);
+      let isWholesale = false;
+      
+      // ✅ شيك على سعر الجملة للمنتجات بدون Variation
+      if (!product_price_id && product_id) {
+        const product = await ProductModel.findById(product_id);
+        
+        if (product) {
+          const minQtyForWholesale = product.start_quantaty || 0;
+          const wholesalePrice = product.whole_price;
+          
+          // ✅ طبّق سعر الجملة لو الكمية >= الحد الأدنى
+          if (
+            wholesalePrice && 
+            wholesalePrice > 0 && 
+            minQtyForWholesale > 0 && 
+            quantity >= minQtyForWholesale
+          ) {
+            finalPrice = wholesalePrice;
+            isWholesale = true;
+          }
+        }
+      }
+      
+      const finalSubtotal = finalPrice * quantity;
+      
+      processedProducts.push({
+        product_id: p.product_id,
+        product_price_id: p.product_price_id,
+        quantity: p.quantity,
+        price: finalPrice,
+        subtotal: finalSubtotal,
+        original_price: p.price,
+        is_wholesale: isWholesale,
+        options_id: p.options_id,
+        isGift: p.isGift,
+      });
+      
+      if (!p.isGift) {
+        productsTotal += finalSubtotal;
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ CALCULATE FINAL GRAND TOTAL
+  // ═══════════════════════════════════════════════════════════
+  let bundlesTotal = 0;
+  if (bundles && bundles.length > 0) {
+    for (const b of bundles as any[]) {
+      if (!b.isGift) {
+        bundlesTotal += Number(b.subtotal) || 0;
+      }
+    }
+  }
+
+  // احسب الـ Grand Total الجديد
+  const subtotal = productsTotal + bundlesTotal;
+  const taxAmountCalc = (subtotal * Number(tax_rate)) / 100;
+  const calculatedGrandTotal = subtotal + taxAmountCalc + Number(shipping) - Number(discount);
+
+  // ✅ استخدم الـ calculated أو الـ original (حسب ما تحب)
+  const finalGrandTotal = calculatedGrandTotal; // أو grand_total لو عايز تثق بالـ Frontend
+
+  if (finalGrandTotal <= 0) {
+    throw new BadRequest("Grand total must be greater than 0");
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // باقي الـ Validations (Customer, Financials, etc.)
+  // ═══════════════════════════════════════════════════════════
+  
   // Customer Validation
   let customer: any = null;
   if (customer_id) {
@@ -133,12 +211,13 @@ export const createSale = async (req: Request, res: Response) => {
 
     totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
 
+    // ✅ قارن مع الـ finalGrandTotal المحسوب
     if (
       Number(totalPaidFromLines.toFixed(2)) !==
-      Number(Number(grand_total).toFixed(2))
+      Number(Number(finalGrandTotal).toFixed(2))
     ) {
       throw new BadRequest(
-        "Sum of payments (financials) must equal grand_total"
+        `Sum of payments (${totalPaidFromLines}) must equal grand_total (${finalGrandTotal})`
       );
     }
 
@@ -158,7 +237,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // Coupon Validation
+  // Coupon, Tax, Discount, Gift Card Validations...
   let coupon: any = null;
   if (coupon_id) {
     if (!mongoose.Types.ObjectId.isValid(coupon_id)) {
@@ -172,7 +251,6 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // Tax Validation
   let tax: any = null;
   if (order_tax) {
     if (!mongoose.Types.ObjectId.isValid(order_tax)) {
@@ -183,7 +261,6 @@ export const createSale = async (req: Request, res: Response) => {
     if (!tax.status) throw new BadRequest("Tax is not active");
   }
 
-  // Discount Validation
   let discountDoc: any = null;
   if (order_discount) {
     if (!mongoose.Types.ObjectId.isValid(order_discount)) {
@@ -194,7 +271,6 @@ export const createSale = async (req: Request, res: Response) => {
     if (!discountDoc.status) throw new BadRequest("Discount is not active");
   }
 
-  // Gift Card Validation
   let giftCard: any = null;
   if (gift_card_id) {
     if (!mongoose.Types.ObjectId.isValid(gift_card_id)) {
@@ -208,47 +284,45 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
   // ✅ STOCK VALIDATION
-  if (products && products.length > 0) {
-    for (const p of products as any[]) {
-      const { product_price_id, product_id, quantity } = p;
+  // ═══════════════════════════════════════════════════════════
+  for (const p of processedProducts) {
+    const { product_price_id, product_id, quantity } = p;
 
-      if (product_price_id) {
-        // منتج مع Variation
-        if (!mongoose.Types.ObjectId.isValid(product_price_id)) {
-          throw new BadRequest("Invalid product_price_id");
-        }
-        const priceDoc = await ProductPriceModel.findById(product_price_id);
-        if (!priceDoc) {
-          throw new NotFound("Product price (variation) not found");
-        }
-        if ((priceDoc.quantity ?? 0) < quantity) {
-          throw new BadRequest(
-            `Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`
-          );
-        }
-      } else {
-        // منتج بدون Variation - التحقق من Product_Warehouse
-        if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
-          throw new BadRequest("Invalid product_id");
-        }
+    if (product_price_id) {
+      if (!mongoose.Types.ObjectId.isValid(product_price_id)) {
+        throw new BadRequest("Invalid product_price_id");
+      }
+      const priceDoc = await ProductPriceModel.findById(product_price_id);
+      if (!priceDoc) {
+        throw new NotFound("Product price (variation) not found");
+      }
+      if ((priceDoc.quantity ?? 0) < quantity) {
+        throw new BadRequest(
+          `Not enough stock for variation ${priceDoc._id}, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`
+        );
+      }
+    } else {
+      if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
+        throw new BadRequest("Invalid product_id");
+      }
 
-        const warehouseStock = await Product_WarehouseModel.findOne({
-          productId: product_id,
-          warehouseId: warehouseId,
-        });
+      const warehouseStock = await Product_WarehouseModel.findOne({
+        productId: product_id,
+        warehouseId: warehouseId,
+      });
 
-        if (!warehouseStock) {
-          throw new NotFound(
-            `Product ${product_id} not found in warehouse ${warehouseId}`
-          );
-        }
+      if (!warehouseStock) {
+        throw new NotFound(
+          `Product ${product_id} not found in warehouse ${warehouseId}`
+        );
+      }
 
-        if ((warehouseStock.quantity ?? 0) < quantity) {
-          throw new BadRequest(
-            `Not enough stock for product in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`
-          );
-        }
+      if ((warehouseStock.quantity ?? 0) < quantity) {
+        throw new BadRequest(
+          `Not enough stock for product in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`
+        );
       }
     }
   }
@@ -278,15 +352,16 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
   // CREATE SALE
+  // ═══════════════════════════════════════════════════════════
   const accountIdsForSale =
     !isPending && !isDue && paymentLines.length > 0
       ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
       : [];
 
-  const totalForDb = Number(grand_total);
   const paidAmountForDb = !isPending && !isDue ? totalPaidFromLines : 0;
-  const remainingAmount = isDue ? totalForDb : 0;
+  const remainingAmount = isDue ? finalGrandTotal : 0;
 
   const sale = await SaleModel.create({
     date: new Date(),
@@ -302,10 +377,10 @@ export const createSale = async (req: Request, res: Response) => {
     order_discount: discountDoc ? discountDoc._id : undefined,
     shipping,
     tax_rate,
-    tax_amount,
+    tax_amount: taxAmountCalc,
     discount,
-    total: totalForDb,
-    grand_total,
+    total: subtotal,
+    grand_total: finalGrandTotal,
     paid_amount: paidAmountForDb,
     remaining_amount: remainingAmount,
     note,
@@ -313,22 +388,24 @@ export const createSale = async (req: Request, res: Response) => {
     shift_id: openShift._id,
   });
 
+  // ═══════════════════════════════════════════════════════════
   // CREATE PRODUCT SALES
-  if (products && products.length > 0) {
-    for (const p of products as any[]) {
-      await ProductSalesModel.create({
-        sale_id: sale._id,
-        product_id: p.product_id,
-        bundle_id: undefined,
-        product_price_id: p.product_price_id,
-        quantity: p.quantity,
-        price: p.price,
-        subtotal: p.subtotal,
-        options_id: p.options_id,
-        isGift: !!p.isGift,
-        isBundle: false,
-      });
-    }
+  // ═══════════════════════════════════════════════════════════
+  for (const p of processedProducts) {
+    await ProductSalesModel.create({
+      sale_id: sale._id,
+      product_id: p.product_id,
+      bundle_id: undefined,
+      product_price_id: p.product_price_id,
+      quantity: p.quantity,
+      price: p.price,
+      subtotal: p.subtotal,
+      original_price: p.original_price,
+      is_wholesale: p.is_wholesale,
+      options_id: p.options_id,
+      isGift: !!p.isGift,
+      isBundle: false,
+    });
   }
 
   if (bundles && bundles.length > 0) {
@@ -348,7 +425,9 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
   // ✅ STOCK DEDUCTION & PAYMENTS
+  // ═══════════════════════════════════════════════════════════
   if (!isPending) {
     // Payment Processing
     if (!isDue && paymentLines.length > 0) {
@@ -368,48 +447,33 @@ export const createSale = async (req: Request, res: Response) => {
     }
 
     // ✅ خصم كميات المنتجات
-    if (products && products.length > 0) {
-      for (const p of products as any[]) {
-        if (p.product_price_id) {
-          // ═══════════════════════════════════════════════════
-          // ✅ منتج مع Variation - خصم من مكانين
-          // ═══════════════════════════════════════════════════
+    for (const p of processedProducts) {
+      if (p.product_price_id) {
+        await ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
+          $inc: { quantity: -p.quantity },
+        });
 
-          // 1️⃣ خصم من ProductPrice
-          await ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
-            $inc: { quantity: -p.quantity },
-          });
+        await ProductModel.findByIdAndUpdate(p.product_id, {
+          $inc: { quantity: -p.quantity },
+        });
 
-          // 2️⃣ خصم من Product
-          await ProductModel.findByIdAndUpdate(p.product_id, {
-            $inc: { quantity: -p.quantity },
-          });
+      } else if (p.product_id) {
+        await Product_WarehouseModel.findOneAndUpdate(
+          { productId: p.product_id, warehouseId: warehouseId },
+          { $inc: { quantity: -p.quantity } }
+        );
 
-        } else if (p.product_id) {
-          // ═══════════════════════════════════════════════════
-          // ✅ منتج بدون Variation - خصم من 3 أماكن
-          // ═══════════════════════════════════════════════════
+        await WarehouseModel.findByIdAndUpdate(warehouseId, {
+          $inc: { stock_Quantity: -p.quantity },
+        });
 
-          // 1️⃣ خصم من Product_Warehouse
-          await Product_WarehouseModel.findOneAndUpdate(
-            { productId: p.product_id, warehouseId: warehouseId },
-            { $inc: { quantity: -p.quantity } }
-          );
-
-          // 2️⃣ خصم من Warehouse
-          await WarehouseModel.findByIdAndUpdate(warehouseId, {
-            $inc: { stock_Quantity: -p.quantity },
-          });
-
-          // 3️⃣ خصم من Product
-          await ProductModel.findByIdAndUpdate(p.product_id, {
-            $inc: { quantity: -p.quantity },
-          });
-        }
+        await ProductModel.findByIdAndUpdate(p.product_id, {
+          $inc: { quantity: -p.quantity },
+        });
       }
     }
 
-    // ✅ خصم كميات الـ Bundles
+    // خصم كميات الـ Bundles
     if (bundles && bundles.length > 0) {
       for (const b of bundles as any[]) {
         const bundleDoc: any = await PandelModel.findById(b.bundle_id).populate(
@@ -417,12 +481,10 @@ export const createSale = async (req: Request, res: Response) => {
         );
         if (bundleDoc) {
           for (const pPrice of bundleDoc.productsId || []) {
-            // خصم من ProductPrice
             await ProductPriceModel.findByIdAndUpdate(pPrice._id, {
               $inc: { quantity: -b.quantity },
             });
 
-            // خصم من Product
             if (pPrice.productId) {
               await ProductModel.findByIdAndUpdate(pPrice.productId, {
                 $inc: { quantity: -b.quantity },
@@ -448,7 +510,9 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
   // FETCH FULL SALE DATA
+  // ═══════════════════════════════════════════════════════════
   const fullSale = await SaleModel.findById(sale._id)
     .populate("customer_id", "name email phone_number")
     .populate("Due_customer_id", "name email phone_number")
@@ -463,7 +527,7 @@ export const createSale = async (req: Request, res: Response) => {
     .lean();
 
   const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
-    .populate("product_id", "name ar_name image price")
+    .populate("product_id", "name ar_name image price whole_price start_quantaty")
     .populate("product_price_id", "price code quantity")
     .populate("bundle_id", "name price")
     .populate("options_id", "name ar_name price")
@@ -485,6 +549,7 @@ export const createSale = async (req: Request, res: Response) => {
     store: STORE_INFO,
     sale: fullSale,
     items: formattedItems,
+    wholesale_applied: processedProducts.some(p => p.is_wholesale),
   });
 };
 

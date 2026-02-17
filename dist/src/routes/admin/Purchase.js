@@ -15,6 +15,8 @@ route.get("/critical-expiry", (0, haspremission_1.authorizePermissions)("purchas
 route.get("/expiring", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.getExpiringProducts));
 route.get("/expired", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.getExpiredProducts));
 route.get("/", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.getAllPurchases));
+// Installment Pay Route
+route.put("/installment/:id/pay", (0, haspremission_1.authorizePermissions)("purchase", "Edit"), (0, catchAsync_1.catchAsync)(Purchase_1.payInstallment));
 route.get("/:id", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Purchase_1.getPurchaseById));
 route.put("/:id", (0, haspremission_1.authorizePermissions)("purchase", "Edit"), (0, validation_1.validate)(Purchase_2.updatePurchaseSchema), (0, catchAsync_1.catchAsync)(Purchase_1.updatePurchase));
 exports.default = route;
