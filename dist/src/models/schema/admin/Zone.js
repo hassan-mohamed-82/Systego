@@ -10,6 +10,7 @@ const ZoneSchema = new mongoose_1.default.Schema({
     ar_name: { type: String, required: true },
     countryId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Country", required: true },
     cityId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "City", required: true },
-    cost: { type: Number, },
+    cost: { type: Number },
+    shipingCost: { type: Number, default: 0 },
 });
 exports.ZoneModel = mongoose_1.default.model("Zone", ZoneSchema);

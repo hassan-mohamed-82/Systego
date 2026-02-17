@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { ZoneModel } from "../../models/schema/admin/Zone";
-import { saveBase64Image } from "../../utils/handleImages";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
@@ -10,7 +9,7 @@ import { CountryModel } from "../../models/schema/admin/Country";
 export const createzone = async (req: Request, res: Response) => {
   const { name, ar_name, cityId, countryId, cost } = req.body;
 
-  if (!name || !cityId || !countryId || cost === undefined)
+  if (!name || !ar_name || !cityId || !countryId || cost === undefined)
     throw new BadRequest("All fields are required");
 
   const cityExists = await CityModels.findById(cityId);
@@ -27,7 +26,7 @@ export const createzone = async (req: Request, res: Response) => {
   const zoneCost = Number(cost) || 0;
   const totalshipingcost = cityCost + zoneCost;
 
-  console.log("City Cost:", cityCost, "Zone Cost:", zoneCost, "Total:", totalshipingcost);
+
 
   const zone = await ZoneModel.create({
     name,
