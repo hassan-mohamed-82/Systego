@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePurchaseSchema = exports.updatePurchaseItemSchema = exports.updatePurchaseItemOptionSchema = exports.createPurchaseSchema = exports.createFinancialSchema = exports.createPurchaseDuePaymentSchema = exports.createPurchaseItemSchema = exports.createPurchaseItemVariationSchema = exports.createPurchaseItemOptionSchema = exports.optionSchema = void 0;
+exports.updatePurchaseSchema = exports.updatePurchaseItemSchema = exports.updatePurchaseItemOptionSchema = exports.createPurchaseSchema = exports.createInstallmentSchema = exports.createFinancialSchema = exports.createPurchaseDuePaymentSchema = exports.createPurchaseItemSchema = exports.createPurchaseItemVariationSchema = exports.createPurchaseItemOptionSchema = exports.optionSchema = void 0;
 const joi_1 = __importDefault(require("joi"));
 exports.optionSchema = joi_1.default.string(); // مجرد ObjectId
 exports.createPurchaseItemOptionSchema = joi_1.default.object({
@@ -44,6 +44,10 @@ exports.createFinancialSchema = joi_1.default.object({
     financial_id: joi_1.default.string().required(),
     payment_amount: joi_1.default.number().required(),
 });
+exports.createInstallmentSchema = joi_1.default.object({
+    date: joi_1.default.date().required(),
+    amount: joi_1.default.number().required(),
+});
 exports.createPurchaseSchema = joi_1.default.object({
     date: joi_1.default.string().required(),
     warehouse_id: joi_1.default.string().required(),
@@ -62,6 +66,7 @@ exports.createPurchaseSchema = joi_1.default.object({
     purchase_materials: joi_1.default.array().optional(), // Adding this to allow materials
     financials: joi_1.default.array().items(exports.createFinancialSchema).optional(),
     purchase_due_payment: joi_1.default.array().items(exports.createPurchaseDuePaymentSchema).optional(),
+    installments: joi_1.default.array().items(exports.createInstallmentSchema).optional(),
 });
 // ___________________ Update _________________________
 exports.updatePurchaseItemOptionSchema = joi_1.default.object({
@@ -92,4 +97,5 @@ exports.updatePurchaseSchema = joi_1.default.object({
     shiping_cost: joi_1.default.number().optional(),
     discount: joi_1.default.number().optional(),
     purchase_items: joi_1.default.array().items(exports.updatePurchaseItemSchema).optional(),
+    installments: joi_1.default.array().optional(),
 });
