@@ -87,12 +87,12 @@ exports.updatePurchaseItemSchema = joi_1.default.object({
     options: joi_1.default.array().items(exports.updatePurchaseItemOptionSchema).optional(),
 });
 exports.updatePurchaseSchema = joi_1.default.object({
-    date: joi_1.default.string().optional(),
-    warehouse_id: joi_1.default.string().optional(),
-    supplier_id: joi_1.default.string().optional(),
-    receipt_img: joi_1.default.string().optional(),
-    currency_id: joi_1.default.string().optional(),
-    tax_id: joi_1.default.string().optional(),
+    date: joi_1.default.string().allow("").optional(),
+    warehouse_id: joi_1.default.string().allow("").optional(),
+    supplier_id: joi_1.default.string().allow("").optional(),
+    receipt_img: joi_1.default.string().allow("").optional(),
+    currency_id: joi_1.default.string().allow("").optional(),
+    tax_id: joi_1.default.string().allow("").optional(),
     exchange_rate: joi_1.default.number().optional(),
     shiping_cost: joi_1.default.number().optional(),
     discount: joi_1.default.number().optional(),

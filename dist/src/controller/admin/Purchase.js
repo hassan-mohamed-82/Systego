@@ -512,9 +512,12 @@ const updatePurchase = async (req, res) => {
     // Delete old installments
     await PurchaseInstallment_1.PurchaseInstallmentModel.deleteMany({ purchase_id: id });
     // ========== Update Purchase ==========
-    existingPurchase.date = date ?? existingPurchase.date;
-    existingPurchase.warehouse_id = warehouse_id ?? existingPurchase.warehouse_id;
-    existingPurchase.supplier_id = supplier_id ?? existingPurchase.supplier_id;
+    if (date)
+        existingPurchase.date = date;
+    if (warehouse_id)
+        existingPurchase.warehouse_id = warehouse_id;
+    if (supplier_id)
+        existingPurchase.supplier_id = supplier_id;
     existingPurchase.receipt_img = imageUrl ?? existingPurchase.receipt_img;
     existingPurchase.payment_status = finalPaymentStatus;
     existingPurchase.exchange_rate = exchange_rate ?? existingPurchase.exchange_rate;
@@ -523,7 +526,7 @@ const updatePurchase = async (req, res) => {
     existingPurchase.shipping_cost = shipping_cost ?? existingPurchase.shipping_cost;
     existingPurchase.grand_total = finalGrandTotal;
     if (tax_id !== undefined)
-        existingPurchase.tax_id = tax_id;
+        existingPurchase.tax_id = tax_id || null;
     if (note !== undefined)
         existingPurchase.note = note;
     await existingPurchase.save();
