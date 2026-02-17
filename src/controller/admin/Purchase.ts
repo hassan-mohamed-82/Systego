@@ -1135,3 +1135,37 @@ export const selection = async (req: Request, res: Response): Promise<void> => {
     products: formattedProducts,
   });
 };
+
+export const payInstallment = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { financial_id } = req.body;
+
+  if (!financial_id) throw new BadRequest("financial_id is required");
+
+  const installment = await PurchaseInstallmentModel.findById(id);
+  if (!installment) throw new NotFound("Installment not found");
+
+  if (installment.status === "paid") throw new BadRequest("Installment is already paid");
+
+  const financial = await BankAccountModel.findById(financial_id);
+  if (!financial) throw new NotFound("Financial account not found");
+
+  // Create Invoice
+  await PurchaseInvoiceModel.create({
+    financial_id,
+    amount: installment.amount,
+    purchase_id: installment.purchase_id,
+  });
+
+  // Deduct from Balance
+  if (financial) {
+    (financial as any).balance -= installment.amount;
+    await financial.save();
+  }
+
+  // Update Installment
+  installment.status = "paid";
+  await installment.save();
+
+  SuccessResponse(res, { message: "Installment paid successfully", installment });
+};

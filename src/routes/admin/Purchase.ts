@@ -8,7 +8,8 @@ import {
   getCriticalExpiryProducts,
   getExpiringProducts,
   getExpiredProducts,
-  selection  // أضف الـ import هنا
+  selection,
+  payInstallment
 } from "../../controller/admin/Purchase";
 import { validate } from "../../middlewares/validation";
 import { createPurchaseSchema, updatePurchaseSchema } from "../../validation/admin/Purchase";
@@ -27,6 +28,10 @@ route.get("/critical-expiry", authorizePermissions("purchase", "View"), catchAsy
 route.get("/expiring", authorizePermissions("purchase", "View"), catchAsync(getExpiringProducts));
 route.get("/expired", authorizePermissions("purchase", "View"), catchAsync(getExpiredProducts));
 route.get("/", authorizePermissions("purchase", "View"), catchAsync(getAllPurchases));
+
+// Installment Pay Route
+route.put("/installment/:id/pay", authorizePermissions("purchase", "Edit"), catchAsync(payInstallment));
+
 route.get("/:id", authorizePermissions("purchase", "View"), catchAsync(getPurchaseById));
 route.put("/:id", authorizePermissions("purchase", "Edit"), validate(updatePurchaseSchema), catchAsync(updatePurchase));
 
