@@ -30,7 +30,8 @@ const createzone = async (req, res) => {
         ar_name,
         cityId,
         countryId,
-        cost: totalshipingcost
+        cost,
+        shipingCost: totalshipingcost
     });
     (0, response_1.SuccessResponse)(res, { message: "Zone created successfully", zone });
 };

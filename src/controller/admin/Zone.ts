@@ -34,7 +34,8 @@ export const createzone = async (req: Request, res: Response) => {
     ar_name,
     cityId,
     countryId,
-    cost: totalshipingcost
+    cost,
+    shipingCost: totalshipingcost
   });
 
   SuccessResponse(res, { message: "Zone created successfully", zone });
