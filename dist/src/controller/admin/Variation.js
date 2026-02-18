@@ -10,6 +10,9 @@ const createVariationWithOptions = async (req, res) => {
     const { name, ar_name, options } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Variation name is required");
+    const existVariation = await Variation_1.VariationModel.findOne({ name });
+    if (existVariation)
+        throw new BadRequest_1.BadRequest("Variation already exists");
     // إنشاء الـ Variation
     const variation = await Variation_1.VariationModel.create({ name, ar_name });
     // إنشاء الـ Options لو موجودة

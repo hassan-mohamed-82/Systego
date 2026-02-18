@@ -4,12 +4,15 @@ import { OptionModel } from "../../models/schema/admin/Variation";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
+import { exist } from "joi";
 
 export const createVariationWithOptions = async (req: Request, res: Response) => {
 
 const { name, ar_name, options } = req.body;
     if (!name) throw new BadRequest("Variation name is required");
 
+    const existVariation = await VariationModel.findOne({ name });
+    if (existVariation) throw new BadRequest("Variation already exists")
     // إنشاء الـ Variation
     const variation = await VariationModel.create({ name, ar_name });
 
