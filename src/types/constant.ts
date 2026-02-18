@@ -49,7 +49,8 @@ export const MODULES = [
   "adjustment_reason",
   "Category_Material",
   "purchase_return",
-  "Units"
+  "Units",
+  "orders"
 ] as const;
 
 // أسماء بس، من غير ids

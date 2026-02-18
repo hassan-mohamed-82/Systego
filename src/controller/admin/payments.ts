@@ -20,15 +20,3 @@ export const getpaymentById=async(req:Request ,res:Response)=>{
     SuccessResponse(res,{message:"payment retrieved successfully",payment})
 }
 
-export const updatepayment=async(req:Request ,res:Response)=>{
-    const {id}=req.params;
-    const status= req.body;
-    const payment=await PaymentModel.findById(id);
-    if(!payment) throw new NotFound("payment not found");
-    if(payment.status!=="pending") throw new UnauthorizedError("you can't update this payment");
-    if(status ==="completed" || status ==="failed"){
-        payment.status=status;
-        await payment.save();
-     }
-    SuccessResponse(res,{message:"payment updated successfully"})
-}

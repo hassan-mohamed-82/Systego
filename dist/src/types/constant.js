@@ -51,7 +51,8 @@ exports.MODULES = [
     "adjustment_reason",
     "Category_Material",
     "purchase_return",
-    "Units"
+    "Units",
+    "orders"
 ];
 // أسماء بس، من غير ids
 exports.ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"];
