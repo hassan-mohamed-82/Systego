@@ -575,29 +575,49 @@ const getSales = async (req, res) => {
 };
 exports.getSales = getSales;
 const getsalePending = async (req, res) => {
-    // 1) هات كل الـ sales الـ pending
-    const sales = await Sale_1.SaleModel.find({ order_pending: 1 }) // 1 = pending
+    const jwtUser = req.user;
+    const cashierId = jwtUser?.id;
+    const warehouseId = jwtUser?.warehouse_id;
+    if (!cashierId) {
+        throw new BadRequest_1.BadRequest("Unauthorized: user not found in token");
+    }
+    if (!warehouseId) {
+        throw new BadRequest_1.BadRequest("Warehouse is not assigned to this user");
+    }
+    // ✅ هات الشيفت المفتوح الحالي
+    const openShift = await CashierShift_1.CashierShift.findOne({
+        cashierman_id: cashierId,
+        status: "open",
+    }).sort({ start_time: -1 });
+    if (!openShift) {
+        return (0, response_1.SuccessResponse)(res, { sales: [] });
+    }
+    // ✅ هات الـ pending sales بتاعة الشيفت ده بس
+    const sales = await Sale_1.SaleModel.find({
+        order_pending: 1,
+        shift_id: openShift._id,
+        cashier_id: cashierId,
+        warehouse_id: warehouseId,
+    })
         .populate("customer_id", "name email phone_number")
         .populate("warehouse_id", "name location")
         .populate("order_tax", "name rate")
         .populate("order_discount", "name rate")
         .populate("coupon_id", "code discount_amount")
         .populate("gift_card_id", "code amount")
+        .sort({ createdAt: -1 })
         .lean();
     if (!sales.length) {
         return (0, response_1.SuccessResponse)(res, { sales: [] });
     }
-    // 2) كل الـ IDs بتاعة الـ sales
     const saleIds = sales.map((s) => s._id);
-    // 3) هات كل الـ items (ProductSales) اللي تابعة للـ sales دي
     const items = await Sale_1.ProductSalesModel.find({
         sale_id: { $in: saleIds },
     })
-        .populate("product_id", "name ar_name image price") // تفاصيل المنتج
-        .populate("product_price_id", "price code") // تفاصيل الـ variation (لو موجود)
-        .populate("bundle_id", "name price") // لو هو bundle
+        .populate("product_id", "name ar_name image price")
+        .populate("product_price_id", "price code")
+        .populate("bundle_id", "name price")
         .lean();
-    // 4) جمّع الـ items حسب sale_id
     const itemsBySaleId = {};
     for (const item of items) {
         const key = item.sale_id.toString();
@@ -605,7 +625,6 @@ const getsalePending = async (req, res) => {
             itemsBySaleId[key] = [];
         itemsBySaleId[key].push(item);
     }
-    // 5) رجّع الـ sales ومعاها items
     const salesWithItems = sales.map((s) => ({
         ...s,
         items: itemsBySaleId[s._id.toString()] || [],
