@@ -55,6 +55,7 @@ import productReportRouter from "./productReport"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
 import RevenueRouter from "./Revenue";
+import DashboardRouter from "./dsashboard";
 import ReturnPurchaseRouter from "./returnPurchase";
 import finicial_reportRouter from "./finicialaccountReport";
 import orderRouter from "./orders";
@@ -120,4 +121,5 @@ route.use("/revenue", RevenueRouter);
 route.use("/orders", orderRouter);
 route.use("/product-report", productReportRouter)
 route.use("/finicial-report", finicial_reportRouter)
+route.use("/dashboard", DashboardRouter)
 export default route;
