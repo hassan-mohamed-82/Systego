@@ -6,6 +6,9 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { UserModel } from "../../models/schema/admin/User";
 import { SuccessResponse } from "../../utils/response";
 import mongoose from "mongoose";
+import { CashierModel } from "../../models/schema/admin/cashier";
+import Warehouse from "../../routes/admin/Warehouse";
+import category from "../../routes/admin/category";
 
 // ═══════════════════════════════════════════════════════════
 // 📊 PRODUCT SALES REPORT
@@ -219,3 +222,22 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
         products: formattedProducts,
     });
 };
+
+
+
+
+export const selection=async(req:Request,res:Response)=>{
+
+    const cashier=await CashierModel.find({status:true})
+    const warehouses=await WarehouseModel.find()
+    const categories=await CategoryModel.find()
+    const products=await ProductModel.find()
+    return SuccessResponse(res, {
+        message: "Product sales report generated successfully",
+        cashier,
+        warehouses,
+        categories,
+        products
+    });
+    
+}

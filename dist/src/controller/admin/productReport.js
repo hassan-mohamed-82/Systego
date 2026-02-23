@@ -3,10 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getProductSalesReport = void 0;
+exports.selection = exports.getProductSalesReport = void 0;
 const Sale_1 = require("../../models/schema/admin/POS/Sale");
+const products_1 = require("../../models/schema/admin/products");
+const category_1 = require("../../models/schema/admin/category");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const response_1 = require("../../utils/response");
 const mongoose_1 = __importDefault(require("mongoose"));
+const cashier_1 = require("../../models/schema/admin/cashier");
 // ═══════════════════════════════════════════════════════════
 // 📊 PRODUCT SALES REPORT
 // ═══════════════════════════════════════════════════════════
@@ -196,3 +200,17 @@ const getProductSalesReport = async (req, res) => {
     });
 };
 exports.getProductSalesReport = getProductSalesReport;
+const selection = async (req, res) => {
+    const cashier = await cashier_1.CashierModel.find({ status: true });
+    const warehouses = await Warehouse_1.WarehouseModel.find();
+    const categories = await category_1.CategoryModel.find();
+    const products = await products_1.ProductModel.find();
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Product sales report generated successfully",
+        cashier,
+        warehouses,
+        categories,
+        products
+    });
+};
+exports.selection = selection;
