@@ -64,7 +64,7 @@ exports.getOrderById = getOrderById;
  * Returns orders within date range plus summary totals
  */
 const getOrdersReport = async (req, res) => {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate } = req.body;
     if (!startDate || !endDate) {
         throw new BadRequest_1.BadRequest("startDate and endDate query parameters are required");
     }
