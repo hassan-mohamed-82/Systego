@@ -11,7 +11,7 @@ const router = Router();
 
 // Report must come before /:id to avoid "report" being treated as an ID
 router.get("/", catchAsync(getAllOrders));
-router.get("/report", catchAsync(getOrdersReport));
+router.post("/report", catchAsync(getOrdersReport));
 router.get("/:id", catchAsync(getOrderById));
 
 export default router;
