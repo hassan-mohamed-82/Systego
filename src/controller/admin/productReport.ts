@@ -228,7 +228,7 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
 
 export const selection=async(req:Request,res:Response)=>{
 
-    const cashier=await CashierModel.find({status:true})
+const cashier=await CashierModel.find({status:true,cashier_active:true})
     const warehouses=await WarehouseModel.find()
     const categories=await CategoryModel.find()
     const products=await ProductModel.find()

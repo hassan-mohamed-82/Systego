@@ -201,7 +201,7 @@ const getProductSalesReport = async (req, res) => {
 };
 exports.getProductSalesReport = getProductSalesReport;
 const selection = async (req, res) => {
-    const cashier = await cashier_1.CashierModel.find({ status: true });
+    const cashier = await cashier_1.CashierModel.find({ status: true, cashier_active: true });
     const warehouses = await Warehouse_1.WarehouseModel.find();
     const categories = await category_1.CategoryModel.find();
     const products = await products_1.ProductModel.find();
