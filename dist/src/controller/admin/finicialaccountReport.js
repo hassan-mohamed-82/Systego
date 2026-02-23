@@ -9,11 +9,12 @@ const expenses_1 = require("../../models/schema/admin/POS/expenses");
 const payment_1 = require("../../models/schema/admin/POS/payment");
 const Financial_Account_1 = require("../../models/schema/admin/Financial_Account");
 const response_1 = require("../../utils/response");
+const catchAsync_1 = require("../../utils/catchAsync");
 const mongoose_1 = __importDefault(require("mongoose"));
 // ═══════════════════════════════════════════════════════════
 // 📊 FINANCIAL REPORT
 // ═══════════════════════════════════════════════════════════
-const getFinancialReport = async (req, res) => {
+exports.getFinancialReport = (0, catchAsync_1.catchAsync)(async (req, res) => {
     const { start_date, end_date, warehouse_id, cashier_id, } = req.body;
     // ═══════════════════════════════════════════════════════════
     // 📅 تحديد الفترة الزمنية
@@ -133,8 +134,39 @@ const getFinancialReport = async (req, res) => {
         expensesCount: 0,
     };
     // ═══════════════════════════════════════════════════════════
-    // 🏦 5. تفاصيل الحسابات المالية
-    // ═══════════════════════════════════════════════════════════
+    const expensesDetailsByAccount = await expenses_1.ExpenseModel.aggregate([
+        { $match: expensesFilter },
+        {
+            $lookup: {
+                from: "bankaccounts",
+                localField: "financial_accountId",
+                foreignField: "_id",
+                as: "account",
+            },
+        },
+        { $unwind: { path: "$account", preserveNullAndEmptyArrays: true } },
+        {
+            $group: {
+                _id: "$financial_accountId",
+                account_name: { $first: "$account.name" },
+                total_amount: { $sum: "$amount" },
+                expenses: {
+                    $push: {
+                        name: "$name",
+                        amount: "$amount",
+                        note: "$note",
+                        date: "$createdAt",
+                    },
+                },
+            },
+        },
+    ]);
+    const expensesMapDetails = {};
+    expensesDetailsByAccount.forEach((item) => {
+        if (item._id) {
+            expensesMapDetails[item._id.toString()] = item.expenses;
+        }
+    });
     // المدفوعات حسب الحساب
     const paymentsByAccount = await payment_1.PaymentModel.aggregate([
         {
@@ -196,39 +228,10 @@ const getFinancialReport = async (req, res) => {
                 net_total: Number(netTotal.toFixed(2)),
                 transactions_count: payments?.transactionsCount || 0,
                 expenses_count: expenses?.expensesCount || 0,
+                detailed_expenses: expensesMapDetails[accId] || [],
             };
         });
     }
-    // ═══════════════════════════════════════════════════════════
-    // 💸 6. المصروفات بالتفصيل حسب الحساب
-    // ═══════════════════════════════════════════════════════════
-    const expensesDetailsByAccount = await expenses_1.ExpenseModel.aggregate([
-        { $match: expensesFilter },
-        {
-            $lookup: {
-                from: "bankaccounts",
-                localField: "financial_accountId",
-                foreignField: "_id",
-                as: "account",
-            },
-        },
-        { $unwind: { path: "$account", preserveNullAndEmptyArrays: true } },
-        {
-            $group: {
-                _id: "$financial_accountId",
-                account_name: { $first: "$account.name" },
-                total_amount: { $sum: "$amount" },
-                expenses: {
-                    $push: {
-                        name: "$name",
-                        amount: "$amount",
-                        note: "$note",
-                        date: "$createdAt",
-                    },
-                },
-            },
-        },
-    ]);
     // ═══════════════════════════════════════════════════════════
     // 📊 7. حساب صافي الربح
     // ═══════════════════════════════════════════════════════════
@@ -260,7 +263,5 @@ const getFinancialReport = async (req, res) => {
             total_pending_value: Number(pendingData.totalPendingValue.toFixed(2)),
         },
         financial_accounts: financialAccountsDetails,
-        expenses_by_account: expensesDetailsByAccount,
     });
-};
-exports.getFinancialReport = getFinancialReport;
+});
