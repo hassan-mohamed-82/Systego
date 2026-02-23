@@ -51,6 +51,7 @@ import ExpensecategoryRouter from "./expensecategory" //Rputer
 import PaymobRouter from "./Paymob"
 import ExpenseAdminRouter from "./expensesAdmin"
 import notificationRoutrt from "./notifications"
+import productReportRouter from "./productReport"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
 import RevenueRouter from "./Revenue";
@@ -116,5 +117,5 @@ route.use("/return-sale", ReturnRouter)
 route.use("/return-purchase", ReturnPurchaseRouter)
 route.use("/revenue", RevenueRouter);
 route.use("/orders", orderRouter);
-
+route.use("/product-report", productReportRouter)
 export default route;

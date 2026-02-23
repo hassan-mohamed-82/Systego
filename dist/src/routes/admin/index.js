@@ -57,6 +57,7 @@ const expensecategory_1 = __importDefault(require("./expensecategory")); //Rpute
 const Paymob_1 = __importDefault(require("./Paymob"));
 const expensesAdmin_1 = __importDefault(require("./expensesAdmin"));
 const notifications_1 = __importDefault(require("./notifications"));
+const productReport_1 = __importDefault(require("./productReport"));
 const authenticated_1 = require("../../middlewares/authenticated");
 const authorized_1 = require("../../middlewares/authorized");
 const Revenue_1 = __importDefault(require("./Revenue"));
@@ -119,4 +120,5 @@ exports.route.use("/return-sale", ReturnSaleRoutes_1.default);
 exports.route.use("/return-purchase", returnPurchase_1.default);
 exports.route.use("/revenue", Revenue_1.default);
 exports.route.use("/orders", orders_1.default);
+exports.route.use("/product-report", productReport_1.default);
 exports.default = exports.route;

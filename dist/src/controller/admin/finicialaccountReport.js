@@ -1,0 +1,266 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getFinancialReport = void 0;
+const Sale_1 = require("../../models/schema/admin/POS/Sale");
+const expenses_1 = require("../../models/schema/admin/POS/expenses");
+const payment_1 = require("../../models/schema/admin/POS/payment");
+const Financial_Account_1 = require("../../models/schema/admin/Financial_Account");
+const response_1 = require("../../utils/response");
+const mongoose_1 = __importDefault(require("mongoose"));
+// ═══════════════════════════════════════════════════════════
+// 📊 FINANCIAL REPORT
+// ═══════════════════════════════════════════════════════════
+const getFinancialReport = async (req, res) => {
+    const { start_date, end_date, warehouse_id, cashier_id, } = req.body;
+    // ═══════════════════════════════════════════════════════════
+    // 📅 تحديد الفترة الزمنية
+    // ═══════════════════════════════════════════════════════════
+    let dateFilter = {};
+    if (start_date && end_date) {
+        dateFilter = {
+            createdAt: {
+                $gte: new Date(start_date),
+                $lte: new Date(new Date(end_date).setHours(23, 59, 59, 999)),
+            },
+        };
+    }
+    else if (start_date) {
+        dateFilter = {
+            createdAt: { $gte: new Date(start_date) },
+        };
+    }
+    else if (end_date) {
+        dateFilter = {
+            createdAt: { $lte: new Date(new Date(end_date).setHours(23, 59, 59, 999)) },
+        };
+    }
+    // ═══════════════════════════════════════════════════════════
+    // 🔍 فلاتر إضافية
+    // ═══════════════════════════════════════════════════════════
+    let salesFilter = { ...dateFilter };
+    let expensesFilter = { ...dateFilter };
+    if (warehouse_id && mongoose_1.default.Types.ObjectId.isValid(warehouse_id)) {
+        salesFilter.warehouse_id = new mongoose_1.default.Types.ObjectId(warehouse_id);
+    }
+    if (cashier_id && mongoose_1.default.Types.ObjectId.isValid(cashier_id)) {
+        salesFilter.cashier_id = new mongoose_1.default.Types.ObjectId(cashier_id);
+        expensesFilter.cashier_id = new mongoose_1.default.Types.ObjectId(cashier_id);
+    }
+    // ═══════════════════════════════════════════════════════════
+    // 📈 1. إحصائيات المبيعات
+    // ═══════════════════════════════════════════════════════════
+    const completedSalesFilter = { ...salesFilter, order_pending: 0 };
+    const salesStats = await Sale_1.SaleModel.aggregate([
+        { $match: completedSalesFilter },
+        {
+            $group: {
+                _id: null,
+                totalOrders: { $sum: 1 },
+                totalRevenue: { $sum: "$grand_total" },
+                totalTax: { $sum: "$tax_amount" },
+                totalDiscount: { $sum: "$discount" },
+                totalShipping: { $sum: "$shipping" },
+                totalPaid: { $sum: "$paid_amount" },
+            },
+        },
+    ]);
+    const salesData = salesStats[0] || {
+        totalOrders: 0,
+        totalRevenue: 0,
+        totalTax: 0,
+        totalDiscount: 0,
+        totalShipping: 0,
+        totalPaid: 0,
+    };
+    // ═══════════════════════════════════════════════════════════
+    // 💰 2. إحصائيات الديون (Due)
+    // ═══════════════════════════════════════════════════════════
+    const dueStats = await Sale_1.SaleModel.aggregate([
+        {
+            $match: {
+                ...completedSalesFilter,
+                Due: 1,
+                remaining_amount: { $gt: 0 }
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                totalDueOrders: { $sum: 1 },
+                totalDueAmount: { $sum: "$remaining_amount" },
+            },
+        },
+    ]);
+    const dueData = dueStats[0] || {
+        totalDueOrders: 0,
+        totalDueAmount: 0,
+    };
+    // ═══════════════════════════════════════════════════════════
+    // 🕐 3. الأوردرات المعلقة (Pending)
+    // ═══════════════════════════════════════════════════════════
+    const pendingStats = await Sale_1.SaleModel.aggregate([
+        { $match: { ...salesFilter, order_pending: 1 } },
+        {
+            $group: {
+                _id: null,
+                totalPendingOrders: { $sum: 1 },
+                totalPendingValue: { $sum: "$grand_total" },
+            },
+        },
+    ]);
+    const pendingData = pendingStats[0] || {
+        totalPendingOrders: 0,
+        totalPendingValue: 0,
+    };
+    // ═══════════════════════════════════════════════════════════
+    // 💸 4. إحصائيات المصروفات
+    // ═══════════════════════════════════════════════════════════
+    const expensesStats = await expenses_1.ExpenseModel.aggregate([
+        { $match: expensesFilter },
+        {
+            $group: {
+                _id: null,
+                totalExpenses: { $sum: "$amount" },
+                expensesCount: { $sum: 1 },
+            },
+        },
+    ]);
+    const expensesData = expensesStats[0] || {
+        totalExpenses: 0,
+        expensesCount: 0,
+    };
+    // ═══════════════════════════════════════════════════════════
+    // 🏦 5. تفاصيل الحسابات المالية
+    // ═══════════════════════════════════════════════════════════
+    // المدفوعات حسب الحساب
+    const paymentsByAccount = await payment_1.PaymentModel.aggregate([
+        {
+            $match: {
+                ...dateFilter,
+                status: "completed",
+            },
+        },
+        { $unwind: "$financials" },
+        {
+            $group: {
+                _id: "$financials.account_id",
+                totalReceived: { $sum: "$financials.amount" },
+                transactionsCount: { $sum: 1 },
+            },
+        },
+    ]);
+    // المصروفات حسب الحساب
+    const expensesByAccount = await expenses_1.ExpenseModel.aggregate([
+        { $match: expensesFilter },
+        {
+            $group: {
+                _id: "$financial_accountId",
+                totalSpent: { $sum: "$amount" },
+                expensesCount: { $sum: 1 },
+            },
+        },
+    ]);
+    // جمع كل الـ Account IDs
+    const allAccountIds = [
+        ...new Set([
+            ...paymentsByAccount.map((p) => p._id?.toString()).filter(Boolean),
+            ...expensesByAccount.map((e) => e._id?.toString()).filter(Boolean),
+        ]),
+    ];
+    // جلب بيانات الحسابات
+    let financialAccountsDetails = [];
+    if (allAccountIds.length > 0) {
+        const accounts = await Financial_Account_1.BankAccountModel.find({
+            _id: { $in: allAccountIds },
+        }).select("name balance").lean();
+        const accountsMap = {};
+        accounts.forEach((acc) => {
+            accountsMap[acc._id.toString()] = acc;
+        });
+        financialAccountsDetails = allAccountIds.map((accId) => {
+            const account = accountsMap[accId] || { name: "Unknown", balance: 0 };
+            const payments = paymentsByAccount.find((p) => p._id?.toString() === accId);
+            const expenses = expensesByAccount.find((e) => e._id?.toString() === accId);
+            const totalReceived = payments?.totalReceived || 0;
+            const totalSpent = expenses?.totalSpent || 0;
+            const netTotal = totalReceived - totalSpent;
+            return {
+                account_id: accId,
+                account_name: account.name,
+                current_balance: account.balance,
+                total_received: Number(totalReceived.toFixed(2)),
+                total_spent: Number(totalSpent.toFixed(2)),
+                net_total: Number(netTotal.toFixed(2)),
+                transactions_count: payments?.transactionsCount || 0,
+                expenses_count: expenses?.expensesCount || 0,
+            };
+        });
+    }
+    // ═══════════════════════════════════════════════════════════
+    // 💸 6. المصروفات بالتفصيل حسب الحساب
+    // ═══════════════════════════════════════════════════════════
+    const expensesDetailsByAccount = await expenses_1.ExpenseModel.aggregate([
+        { $match: expensesFilter },
+        {
+            $lookup: {
+                from: "bankaccounts",
+                localField: "financial_accountId",
+                foreignField: "_id",
+                as: "account",
+            },
+        },
+        { $unwind: { path: "$account", preserveNullAndEmptyArrays: true } },
+        {
+            $group: {
+                _id: "$financial_accountId",
+                account_name: { $first: "$account.name" },
+                total_amount: { $sum: "$amount" },
+                expenses: {
+                    $push: {
+                        name: "$name",
+                        amount: "$amount",
+                        note: "$note",
+                        date: "$createdAt",
+                    },
+                },
+            },
+        },
+    ]);
+    // ═══════════════════════════════════════════════════════════
+    // 📊 7. حساب صافي الربح
+    // ═══════════════════════════════════════════════════════════
+    const netProfit = salesData.totalRevenue - expensesData.totalExpenses;
+    // ═══════════════════════════════════════════════════════════
+    // 📤 Response
+    // ═══════════════════════════════════════════════════════════
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Financial report generated successfully",
+        period: {
+            start_date: start_date || "All time",
+            end_date: end_date || "All time",
+        },
+        summary: {
+            total_orders: salesData.totalOrders,
+            total_revenue: Number(salesData.totalRevenue.toFixed(2)),
+            total_expenses: Number(expensesData.totalExpenses.toFixed(2)),
+            net_profit: Number(netProfit.toFixed(2)),
+            total_tax: Number(salesData.totalTax.toFixed(2)),
+            total_discount: Number(salesData.totalDiscount.toFixed(2)),
+            total_shipping: Number(salesData.totalShipping.toFixed(2)),
+        },
+        due_summary: {
+            total_due_orders: dueData.totalDueOrders,
+            total_due_amount: Number(dueData.totalDueAmount.toFixed(2)),
+        },
+        pending_summary: {
+            total_pending_orders: pendingData.totalPendingOrders,
+            total_pending_value: Number(pendingData.totalPendingValue.toFixed(2)),
+        },
+        financial_accounts: financialAccountsDetails,
+        expenses_by_account: expensesDetailsByAccount,
+    });
+};
+exports.getFinancialReport = getFinancialReport;
