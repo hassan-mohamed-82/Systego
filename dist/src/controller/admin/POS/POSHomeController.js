@@ -236,47 +236,96 @@ const getAllSelections = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Selections list", dueCustomers, countries, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
-// get active bundles (pandels) for POS
 const getActiveBundles = async (req, res) => {
     const currentDate = new Date();
-    // جلب الـ Bundles النشطة فقط (في نطاق التاريخ)
     const bundles = await pandels_1.PandelModel.find({
         status: true,
         startdate: { $lte: currentDate },
         enddate: { $gte: currentDate },
-    }).populate("productsId", "name price image ar_name");
-    // حساب السعر الأصلي ونسبة التوفير
-    const bundlesWithPricing = bundles.map((bundle) => {
-        const products = bundle.productsId;
-        // حساب السعر الأصلي (مجموع أسعار المنتجات)
-        const originalPrice = products.reduce((sum, product) => {
-            return sum + (product.price || 0);
-        }, 0);
-        // حساب التوفير
+    }).lean();
+    const bundlesWithDetails = await Promise.all(bundles.map(async (bundle) => {
+        let originalPrice = 0;
+        const productsDetails = await Promise.all((bundle.products || []).map(async (p) => {
+            // جلب المنتج
+            const product = await products_1.ProductModel.findById(p.productId)
+                .select("name ar_name image price")
+                .lean();
+            if (!product)
+                return null;
+            // جلب كل الـ Variations للمنتج ده
+            const allVariations = await product_price_1.ProductPriceModel.find({
+                productId: p.productId,
+            })
+                .select("price code quantity cost")
+                .lean();
+            // جلب الـ Options لكل Variation
+            const variationsWithOptions = await Promise.all(allVariations.map(async (v) => {
+                const options = await product_price_1.ProductPriceOptionModel.find({
+                    product_price_id: v._id,
+                })
+                    .populate("option_id", "name ar_name")
+                    .lean();
+                return {
+                    _id: v._id,
+                    price: v.price,
+                    code: v.code,
+                    quantity: v.quantity,
+                    options: options.map((o) => o.option_id),
+                };
+            }));
+            const hasVariations = variationsWithOptions.length > 0;
+            const isVariationFixed = !!p.productPriceId;
+            let selectedVariation = null;
+            let productPrice = product.price || 0;
+            // لو الـ Variation محدد من الأدمن
+            if (isVariationFixed && p.productPriceId) {
+                const fixedVariation = variationsWithOptions.find((v) => v._id.toString() === p.productPriceId.toString());
+                if (fixedVariation) {
+                    selectedVariation = fixedVariation;
+                    productPrice = fixedVariation.price || product.price || 0;
+                }
+            }
+            // حساب السعر الأصلي
+            originalPrice += productPrice * (p.quantity || 1);
+            return {
+                productId: p.productId,
+                product: product,
+                quantity: p.quantity || 1,
+                // معلومات الـ Variations
+                hasVariations: hasVariations,
+                isVariationFixed: isVariationFixed,
+                requiresSelection: hasVariations && !isVariationFixed,
+                // لو محدد من الأدمن
+                selectedVariation: selectedVariation,
+                productPriceId: p.productPriceId || null,
+                // لو مفتوح للكاشير
+                availableVariations: !isVariationFixed ? variationsWithOptions : [],
+            };
+        }));
+        const validProducts = productsDetails.filter((p) => p !== null);
         const savings = originalPrice - bundle.price;
         const savingsPercentage = originalPrice > 0 ? Math.round((savings / originalPrice) * 100) : 0;
+        // هل الـ Bundle يحتاج اختيار من الكاشير؟
+        const requiresVariationSelection = validProducts.some((p) => p?.requiresSelection);
         return {
             _id: bundle._id,
             name: bundle.name,
             images: bundle.images,
-            products: products.map((p) => ({
-                _id: p._id,
-                name: p.name,
-                ar_name: p.ar_name,
-                price: p.price,
-                image: p.image,
-            })),
+            price: bundle.price,
             originalPrice: originalPrice,
-            bundlePrice: bundle.price,
-            savings: savings,
-            savingsPercentage: savingsPercentage,
+            savings: savings > 0 ? savings : 0,
+            savingsPercentage: savingsPercentage > 0 ? savingsPercentage : 0,
             startdate: bundle.startdate,
             enddate: bundle.enddate,
+            // ✅ الجديد
+            requiresVariationSelection: requiresVariationSelection,
+            products: validProducts,
         };
-    });
-    (0, response_1.SuccessResponse)(res, {
+    }));
+    return (0, response_1.SuccessResponse)(res, {
         message: "Active bundles",
-        bundles: bundlesWithPricing,
+        count: bundlesWithDetails.length,
+        bundles: bundlesWithDetails,
     });
 };
 exports.getActiveBundles = getActiveBundles;

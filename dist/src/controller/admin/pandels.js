@@ -1,88 +1,278 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getActiveBundles = exports.deletePandel = exports.updatePandel = exports.createPandel = exports.getPandelById = exports.getPandels = void 0;
+exports.deletePandel = exports.updatePandel = exports.createPandel = exports.getPandelById = exports.getPandels = void 0;
 const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const handleImages_1 = require("../../utils/handleImages");
 const products_1 = require("../../models/schema/admin/products");
 const pandels_1 = require("../../models/schema/admin/pandels");
+const product_price_1 = require("../../models/schema/admin/product_price");
 const deleteImage_1 = require("../../utils/deleteImage");
-const producthelper_1 = require("../../utils/producthelper");
+const mongoose_1 = __importDefault(require("mongoose"));
+// ═══════════════════════════════════════════════════════════
+// 📦 GET ALL PANDELS (Admin)
+// ═══════════════════════════════════════════════════════════
 const getPandels = async (req, res) => {
-    const pandels = await pandels_1.PandelModel.find({ status: true }).populate('productsId', 'name price');
-    return (0, response_1.SuccessResponse)(res, { message: "Pandels found successfully", pandels });
+    const pandels = await pandels_1.PandelModel.find({ status: true })
+        .populate({
+        path: "products.productId",
+        select: "name ar_name price image",
+    })
+        .populate({
+        path: "products.productPriceId",
+        select: "price code",
+    })
+        .lean();
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Pandels found successfully",
+        pandels,
+    });
 };
 exports.getPandels = getPandels;
+// ═══════════════════════════════════════════════════════════
+// 📦 GET PANDEL BY ID (Admin)
+// ═══════════════════════════════════════════════════════════
 const getPandelById = async (req, res) => {
     const { id } = req.params;
-    const jwtUser = req.user;
-    const warehouseId = jwtUser?.warehouse_id;
     if (!id)
         throw new BadRequest_1.BadRequest("Pandel id is required");
-    const pandel = await pandels_1.PandelModel.findById(id).lean();
+    const pandel = await pandels_1.PandelModel.findById(id)
+        .populate({
+        path: "products.productId",
+        select: "name ar_name price image",
+    })
+        .populate({
+        path: "products.productPriceId",
+        select: "price code",
+    })
+        .lean();
     if (!pandel)
         throw new Errors_1.NotFound("Pandel not found");
-    // هات الـ Products كاملة بالـ Variations
-    const products = await (0, producthelper_1.buildProductsWithVariations)({
-        filter: { _id: { $in: pandel.productsId } },
-        warehouseId,
-    });
+    // جلب كل الـ Variations لكل منتج
+    const productsWithVariations = await Promise.all((pandel.products || []).map(async (p) => {
+        const variations = await product_price_1.ProductPriceModel.find({
+            productId: p.productId?._id || p.productId,
+        })
+            .select("price code quantity")
+            .lean();
+        // جلب Options لكل Variation
+        const variationsWithOptions = await Promise.all(variations.map(async (v) => {
+            const options = await product_price_1.ProductPriceOptionModel.find({
+                product_price_id: v._id,
+            })
+                .populate("option_id", "name ar_name")
+                .lean();
+            return {
+                ...v,
+                options: options.map((o) => o.option_id),
+            };
+        }));
+        return {
+            ...p,
+            availableVariations: variationsWithOptions,
+            hasVariations: variationsWithOptions.length > 0,
+        };
+    }));
     return (0, response_1.SuccessResponse)(res, {
         message: "Pandel found successfully",
         pandel: {
             ...pandel,
-            products,
+            products: productsWithVariations,
         },
     });
 };
 exports.getPandelById = getPandelById;
+// ═══════════════════════════════════════════════════════════
+// ➕ CREATE PANDEL (Admin)
+// ═══════════════════════════════════════════════════════════
 const createPandel = async (req, res) => {
-    const { name, productsId, images, startdate, enddate, status, price } = req.body;
-    if (!name || !productsId || !images || !startdate || !enddate || status === true || !price)
-        throw new BadRequest_1.BadRequest("All fields are required");
-    const imageUrls = [];
-    for (const [index, base64Image] of images.entries()) {
-        const imageUrl = await (0, handleImages_1.saveBase64Image)(base64Image, `${Date.now()}_${index}`, req, "pandels");
-        imageUrls.push(imageUrl);
+    const { name, products, images, startdate, enddate, status = true, price } = req.body;
+    // Validation
+    if (!name)
+        throw new BadRequest_1.BadRequest("Name is required");
+    if (!products || !Array.isArray(products) || products.length === 0) {
+        throw new BadRequest_1.BadRequest("At least one product is required");
     }
-    const existingProducts = await products_1.ProductModel.find({ _id: { $in: productsId } });
-    if (existingProducts.length !== productsId.length) {
-        throw new BadRequest_1.BadRequest("Some products not found");
+    if (!startdate)
+        throw new BadRequest_1.BadRequest("Start date is required");
+    if (!enddate)
+        throw new BadRequest_1.BadRequest("End date is required");
+    if (!price || price <= 0)
+        throw new BadRequest_1.BadRequest("Valid price is required");
+    // Validate each product
+    const validatedProducts = [];
+    for (const p of products) {
+        if (!p.productId) {
+            throw new BadRequest_1.BadRequest("Each product must have productId");
+        }
+        if (!mongoose_1.default.Types.ObjectId.isValid(p.productId)) {
+            throw new BadRequest_1.BadRequest(`Invalid productId: ${p.productId}`);
+        }
+        // Check product exists
+        const product = await products_1.ProductModel.findById(p.productId);
+        if (!product) {
+            throw new BadRequest_1.BadRequest(`Product ${p.productId} not found`);
+        }
+        // If productPriceId specified, validate it
+        if (p.productPriceId) {
+            if (!mongoose_1.default.Types.ObjectId.isValid(p.productPriceId)) {
+                throw new BadRequest_1.BadRequest(`Invalid productPriceId: ${p.productPriceId}`);
+            }
+            const productPrice = await product_price_1.ProductPriceModel.findOne({
+                _id: p.productPriceId,
+                productId: p.productId,
+            });
+            if (!productPrice) {
+                throw new BadRequest_1.BadRequest(`ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`);
+            }
+        }
+        validatedProducts.push({
+            productId: p.productId,
+            productPriceId: p.productPriceId || null,
+            quantity: p.quantity || 1,
+        });
     }
+    // Check duplicate name
     const existingPandel = await pandels_1.PandelModel.findOne({ name });
     if (existingPandel) {
         throw new BadRequest_1.BadRequest("Pandel name already exists");
     }
-    const pandel = await pandels_1.PandelModel.create({ name, productsId, images: imageUrls, startdate, enddate, status, price });
-    return (0, response_1.SuccessResponse)(res, { message: "Pandel created successfully", pandel });
+    // Save images
+    let imageUrls = [];
+    if (images && Array.isArray(images) && images.length > 0) {
+        for (const [index, base64Image] of images.entries()) {
+            if (base64Image && base64Image.startsWith("data:image")) {
+                const imageUrl = await (0, handleImages_1.saveBase64Image)(base64Image, `${Date.now()}_${index}`, req, "pandels");
+                imageUrls.push(imageUrl);
+            }
+            else if (base64Image) {
+                imageUrls.push(base64Image);
+            }
+        }
+    }
+    // Create Pandel
+    const pandel = await pandels_1.PandelModel.create({
+        name,
+        products: validatedProducts,
+        images: imageUrls,
+        startdate: new Date(startdate),
+        enddate: new Date(enddate),
+        status,
+        price,
+    });
+    // Populate and return
+    const populatedPandel = await pandels_1.PandelModel.findById(pandel._id)
+        .populate({
+        path: "products.productId",
+        select: "name ar_name price image",
+    })
+        .populate({
+        path: "products.productPriceId",
+        select: "price code",
+    })
+        .lean();
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Pandel created successfully",
+        pandel: populatedPandel,
+    });
 };
 exports.createPandel = createPandel;
+// ═══════════════════════════════════════════════════════════
+// ✏️ UPDATE PANDEL (Admin)
+// ═══════════════════════════════════════════════════════════
 const updatePandel = async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new BadRequest_1.BadRequest("Pandel id is required");
-    const updateData = { ...req.body };
+    const pandel = await pandels_1.PandelModel.findById(id);
+    if (!pandel)
+        throw new Errors_1.NotFound("Pandel not found");
+    const updateData = {};
+    // Update name
+    if (req.body.name !== undefined) {
+        const existingPandel = await pandels_1.PandelModel.findOne({
+            name: req.body.name,
+            _id: { $ne: id },
+        });
+        if (existingPandel) {
+            throw new BadRequest_1.BadRequest("Pandel name already exists");
+        }
+        updateData.name = req.body.name;
+    }
+    // Update products
+    if (req.body.products) {
+        const validatedProducts = [];
+        for (const p of req.body.products) {
+            if (!p.productId) {
+                throw new BadRequest_1.BadRequest("Each product must have productId");
+            }
+            const product = await products_1.ProductModel.findById(p.productId);
+            if (!product) {
+                throw new BadRequest_1.BadRequest(`Product ${p.productId} not found`);
+            }
+            if (p.productPriceId) {
+                const productPrice = await product_price_1.ProductPriceModel.findOne({
+                    _id: p.productPriceId,
+                    productId: p.productId,
+                });
+                if (!productPrice) {
+                    throw new BadRequest_1.BadRequest(`ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`);
+                }
+            }
+            validatedProducts.push({
+                productId: p.productId,
+                productPriceId: p.productPriceId || null,
+                quantity: p.quantity || 1,
+            });
+        }
+        updateData.products = validatedProducts;
+    }
+    // Update images
     if (req.body.images) {
         const imageUrls = [];
         for (const [index, base64Image] of req.body.images.entries()) {
-            const imageUrl = await (0, handleImages_1.saveBase64Image)(base64Image, `${Date.now()}_${index}`, req, "pandels");
-            imageUrls.push(imageUrl);
+            if (base64Image && base64Image.startsWith("data:image")) {
+                const imageUrl = await (0, handleImages_1.saveBase64Image)(base64Image, `${Date.now()}_${index}`, req, "pandels");
+                imageUrls.push(imageUrl);
+            }
+            else if (base64Image) {
+                imageUrls.push(base64Image);
+            }
         }
         updateData.images = imageUrls;
     }
-    if (req.body.productsId) {
-        const existingProducts = await products_1.ProductModel.find({ _id: { $in: req.body.productsId } });
-        if (existingProducts.length !== req.body.productsId.length) {
-            throw new BadRequest_1.BadRequest("Some products not found");
-        }
-    }
-    const pandel = await pandels_1.PandelModel.findByIdAndUpdate(id, updateData, { new: true });
-    if (!pandel)
-        throw new Errors_1.NotFound("Pandel not found");
-    return (0, response_1.SuccessResponse)(res, { message: "Pandel updated successfully", pandel });
+    // Update other fields
+    if (req.body.startdate !== undefined)
+        updateData.startdate = new Date(req.body.startdate);
+    if (req.body.enddate !== undefined)
+        updateData.enddate = new Date(req.body.enddate);
+    if (req.body.status !== undefined)
+        updateData.status = req.body.status;
+    if (req.body.price !== undefined)
+        updateData.price = req.body.price;
+    const updatedPandel = await pandels_1.PandelModel.findByIdAndUpdate(id, updateData, { new: true })
+        .populate({
+        path: "products.productId",
+        select: "name ar_name price image",
+    })
+        .populate({
+        path: "products.productPriceId",
+        select: "price code",
+    })
+        .lean();
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Pandel updated successfully",
+        pandel: updatedPandel,
+    });
 };
 exports.updatePandel = updatePandel;
+// ═══════════════════════════════════════════════════════════
+// 🗑️ DELETE PANDEL (Admin)
+// ═══════════════════════════════════════════════════════════
 const deletePandel = async (req, res) => {
     const { id } = req.params;
     if (!id)
@@ -91,52 +281,12 @@ const deletePandel = async (req, res) => {
     if (!pandel)
         throw new Errors_1.NotFound("Pandel not found");
     // Delete images from server
-    for (const imageUrl of pandel.images) {
-        await (0, deleteImage_1.deletePhotoFromServer)(imageUrl); // ← بدون req
+    for (const imageUrl of pandel.images || []) {
+        await (0, deleteImage_1.deletePhotoFromServer)(imageUrl);
     }
     return (0, response_1.SuccessResponse)(res, { message: "Pandel deleted successfully" });
 };
 exports.deletePandel = deletePandel;
-const getActiveBundles = async (req, res) => {
-    const currentDate = new Date();
-    // جلب الـ Bundles النشطة فقط (في نطاق التاريخ)
-    const bundles = await pandels_1.PandelModel.find({
-        status: true,
-        startdate: { $lte: currentDate },
-        enddate: { $gte: currentDate },
-    }).populate("productsId", "name price image ar_name");
-    // حساب السعر الأصلي ونسبة التوفير
-    const bundlesWithPricing = bundles.map((bundle) => {
-        const products = bundle.productsId;
-        // حساب السعر الأصلي (مجموع أسعار المنتجات)
-        const originalPrice = products.reduce((sum, product) => {
-            return sum + (product.price || 0);
-        }, 0);
-        // حساب التوفير
-        const savings = originalPrice - bundle.price;
-        const savingsPercentage = originalPrice > 0 ? Math.round((savings / originalPrice) * 100) : 0;
-        return {
-            _id: bundle._id,
-            name: bundle.name,
-            images: bundle.images,
-            products: products.map((p) => ({
-                _id: p._id,
-                name: p.name,
-                ar_name: p.ar_name,
-                price: p.price,
-                image: p.image,
-            })),
-            originalPrice: originalPrice,
-            bundlePrice: bundle.price,
-            savings: savings,
-            savingsPercentage: savingsPercentage,
-            startdate: bundle.startdate,
-            enddate: bundle.enddate,
-        };
-    });
-    (0, response_1.SuccessResponse)(res, {
-        message: "Active bundles",
-        bundles: bundlesWithPricing,
-    });
-};
-exports.getActiveBundles = getActiveBundles;
+// ═══════════════════════════════════════════════════════════
+// 🛒 GET ACTIVE BUNDLES FOR POS (مع الـ Variations)
+// ═══════════════════════════════════════════════════════════
