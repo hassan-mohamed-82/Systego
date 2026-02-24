@@ -8,6 +8,7 @@ const saleController_1 = require("../../../controller/admin/POS/saleController")
 const catchAsync_1 = require("../../../utils/catchAsync");
 const haspremission_1 = require("../../../middlewares/haspremission");
 const router = express_1.default.Router();
+router.post('/apply-coupon', (0, haspremission_1.authorizePermissions)("POS", "Add"), (0, catchAsync_1.catchAsync)(saleController_1.applyCoupon));
 router.post('/sales', (0, haspremission_1.authorizePermissions)("POS", "Add"), (0, catchAsync_1.catchAsync)(saleController_1.createSale));
 router.get('/sales', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getAllSales));
 router.get('/sales/pending', (0, haspremission_1.authorizePermissions)("POS", "View"), (0, catchAsync_1.catchAsync)(saleController_1.getsalePending));

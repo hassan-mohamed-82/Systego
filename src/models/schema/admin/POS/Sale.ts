@@ -61,9 +61,9 @@ const SaleSchema = new Schema(
     order_tax: { type: Schema.Types.ObjectId, ref: "Taxes" },
     order_discount: { type: Schema.Types.ObjectId, ref: "Discount" },
     grand_total: { type: Number, required: true },
-    coupon_id: { type: Schema.Types.ObjectId, ref: "Coupon" },
     gift_card_id: { type: Schema.Types.ObjectId, ref: "GiftCard" },
-
+    coupon_code: { type: String, default: "" },
+    applied_coupon: { type: Boolean, default: false },
     cashier_id: {
       type: Schema.Types.ObjectId,
       ref: "User",

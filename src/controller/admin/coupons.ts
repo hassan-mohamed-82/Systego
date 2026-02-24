@@ -5,13 +5,13 @@ import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 
 export const createcoupons=async(req:Request,res:Response)=>{
-    const {coupon_code,type,amount,minimum_amount,quantity,available,expired_date}=req.body;
-    if(!coupon_code||!type||!amount||!minimum_amount||!quantity||!available||!expired_date) throw new BadRequest("Please provide all required fields");
+    const {coupon_code,type,amount,minimum_amount_for_use,quantity,available,expired_date}=req.body;
+    if(!coupon_code||!type||!amount||!minimum_amount_for_use||!quantity||!available||!expired_date) throw new BadRequest("Please provide all required fields");
     const coupon=new CouponModel({
         coupon_code,
         type,
         amount,
-        minimum_amount,
+        minimum_amount_for_use,
         quantity,
         available,
         expired_date,

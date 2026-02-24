@@ -39,7 +39,7 @@ const CouponSchema = new mongoose_1.Schema({
     coupon_code: { type: String, required: true, unique: true, trim: true, maxlength: 100 },
     type: { type: String, enum: ["percentage", "flat"], required: true },
     amount: { type: Number, required: true },
-    minimum_amount: { type: Number, default: 0 },
+    minimum_amount_for_use: { type: Number, default: 0 },
     quantity: { type: Number, required: true },
     available: { type: Number, required: true },
     expired_date: { type: Date, required: true },

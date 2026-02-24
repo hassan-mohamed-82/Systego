@@ -62,6 +62,8 @@ export const createSale = async (req: Request, res: Response) => {
     discount = 0,
     note,
     financials,
+    coupon_code,
+    applied_coupon, 
     Due = 0,
   } = req.body;
 
@@ -955,7 +957,8 @@ export const getSalePendingById = async (req: Request, res: Response) => {
   const payloadForCreateSale = {
     customer_id: (sale.customer_id as any)?._id || null,
     order_pending: 0,
-    coupon_id: (sale.coupon_id as any)?._id || null,
+    coupon_code: sale.coupon_code || "",
+    applied_coupon: sale.applied_coupon || false,
     gift_card_id: (sale.gift_card_id as any)?._id || null,
     tax_id: (sale.order_tax as any)?._id || null,
     discount_id: (sale.order_discount as any)?._id || null,
@@ -1000,7 +1003,8 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       customer: sale.customer_id || null,
       warehouse: sale.warehouse_id || null,
       cashier: sale.cashier_id || null,
-      coupon: sale.coupon_id || null,
+      coupon_code: sale.coupon_code || "",
+      applied_coupon: sale.applied_coupon || false,  
       gift_card: sale.gift_card_id || null,
       tax: sale.order_tax || null,
       discount_info: sale.order_discount || null,
@@ -1231,4 +1235,21 @@ export const payDue = async (req: Request, res: Response) => {
     },
     paid_sales: paidSales,
   });
+};
+
+
+
+export const applyCoupon = async (req: Request, res: Response) => {
+    const { coupon_code ,grand_total} = req.body;
+    if (!coupon_code) throw new BadRequest("Please provide all required fields");
+    const coupon = await CouponModel.findOne({ coupon_code });
+    if (!coupon) throw new NotFound("Coupon not found");
+    if (coupon.available <= 0) throw new BadRequest("Coupon is not available");
+    if (coupon.expired_date < new Date()) throw new BadRequest("Coupon is expired");
+    if (coupon.minimum_amount_for_use > 0 && coupon.minimum_amount_for_use > grand_total) 
+      throw new BadRequest("Coupon is not applicable for this sale");
+    return SuccessResponse(res, {
+        message: "Coupon applied successfully",
+        coupon,
+    });
 };

@@ -6,14 +6,14 @@ const BadRequest_1 = require("../../Errors/BadRequest");
 const Errors_1 = require("../../Errors");
 const response_1 = require("../../utils/response");
 const createcoupons = async (req, res) => {
-    const { coupon_code, type, amount, minimum_amount, quantity, available, expired_date } = req.body;
-    if (!coupon_code || !type || !amount || !minimum_amount || !quantity || !available || !expired_date)
+    const { coupon_code, type, amount, minimum_amount_for_use, quantity, available, expired_date } = req.body;
+    if (!coupon_code || !type || !amount || !minimum_amount_for_use || !quantity || !available || !expired_date)
         throw new BadRequest_1.BadRequest("Please provide all required fields");
     const coupon = new coupons_1.CouponModel({
         coupon_code,
         type,
         amount,
-        minimum_amount,
+        minimum_amount_for_use,
         quantity,
         available,
         expired_date,

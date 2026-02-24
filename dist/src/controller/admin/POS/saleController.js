@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.payDue = exports.getDueSales = exports.getSalePendingById = exports.getShiftCompletedSales = exports.getsalePending = exports.getSales = exports.getAllSales = exports.createSale = void 0;
+exports.applyCoupon = exports.payDue = exports.getDueSales = exports.getSalePendingById = exports.getShiftCompletedSales = exports.getsalePending = exports.getSales = exports.getAllSales = exports.createSale = void 0;
 const Sale_1 = require("../../../models/schema/admin/POS/Sale");
 const Warehouse_1 = require("../../../models/schema/admin/Warehouse");
 const Errors_1 = require("../../../Errors");
@@ -46,7 +46,7 @@ const createSale = async (req, res) => {
     if (!openShift) {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
-    const { customer_id, order_pending = 0, coupon_id, gift_card_id, order_tax, order_discount, products, bundles, shipping = 0, tax_rate = 0, discount = 0, note, financials, Due = 0, } = req.body;
+    const { customer_id, order_pending = 0, coupon_id, gift_card_id, order_tax, order_discount, products, bundles, shipping = 0, tax_rate = 0, discount = 0, note, financials, coupon_code, applied_coupon, Due = 0, } = req.body;
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
         throw new Errors_1.NotFound("Warehouse not found");
@@ -808,7 +808,8 @@ const getSalePendingById = async (req, res) => {
     const payloadForCreateSale = {
         customer_id: sale.customer_id?._id || null,
         order_pending: 0,
-        coupon_id: sale.coupon_id?._id || null,
+        coupon_code: sale.coupon_code || "",
+        applied_coupon: sale.applied_coupon || false,
         gift_card_id: sale.gift_card_id?._id || null,
         tax_id: sale.order_tax?._id || null,
         discount_id: sale.order_discount?._id || null,
@@ -852,7 +853,8 @@ const getSalePendingById = async (req, res) => {
             customer: sale.customer_id || null,
             warehouse: sale.warehouse_id || null,
             cashier: sale.cashier_id || null,
-            coupon: sale.coupon_id || null,
+            coupon_code: sale.coupon_code || "",
+            applied_coupon: sale.applied_coupon || false,
             gift_card: sale.gift_card_id || null,
             tax: sale.order_tax || null,
             discount_info: sale.order_discount || null,
@@ -1029,3 +1031,22 @@ const payDue = async (req, res) => {
     });
 };
 exports.payDue = payDue;
+const applyCoupon = async (req, res) => {
+    const { coupon_code, grand_total } = req.body;
+    if (!coupon_code)
+        throw new BadRequest_1.BadRequest("Please provide all required fields");
+    const coupon = await coupons_1.CouponModel.findOne({ coupon_code });
+    if (!coupon)
+        throw new Errors_1.NotFound("Coupon not found");
+    if (coupon.available <= 0)
+        throw new BadRequest_1.BadRequest("Coupon is not available");
+    if (coupon.expired_date < new Date())
+        throw new BadRequest_1.BadRequest("Coupon is expired");
+    if (coupon.minimum_amount_for_use > 0 && coupon.minimum_amount_for_use > grand_total)
+        throw new BadRequest_1.BadRequest("Coupon is not applicable for this sale");
+    return (0, response_1.SuccessResponse)(res, {
+        message: "Coupon applied successfully",
+        coupon,
+    });
+};
+exports.applyCoupon = applyCoupon;
