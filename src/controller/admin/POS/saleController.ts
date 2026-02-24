@@ -720,7 +720,6 @@ export const getsalePending = async (req: Request, res: Response) => {
     .populate("warehouse_id", "name location")
     .populate("order_tax", "name rate")
     .populate("order_discount", "name rate")
-    .populate("coupon_id", "code discount_amount")
     .populate("gift_card_id", "code amount")
     .sort({ createdAt: -1 })
     .lean();
@@ -879,7 +878,6 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     .populate("customer_id", "name email phone_number address")
     .populate("warehouse_id", "name ar_name")
     .populate("cashier_id", "name email")
-    .populate("coupon_id", "code discount_type discount_value")
     .populate("gift_card_id", "code balance")
     .populate("order_tax", "name rate")
     .populate("order_discount", "name discount_type discount_value")
