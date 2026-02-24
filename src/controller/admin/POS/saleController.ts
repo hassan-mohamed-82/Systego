@@ -293,11 +293,8 @@ export const createSale = async (req: Request, res: Response) => {
   // Coupon, Tax, Discount, Gift Card Validations
   // ═══════════════════════════════════════════════════════════
   let coupon: any = null;
-  if (coupon_id) {
-    if (!mongoose.Types.ObjectId.isValid(coupon_id)) {
-      throw new BadRequest("Invalid coupon id");
-    }
-    coupon = await CouponModel.findById(coupon_id);
+  if (coupon_code) {
+    coupon = await CouponModel.findOne({ coupon_code: coupon_code });
     if (!coupon) throw new NotFound("Coupon not found");
     if (coupon.available <= 0) throw new BadRequest("Coupon is out of stock");
     if (coupon.expired_date && coupon.expired_date < new Date()) {
@@ -425,7 +422,8 @@ export const createSale = async (req: Request, res: Response) => {
     warehouse_id: warehouseId,
     account_id: accountIdsForSale,
     order_pending: normalizedOrderPending,
-    coupon_id: coupon ? coupon._id : undefined,
+    coupon_code: coupon ? coupon.coupon_code : "",
+    applied_coupon: coupon ? true : false,
     gift_card_id: giftCard ? giftCard._id : undefined,
     order_tax: tax ? tax._id : undefined,
     order_discount: discountDoc ? discountDoc._id : undefined,
@@ -568,7 +566,6 @@ export const createSale = async (req: Request, res: Response) => {
     .populate("warehouse_id", "name location")
     .populate("order_tax", "name amount type")
     .populate("order_discount", "name amount type")
-    .populate("coupon_id", "coupon_code amount type")
     .populate("gift_card_id", "code amount")
     .populate("cashier_id", "name email")
     .populate("shift_id", "start_time status")
