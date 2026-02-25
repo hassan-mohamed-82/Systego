@@ -5,6 +5,6 @@ const haspremission_1 = require("../../middlewares/haspremission");
 const catchAsync_1 = require("../../utils/catchAsync");
 const productReport_1 = require("../../controller/admin/productReport");
 const router = (0, express_1.Router)();
-router.post("/", (0, haspremission_1.authorizePermissions)("product_report", "View"), (0, catchAsync_1.catchAsync)(productReport_1.getProductSalesReport));
+router.get("/", (0, haspremission_1.authorizePermissions)("product_report", "View"), (0, catchAsync_1.catchAsync)(productReport_1.getProductSalesReport));
 router.get("/selection", (0, haspremission_1.authorizePermissions)("product_report", "View"), (0, catchAsync_1.catchAsync)(productReport_1.selection));
 exports.default = router;

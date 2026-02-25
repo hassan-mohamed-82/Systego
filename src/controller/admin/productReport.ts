@@ -24,7 +24,17 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
         sort_by = "count",      // count, total_price, product_name
         sort_order = "desc",    // asc, desc
         search,
-    } = req.body;
+    } = req.query as {
+        category_id?: string;
+        product_id?: string;
+        warehouse_id?: string;
+        cashier_id?: string;
+        start_date?: string;
+        end_date?: string;
+        sort_by?: string;
+        sort_order?: string;
+        search?: string;
+    };
 
     // ═══════════════════════════════════════════════════════════
     // 📅 فلتر التاريخ
@@ -226,12 +236,12 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
 
 
 
-export const selection=async(req:Request,res:Response)=>{
+export const selection = async (req: Request, res: Response) => {
 
-const cashier=await CashierModel.find({status:true,cashier_active:true})
-    const warehouses=await WarehouseModel.find()
-    const categories=await CategoryModel.find()
-    const products=await ProductModel.find()
+    const cashier = await CashierModel.find({ status: true, cashier_active: true })
+    const warehouses = await WarehouseModel.find()
+    const categories = await CategoryModel.find()
+    const products = await ProductModel.find()
     return SuccessResponse(res, {
         message: "Product sales report generated successfully",
         cashier,
@@ -239,5 +249,5 @@ const cashier=await CashierModel.find({status:true,cashier_active:true})
         categories,
         products
     });
-    
+
 }

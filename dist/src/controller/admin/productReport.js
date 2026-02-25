@@ -17,7 +17,7 @@ const cashier_1 = require("../../models/schema/admin/cashier");
 const getProductSalesReport = async (req, res) => {
     const { category_id, product_id, warehouse_id, cashier_id, start_date, end_date, sort_by = "count", // count, total_price, product_name
     sort_order = "desc", // asc, desc
-    search, } = req.body;
+    search, } = req.query;
     // ═══════════════════════════════════════════════════════════
     // 📅 فلتر التاريخ
     // ═══════════════════════════════════════════════════════════
