@@ -15,7 +15,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 // 📊 FINANCIAL REPORT
 // ═══════════════════════════════════════════════════════════
 exports.getFinancialReport = (0, catchAsync_1.catchAsync)(async (req, res) => {
-    const { start_date, end_date, warehouse_id, cashier_id, } = req.body;
+    const { start_date, end_date, warehouse_id, cashier_id, } = req.query;
     // ═══════════════════════════════════════════════════════════
     // 📅 تحديد الفترة الزمنية
     // ═══════════════════════════════════════════════════════════

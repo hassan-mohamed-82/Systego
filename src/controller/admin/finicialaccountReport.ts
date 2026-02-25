@@ -16,7 +16,12 @@ export const getFinancialReport = catchAsync(async (req: Request, res: Response)
         end_date,
         warehouse_id,
         cashier_id,
-    } = req.body;
+    } = req.query as {
+        start_date?: string;
+        end_date?: string;
+        warehouse_id?: string;
+        cashier_id?: string;
+    };
 
     // ═══════════════════════════════════════════════════════════
     // 📅 تحديد الفترة الزمنية

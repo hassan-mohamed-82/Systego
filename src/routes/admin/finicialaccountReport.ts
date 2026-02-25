@@ -5,6 +5,6 @@ import { authorizePermissions } from "../../middlewares/haspremission";
 
 const router = Router();
 
-router.post("/", authorizePermissions("financial_report", "View"), catchAsync(getFinancialReport));
+router.get("/", authorizePermissions("financial_report", "View"), catchAsync(getFinancialReport));
 
 export default router;
