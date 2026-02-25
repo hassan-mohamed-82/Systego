@@ -51,7 +51,6 @@ export const createSale = async (req: Request, res: Response) => {
   const {
     customer_id,
     order_pending = 0,
-    coupon_id,
     gift_card_id,
     order_tax,
     order_discount,
@@ -635,6 +634,7 @@ export const createSale = async (req: Request, res: Response) => {
     return item;
   });
 
+  
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`

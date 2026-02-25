@@ -46,7 +46,7 @@ const createSale = async (req, res) => {
     if (!openShift) {
         throw new BadRequest_1.BadRequest("You must open a cashier shift before creating a sale");
     }
-    const { customer_id, order_pending = 0, coupon_id, gift_card_id, order_tax, order_discount, products, bundles, shipping = 0, tax_rate = 0, discount = 0, note, financials, coupon_code, applied_coupon, Due = 0, } = req.body;
+    const { customer_id, order_pending = 0, gift_card_id, order_tax, order_discount, products, bundles, shipping = 0, tax_rate = 0, discount = 0, note, financials, coupon_code, applied_coupon, Due = 0, } = req.body;
     const warehouse = await Warehouse_1.WarehouseModel.findById(warehouseId);
     if (!warehouse) {
         throw new Errors_1.NotFound("Warehouse not found");
