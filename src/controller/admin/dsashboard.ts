@@ -16,8 +16,11 @@ import mongoose from "mongoose";
 // 📊 MAIN DASHBOARD API
 // ═══════════════════════════════════════════════════════════
 export const getDashboard = async (req: Request, res: Response) => {
-  const body = req.body || {};
-  const { start_date, end_date, warehouse_id } = body;
+  const { start_date, end_date, warehouse_id } = req.query as {
+    start_date?: string;
+    end_date?: string;
+    warehouse_id?: string;
+  };
 
   // ═══════════════════════════════════════════════════════════
   // 📅 تحديد الفترة الزمنية
@@ -399,17 +402,17 @@ export const getDashboard = async (req: Request, res: Response) => {
     cards: {
       total_sales_today: Number(totalSalesToday.toFixed(2)),
       orders_today: ordersToday,
-      
+
       total_sales: Number(totalSales.toFixed(2)),
       total_discount: Number(totalDiscount.toFixed(2)),
       total_tax: Number(totalTax.toFixed(2)),
       total_returns: Number(totalReturns.toFixed(2)),
       returns_count: returnsCount,
-      
+
       net_revenue: Number(netRevenue.toFixed(2)),
       total_expenses: Number(totalExpenses.toFixed(2)),
       net_profit: Number(netProfit.toFixed(2)),
-      
+
       total_orders: totalOrders,
     },
 
