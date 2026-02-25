@@ -97,7 +97,6 @@ export const getOrdersReport = async (req: Request, res: Response) => {
         .populate("account_id", "name balance")
         .populate("order_tax")
         .populate("order_discount")
-        .populate("coupon_id")
         .populate("gift_card_id")
         .sort({ createdAt: -1 });
 

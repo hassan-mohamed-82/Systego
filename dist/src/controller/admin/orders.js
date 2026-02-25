@@ -88,7 +88,6 @@ const getOrdersReport = async (req, res) => {
         .populate("account_id", "name balance")
         .populate("order_tax")
         .populate("order_discount")
-        .populate("coupon_id")
         .populate("gift_card_id")
         .sort({ createdAt: -1 });
     // Calculate summary totals
