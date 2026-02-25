@@ -1,7 +1,7 @@
 import express from 'express';
 import { getAllCategorys, getAllBrands, getProductsByCategory,
    getCashiers , getProductsByBrand, getAllSelections, getFeaturedProducts ,
-selectCashier} from '../../../controller/admin/POS/POSHomeController';
+selectCashier,getActiveBundles} from '../../../controller/admin/POS/POSHomeController';
 import { authorizePermissions } from '../../../middlewares/haspremission';
 
 const router = express.Router();
@@ -11,6 +11,8 @@ router.get('/categories',authorizePermissions("POS","View"), getAllCategorys);
 
 
 router.get('/brands',authorizePermissions("POS","View"), getAllBrands);
+
+router.get('/bundles',authorizePermissions("POS","View"), getActiveBundles);
 
 router.get('/cashiers',authorizePermissions("POS","View"), getCashiers);
 
