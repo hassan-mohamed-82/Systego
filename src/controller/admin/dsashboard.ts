@@ -280,10 +280,16 @@ export const getDashboard = async (req: Request, res: Response) => {
   ]);
 
   // 5️⃣ Transfer Activity (Heatmap)
+  // Transfer schema uses `date` field instead of `createdAt`
+  const transferDateFilter: any = {};
+  if (dateFilter.createdAt) {
+    transferDateFilter.date = dateFilter.createdAt;
+  }
+
   const transferActivity = await TransferModel.aggregate([
     {
       $match: {
-        ...dateFilter,
+        ...transferDateFilter,
         status: "received",
       },
     },
