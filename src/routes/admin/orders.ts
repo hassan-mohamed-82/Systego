@@ -10,8 +10,8 @@ import { catchAsync } from "../../utils/catchAsync";
 const router = Router();
 
 // Report must come before /:id to avoid "report" being treated as an ID
-router.get("/", catchAsync(getAllOrders));
-router.post("/report", catchAsync(getOrdersReport));
-router.get("/:id", catchAsync(getOrderById));
+router.get("/", authorizePermissions("orders", "View"), catchAsync(getAllOrders));
+router.post("/report", authorizePermissions("orders", "View"), catchAsync(getOrdersReport));
+router.get("/:id", authorizePermissions("orders", "View"), catchAsync(getOrderById));
 
 export default router;

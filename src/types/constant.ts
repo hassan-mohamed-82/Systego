@@ -49,6 +49,11 @@ export const MODULES = [
   "adjustment_reason",
   "Category_Material",
   "purchase_return",
+  "dashboard",
+  "product_report",
+  "sale_report",
+  "financial_report",
+  "order",
   "Units",
   "orders"
 ] as const;
