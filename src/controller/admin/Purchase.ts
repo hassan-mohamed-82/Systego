@@ -232,6 +232,7 @@ export const createPurchase = async (req: Request, res: Response) => {
 
     await ProductModel.findByIdAndUpdate(product._id, {
       $inc: { quantity: totalQuantity },
+      $set: { cost: p.unit_cost_after_discount || p.unit_cost },
     });
 
     const category = await CategoryModel.findById((product as any).categoryId);
@@ -703,6 +704,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
     await ProductModel.findByIdAndUpdate(product._id, {
       $inc: { quantity: totalQuantity },
+      $set: { cost: p.unit_cost_after_discount || p.unit_cost },
     });
 
     const category = await CategoryModel.findById((product as any).categoryId);
