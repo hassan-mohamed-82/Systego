@@ -79,6 +79,7 @@ const getDashboard = async (req, res) => {
         {
             $group: {
                 _id: null,
+                totalBeforeDiscount: { $sum: "$total" },
                 totalSales: { $sum: "$grand_total" },
                 totalDiscount: { $sum: "$discount" },
                 totalTax: { $sum: "$tax_amount" },
@@ -86,6 +87,7 @@ const getDashboard = async (req, res) => {
             },
         },
     ]);
+    const totalBeforeDiscount = periodSales[0]?.totalBeforeDiscount || 0;
     const totalSales = periodSales[0]?.totalSales || 0;
     const totalDiscount = periodSales[0]?.totalDiscount || 0;
     const totalTax = periodSales[0]?.totalTax || 0;
@@ -108,8 +110,8 @@ const getDashboard = async (req, res) => {
     ]);
     const totalReturns = periodReturns[0]?.totalReturns || 0;
     const returnsCount = periodReturns[0]?.returnsCount || 0;
-    // 4️⃣ Net Revenue = Sales - Discount - Tax - Returns
-    const netRevenue = totalSales - totalDiscount - totalTax - totalReturns;
+    // 4️⃣ Net Revenue = grand_total (المبلغ النهائي) - المرتجعات
+    const netRevenue = totalSales - totalReturns;
     // 5️⃣ Total Expenses
     const periodExpenses = await expenses_1.ExpenseModel.aggregate([
         {
@@ -378,6 +380,7 @@ const getDashboard = async (req, res) => {
         cards: {
             total_sales_today: Number(totalSalesToday.toFixed(2)),
             orders_today: ordersToday,
+            total_before_discount: Number(totalBeforeDiscount.toFixed(2)),
             total_sales: Number(totalSales.toFixed(2)),
             total_discount: Number(totalDiscount.toFixed(2)),
             total_tax: Number(totalTax.toFixed(2)),
