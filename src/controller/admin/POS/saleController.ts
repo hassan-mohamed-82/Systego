@@ -683,7 +683,6 @@ export const getSales = async (req: Request, res: Response) => {
     .populate("warehouse_id", "name location")
     .populate("order_tax", "name amount type")
     .populate("order_discount", "name amount type")
-    .populate("coupon_id", "coupon_code amount type")
     .populate("gift_card_id", "code amount")
     .populate("cashier_id", "name email")
     .populate("shift_id", "start_time status")
