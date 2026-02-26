@@ -701,7 +701,6 @@ const getShiftCompletedSales = async (req, res) => {
         .populate("warehouse_id", "name location")
         .populate("order_tax", "name rate")
         .populate("order_discount", "name rate")
-        .populate("coupon_id", "code discount_amount")
         .populate("gift_card_id", "code amount")
         .lean();
     if (!sales.length) {
