@@ -65,7 +65,7 @@ const createPurchase = async (req, res) => {
             });
             totalDuePayments = grand_total;
         }
-        else if (totalDuePayments !== grand_total) {
+        if (totalDuePayments !== grand_total) {
             throw new BadRequest_1.BadRequest(`Due payments must equal grand_total. Expected: ${grand_total}, Received: ${totalDuePayments}`);
         }
     }

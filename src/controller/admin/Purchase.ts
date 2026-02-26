@@ -86,7 +86,8 @@ export const createPurchase = async (req: Request, res: Response) => {
         date: getDefaultDueDate()
       });
       totalDuePayments = grand_total;
-    } else if (totalDuePayments !== grand_total) {
+    }
+    if (totalDuePayments !== grand_total) {
       throw new BadRequest(`Due payments must equal grand_total. Expected: ${grand_total}, Received: ${totalDuePayments}`);
     }
   } else if (payment_status === "partial") {
