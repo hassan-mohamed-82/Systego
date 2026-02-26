@@ -1293,4 +1293,4 @@ export const applyCoupon = async (req: Request, res: Response) => {
         message: "Coupon applied successfully",
         coupon,
     });
-};
+}
