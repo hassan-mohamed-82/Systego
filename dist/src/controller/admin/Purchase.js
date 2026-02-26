@@ -58,15 +58,16 @@ const createPurchase = async (req, res) => {
         if (totalPaidNow > 0) {
             throw new BadRequest_1.BadRequest("Later payment should not have immediate payments");
         }
-        if (purchase_due_payment.length === 0) {
+        if (purchase_due_payment.length === 0 && installments.length === 0) {
             purchase_due_payment.push({
                 amount: grand_total,
                 date: getDefaultDueDate()
             });
             totalDuePayments = grand_total;
         }
-        if (totalDuePayments !== grand_total) {
-            throw new BadRequest_1.BadRequest(`Due payments must equal grand_total. Expected: ${grand_total}, Received: ${totalDuePayments}`);
+        const totalLaterPayments = totalDuePayments + totalInstallments;
+        if (totalLaterPayments !== grand_total) {
+            throw new BadRequest_1.BadRequest(`Due payments + installments must equal grand_total. Expected: ${grand_total}, Received: ${totalLaterPayments}`);
         }
     }
     else if (payment_status === "partial") {
