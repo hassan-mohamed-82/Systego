@@ -634,7 +634,7 @@ export const createSale = async (req: Request, res: Response) => {
     return item;
   });
 
-  
+
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`
@@ -756,7 +756,7 @@ export const getsalePending = async (req: Request, res: Response) => {
   }
 
   // ✅ هات الـ pending sales بتاعة الشيفت ده بس
-  const sales = await SaleModel.find({ 
+  const sales = await SaleModel.find({
     order_pending: 1,
     shift_id: openShift._id,
     cashier_id: cashierId,
@@ -1044,7 +1044,7 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       warehouse: sale.warehouse_id || null,
       cashier: sale.cashier_id || null,
       coupon_code: sale.coupon_code || "",
-      applied_coupon: sale.applied_coupon || false,  
+      applied_coupon: sale.applied_coupon || false,
       gift_card: sale.gift_card_id || null,
       tax: sale.order_tax || null,
       discount_info: sale.order_discount || null,
@@ -1280,16 +1280,16 @@ export const payDue = async (req: Request, res: Response) => {
 
 
 export const applyCoupon = async (req: Request, res: Response) => {
-    const { coupon_code ,grand_total} = req.body;
-    if (!coupon_code) throw new BadRequest("Please provide all required fields");
-    const coupon = await CouponModel.findOne({ coupon_code });
-    if (!coupon) throw new NotFound("Coupon not found");
-    if (coupon.available <= 0) throw new BadRequest("Coupon is not available");
-    if (coupon.expired_date < new Date()) throw new BadRequest("Coupon is expired");
-    if (coupon.minimum_amount_for_use > 0 && coupon.minimum_amount_for_use > grand_total) 
-      throw new BadRequest("Coupon is not applicable for this sale");
-    return SuccessResponse(res, {
-        message: "Coupon applied successfully",
-        coupon,
-    });
+  const { coupon_code, grand_total } = req.body;
+  if (!coupon_code) throw new BadRequest("Please provide all required fields");
+  const coupon = await CouponModel.findOne({ coupon_code });
+  if (!coupon) throw new NotFound("Coupon not found");
+  if (coupon.available <= 0) throw new BadRequest("Coupon is not available");
+  if (coupon.expired_date < new Date()) throw new BadRequest("Coupon is expired");
+  if (coupon.minimum_amount_for_use > 0 && coupon.minimum_amount_for_use > grand_total)
+    throw new BadRequest("Coupon is not applicable for this sale");
+  return SuccessResponse(res, {
+    message: "Coupon applied successfully",
+    coupon,
+  });
 };
