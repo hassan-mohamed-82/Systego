@@ -4,20 +4,36 @@ import dotenv from "dotenv";
 
 
 
-dotenv.config();
+// dotenv.config();
+// export const connectDB = async () => {
+//   try {
+//     await mongoose.connect(process.env.MongoDB_URI || "",)
+//     console.log("MongoDB connected successfully");
+
+//   } catch (error) {
+//     console.error("MongoDB connection failed:", error);
+//     // process.exit(1); // Exit the process with failure
+//   }
+// };
+
+
 export const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MongoDB_URI || "",)
+    const uri = process.env.MongoDB_URI;
+
+    if (!uri) {
+      // This will now throw a clean 500 JSON error if the .env failed to load!
+      throw new Error("CRITICAL: MongoDB_URI is undefined. dotenv failed to load the .env file!");
+    }
+
+    await mongoose.connect(uri);
     console.log("MongoDB connected successfully");
 
   } catch (error) {
     console.error("MongoDB connection failed:", error);
-    // process.exit(1); // Exit the process with failure
+    throw error;
   }
 };
-
-
-
 
 // import mongoose from "mongoose";
 
