@@ -22,10 +22,9 @@ export const connectDB = async () => {
     const uri = process.env.MongoDB_URI;
 
     if (!uri) {
-      // This will now throw a clean 500 JSON error if the .env failed to load!
-      throw new Error("CRITICAL: MongoDB_URI is undefined. dotenv failed to load the .env file!");
+      console.error("CRITICAL: MongoDB_URI is undefined. The .env file failed to load!");
+      return; // Return instead of throwing, so the server stays alive!
     }
-
     await mongoose.connect(uri);
     console.log("MongoDB connected successfully");
 
