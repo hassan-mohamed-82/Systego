@@ -5,16 +5,29 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.connectDB = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
+// dotenv.config();
+// export const connectDB = async () => {
+//   try {
+//     await mongoose.connect(process.env.MongoDB_URI || "",)
+//     console.log("MongoDB connected successfully");
+//   } catch (error) {
+//     console.error("MongoDB connection failed:", error);
+//     // process.exit(1); // Exit the process with failure
+//   }
+// };
 const connectDB = async () => {
     try {
-        await mongoose_1.default.connect(process.env.MongoDB_URI || "");
+        const uri = process.env.MongoDB_URI;
+        if (!uri) {
+            console.error("CRITICAL: MongoDB_URI is undefined. The .env file failed to load!");
+            return; // Return instead of throwing, so the server stays alive!
+        }
+        await mongoose_1.default.connect(uri);
         console.log("MongoDB connected successfully");
     }
     catch (error) {
         console.error("MongoDB connection failed:", error);
-        process.exit(1); // Exit the process with failure
+        throw error;
     }
 };
 exports.connectDB = connectDB;

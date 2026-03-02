@@ -61,7 +61,6 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
         }
       ]
     })
-    .populate("coupon_id", "code discount_type discount_value")
     .populate("gift_card_id", "code balance")
     .populate("order_tax", "name rate")
     .populate("order_discount", "name discount_type discount_value")

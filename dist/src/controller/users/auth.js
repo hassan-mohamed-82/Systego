@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getProfile = exports.editProfile = exports.login = exports.signup = void 0;
 const platformUser_1 = require("../../models/schema/users/platformUser");
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const response_1 = require("../../utils/response");
 const Errors_1 = require("../../Errors");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -30,7 +30,7 @@ const signup = async (req, res) => {
 exports.signup = signup;
 exports.login = (0, express_async_handler_1.default)(async (req, res) => {
     const user = await platformUser_1.Platform_User.findOne({ email: req.body.email });
-    if (!user || !(await bcrypt_1.default.compare(req.body.password, user.password))) {
+    if (!user || !(await bcryptjs_1.default.compare(req.body.password, user.password))) {
         throw new BadRequest_1.BadRequest('Incorrect email or password');
     }
     const token = await (0, generateJWT_1.default)({ id: user.id });

@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Platform_User = void 0;
 const mongoose_1 = require("mongoose");
 const mongoose_2 = __importDefault(require("mongoose"));
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const PlatformUserSchema = new mongoose_1.Schema({
     name: {
         type: String,
@@ -47,7 +47,7 @@ const PlatformUserSchema = new mongoose_1.Schema({
 PlatformUserSchema.pre("save", async function (next) {
     if (!this.isModified("password"))
         return next();
-    this.password = await bcrypt_1.default.hash(this.password, 10);
+    this.password = await bcryptjs_1.default.hash(this.password, 10);
     next();
 });
 exports.Platform_User = mongoose_2.default.model('platform_user', PlatformUserSchema);

@@ -3,21 +3,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
+// __dirname in your compiled file is dist/src/
+// We go up two directories to hit the root where the .env file lives
+const envPath = path_1.default.join(__dirname, '../../.env');
+dotenv_1.default.config({ path: envPath });
 const express_1 = __importDefault(require("express"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
-const path_1 = __importDefault(require("path"));
 const index_1 = __importDefault(require("./routes/index"));
 const errorHandler_1 = require("./middlewares/errorHandler");
 const Errors_1 = require("./Errors");
-const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const helmet_1 = __importDefault(require("helmet"));
 const connection_1 = require("./models/connection");
 const expiry_lowstock_1 = require("./utils/expiry_lowstock");
 require("./utils/bookingcheck");
-dotenv_1.default.config();
+// dotenv.config();
 const app = (0, express_1.default)();
 // 🧩 Connect to DB
 (0, connection_1.connectDB)();
