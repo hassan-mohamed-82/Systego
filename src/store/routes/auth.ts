@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { login, signup } from '../../store/controller/auth';
-import { validate } from '../midlewares/validate';
+import { validate } from '../../middlewares/validation';
 import { loginSchema, signupSchema } from '../../store/validation/auth';
 import { catchAsync } from '../../utils/catchAsync';
 
