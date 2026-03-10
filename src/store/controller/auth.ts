@@ -28,7 +28,6 @@ export const signup = async (req: Request, res: Response) => {
     SuccessResponse(res, { message: "Signup successful" }, 201);
 };
 
-
 export const login = asyncHandler(async (req: Request, res: Response) => {
     const user = await CustomerModel.findOne({ email: req.body.email });
 
