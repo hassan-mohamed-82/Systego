@@ -2,7 +2,7 @@ import { model, Schema, Types } from "mongoose";
 import mongoose from "mongoose";
 import bcrypt from 'bcryptjs';
 
-const customerSchema = new Schema(
+const CustomerSchema = new Schema(
   {
     name: {
       type: String,
@@ -43,10 +43,10 @@ const customerSchema = new Schema(
   { timestamps: true, }
 );
 
-customerSchema.pre("save", async function (next) {
+CustomerSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
-export const CustomerModel = mongoose.model('customer', customerSchema);
+export const CustomerModel = mongoose.model('customer', CustomerSchema);

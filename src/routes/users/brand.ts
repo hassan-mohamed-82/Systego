@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { getAllBrands, getBrandById} from '../../controller/users/brand';
+import { getAllBrands, getBrandById } from '../../controller/users/brand';
 
-const route = Router();
+const brandRoute = Router();
 
-route.get("/", getAllBrands);
+brandRoute.get("/", getAllBrands);
+brandRoute.get("/:id", getBrandById);
 
-route.get("/:id", getBrandById);
 
-
-export default route;
+export default brandRoute;

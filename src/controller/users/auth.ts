@@ -1,26 +1,22 @@
 import { Request, Response } from "express";
-import { Platform_User } from "../../models/schema/users/platformUser";
 import bcrypt from "bcryptjs";
 import { SuccessResponse } from "../../utils/response";
 import {
-  ForbiddenError,
   NotFound,
   UnauthorizedError,
   UniqueConstrainError,
 } from "../../Errors";
 import { BadRequest } from "../../Errors/BadRequest";
-
 import asyncHandler from 'express-async-handler';
-
 import generateJWT from '../../middlewares/generateJWT';
-
 import { saveBase64Image } from '../../utils/handleImages';
+import { CustomerModel } from '../../models/schema/users/Customer';
 
 
 export const signup = async (req: Request, res: Response) => {
   const { name, email, phone, password } = req.body;
 
-  const existing = await Platform_User.findOne({ email });
+  const existing = await CustomerModel.findOne({ email });
   if (existing) throw new UniqueConstrainError("Email", "User already signed up with this email");
 
   const userData: any = {
@@ -30,7 +26,7 @@ export const signup = async (req: Request, res: Response) => {
     password
   };
 
-  const newUser = new Platform_User(userData);
+  const newUser = new CustomerModel(userData);
 
   await newUser.save();
 
@@ -39,7 +35,7 @@ export const signup = async (req: Request, res: Response) => {
 
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const user = await Platform_User.findOne({ email: req.body.email });
+  const user = await CustomerModel.findOne({ email: req.body.email });
 
   if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
     throw new BadRequest('Incorrect email or password');
@@ -52,7 +48,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
 
 export const editProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = await Platform_User.findById(req.params.id);
+  const user = await CustomerModel.findById(req.params.id);
 
   if (!user) {
     throw new NotFound('User not found');
@@ -75,10 +71,8 @@ export const editProfile = asyncHandler(async (req: Request, res: Response) => {
   return SuccessResponse(res, { message: 'Profile updated successfully' }, 200);
 });
 
-// getProfiel user
-
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = await Platform_User.findById(req.user?.id).select('-password -v')
+  const user = await CustomerModel.findById(req.user?.id).select('-password -v')
   if (!user) {
     throw new NotFound('User not found');
   }
