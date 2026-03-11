@@ -39,6 +39,12 @@ const CustomerSchema = new Schema(
         ref: "Products",
       },
     ],
+    addresses: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Address",
+      },
+    ],
   },
   { timestamps: true, }
 );

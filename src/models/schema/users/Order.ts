@@ -2,36 +2,44 @@ import { Schema, model, Document } from 'mongoose';
 
 const orderSchema = new Schema({
   user: {
-    type: Schema.Types.ObjectId, 
-    ref: 'platform_user',
+    type: Schema.Types.ObjectId,
+    ref: 'Customer',
     required: true
   },
-   cartItems: [
-      {
-        product: {
-         type: Schema.Types.ObjectId, 
-          ref: "Product",
-        },
-        quantity: Number,
-        price: Number,
+  cartItems: [
+    {
+      product: {
+        type: Schema.Types.ObjectId,
+        ref: "Product",
       },
-    ],
-     totalPrice: {
-      type: Number,
+      quantity: Number,
+      price: Number,
     },
-    shippingAddress: {
-       type: Schema.Types.ObjectId, 
-       ref: 'Address'
-    },
-    paymentMethod: {
-    type: Schema.Types.ObjectId, 
+  ],
+  shippingAddress: {
+    // بدل ما يكون Ref فقط، خزن التفاصيل المهمة
+    details: { type: String },
+    city: { type: String },
+    zone: { type: String }
+  },
+  shippingPrice: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  totalOrderPrice: {
+    type: Number,
+    required: true
+  },
+  paymentMethod: {
+    type: Schema.Types.ObjectId,
     ref: "PaymentMethod",
     required: true
-    },
-    proofImage: {
-     type: String,
+  },
+  proofImage: {
+    type: String,
     required: true
-    },
+  },
   status: {
     type: String,
     enum: ['pending', 'rejected', 'approved'],
@@ -41,4 +49,4 @@ const orderSchema = new Schema({
   timestamps: true
 });
 
-export const Order = model('Order', orderSchema);
+export const OrderModel = model('Order', orderSchema);

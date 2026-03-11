@@ -2,15 +2,15 @@ import { Schema, model } from 'mongoose';
 
 const cartSchema = new Schema({
   user: {
-    type: Schema.Types.ObjectId, 
+    type: Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    unique: true 
+    unique: true
   },
   cartItems: [
     {
       product: {
-        type: Schema.Types.ObjectId, 
+        type: Schema.Types.ObjectId,
         ref: 'Products',
         required: true
       },
@@ -38,11 +38,11 @@ const cartSchema = new Schema({
 });
 
 // Calculate total price before saving
-cartSchema.pre('save', function(next) {
+cartSchema.pre('save', function (next) {
   this.totalCartPrice = this.cartItems.reduce((total, item) => {
     return total + (item.price * item.quantity);
   }, 0);
   next();
 });
 
-export const Cart = model('Cart', cartSchema);
+export const CartModel = model('Cart', cartSchema);
