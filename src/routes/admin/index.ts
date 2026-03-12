@@ -52,6 +52,7 @@ import PaymobRouter from "./Paymob"
 import ExpenseAdminRouter from "./expensesAdmin"
 import notificationRoutrt from "./notifications"
 import productReportRouter from "./productReport"
+import productMovementRouter from "./productMovement"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
 import RevenueRouter from "./Revenue";
@@ -120,6 +121,7 @@ route.use("/return-purchase", ReturnPurchaseRouter)
 route.use("/revenue", RevenueRouter);
 route.use("/orders", orderRouter);
 route.use("/product-report", productReportRouter)
+route.use("/product-movement", productMovementRouter)
 route.use("/finicial-report", finicial_reportRouter)
 route.use("/dashboard", DashboardRouter)
 export default route;

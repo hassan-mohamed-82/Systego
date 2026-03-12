@@ -53,6 +53,7 @@ exports.MODULES = [
     "purchase_return",
     "dashboard",
     "product_report",
+    "product_movement",
     "sale_report",
     "financial_report",
     "order",
