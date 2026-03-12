@@ -41,11 +41,16 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new BadRequest('Incorrect email or password');
   }
 
+  const { password, __v, ...userResponse } = user.toObject();
+
   const token = await generateJWT({ id: user.id });
 
-  return SuccessResponse(res, { message: 'User logged in successfully', token }, 200);
+  return SuccessResponse(res, {
+    message: 'User logged in successfully',
+    user: userResponse,
+    token
+  }, 200);
 });
-
 
 export const editProfile = asyncHandler(async (req: Request, res: Response) => {
   const user = await CustomerModel.findById(req.params.id);
