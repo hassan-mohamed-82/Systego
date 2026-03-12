@@ -9,14 +9,14 @@ import {
 
 import { authenticated } from '../../middlewares/authenticated';
 
-const router = express.Router();
+const wishlistRoute = express.Router();
 
-router.use(authenticated)
+wishlistRoute.use(authenticated)
 
-router.post('/add', addProductToWishlist);
-router.delete('/remove', removeProductFromWishlist);
-router.get('/', getUserWishlist);
-router.get('/check/:productId', checkProductInWishlist);
-router.delete('/clear', clearWishlist);
+wishlistRoute.post('/add', addProductToWishlist);
+wishlistRoute.delete('/remove', removeProductFromWishlist);
+wishlistRoute.get('/', getUserWishlist);
+wishlistRoute.get('/check/:productId', checkProductInWishlist);
+wishlistRoute.delete('/clear', clearWishlist);
 
-export default router;
+export default wishlistRoute;

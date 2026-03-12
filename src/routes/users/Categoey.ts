@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { getAllCategorys, getCategoryById} from '../../controller/users/Category'
+import { getAllCategorys, getCategoryById } from '../../controller/users/Category'
 
-const route = Router();
+const categoryRoute = Router();
 
-route.get("/", getAllCategorys);
+categoryRoute.get("/", getAllCategorys);
+categoryRoute.get("/:id", getCategoryById);
 
-route.get("/:id", getCategoryById);
 
-
-export default route;
+export default categoryRoute;

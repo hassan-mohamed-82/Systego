@@ -60,6 +60,7 @@ import DashboardRouter from "./dsashboard";
 import ReturnPurchaseRouter from "./returnPurchase";
 import finicial_reportRouter from "./finicialaccountReport";
 import orderRouter from "./orders";
+import versionUpdaterRouter from "./versionUpdater";
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -124,4 +125,5 @@ route.use("/product-report", productReportRouter)
 route.use("/product-movement", productMovementRouter)
 route.use("/finicial-report", finicial_reportRouter)
 route.use("/dashboard", DashboardRouter)
+route.use("/version-updater", versionUpdaterRouter)
 export default route;

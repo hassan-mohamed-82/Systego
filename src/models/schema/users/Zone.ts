@@ -1,4 +1,4 @@
-import mongoose,{Schema} from "mongoose";
+import mongoose, { Schema } from "mongoose";
 const zoneSchema = new Schema({
     name: {
         type: String,
@@ -6,7 +6,7 @@ const zoneSchema = new Schema({
         unique: true
     },
     city: {
-        type: Schema.Types.ObjectId, 
+        type: Schema.Types.ObjectId,
         ref: 'City',
         required: true
     },
@@ -20,4 +20,4 @@ const zoneSchema = new Schema({
         required: true
     }
 });
-export const Zone = mongoose.model("Zone", zoneSchema);
+export const ZoneModel = mongoose.model("Zone", zoneSchema);

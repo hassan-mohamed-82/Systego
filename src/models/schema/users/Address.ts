@@ -1,19 +1,24 @@
-import { Schema, model, Document } from 'mongoose';
-
+import { Schema, model } from 'mongoose';
 
 const addressSchema = new Schema({
+  user: {
+    type: Schema.Types.ObjectId,
+    ref: 'Customer',
+    required: true
+  },
   country: {
-    type: Schema.Types.ObjectId, 
+    type: Schema.Types.ObjectId,
     ref: 'Country',
     required: true
   },
   city: {
-     type: Schema.Types.ObjectId, 
+    type: Schema.Types.ObjectId,
     ref: 'City',
     required: true
   },
   zone: {
-    type: String,
+    type: Schema.Types.ObjectId,
+    ref: 'Zone',
     required: true
   },
   street: {
@@ -37,5 +42,4 @@ const addressSchema = new Schema({
   timestamps: true
 });
 
-
-export const Address = model('Address', addressSchema);
+export const AddressModel = model('Address', addressSchema);

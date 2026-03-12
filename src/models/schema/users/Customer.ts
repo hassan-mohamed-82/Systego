@@ -2,7 +2,7 @@ import { model, Schema, Types } from "mongoose";
 import mongoose from "mongoose";
 import bcrypt from 'bcryptjs';
 
-const PlatformUserSchema = new Schema(
+const CustomerSchema = new Schema(
   {
     name: {
       type: String,
@@ -39,14 +39,20 @@ const PlatformUserSchema = new Schema(
         ref: "Products",
       },
     ],
+    addresses: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Address",
+      },
+    ],
   },
   { timestamps: true, }
 );
 
-PlatformUserSchema.pre("save", async function (next) {
+CustomerSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
-export const Platform_User = mongoose.model('platform_user', PlatformUserSchema);
+export const CustomerModel = mongoose.model('customer', CustomerSchema);
