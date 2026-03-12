@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticated } from '../../middlewares/authenticated';
-import { addToCart, getCart, updateQuantity, removeFromCart, clearCart } from '../../controller/users/Cart';
+import { addToCart, getCart, updateQuantity, removeFromCart, clearCart } from '../../controller/users/cart';
 import { validate } from '../../middlewares/validation';
 import { addToCartSchema, updateQuantitySchema } from '../../validation/users/cart';
 
