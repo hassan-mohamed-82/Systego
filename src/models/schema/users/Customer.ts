@@ -55,4 +55,4 @@ CustomerSchema.pre("save", async function (next) {
   next();
 });
 
-export const CustomerModel = mongoose.model('customer', CustomerSchema);
+export const CustomerModel = mongoose.model('UserStore', CustomerSchema);
