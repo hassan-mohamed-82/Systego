@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Zone = void 0;
+exports.ZoneModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const zoneSchema = new mongoose_1.Schema({
     name: {
@@ -56,4 +56,4 @@ const zoneSchema = new mongoose_1.Schema({
         required: true
     }
 });
-exports.Zone = mongoose_1.default.model("Zone", zoneSchema);
+exports.ZoneModel = mongoose_1.default.model("Zone", zoneSchema);

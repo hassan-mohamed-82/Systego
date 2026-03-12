@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const authenticated_1 = require("../../middlewares/authenticated");
+const address_1 = require("../../controller/users/address");
+const validation_1 = require("../../middlewares/validation");
+const address_2 = require("../../validation/users/address");
+const addressRoute = (0, express_1.Router)();
+addressRoute.use(authenticated_1.authenticated);
+addressRoute.post("/", (0, validation_1.validate)(address_2.addressSchema), address_1.addAddress);
+addressRoute.put("/:id", (0, validation_1.validate)(address_2.updateAddressSchema), address_1.updateAddress);
+addressRoute.get("/", address_1.getMyAddresses);
+addressRoute.delete("/:id", address_1.deleteAddress);
+exports.default = addressRoute;

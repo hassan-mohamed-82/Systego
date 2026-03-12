@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const haspremission_1 = require("../../middlewares/haspremission");
+const catchAsync_1 = require("../../utils/catchAsync");
+const productMovement_1 = require("../../controller/admin/productMovement");
+const router = (0, express_1.Router)();
+router.get("/", (0, haspremission_1.authorizePermissions)("product_movement", "View"), (0, catchAsync_1.catchAsync)(productMovement_1.getProductMovement));
+router.get("/selection", (0, haspremission_1.authorizePermissions)("product_movement", "View"), (0, catchAsync_1.catchAsync)(productMovement_1.selection));
+exports.default = router;

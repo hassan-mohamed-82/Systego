@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearWishlist = exports.checkProductInWishlist = exports.getUserWishlist = exports.removeProductFromWishlist = exports.addProductToWishlist = void 0;
-const platformUser_1 = require("../../models/schema/users/platformUser");
+const Customer_1 = require("../../models/schema/users/Customer");
 const products_1 = require("../../models/schema/admin/products");
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const NotFound_1 = require("../../Errors/NotFound");
@@ -20,7 +20,7 @@ exports.addProductToWishlist = (0, express_async_handler_1.default)(async (req, 
         throw new BadRequest_1.BadRequest('Missing required fields: userId, productId');
     }
     // Check if user exists
-    const user = await platformUser_1.Platform_User.findById(userId);
+    const user = await Customer_1.CustomerModel.findById(userId);
     if (!user) {
         throw new NotFound_1.NotFound('User not found');
     }
@@ -37,7 +37,7 @@ exports.addProductToWishlist = (0, express_async_handler_1.default)(async (req, 
     user.wishlist.push(productId);
     const updatedUser = await user.save();
     // Populate wishlist with product details
-    const populatedUser = await platformUser_1.Platform_User.findById(updatedUser._id)
+    const populatedUser = await Customer_1.CustomerModel.findById(updatedUser._id)
         .populate('wishlist', 'name images price stock category');
     return (0, response_1.SuccessResponse)(res, {
         message: 'Product added to wishlist successfully',
@@ -53,7 +53,7 @@ exports.removeProductFromWishlist = (0, express_async_handler_1.default)(async (
         throw new BadRequest_1.BadRequest('Missing required fields: userId, productId');
     }
     // Check if user exists
-    const user = await platformUser_1.Platform_User.findById(userId);
+    const user = await Customer_1.CustomerModel.findById(userId);
     if (!user) {
         throw new NotFound_1.NotFound('User not found');
     }
@@ -65,7 +65,7 @@ exports.removeProductFromWishlist = (0, express_async_handler_1.default)(async (
     user.wishlist = user.wishlist.filter(item => item.toString() !== productId);
     const updatedUser = await user.save();
     // Populate wishlist with product details
-    const populatedUser = await platformUser_1.Platform_User.findById(updatedUser._id)
+    const populatedUser = await Customer_1.CustomerModel.findById(updatedUser._id)
         .populate('wishlist', 'name images price stock category');
     return (0, response_1.SuccessResponse)(res, {
         message: 'Product removed from wishlist successfully',
@@ -80,7 +80,7 @@ exports.getUserWishlist = (0, express_async_handler_1.default)(async (req, res) 
         throw new BadRequest_1.BadRequest('User ID is required');
     }
     // Check if user exists and populate wishlist
-    const user = await platformUser_1.Platform_User.findById(userId)
+    const user = await Customer_1.CustomerModel.findById(userId)
         .populate('wishlist', 'name images price stock category discount');
     if (!user) {
         throw new NotFound_1.NotFound('User not found');
@@ -99,7 +99,7 @@ exports.checkProductInWishlist = (0, express_async_handler_1.default)(async (req
         throw new BadRequest_1.BadRequest('Missing required fields: userId, productId');
     }
     // Check if user exists
-    const user = await platformUser_1.Platform_User.findById(userId);
+    const user = await Customer_1.CustomerModel.findById(userId);
     if (!user) {
         throw new NotFound_1.NotFound('User not found');
     }
@@ -118,7 +118,7 @@ exports.clearWishlist = (0, express_async_handler_1.default)(async (req, res) =>
         throw new BadRequest_1.BadRequest('User ID is required');
     }
     // Check if user exists
-    const user = await platformUser_1.Platform_User.findById(userId);
+    const user = await Customer_1.CustomerModel.findById(userId);
     if (!user) {
         throw new NotFound_1.NotFound('User not found');
     }

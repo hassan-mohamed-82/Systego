@@ -1,11 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Order = void 0;
+exports.OrderModel = void 0;
 const mongoose_1 = require("mongoose");
 const orderSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'platform_user',
+        ref: 'Customer',
         required: true
     },
     cartItems: [
@@ -18,12 +18,20 @@ const orderSchema = new mongoose_1.Schema({
             price: Number,
         },
     ],
-    totalPrice: {
-        type: Number,
-    },
     shippingAddress: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'Address'
+        // بدل ما يكون Ref فقط، خزن التفاصيل المهمة
+        details: { type: String },
+        city: { type: String },
+        zone: { type: String }
+    },
+    shippingPrice: {
+        type: Number,
+        required: true,
+        default: 0
+    },
+    totalOrderPrice: {
+        type: Number,
+        required: true
     },
     paymentMethod: {
         type: mongoose_1.Schema.Types.ObjectId,
@@ -42,4 +50,4 @@ const orderSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
-exports.Order = (0, mongoose_1.model)('Order', orderSchema);
+exports.OrderModel = (0, mongoose_1.model)('Order', orderSchema);
