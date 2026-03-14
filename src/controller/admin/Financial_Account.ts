@@ -375,3 +375,58 @@ export const selectwarehousesforbankaccount = async (req: Request, res: Response
     warehouses,
   });
 };
+
+// ✅ Transfer Money between bank accounts
+export const transferMoney = async (req: Request, res: Response) => {
+  const { from_account_id, to_account_id, amount } = req.body;
+
+  if (!from_account_id || !to_account_id || amount == null) {
+    throw new BadRequest("from_account_id, to_account_id, and amount are required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(from_account_id)) {
+    throw new BadRequest("Invalid from_account_id");
+  }
+  if (!mongoose.Types.ObjectId.isValid(to_account_id)) {
+    throw new BadRequest("Invalid to_account_id");
+  }
+
+  if (from_account_id === to_account_id) {
+    throw new BadRequest("From and To accounts cannot be the same");
+  }
+
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    throw new BadRequest("Amount must be a positive number");
+  }
+
+  const fromAccount = await BankAccountModel.findOne({ _id: from_account_id, status: true });
+  if (!fromAccount) throw new NotFound("Source account not found or inactive");
+
+  const toAccount = await BankAccountModel.findOne({ _id: to_account_id, status: true });
+  if (!toAccount) throw new NotFound("Destination account not found or inactive");
+
+  if (fromAccount.balance < numAmount) {
+    throw new BadRequest("Insufficient balance in source account");
+  }
+
+  const [updatedFrom, updatedTo] = await Promise.all([
+    BankAccountModel.findByIdAndUpdate(
+      from_account_id,
+      { $inc: { balance: -numAmount } },
+      { new: true }
+    ),
+    BankAccountModel.findByIdAndUpdate(
+      to_account_id,
+      { $inc: { balance: numAmount } },
+      { new: true }
+    ),
+  ]);
+
+  SuccessResponse(res, {
+    message: "Transfer completed successfully",
+    from: { name: updatedFrom?.name, balance: updatedFrom?.balance },
+    to: { name: updatedTo?.name, balance: updatedTo?.balance },
+    transferred_amount: numAmount,
+  });
+};
