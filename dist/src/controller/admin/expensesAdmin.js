@@ -94,7 +94,19 @@ const getExpensesAdmin = async (req, res) => {
     const userId = req.user?.id;
     if (!userId)
         throw new Errors_1.BadRequest("User ID is required");
-    const expenses = await expenses_1.ExpenseModel.find()
+    const { startDate, endDate } = req.query;
+    const filter = {};
+    if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate)
+            filter.createdAt.$gte = new Date(startDate);
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filter.createdAt.$lte = end;
+        }
+    }
+    const expenses = await expenses_1.ExpenseModel.find(filter)
         .populate("admin_id", "username ")
         .populate("cashier_id", "name")
         .populate("shift_id", "start_time end_time")

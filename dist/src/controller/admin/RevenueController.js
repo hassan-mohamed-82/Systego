@@ -102,7 +102,19 @@ const getRevenues = async (req, res) => {
     const userId = req.user?.id;
     if (!userId)
         throw new BadRequest_1.BadRequest("Unauthorized Token");
-    const revenues = await Revenue_1.RevenueModel.find()
+    const { startDate, endDate } = req.query;
+    const filter = {};
+    if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate)
+            filter.createdAt.$gte = new Date(startDate);
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filter.createdAt.$lte = end;
+        }
+    }
+    const revenues = await Revenue_1.RevenueModel.find(filter)
         .populate("admin_id", "username ")
         .populate("Category_id", "name ar_name")
         .populate("financial_accountId", "name ar_name");

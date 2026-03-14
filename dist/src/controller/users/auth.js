@@ -33,8 +33,13 @@ exports.login = (0, express_async_handler_1.default)(async (req, res) => {
     if (!user || !(await bcryptjs_1.default.compare(req.body.password, user.password))) {
         throw new BadRequest_1.BadRequest('Incorrect email or password');
     }
+    const { password, __v, ...userResponse } = user.toObject();
     const token = await (0, generateJWT_1.default)({ id: user.id });
-    return (0, response_1.SuccessResponse)(res, { message: 'User logged in successfully', token }, 200);
+    return (0, response_1.SuccessResponse)(res, {
+        message: 'User logged in successfully',
+        user: userResponse,
+        token
+    }, 200);
 });
 exports.editProfile = (0, express_async_handler_1.default)(async (req, res) => {
     const user = await Customer_1.CustomerModel.findById(req.params.id);

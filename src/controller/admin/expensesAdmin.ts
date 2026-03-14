@@ -118,7 +118,20 @@ export const getExpensesAdmin = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     if (!userId) throw new BadRequest("User ID is required");
 
-    const expenses = await ExpenseModel.find()
+    const { startDate, endDate } = req.query;
+    const filter: any = {};
+
+    if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) filter.createdAt.$gte = new Date(startDate as string);
+        if (endDate) {
+            const end = new Date(endDate as string);
+            end.setHours(23, 59, 59, 999);
+            filter.createdAt.$lte = end;
+        }
+    }
+
+    const expenses = await ExpenseModel.find(filter)
         .populate("admin_id", "username ")
         .populate("cashier_id", "name")
         .populate("shift_id", "start_time end_time")

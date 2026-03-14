@@ -56,4 +56,4 @@ CustomerSchema.pre("save", async function (next) {
     this.password = await bcryptjs_1.default.hash(this.password, 10);
     next();
 });
-exports.CustomerModel = mongoose_2.default.model('customer', CustomerSchema);
+exports.CustomerModel = mongoose_2.default.model('UserStore', CustomerSchema);
