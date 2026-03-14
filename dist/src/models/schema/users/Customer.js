@@ -13,10 +13,16 @@ const CustomerSchema = new mongoose_1.Schema({
         trim: true,
         required: [true, "Name is required"],
     },
+    username: {
+        type: String,
+        trim: true,
+        unique: true,
+        sparse: true,
+    },
     email: {
         type: String,
-        required: [true, "Email must be provided"],
         unique: [true, "Email must be unique"],
+        sparse: true,
         trim: true,
         lowercase: true,
     },
@@ -30,8 +36,19 @@ const CustomerSchema = new mongoose_1.Schema({
     },
     password: {
         type: String,
-        required: [true, "Password is required"],
         minlength: [6, "Too short password"],
+    },
+    is_profile_complete: {
+        type: Boolean,
+        default: false,
+    },
+    otp_code: {
+        type: String,
+        default: null,
+    },
+    otp_expires_at: {
+        type: Date,
+        default: null,
     },
     imagePath: {
         type: String,
@@ -51,7 +68,8 @@ const CustomerSchema = new mongoose_1.Schema({
     ],
 }, { timestamps: true, });
 CustomerSchema.pre("save", async function (next) {
-    if (!this.isModified("password"))
+    this.is_profile_complete = Boolean(this.username?.trim() && this.password);
+    if (!this.isModified("password") || !this.password)
         return next();
     this.password = await bcryptjs_1.default.hash(this.password, 10);
     next();

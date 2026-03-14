@@ -1,8 +1,9 @@
 import nodemailer from "nodemailer";
 
 export const sendEmail = async (to: string, subject: string, text: string) => {
-  console.log("Email user:", process.env.EMAIL_USER);
-  console.log("Email pass:", process.env.EMAIL_PASS ? "Exists" : "Missing");
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error("EMAIL_USER and EMAIL_PASS must be configured");
+  }
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -12,17 +13,14 @@ export const sendEmail = async (to: string, subject: string, text: string) => {
     },
   });
 
-  try {
-    const info = await transporter.sendMail({
-      from: `"Smart_collge" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      text,
-    });
-    console.log("✅ Email sent:", info.response);
-  } catch (error) {
-    console.error("❌ Email error:", error);
-  }
+  const info = await transporter.sendMail({
+    from: `"Smart_collge" <${process.env.EMAIL_USER}>`,
+    to,
+    subject,
+    text,
+  });
+
+  return info;
 };
 
 // import SibApiV3Sdk from "sib-api-v3-sdk";
