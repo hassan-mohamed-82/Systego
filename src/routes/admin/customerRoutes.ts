@@ -2,7 +2,7 @@ import express from 'express';
 import { authorizePermissions } from "../../middlewares/haspremission"
 import {
     createCustomer, deleteCustomer, getCustomerById, getCustomers, getDueCustomers, updateCustomer
-    , getallgroups, getgroupbyid, creategroup, deletegroup, updategroup, getCountriesWithCities
+    , getallgroups, getgroupbyid, creategroup, deletegroup, updategroup, getCountriesWithCities, getCustomerSinglePageData
 } from '../../controller/admin/customer';
 import { catchAsync } from '../../utils/catchAsync';
 
@@ -11,6 +11,7 @@ const router = express.Router();
 router.post('/', authorizePermissions("POS", "Add"), authorizePermissions("customer", "Add"), catchAsync(createCustomer));
 router.get('/', authorizePermissions("customer", "View"), catchAsync(getCustomers));
 router.get('/countries', authorizePermissions("customer", "View"), catchAsync(getCountriesWithCities));
+router.get('/single-page/:id', authorizePermissions("customer", "View"), catchAsync(getCustomerSinglePageData));
 
 // Due customers route (must be before /:id)
 router.get('/due', authorizePermissions("customer", "View"), catchAsync(getDueCustomers));

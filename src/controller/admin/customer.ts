@@ -4,6 +4,10 @@ import { BadRequest } from '../../Errors/BadRequest';
 import { NotFound } from '../../Errors';
 import { SuccessResponse } from '../../utils/response';
 import { CountryModel } from '../../models/schema/admin/Country';
+import mongoose from 'mongoose';
+import { SaleModel } from '../../models/schema/admin/POS/Sale';
+import { PaymentModel } from '../../models/schema/admin/POS/payment';
+import { ReturnModel } from '../../models/schema/admin/POS/ReturnSale';
 
 // Create Customer
 export const createCustomer = async (req: Request, res: Response) => {
@@ -230,6 +234,104 @@ export const getCountriesWithCities = async (req: Request, res: Response) => {
     SuccessResponse(res, {
         message: "Countries with cities fetched successfully",
         countries,
+    });
+};
+
+export const getCustomerSinglePageData = async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        throw new BadRequest("Valid customer id is required");
+    }
+
+    const customer = await CustomerModel.findById(id)
+        .populate('country', 'name')
+        .populate('city', 'name');
+
+    if (!customer) {
+        throw new NotFound("Customer not found");
+    }
+
+    const customerObjectId = new mongoose.Types.ObjectId(id);
+
+    const sales = await SaleModel.find({
+        $or: [
+            { customer_id: customerObjectId },
+            { Due_customer_id: customerObjectId },
+        ],
+    })
+        .select('reference grand_total paid_amount remaining_amount date createdAt')
+        .sort({ createdAt: -1 });
+
+    const saleIds = sales.map((sale) => sale._id);
+
+    const totalOrders = sales.length;
+    const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.grand_total || 0), 0);
+    const totalPaid = sales.reduce((sum, sale) => sum + Number(sale.paid_amount || 0), 0);
+    const outstandingBalance = sales.reduce((sum, sale) => sum + Number(sale.remaining_amount || 0), 0);
+    const lastOrderDate = sales.length > 0 ? sales[0].date || sales[0].createdAt : null;
+
+    const paymentDocs = saleIds.length
+        ? await PaymentModel.find({ sale_id: { $in: saleIds } })
+            .populate('sale_id', 'reference')
+            .populate('financials.account_id', 'name')
+            .sort({ createdAt: -1 })
+        : [];
+
+    const paymentHistory = paymentDocs.flatMap((payment: any) => {
+        const lines = Array.isArray(payment.financials) ? payment.financials : [];
+
+        return lines.map((line: any, index: number) => {
+            const accountName = line?.account_id?.name || 'Unknown';
+
+            return {
+                payment_id: payment._id,
+                date: payment.createdAt,
+                amount: Number(line?.amount || 0),
+                payment_method: accountName,
+                reference_number: payment?.sale_id?.reference || null,
+                notes: payment.payment_proof || '',
+                line_no: index + 1,
+            };
+        });
+    });
+
+    const returnDocs = await ReturnModel.find({ customer_id: customerObjectId })
+        .select('reference sale_reference date items total_amount createdAt')
+        .sort({ createdAt: -1 });
+
+    const returns = returnDocs.map((ret: any) => ({
+        return_number: ret.reference,
+        order_number: ret.sale_reference,
+        date: ret.date || ret.createdAt,
+        items_returned: Array.isArray(ret.items)
+            ? ret.items.reduce((sum: number, item: any) => sum + Number(item.returned_quantity || 0), 0)
+            : 0,
+        refund_amount: Number(ret.total_amount || 0),
+        status: 'completed',
+    }));
+
+    return SuccessResponse(res, {
+        message: "Customer single page data fetched successfully",
+        customer: {
+            customer_name: customer.name,
+            phone_number: customer.phone_number,
+            email: customer.email || null,
+            address: customer.address || null,
+            city: (customer.city as any)?.name || null,
+            country: (customer.country as any)?.name || null,
+            cards: {
+                total_orders: totalOrders,
+            },
+            financial_summary: {
+                total_revenue: totalRevenue,
+                total_paid: totalPaid,
+                outstanding_balance: outstandingBalance,
+                last_order_date: lastOrderDate,
+            },
+            payment_history: paymentHistory,
+            returns,
+        },
     });
 };
 
