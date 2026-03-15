@@ -1,12 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { SuccessResponse } from "../../utils/response";
-import {
-  NotFound,
-  UnauthorizedError,
-  UniqueConstrainError,
-} from "../../Errors";
-import { BadRequest } from "../../Errors/BadRequest";
+import { NotFound, UnauthorizedError, UniqueConstrainError, BadRequest } from "../../Errors";
 import asyncHandler from 'express-async-handler';
 import generateJWT from '../../middlewares/generateJWT';
 import { saveBase64Image } from '../../utils/handleImages';
@@ -15,212 +10,208 @@ import { sendEmail } from '../../utils/sendEmails';
 
 const generateOtpCode = (): string => Math.floor(100000 + Math.random() * 900000).toString();
 
+// 1. Signup
+export const signup = asyncHandler(async (req: Request, res: Response) => {
+  const { username, email, phone, password, image } = req.body;
 
-export const signup = async (req: Request, res: Response) => {
-  const { name, username, email, phone, password } = req.body;
+  const existing = await CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
+  if (existing) {
+    throw new BadRequest(existing.is_profile_complete
+      ? "User already exists with this email or phone."
+      : "You have an existing account from our store. Please login with your phone number to activate it.");
+  }
 
-  const existing = await CustomerModel.findOne({ email });
-  if (existing) throw new UniqueConstrainError("Email", "User already signed up with this email");
+  const newUser = new CustomerModel({ username, email, phone_number: phone, password });
 
-  const existingUsername = await CustomerModel.findOne({ username });
-  if (existingUsername) throw new UniqueConstrainError("Username", "User already signed up with this username");
-
-  const userData: any = {
-    name,
-    username,
-    email,
-    phone_number: phone,
-    password
-  };
-
-  const newUser = new CustomerModel(userData);
+  if (image) {
+    newUser.imagePath = await saveBase64Image(image, newUser._id.toString(), req, 'profile_images');
+  }
 
   await newUser.save();
 
-  SuccessResponse(res, { message: "Signup successful" }, 201);
-};
+  SuccessResponse(res, {
+    message: "Signup successful, please login.",
+    action_required: "GO_TO_LOGIN"
+  }, 201);
+});
 
-
+// 2. Login (The Main Router for Frontend)
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const identifier = req.body.identifier ?? req.body.email;
-  const user = await CustomerModel.findOne({
-    $or: [{ email: identifier }, { username: identifier }],
-  });
+  const identifier = req.body.identifier || req.body.email || req.body.phone;
+  if (!identifier) throw new BadRequest('Please provide email, phone or username');
 
+  const user = await CustomerModel.findOne({
+    $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { username: identifier }]
+  }).select('+password');
+
+  // Scenario 1: User doesn't exist at all
   if (!user) {
-    throw new BadRequest('Incorrect email/username or password');
+    throw new NotFound("Account not found.", {
+      action_required: "GO_TO_SIGNUP"
+    });
   }
 
+  // Scenario 2: POS Client (Account exists but no password yet)
   if (!user.is_profile_complete) {
-    if (!user.email) {
-      throw new BadRequest('Email is required to receive OTP');
-    }
-
     const otpCode = generateOtpCode();
     user.otp_code = otpCode;
     user.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    await sendEmail(
-      user.email,
-      'Your OTP Code',
-      `Your OTP code is ${otpCode}. It will expire in 10 minutes.`
-    );
+    if (user.email) {
+      await sendEmail(user.email, 'Verification Code', `Your OTP code is ${otpCode}`);
+    }
 
     return SuccessResponse(res, {
-      message: 'OTP sent to your email',
+      message: 'Verification code sent to your contact info.',
       requires_otp: true,
+      action_required: "GO_TO_OTP_SCREEN"
     }, 200);
   }
 
+  // Scenario 3: Registered Online Client (Needs Password)
   if (!req.body.password) {
-    throw new BadRequest('Password is required');
+    return SuccessResponse(res, {
+      message: "Please enter your password to continue.",
+      action_required: "SHOW_PASSWORD_FIELD"
+    }, 200);
   }
 
-  if (!user.password || !(await bcrypt.compare(req.body.password, user.password))) {
-    throw new BadRequest('Incorrect email/username or password');
-  }
-
-  const { password, __v, ...userResponse } = user.toObject();
+  const isMatch = await bcrypt.compare(req.body.password, user.password || '');
+  if (!isMatch) throw new BadRequest('Incorrect password.');
 
   const token = await generateJWT({ id: user.id });
+  const { password, __v, ...userResponse } = user.toObject();
 
   return SuccessResponse(res, {
-    message: 'User logged in successfully',
+    message: 'Login successful',
     user: userResponse,
-    token
+    token,
+    action_required: "GO_TO_HOME"
   }, 200);
 });
 
+// 3. Verify OTP
 export const verifyOtpAndLogin = asyncHandler(async (req: Request, res: Response) => {
-  const identifier = req.body.identifier ?? req.body.email;
+  const identifier = req.body.identifier || req.body.email || req.body.phone;
   const { otp } = req.body;
 
   const user = await CustomerModel.findOne({
-    $or: [{ email: identifier }, { username: identifier }],
+    $or: [{ email: identifier }, { phone_number: identifier }, { username: identifier }]
   });
 
-  if (!user) {
-    throw new NotFound('User not found');
-  }
-
-  if (!user.otp_code || !user.otp_expires_at) {
-    throw new BadRequest('No OTP found for this user');
-  }
-
-  if (user.otp_code !== otp) {
-    throw new BadRequest('Invalid OTP');
-  }
-
-  if (new Date() > user.otp_expires_at) {
-    throw new BadRequest('OTP expired');
+  if (!user || user.otp_code !== otp || (user.otp_expires_at && new Date() > user.otp_expires_at)) {
+    throw new BadRequest('Invalid or expired OTP code.');
   }
 
   user.otp_code = undefined as any;
   user.otp_expires_at = undefined as any;
   await user.save();
 
-  const token = await generateJWT({ id: user.id });
-  const { password, __v, otp_code, otp_expires_at, ...userResponse } = user.toObject();
+  // If POS client, they MUST complete their profile (set password/username)
+  if (!user.is_profile_complete) {
+    return SuccessResponse(res, {
+      message: 'OTP verified. Please set your account details.',
+      action_required: "GO_TO_COMPLETE_PROFILE",
+      user_data: {
+        userId: user._id,
+        phone_number: user.phone_number,
+        email: user.email,
+        username: user.username,
+        imagePath: user.imagePath
+      }
+    }, 200);
+  }
 
+  // If somehow a complete user used OTP (e.g., forget password flow)
+  const token = await generateJWT({ id: user.id });
+  const { password, __v, ...userResponse } = user.toObject();
   return SuccessResponse(res, {
-    message: 'OTP verified successfully',
+    message: 'Verified successfully',
     token,
     user: userResponse,
-    requires_otp: false,
+    action_required: "GO_TO_HOME"
   }, 200);
 });
 
+// 4. Complete Profile (The bridge from POS to Online)
+export const completeProfile = asyncHandler(async (req: Request, res: Response) => {
+  const { userId, username, email, password, confirmPassword, image } = req.body;
+
+  if (password !== confirmPassword) {
+    throw new BadRequest('Passwords do not match.');
+  }
+
+  const user = await CustomerModel.findById(userId);
+  if (!user) throw new NotFound("User not found.");
+
+  if (username) user.username = username;
+  if (email) user.email = email;
+  if (password) user.password = password;
+
+  if (image) {
+    user.imagePath = await saveBase64Image(image, user._id.toString(), req, 'profile_images');
+  }
+
+  await user.save();
+  const token = await generateJWT({ id: user.id });
+  const { password: _, __v, ...userResponse } = user.toObject();
+
+  return SuccessResponse(res, {
+    message: "Account activated successfully!",
+    token,
+    user: userResponse,
+    action_required: "GO_TO_HOME"
+  }, 200);
+});
+
+// 5. Edit Profile
+export const editProfile = asyncHandler(async (req: Request, res: Response) => {
+  const user = await CustomerModel.findById(req.params.id);
+  if (!user) throw new NotFound('User not found.');
+  if (user.id !== req.user?.id) throw new UnauthorizedError('Not authorized.');
+
+  const { phone, username, email, password, image } = req.body;
+
+  if (image) {
+    user.imagePath = await saveBase64Image(image, user.id, req, 'profile_images');
+  }
+  if (phone) user.phone_number = phone;
+  if (username) user.username = username;
+  if (email) user.email = email;
+  if (password) user.password = password;
+
+  await user.save();
+  return SuccessResponse(res, {
+    message: 'Profile updated successfully',
+    action_required: "REFRESH_PROFILE"
+  }, 200);
+});
+
+// 6. Get Profile
+export const getProfile = asyncHandler(async (req: Request, res: Response) => {
+  const user = await CustomerModel.findById(req.user?.id);
+  if (!user) throw new NotFound('User not found.');
+  const { password, __v, ...userResponse } = user.toObject();
+  return SuccessResponse(res, { message: 'Profile retrieved successfully', data: userResponse }, 200);
+});
+
+// 7. Resend OTP
 export const resendOtp = asyncHandler(async (req: Request, res: Response) => {
-  const identifier = req.body.identifier ?? req.body.email;
-
-  const user = await CustomerModel.findOne({
-    $or: [{ email: identifier }, { username: identifier }],
-  });
-
-  if (!user) {
-    throw new NotFound('User not found');
-  }
-
-  if (user.is_profile_complete) {
-    throw new BadRequest('User profile is already complete and does not require OTP');
-  }
-
-  if (!user.email) {
-    throw new BadRequest('Email is required to receive OTP');
-  }
+  const identifier = req.body.identifier || req.body.email || req.body.phone;
+  const user = await CustomerModel.findOne({ $or: [{ email: identifier }, { phone_number: identifier }] });
+  if (!user) throw new NotFound('User not found.');
 
   const otpCode = generateOtpCode();
   user.otp_code = otpCode;
   user.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
   await user.save();
 
-  await sendEmail(
-    user.email,
-    'Your OTP Code',
-    `Your OTP code is ${otpCode}. It will expire in 10 minutes.`
-  );
+  if (user.email) await sendEmail(user.email, 'Your OTP Code', `Your new code is ${otpCode}`);
 
   return SuccessResponse(res, {
-    message: 'OTP resent successfully',
+    message: 'A new OTP has been sent.',
     requires_otp: true,
+    action_required: "STAY_ON_OTP_SCREEN"
   }, 200);
 });
-
-export const editProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = await CustomerModel.findById(req.params.id);
-
-  if (!user) {
-    throw new NotFound('User not found');
-  }
-  if (user.id !== req.user?.id) {
-    throw new UnauthorizedError('You are not authorized to edit this profile');
-  }
-
-  const { name, phone, username, email, password } = req.body;
-
-  const folder = 'profile_images';
-
-  const imageUrl = req.user?.id ? await saveBase64Image(req.body.image, req.user.id, req, folder) : null;
-  if (imageUrl) user.imagePath = imageUrl;
-  if (name) user.name = name;
-  if (phone) user.phone_number = phone;
-  if (username && username !== user.username) {
-    const existingUsername = await CustomerModel.findOne({ username, _id: { $ne: user.id } });
-    if (existingUsername) throw new UniqueConstrainError('Username', 'Username already exists');
-    user.username = username;
-  }
-  if (email && email !== user.email) {
-    const existingEmail = await CustomerModel.findOne({ email, _id: { $ne: user.id } });
-    if (existingEmail) throw new UniqueConstrainError('Email', 'Email already exists');
-    user.email = email;
-  }
-  if (password) user.password = password;
-
-
-  await user.save();
-  return SuccessResponse(res, {
-    message: 'Profile updated successfully',
-    is_profile_complete: user.is_profile_complete,
-    requires_otp: !user.is_profile_complete,
-  }, 200);
-});
-
-export const getProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = await CustomerModel.findById(req.user?.id).select('-password -__v')
-  if (!user) {
-    throw new NotFound('User not found');
-  }
-  return SuccessResponse(res, {
-    message: 'Profile retrieved successfully',
-    data: user,
-    is_profile_complete: user.is_profile_complete,
-    requires_otp: !user.is_profile_complete,
-  }, 200);
-});
-
-
-
-
-
-

@@ -76,3 +76,11 @@ export const updateAddress = async (req: Request, res: Response) => {
 
     SuccessResponse(res, { message: "Address updated successfully", address });
 };
+
+export const getAllLists = async (req: Request, res: Response) => {
+    const countries = await CountryModel.find();
+    const cities = await CityModels.find();
+    const zones = await ZoneModel.find();
+
+    SuccessResponse(res, { message: "Lists fetched successfully", countries, cities, zones });
+};
