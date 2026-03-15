@@ -9,7 +9,10 @@ export const createSupplierSchema = Joi.object({
   image: Joi.string().optional(),
   cityId: Joi.string().required(),
   countryId: Joi.string().required(),
-
+  contact_person: Joi.string().optional(),
+  registration_date: Joi.date().optional(),
+  status: Joi.string().valid("active", "inactive").optional(),
+  notes: Joi.array().items(Joi.string()).optional(),
 });
 
 export const updateSupplierSchema = Joi.object({
@@ -21,4 +24,8 @@ export const updateSupplierSchema = Joi.object({
   image: Joi.string().optional(),
   cityId: Joi.string().optional(),
   countryId: Joi.string().optional(),
+  contact_person: Joi.string().optional(),
+  registration_date: Joi.date().optional(),
+  status: Joi.string().valid("active", "inactive").optional(),
+  notes: Joi.array().items(Joi.string()).optional(),
 });

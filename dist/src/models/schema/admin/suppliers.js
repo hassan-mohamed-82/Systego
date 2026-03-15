@@ -44,5 +44,9 @@ const SupplierSchema = new mongoose_1.Schema({
     company_name: { type: String, maxlength: 150 },
     cityId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "City" },
     countryId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Country" },
+    contact_person: { type: String, maxlength: 100 },
+    registration_date: { type: Date, default: Date.now },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
+    notes: [{ type: String }],
 });
 exports.SupplierModel = mongoose_1.default.model("Supplier", SupplierSchema);
