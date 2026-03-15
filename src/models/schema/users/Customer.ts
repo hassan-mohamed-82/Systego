@@ -4,11 +4,6 @@ import bcrypt from 'bcryptjs';
 
 const CustomerSchema = new Schema(
   {
-    name: {
-      type: String,
-      trim: true,
-      required: [true, "Name is required"],
-    },
     username: {
       type: String,
       trim: true,
