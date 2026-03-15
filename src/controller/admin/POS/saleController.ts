@@ -90,7 +90,7 @@ export const createSale = async (req: Request, res: Response) => {
 
   if (products && products.length > 0) {
     for (const p of products as any[]) {
-      const { product_id, product_price_id, quantity } = p;
+      const { product_id, product_price_id, quantity, discount = 0, discount_type = "fixed" } = p;
 
       let finalPrice = 0;
       let originalPrice = 0;
@@ -146,6 +146,17 @@ export const createSale = async (req: Request, res: Response) => {
         originalPrice = finalPrice;
       }
 
+      // Apply product-specific discount
+      let appliedDiscount = 0;
+      if (Number(discount) > 0) {
+        if (discount_type === "percentage") {
+          appliedDiscount = finalPrice * (Number(discount) / 100);
+        } else {
+          appliedDiscount = Number(discount);
+        }
+        finalPrice = Math.max(0, finalPrice - appliedDiscount);
+      }
+
       const finalSubtotal = finalPrice * quantity;
 
       processedProducts.push({
@@ -155,6 +166,8 @@ export const createSale = async (req: Request, res: Response) => {
         price: finalPrice,
         subtotal: finalSubtotal,
         original_price: originalPrice,
+        discount: Number(discount),
+        discount_type: discount_type,
         is_wholesale: isWholesale,
         options_id: p.options_id,
         isGift: p.isGift,
@@ -174,7 +187,7 @@ export const createSale = async (req: Request, res: Response) => {
 
   if (bundles && bundles.length > 0) {
     for (const b of bundles as any[]) {
-      const { bundle_id, quantity, selected_variations, isGift } = b;
+      const { bundle_id, quantity, selected_variations, isGift, discount = 0, discount_type = "fixed" } = b;
 
       if (!mongoose.Types.ObjectId.isValid(bundle_id)) {
         throw new BadRequest("Invalid bundle id");
@@ -245,13 +258,28 @@ export const createSale = async (req: Request, res: Response) => {
         });
       }
 
-      const bundleSubtotal = bundleDoc.price * quantity;
+      let finalBundlePrice = bundleDoc.price;
+      let appliedDiscount = 0;
+      
+      if (Number(discount) > 0) {
+        if (discount_type === "percentage") {
+          appliedDiscount = finalBundlePrice * (Number(discount) / 100);
+        } else {
+          appliedDiscount = Number(discount);
+        }
+        finalBundlePrice = Math.max(0, finalBundlePrice - appliedDiscount);
+      }
+
+      const bundleSubtotal = finalBundlePrice * quantity;
 
       processedBundles.push({
         bundle_id,
         quantity,
-        price: bundleDoc.price,
+        price: finalBundlePrice,
         subtotal: bundleSubtotal,
+        original_price: bundleDoc.price,
+        discount: Number(discount),
+        discount_type: discount_type,
         isGift: !!isGift,
         products: bundleProductsProcessed,
       });
@@ -485,6 +513,8 @@ export const createSale = async (req: Request, res: Response) => {
       price: p.price,
       subtotal: p.subtotal,
       original_price: p.original_price,
+      discount: p.discount,
+      discount_type: p.discount_type,
       is_wholesale: p.is_wholesale,
       options_id: p.options_id,
       isGift: !!p.isGift,
@@ -504,6 +534,9 @@ export const createSale = async (req: Request, res: Response) => {
       quantity: b.quantity,
       price: b.price,
       subtotal: b.subtotal,
+      original_price: b.original_price,
+      discount: b.discount,
+      discount_type: b.discount_type,
       options_id: [],
       isGift: !!b.isGift,
       isBundle: true,
@@ -708,6 +741,8 @@ export const getSales = async (req: Request, res: Response) => {
           ...item,
           price: null,
           subtotal: null,
+          discount: null,
+          original_price: null,
           product_id: { ...item.product_id, price: null },
           product_price_id: item.product_price_id
             ? { ...item.product_price_id, price: null }
@@ -721,6 +756,8 @@ export const getSales = async (req: Request, res: Response) => {
           ...item,
           price: null,
           subtotal: null,
+          discount: null,
+          original_price: null,
           bundle_id: { ...item.bundle_id, price: null },
         };
       }
