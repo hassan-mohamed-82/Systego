@@ -6,10 +6,14 @@ const validation_1 = require("../../middlewares/validation");
 const authenticated_1 = require("../../middlewares/authenticated");
 const auth_2 = require("../../validation/users/auth");
 const authRoute = (0, express_1.Router)();
+// Authentication Flow
 authRoute.post("/signup", (0, validation_1.validate)(auth_2.signupSchema), auth_1.signup);
 authRoute.post("/login", (0, validation_1.validate)(auth_2.loginSchema), auth_1.login);
 authRoute.post("/verify-otp", (0, validation_1.validate)(auth_2.verifyOtpSchema), auth_1.verifyOtpAndLogin);
 authRoute.post("/resend-otp", (0, validation_1.validate)(auth_2.resendOtpSchema), auth_1.resendOtp);
-authRoute.put("/edit-profile/:id", authenticated_1.authenticated, auth_1.editProfile);
+// POS to Online transition
+authRoute.post("/complete-profile", (0, validation_1.validate)(auth_2.completeProfileSchema), auth_1.completeProfile);
+// Profile Management
+authRoute.put("/edit-profile/:id", authenticated_1.authenticated, (0, validation_1.validate)(auth_2.editProfileSchema), auth_1.editProfile);
 authRoute.get("/get-profile", authenticated_1.authenticated, auth_1.getProfile);
 exports.default = authRoute;

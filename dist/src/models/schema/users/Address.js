@@ -5,7 +5,7 @@ const mongoose_1 = require("mongoose");
 const addressSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'Customer',
+        ref: 'UserStore',
         required: true
     },
     country: {

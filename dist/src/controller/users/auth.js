@@ -3,174 +3,196 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getProfile = exports.editProfile = exports.resendOtp = exports.verifyOtpAndLogin = exports.login = exports.signup = void 0;
+exports.resendOtp = exports.getProfile = exports.editProfile = exports.completeProfile = exports.verifyOtpAndLogin = exports.login = exports.signup = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const response_1 = require("../../utils/response");
 const Errors_1 = require("../../Errors");
-const BadRequest_1 = require("../../Errors/BadRequest");
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const generateJWT_1 = __importDefault(require("../../middlewares/generateJWT"));
 const handleImages_1 = require("../../utils/handleImages");
 const Customer_1 = require("../../models/schema/users/Customer");
 const sendEmails_1 = require("../../utils/sendEmails");
 const generateOtpCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-const signup = async (req, res) => {
-    const { name, username, email, phone, password } = req.body;
-    const existing = await Customer_1.CustomerModel.findOne({ email });
-    if (existing)
-        throw new Errors_1.UniqueConstrainError("Email", "User already signed up with this email");
-    const existingUsername = await Customer_1.CustomerModel.findOne({ username });
-    if (existingUsername)
-        throw new Errors_1.UniqueConstrainError("Username", "User already signed up with this username");
-    const userData = {
-        name,
-        username,
-        email,
-        phone_number: phone,
-        password
-    };
-    const newUser = new Customer_1.CustomerModel(userData);
-    await newUser.save();
-    (0, response_1.SuccessResponse)(res, { message: "Signup successful" }, 201);
-};
-exports.signup = signup;
-exports.login = (0, express_async_handler_1.default)(async (req, res) => {
-    const identifier = req.body.identifier ?? req.body.email;
-    const user = await Customer_1.CustomerModel.findOne({
-        $or: [{ email: identifier }, { username: identifier }],
-    });
-    if (!user) {
-        throw new BadRequest_1.BadRequest('Incorrect email/username or password');
+// 1. Signup
+exports.signup = (0, express_async_handler_1.default)(async (req, res) => {
+    const { username, email, phone, password, image } = req.body;
+    const existing = await Customer_1.CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
+    if (existing) {
+        throw new Errors_1.BadRequest(existing.is_profile_complete
+            ? "User already exists with this email or phone."
+            : "You have an existing account from our store. Please login with your phone number to activate it.");
     }
+    const newUser = new Customer_1.CustomerModel({ username, email, phone_number: phone, password });
+    if (image) {
+        newUser.imagePath = await (0, handleImages_1.saveBase64Image)(image, newUser._id.toString(), req, 'profile_images');
+    }
+    await newUser.save();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Signup successful, please login.",
+        action_required: "GO_TO_LOGIN"
+    }, 201);
+});
+// 2. Login (The Main Router for Frontend)
+exports.login = (0, express_async_handler_1.default)(async (req, res) => {
+    const identifier = req.body.identifier || req.body.email || req.body.phone;
+    if (!identifier)
+        throw new Errors_1.BadRequest('Please provide email, phone or username');
+    const user = await Customer_1.CustomerModel.findOne({
+        $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { username: identifier }]
+    }).select('+password');
+    // Scenario 1: User doesn't exist at all
+    if (!user) {
+        throw new Errors_1.NotFound("Account not found.", {
+            action_required: "GO_TO_SIGNUP"
+        });
+    }
+    // Scenario 2: POS Client (Account exists but no password yet)
     if (!user.is_profile_complete) {
-        if (!user.email) {
-            throw new BadRequest_1.BadRequest('Email is required to receive OTP');
-        }
         const otpCode = generateOtpCode();
         user.otp_code = otpCode;
         user.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
         await user.save();
-        await (0, sendEmails_1.sendEmail)(user.email, 'Your OTP Code', `Your OTP code is ${otpCode}. It will expire in 10 minutes.`);
+        if (user.email) {
+            await (0, sendEmails_1.sendEmail)(user.email, 'Verification Code', `Your OTP code is ${otpCode}`);
+        }
         return (0, response_1.SuccessResponse)(res, {
-            message: 'OTP sent to your email',
+            message: 'Verification code sent to your contact info.',
             requires_otp: true,
+            action_required: "GO_TO_OTP_SCREEN"
         }, 200);
     }
+    // Scenario 3: Registered Online Client (Needs Password)
     if (!req.body.password) {
-        throw new BadRequest_1.BadRequest('Password is required');
+        return (0, response_1.SuccessResponse)(res, {
+            message: "Please enter your password to continue.",
+            action_required: "SHOW_PASSWORD_FIELD"
+        }, 200);
     }
-    if (!user.password || !(await bcryptjs_1.default.compare(req.body.password, user.password))) {
-        throw new BadRequest_1.BadRequest('Incorrect email/username or password');
-    }
-    const { password, __v, ...userResponse } = user.toObject();
+    const isMatch = await bcryptjs_1.default.compare(req.body.password, user.password || '');
+    if (!isMatch)
+        throw new Errors_1.BadRequest('Incorrect password.');
     const token = await (0, generateJWT_1.default)({ id: user.id });
+    const { password, __v, ...userResponse } = user.toObject();
     return (0, response_1.SuccessResponse)(res, {
-        message: 'User logged in successfully',
+        message: 'Login successful',
         user: userResponse,
-        token
+        token,
+        action_required: "GO_TO_HOME"
     }, 200);
 });
+// 3. Verify OTP
 exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res) => {
-    const identifier = req.body.identifier ?? req.body.email;
+    const identifier = req.body.identifier || req.body.email || req.body.phone;
     const { otp } = req.body;
     const user = await Customer_1.CustomerModel.findOne({
-        $or: [{ email: identifier }, { username: identifier }],
+        $or: [{ email: identifier }, { phone_number: identifier }, { username: identifier }]
     });
-    if (!user) {
-        throw new Errors_1.NotFound('User not found');
-    }
-    if (!user.otp_code || !user.otp_expires_at) {
-        throw new BadRequest_1.BadRequest('No OTP found for this user');
-    }
-    if (user.otp_code !== otp) {
-        throw new BadRequest_1.BadRequest('Invalid OTP');
-    }
-    if (new Date() > user.otp_expires_at) {
-        throw new BadRequest_1.BadRequest('OTP expired');
+    if (!user || user.otp_code !== otp || (user.otp_expires_at && new Date() > user.otp_expires_at)) {
+        throw new Errors_1.BadRequest('Invalid or expired OTP code.');
     }
     user.otp_code = undefined;
     user.otp_expires_at = undefined;
     await user.save();
+    // If POS client, they MUST complete their profile (set password/username)
+    if (!user.is_profile_complete) {
+        return (0, response_1.SuccessResponse)(res, {
+            message: 'OTP verified. Please set your account details.',
+            action_required: "GO_TO_COMPLETE_PROFILE",
+            user_data: {
+                userId: user._id,
+                phone_number: user.phone_number,
+                email: user.email,
+                username: user.username,
+                imagePath: user.imagePath
+            }
+        }, 200);
+    }
+    // If somehow a complete user used OTP (e.g., forget password flow)
     const token = await (0, generateJWT_1.default)({ id: user.id });
-    const { password, __v, otp_code, otp_expires_at, ...userResponse } = user.toObject();
+    const { password, __v, ...userResponse } = user.toObject();
     return (0, response_1.SuccessResponse)(res, {
-        message: 'OTP verified successfully',
+        message: 'Verified successfully',
         token,
         user: userResponse,
-        requires_otp: false,
+        action_required: "GO_TO_HOME"
     }, 200);
 });
-exports.resendOtp = (0, express_async_handler_1.default)(async (req, res) => {
-    const identifier = req.body.identifier ?? req.body.email;
-    const user = await Customer_1.CustomerModel.findOne({
-        $or: [{ email: identifier }, { username: identifier }],
-    });
-    if (!user) {
-        throw new Errors_1.NotFound('User not found');
+// 4. Complete Profile (The bridge from POS to Online)
+exports.completeProfile = (0, express_async_handler_1.default)(async (req, res) => {
+    const { userId, username, email, password, confirmPassword, image } = req.body;
+    if (password !== confirmPassword) {
+        throw new Errors_1.BadRequest('Passwords do not match.');
     }
-    if (user.is_profile_complete) {
-        throw new BadRequest_1.BadRequest('User profile is already complete and does not require OTP');
+    const user = await Customer_1.CustomerModel.findById(userId);
+    if (!user)
+        throw new Errors_1.NotFound("User not found.");
+    if (username)
+        user.username = username;
+    if (email)
+        user.email = email;
+    if (password)
+        user.password = password;
+    if (image) {
+        user.imagePath = await (0, handleImages_1.saveBase64Image)(image, user._id.toString(), req, 'profile_images');
     }
-    if (!user.email) {
-        throw new BadRequest_1.BadRequest('Email is required to receive OTP');
-    }
-    const otpCode = generateOtpCode();
-    user.otp_code = otpCode;
-    user.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
-    await (0, sendEmails_1.sendEmail)(user.email, 'Your OTP Code', `Your OTP code is ${otpCode}. It will expire in 10 minutes.`);
+    const token = await (0, generateJWT_1.default)({ id: user.id });
+    const { password: _, __v, ...userResponse } = user.toObject();
     return (0, response_1.SuccessResponse)(res, {
-        message: 'OTP resent successfully',
-        requires_otp: true,
+        message: "Account activated successfully!",
+        token,
+        user: userResponse,
+        action_required: "GO_TO_HOME"
     }, 200);
 });
+// 5. Edit Profile
 exports.editProfile = (0, express_async_handler_1.default)(async (req, res) => {
     const user = await Customer_1.CustomerModel.findById(req.params.id);
-    if (!user) {
-        throw new Errors_1.NotFound('User not found');
+    if (!user)
+        throw new Errors_1.NotFound('User not found.');
+    if (user.id !== req.user?.id)
+        throw new Errors_1.UnauthorizedError('Not authorized.');
+    const { phone, username, email, password, image } = req.body;
+    if (image) {
+        user.imagePath = await (0, handleImages_1.saveBase64Image)(image, user.id, req, 'profile_images');
     }
-    if (user.id !== req.user?.id) {
-        throw new Errors_1.UnauthorizedError('You are not authorized to edit this profile');
-    }
-    const { name, phone, username, email, password } = req.body;
-    const folder = 'profile_images';
-    const imageUrl = req.user?.id ? await (0, handleImages_1.saveBase64Image)(req.body.image, req.user.id, req, folder) : null;
-    if (imageUrl)
-        user.imagePath = imageUrl;
-    if (name)
-        user.name = name;
     if (phone)
         user.phone_number = phone;
-    if (username && username !== user.username) {
-        const existingUsername = await Customer_1.CustomerModel.findOne({ username, _id: { $ne: user.id } });
-        if (existingUsername)
-            throw new Errors_1.UniqueConstrainError('Username', 'Username already exists');
+    if (username)
         user.username = username;
-    }
-    if (email && email !== user.email) {
-        const existingEmail = await Customer_1.CustomerModel.findOne({ email, _id: { $ne: user.id } });
-        if (existingEmail)
-            throw new Errors_1.UniqueConstrainError('Email', 'Email already exists');
+    if (email)
         user.email = email;
-    }
     if (password)
         user.password = password;
     await user.save();
     return (0, response_1.SuccessResponse)(res, {
         message: 'Profile updated successfully',
-        is_profile_complete: user.is_profile_complete,
-        requires_otp: !user.is_profile_complete,
+        action_required: "REFRESH_PROFILE"
     }, 200);
 });
+// 6. Get Profile
 exports.getProfile = (0, express_async_handler_1.default)(async (req, res) => {
-    const user = await Customer_1.CustomerModel.findById(req.user?.id).select('-password -__v');
-    if (!user) {
-        throw new Errors_1.NotFound('User not found');
-    }
+    const user = await Customer_1.CustomerModel.findById(req.user?.id);
+    if (!user)
+        throw new Errors_1.NotFound('User not found.');
+    const { password, __v, ...userResponse } = user.toObject();
+    return (0, response_1.SuccessResponse)(res, { message: 'Profile retrieved successfully', data: userResponse }, 200);
+});
+// 7. Resend OTP
+exports.resendOtp = (0, express_async_handler_1.default)(async (req, res) => {
+    const identifier = req.body.identifier || req.body.email || req.body.phone;
+    const user = await Customer_1.CustomerModel.findOne({ $or: [{ email: identifier }, { phone_number: identifier }] });
+    if (!user)
+        throw new Errors_1.NotFound('User not found.');
+    const otpCode = generateOtpCode();
+    user.otp_code = otpCode;
+    user.otp_expires_at = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+    if (user.email)
+        await (0, sendEmails_1.sendEmail)(user.email, 'Your OTP Code', `Your new code is ${otpCode}`);
     return (0, response_1.SuccessResponse)(res, {
-        message: 'Profile retrieved successfully',
-        data: user,
-        is_profile_complete: user.is_profile_complete,
-        requires_otp: !user.is_profile_complete,
+        message: 'A new OTP has been sent.',
+        requires_otp: true,
+        action_required: "STAY_ON_OTP_SCREEN"
     }, 200);
 });

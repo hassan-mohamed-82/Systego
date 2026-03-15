@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateAddress = exports.deleteAddress = exports.getMyAddresses = exports.addAddress = void 0;
+exports.getAllLists = exports.updateAddress = exports.deleteAddress = exports.getMyAddresses = exports.addAddress = void 0;
 const Address_1 = require("../../models/schema/users/Address");
 const Zone_1 = require("../../models/schema/admin/Zone");
 const City_1 = require("../../models/schema/admin/City");
@@ -69,3 +69,10 @@ const updateAddress = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { message: "Address updated successfully", address });
 };
 exports.updateAddress = updateAddress;
+const getAllLists = async (req, res) => {
+    const countries = await Country_1.CountryModel.find();
+    const cities = await City_1.CityModels.find();
+    const zones = await Zone_1.ZoneModel.find();
+    (0, response_1.SuccessResponse)(res, { message: "Lists fetched successfully", countries, cities, zones });
+};
+exports.getAllLists = getAllLists;

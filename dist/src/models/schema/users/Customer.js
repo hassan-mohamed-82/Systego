@@ -8,11 +8,6 @@ const mongoose_1 = require("mongoose");
 const mongoose_2 = __importDefault(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const CustomerSchema = new mongoose_1.Schema({
-    name: {
-        type: String,
-        trim: true,
-        required: [true, "Name is required"],
-    },
     username: {
         type: String,
         trim: true,

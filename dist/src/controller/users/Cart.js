@@ -37,8 +37,7 @@ const addToCart = async (req, res) => {
 exports.addToCart = addToCart;
 const getCart = async (req, res) => {
     const userId = req.user?.id;
-    const cart = await Cart_1.CartModel.find({ user: userId })
-        .populate('product', 'name');
+    const cart = await Cart_1.CartModel.find({ user: userId });
     if (!cart) {
         return (0, response_1.SuccessResponse)(res, { message: "Cart is empty", cartItems: [], totalCartPrice: 0 });
     }

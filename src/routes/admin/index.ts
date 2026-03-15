@@ -61,6 +61,7 @@ import ReturnPurchaseRouter from "./returnPurchase";
 import finicial_reportRouter from "./finicialaccountReport";
 import orderRouter from "./orders";
 import versionUpdaterRouter from "./versionUpdater";
+import DecimalSettingRouter from "./DecimalSetting";
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -126,4 +127,5 @@ route.use("/product-movement", productMovementRouter)
 route.use("/finicial-report", finicial_reportRouter)
 route.use("/dashboard", DashboardRouter)
 route.use("/version-updater", versionUpdaterRouter)
+route.use("/decimal-setting", DecimalSettingRouter)
 export default route;

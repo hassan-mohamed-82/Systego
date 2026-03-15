@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const DecimalSetting_1 = require("../../controller/admin/DecimalSetting");
+const validation_1 = require("../../middlewares/validation");
+const DecimalSetting_2 = require("../../validation/admin/DecimalSetting");
+const catchAsync_1 = require("../../utils/catchAsync");
+const route = (0, express_1.Router)();
+route.get("/", (0, catchAsync_1.catchAsync)(DecimalSetting_1.getDecimalSetting));
+route.put("/", (0, validation_1.validate)(DecimalSetting_2.updateDecimalSettingSchema), (0, catchAsync_1.catchAsync)(DecimalSetting_1.updateDecimalSetting));
+exports.default = route;
