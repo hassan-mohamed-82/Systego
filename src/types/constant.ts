@@ -56,7 +56,9 @@ export const MODULES = [
   "financial_report",
   "order",
   "Units",
-  "orders"
+  "orders",
+  "banner",
+  "decimal_setting"
 ] as const;
 
 // أسماء بس، من غير ids

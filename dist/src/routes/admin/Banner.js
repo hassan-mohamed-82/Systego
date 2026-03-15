@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Banner_1 = require("../../controller/admin/Banner");
+const validation_1 = require("../../middlewares/validation");
+const Banner_2 = require("../../validation/admin/Banner");
+const catchAsync_1 = require("../../utils/catchAsync");
+const haspremission_1 = require("../../middlewares/haspremission");
+const route = (0, express_1.Router)();
+route.post("/", (0, haspremission_1.authorizePermissions)("banner", "Add"), (0, validation_1.validate)(Banner_2.createBannerSchema), (0, catchAsync_1.catchAsync)(Banner_1.createBanner));
+route.get("/", (0, haspremission_1.authorizePermissions)("banner", "View"), (0, catchAsync_1.catchAsync)(Banner_1.getBanners));
+route.get("/:id", (0, haspremission_1.authorizePermissions)("banner", "View"), (0, catchAsync_1.catchAsync)(Banner_1.getBannerById));
+route.put("/:id", (0, haspremission_1.authorizePermissions)("banner", "Edit"), (0, validation_1.validate)(Banner_2.updateBannerSchema), (0, catchAsync_1.catchAsync)(Banner_1.updateBanner));
+route.delete("/:id", (0, haspremission_1.authorizePermissions)("banner", "Delete"), (0, catchAsync_1.catchAsync)(Banner_1.deleteBanner));
+exports.default = route;

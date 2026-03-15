@@ -58,7 +58,9 @@ exports.MODULES = [
     "financial_report",
     "order",
     "Units",
-    "orders"
+    "orders",
+    "banner",
+    "decimal_setting"
 ];
 // أسماء بس، من غير ids
 exports.ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"];
