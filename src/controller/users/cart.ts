@@ -41,7 +41,6 @@ export const getCart = async (req: Request, res: Response) => {
     const userId = req.user?.id;
 
     const cart = await CartModel.find({ user: userId })
-        .populate('product', 'name');
 
     if (!cart) {
         return SuccessResponse(res, { message: "Cart is empty", cartItems: [], totalCartPrice: 0 });

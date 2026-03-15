@@ -1,7 +1,7 @@
 import Joi from "joi";
 
 export const addToCartSchema = Joi.object({
-    product: Joi.string().hex().length(24).required().messages({
+    productId: Joi.string().hex().length(24).required().messages({
         "any.required": "Product ID is required",
     }),
     quantity: Joi.number().min(1).default(1).messages({
