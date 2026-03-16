@@ -23,12 +23,15 @@ export async function authenticated(
     // ✅ جيب الـ permissions من الـ DB
     let permissions: UserPermission[] = [];
 
-    if (decoded.role === "superadmin") {
-      // Superadmin - كل الـ permissions
+    if (
+      decoded.role === "superadmin" ||
+      (decoded.role === "admin" && !!decoded.warehouse_id && !decoded.role_id)
+    ) {
+      // Superadmin and warehouse-scoped admin without role_id get full module actions
       permissions = MODULES.map((mod) => ({
         module: mod,
         actions: ACTION_NAMES.map((actionName, index) => ({
-          id: `superadmin_${mod}_${index}`,
+          id: `${decoded.role}_${mod}_${index}`,
           action: actionName,
         })),
       }));

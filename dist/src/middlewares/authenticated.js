@@ -16,12 +16,13 @@ async function authenticated(req, res, next) {
         const decoded = (0, auth_1.verifyToken)(token);
         // ✅ جيب الـ permissions من الـ DB
         let permissions = [];
-        if (decoded.role === "superadmin") {
-            // Superadmin - كل الـ permissions
+        if (decoded.role === "superadmin" ||
+            (decoded.role === "admin" && !!decoded.warehouse_id && !decoded.role_id)) {
+            // Superadmin and warehouse-scoped admin without role_id get full module actions
             permissions = constant_1.MODULES.map((mod) => ({
                 module: mod,
                 actions: constant_1.ACTION_NAMES.map((actionName, index) => ({
-                    id: `superadmin_${mod}_${index}`,
+                    id: `${decoded.role}_${mod}_${index}`,
                     action: actionName,
                 })),
             }));

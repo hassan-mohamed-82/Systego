@@ -35,12 +35,16 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
     throw new BadRequest("username, email, and password are required");
   }
 
-  if (role === "admin" && !role_id) {
-    throw new BadRequest("role_id is required for admin users");
+  if (role === "admin" && !role_id && !warehouse_id) {
+    throw new BadRequest("role_id is required for admin users unless warehouse_id is assigned");
   }
 
   if (role === "superadmin" && role_id) {
     throw new BadRequest("superadmin doesn't need role_id");
+  }
+
+  if (role === "superadmin" && warehouse_id) {
+    throw new BadRequest("superadmin should not be restricted to a warehouse");
   }
 
   if (role === "admin" && role_id) {
@@ -214,7 +218,7 @@ export const getUserPermissions = async (req: Request, res: Response, next: Next
   }
 
   // لو superadmin، له كل الصلاحيات
-  if (user.role === "superadmin") {
+  if (user.role === "superadmin" || (user.role === "admin" && user.warehouse_id && !user.role_id)) {
     const allPermissions = MODULES.map((mod) => ({
       module: mod,
       actions: ACTION_NAMES.map((action) => ({
@@ -224,7 +228,9 @@ export const getUserPermissions = async (req: Request, res: Response, next: Next
     }));
 
     return SuccessResponse(res, {
-      message: "User has superadmin access (all permissions)",
+      message: user.role === "superadmin"
+        ? "User has superadmin access (all permissions)"
+        : "User has warehouse admin access (all permissions in assigned warehouse)",
       user: {
         id: user._id,
         username: user.username,

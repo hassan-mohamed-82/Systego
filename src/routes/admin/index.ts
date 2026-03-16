@@ -55,6 +55,7 @@ import productReportRouter from "./productReport"
 import productMovementRouter from "./productMovement"
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
+import { enforceWarehouseScope } from "../../middlewares/warehouseScope";
 import RevenueRouter from "./Revenue";
 import DashboardRouter from "./dsashboard";
 import ReturnPurchaseRouter from "./returnPurchase";
@@ -67,6 +68,7 @@ export const route = Router();
 
 route.use("/auth", authRouter);
 route.use(authenticated, authorizeRoles("admin", "superadmin"));
+route.use(enforceWarehouseScope);
 route.use("/brand", brandRouter);
 route.use("/admin", AdminRouter);
 route.use("/permission", permissionRouter);

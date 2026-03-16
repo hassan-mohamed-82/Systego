@@ -34,14 +34,18 @@ const login = async (req, res, next) => {
     // ✅ جيب الـ permissions للـ Response (Frontend)
     let mappedPermissions = [];
     let roleName = null;
-    if (user.role === "superadmin") {
+    if (user.role === "superadmin" ||
+        (user.role === "admin" && !!user.warehouse_id && !user.role_id)) {
         mappedPermissions = constant_1.MODULES.map((mod) => ({
             module: mod,
             actions: constant_1.ACTION_NAMES.map((actionName, index) => ({
-                id: `superadmin_${mod}_${index}`,
+                id: `${user.role}_${mod}_${index}`,
                 action: actionName,
             })),
         }));
+        if (user.role === "admin") {
+            roleName = "Warehouse Admin";
+        }
     }
     else if (user.role_id) {
         const roleData = await roles_1.RoleModel.findById(user.role_id).lean();

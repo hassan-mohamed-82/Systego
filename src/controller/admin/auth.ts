@@ -38,14 +38,21 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   let mappedPermissions: UserPermission[] = [];
   let roleName: string | null = null;
 
-  if (user.role === "superadmin") {
+  if (
+    user.role === "superadmin" ||
+    (user.role === "admin" && !!user.warehouse_id && !user.role_id)
+  ) {
     mappedPermissions = MODULES.map((mod) => ({
       module: mod,
       actions: ACTION_NAMES.map((actionName, index) => ({
-        id: `superadmin_${mod}_${index}`,
+        id: `${user.role}_${mod}_${index}`,
         action: actionName,
       })),
     }));
+
+    if (user.role === "admin") {
+      roleName = "Warehouse Admin";
+    }
   } else if (user.role_id) {
     const roleData = await RoleModel.findById(user.role_id).lean();
 

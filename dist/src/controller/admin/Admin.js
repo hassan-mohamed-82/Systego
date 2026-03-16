@@ -22,11 +22,14 @@ const createUser = async (req, res, next) => {
     if (!username || !email || !password) {
         throw new Errors_1.BadRequest("username, email, and password are required");
     }
-    if (role === "admin" && !role_id) {
-        throw new Errors_1.BadRequest("role_id is required for admin users");
+    if (role === "admin" && !role_id && !warehouse_id) {
+        throw new Errors_1.BadRequest("role_id is required for admin users unless warehouse_id is assigned");
     }
     if (role === "superadmin" && role_id) {
         throw new Errors_1.BadRequest("superadmin doesn't need role_id");
+    }
+    if (role === "superadmin" && warehouse_id) {
+        throw new Errors_1.BadRequest("superadmin should not be restricted to a warehouse");
     }
     if (role === "admin" && role_id) {
         if (!mongoose_1.default.Types.ObjectId.isValid(role_id)) {
@@ -176,7 +179,7 @@ const getUserPermissions = async (req, res, next) => {
         throw new Errors_1.NotFound("User not found");
     }
     // لو superadmin، له كل الصلاحيات
-    if (user.role === "superadmin") {
+    if (user.role === "superadmin" || (user.role === "admin" && user.warehouse_id && !user.role_id)) {
         const allPermissions = constant_1.MODULES.map((mod) => ({
             module: mod,
             actions: constant_1.ACTION_NAMES.map((action) => ({
@@ -185,7 +188,9 @@ const getUserPermissions = async (req, res, next) => {
             })),
         }));
         return (0, response_1.SuccessResponse)(res, {
-            message: "User has superadmin access (all permissions)",
+            message: user.role === "superadmin"
+                ? "User has superadmin access (all permissions)"
+                : "User has warehouse admin access (all permissions in assigned warehouse)",
             user: {
                 id: user._id,
                 username: user.username,
