@@ -58,7 +58,8 @@ export const MODULES = [
   "Units",
   "orders",
   "banner",
-  "decimal_setting"
+  "decimal_setting",
+  "service_fees"
 ] as const;
 
 // أسماء بس، من غير ids

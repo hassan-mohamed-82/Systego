@@ -22,6 +22,7 @@ import { CityModels } from "../../../models/schema/admin/City";
 import { CashierModel } from "../../../models/schema/admin/cashier";
 import { BadRequest } from "../../../Errors/BadRequest";
 import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
+import { ServiceFeeModel } from "../../../models/schema/admin/ServiceFee";
 // get all category 
 export const getAllCategorys = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
@@ -288,8 +289,9 @@ export const getAllSelections = async (req: Request, res: Response) => {
     path: "cities",
     select: "name ar_name shipingCost",    // الحقول اللي ترجع من الـ City
   });
+  const sevicefees = await ServiceFeeModel.find({status: true}).select('title amount type module warehouseId');
 
-    SuccessResponse(res, {message: "Selections list",dueCustomers,countries ,warehouses, currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
+    SuccessResponse(res, {message: "Selections list",dueCustomers,countries ,warehouses, sevicefees,currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
 
 

@@ -21,6 +21,7 @@ const Country_1 = require("../../../models/schema/admin/Country");
 const cashier_1 = require("../../../models/schema/admin/cashier");
 const BadRequest_1 = require("../../../Errors/BadRequest");
 const Product_Warehouse_1 = require("../../../models/schema/admin/Product_Warehouse");
+const ServiceFee_1 = require("../../../models/schema/admin/ServiceFee");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const jwtUser = req.user;
@@ -233,7 +234,8 @@ const getAllSelections = async (req, res) => {
         path: "cities",
         select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
     });
-    (0, response_1.SuccessResponse)(res, { message: "Selections list", dueCustomers, countries, warehouses, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
+    const sevicefees = await ServiceFee_1.ServiceFeeModel.find({ status: true }).select('title amount type module warehouseId');
+    (0, response_1.SuccessResponse)(res, { message: "Selections list", dueCustomers, countries, warehouses, sevicefees, currency, accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups });
 };
 exports.getAllSelections = getAllSelections;
 const getActiveBundles = async (req, res) => {

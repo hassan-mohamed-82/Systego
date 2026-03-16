@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const ServiceFee_1 = require("../../controller/admin/ServiceFee");
+const validation_1 = require("../../middlewares/validation");
+const ServiceFee_2 = require("../../validation/admin/ServiceFee");
+const catchAsync_1 = require("../../utils/catchAsync");
+const haspremission_1 = require("../../middlewares/haspremission");
+const route = (0, express_1.Router)();
+route.post("/", (0, haspremission_1.authorizePermissions)("service_fees", "Add"), (0, validation_1.validate)(ServiceFee_2.createServiceFeeSchema), (0, catchAsync_1.catchAsync)(ServiceFee_1.createServiceFee));
+route.get("/", (0, haspremission_1.authorizePermissions)("service_fees", "View"), (0, catchAsync_1.catchAsync)(ServiceFee_1.getAllServiceFees));
+route.get("/:id", (0, haspremission_1.authorizePermissions)("service_fees", "View"), (0, catchAsync_1.catchAsync)(ServiceFee_1.getServiceFeeById));
+route.put("/:id", (0, haspremission_1.authorizePermissions)("service_fees", "Edit"), (0, validation_1.validate)(ServiceFee_2.updateServiceFeeSchema), (0, catchAsync_1.catchAsync)(ServiceFee_1.updateServiceFee));
+route.patch("/:id/status", (0, haspremission_1.authorizePermissions)("service_fees", "Status"), (0, catchAsync_1.catchAsync)(ServiceFee_1.toggleServiceFeeStatus));
+route.delete("/:id", (0, haspremission_1.authorizePermissions)("service_fees", "Delete"), (0, catchAsync_1.catchAsync)(ServiceFee_1.deleteServiceFee));
+exports.default = route;
