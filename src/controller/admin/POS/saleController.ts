@@ -19,12 +19,15 @@ import { ProductModel } from '../../../models/schema/admin/products';
 import { UserModel } from '../../../models/schema/admin/User';
 import bcrypt from "bcryptjs";
 import { Product_WarehouseModel } from '../../../models/schema/admin/Product_Warehouse';
+import { ServiceFeeModel } from '../../../models/schema/admin/ServiceFee';
 
 const STORE_INFO = {
   name: "SYSTEGO",
   phone: "01134567",
   address: "Cairo, Egypt",
 };
+
+const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
 export const createSale = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
@@ -52,6 +55,7 @@ export const createSale = async (req: Request, res: Response) => {
     customer_id,
     order_pending = 0,
     gift_card_id,
+    service_fee_ids = [],
     order_tax,
     order_discount,
     products,
@@ -294,8 +298,54 @@ export const createSale = async (req: Request, res: Response) => {
   // ✅ CALCULATE FINAL GRAND TOTAL
   // ═══════════════════════════════════════════════════════════
   const subtotal = productsTotal + bundlesTotal;
+  const normalizedServiceFeeIds = Array.isArray(service_fee_ids)
+    ? service_fee_ids
+        .filter((id: unknown) => !!id)
+        .map((id: unknown) => String(id))
+    : [];
+
+  const uniqueServiceFeeIds = Array.from(new Set(normalizedServiceFeeIds));
+
+  uniqueServiceFeeIds.forEach((id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new BadRequest(`Invalid service fee id: ${id}`);
+    }
+  });
+
+  const serviceFeeDocs = uniqueServiceFeeIds.length
+    ? await ServiceFeeModel.find({
+        _id: { $in: uniqueServiceFeeIds },
+        status: true,
+        module: "pos",
+        $or: [{ warehouseId }, { warehouseId: null }],
+      }).lean()
+    : [];
+
+  if (serviceFeeDocs.length !== uniqueServiceFeeIds.length) {
+    throw new BadRequest("One or more selected service fees are invalid for this warehouse or module");
+  }
+
+  const appliedServiceFees = serviceFeeDocs.map((fee: any) => {
+    const calculatedAmount = fee.type === "percentage"
+      ? roundCurrency((subtotal * Number(fee.amount || 0)) / 100)
+      : roundCurrency(Number(fee.amount || 0));
+
+    return {
+      service_fee_id: fee._id,
+      title: fee.title,
+      type: fee.type,
+      rate: Number(fee.amount || 0),
+      amount: calculatedAmount,
+      module: fee.module,
+      warehouseId: fee.warehouseId || null,
+    };
+  });
+
+  const serviceFeeTotal = roundCurrency(
+    appliedServiceFees.reduce((sum, fee) => sum + fee.amount, 0)
+  );
   const taxAmountCalc = (subtotal * Number(tax_rate)) / 100;
-  const finalGrandTotal = subtotal + taxAmountCalc + Number(shipping) - Number(discount);
+  const finalGrandTotal = subtotal + serviceFeeTotal + taxAmountCalc + Number(shipping) - Number(discount);
 
   if (finalGrandTotal <= 0) {
     throw new BadRequest("Grand total must be greater than 0");
@@ -487,6 +537,8 @@ export const createSale = async (req: Request, res: Response) => {
     gift_card_id: giftCard ? giftCard._id : undefined,
     order_tax: tax ? tax._id : undefined,
     order_discount: discountDoc ? discountDoc._id : undefined,
+    service_fees: appliedServiceFees,
+    service_fee_total: serviceFeeTotal,
     shipping,
     tax_rate,
     tax_amount: taxAmountCalc,
@@ -675,11 +727,13 @@ export const createSale = async (req: Request, res: Response) => {
     store: STORE_INFO,
     sale: fullSale,
     items: formattedItems,
+    service_fees: appliedServiceFees,
     wholesale_applied: processedProducts.some((p) => p.is_wholesale),
     pricing_details: {
       products_total: productsTotal,
       bundles_total: bundlesTotal,
       subtotal: subtotal,
+      service_fee_total: serviceFeeTotal,
       tax_amount: taxAmountCalc,
       shipping: Number(shipping),
       discount: Number(discount),
@@ -690,7 +744,7 @@ export const createSale = async (req: Request, res: Response) => {
 
 export const getAllSales = async (req: Request, res: Response) => {
   const sales = await SaleModel.find({ order_pending: 0 }) // ✅ المكتملة بس
-    .select("reference grand_total paid_amount remaining_amount Due order_pending date createdAt")
+    .select("reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt")
     .populate("customer_id", "name")
     .populate("Due_customer_id", "name")
     .populate("warehouse_id", "name")
@@ -1042,6 +1096,8 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     shipping: sale.shipping || 0,
     tax_rate: sale.tax_rate || 0,
     tax_amount: sale.tax_amount || 0,
+    service_fee_total: sale.service_fee_total || 0,
+    service_fees: sale.service_fees || [],
     discount: sale.discount || 0,
     total: sale.total || sale.grand_total,
     grand_total: sale.grand_total,
@@ -1085,6 +1141,8 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       gift_card: sale.gift_card_id || null,
       tax: sale.order_tax || null,
       discount_info: sale.order_discount || null,
+      service_fees: sale.service_fees || [],
+      service_fee_total: sale.service_fee_total || 0,
       created_at: sale.createdAt,
     },
     products,

@@ -86,6 +86,18 @@ const SaleSchema = new mongoose_1.Schema({
     },
     order_tax: { type: mongoose_1.Schema.Types.ObjectId, ref: "Taxes" },
     order_discount: { type: mongoose_1.Schema.Types.ObjectId, ref: "Discount" },
+    service_fees: [
+        {
+            service_fee_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "ServiceFee", required: false },
+            title: { type: String, required: true },
+            type: { type: String, enum: ["fixed", "percentage"], required: true },
+            rate: { type: Number, required: true, min: 0 },
+            amount: { type: Number, required: true, min: 0 },
+            module: { type: String, enum: ["online", "pos"], required: true },
+            warehouseId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Warehouse", required: false },
+        },
+    ],
+    service_fee_total: { type: Number, default: 0 },
     grand_total: { type: Number, required: true },
     gift_card_id: { type: mongoose_1.Schema.Types.ObjectId, ref: "GiftCard" },
     coupon_code: { type: String, default: "" },

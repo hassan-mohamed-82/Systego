@@ -272,8 +272,13 @@ export const getFeaturedProducts = async (req: Request, res: Response) => {
 
 // get all selections
 export const getAllSelections = async (req: Request, res: Response) => {
-    const warehouses = await WarehouseModel.find().select('name');
-    const accounts = await BankAccountModel.find({in_POS: true, status: true}).select('name balance warhouseId');
+    const warehouseId = req.user?.warehouse_id;
+    const warehouses = await WarehouseModel.find(warehouseId ? { _id: warehouseId } : {}).select('name');
+    const accounts = await BankAccountModel.find({
+      in_POS: true,
+      status: true,
+      ...(warehouseId ? { warehouseId } : {}),
+    }).select('name balance warehouseId');
     const taxes = await TaxesModel.find().select('name status amount type'); 
     const discounts = await DiscountModel.find().select('name status amount type');
     const coupons = await CouponModel.find().select('coupon_code amount type minimum_amount quantity available expired_date');
@@ -289,7 +294,11 @@ export const getAllSelections = async (req: Request, res: Response) => {
     path: "cities",
     select: "name ar_name shipingCost",    // الحقول اللي ترجع من الـ City
   });
-  const sevicefees = await ServiceFeeModel.find({status: true}).select('title amount type module warehouseId');
+  const sevicefees = await ServiceFeeModel.find({
+    status: true,
+    module: 'pos',
+    $or: warehouseId ? [{ warehouseId }, { warehouseId: null }] : [{ warehouseId: null }],
+  }).select('title amount type module warehouseId');
 
     SuccessResponse(res, {message: "Selections list",dueCustomers,countries ,warehouses, sevicefees,currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
 }
