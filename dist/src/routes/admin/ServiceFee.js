@@ -7,6 +7,7 @@ const ServiceFee_2 = require("../../validation/admin/ServiceFee");
 const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
 const route = (0, express_1.Router)();
+route.get("/select", (0, haspremission_1.authorizePermissions)("service_fees", "View"), (0, catchAsync_1.catchAsync)(ServiceFee_1.getallwarehouses));
 route.post("/", (0, haspremission_1.authorizePermissions)("service_fees", "Add"), (0, validation_1.validate)(ServiceFee_2.createServiceFeeSchema), (0, catchAsync_1.catchAsync)(ServiceFee_1.createServiceFee));
 route.get("/", (0, haspremission_1.authorizePermissions)("service_fees", "View"), (0, catchAsync_1.catchAsync)(ServiceFee_1.getAllServiceFees));
 route.get("/:id", (0, haspremission_1.authorizePermissions)("service_fees", "View"), (0, catchAsync_1.catchAsync)(ServiceFee_1.getServiceFeeById));

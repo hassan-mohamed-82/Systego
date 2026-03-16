@@ -6,6 +6,7 @@ import {
   updateServiceFee,
   deleteServiceFee,
   toggleServiceFeeStatus,
+  getallwarehouses
 } from "../../controller/admin/ServiceFee";
 import { validate } from "../../middlewares/validation";
 import { createServiceFeeSchema, updateServiceFeeSchema } from "../../validation/admin/ServiceFee";
@@ -13,6 +14,8 @@ import { catchAsync } from "../../utils/catchAsync";
 import { authorizePermissions } from "../../middlewares/haspremission";
 
 const route = Router();
+
+route.get("/select", authorizePermissions("service_fees", "View"), catchAsync(getallwarehouses));
 
 route.post("/", authorizePermissions("service_fees", "Add"), validate(createServiceFeeSchema), catchAsync(createServiceFee));
 route.get("/", authorizePermissions("service_fees", "View"), catchAsync(getAllServiceFees));
