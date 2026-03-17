@@ -100,6 +100,7 @@ route.use("/purchase", PurchaseRouter);
 route.use("/stock", StockRouter);
 route.use("/zone", ZoneRouter);
 route.use("/currency", CurrencyRouter);
+route.use("/dashboard", DashboardRouter);
 route.use("/taxes", TaxesRouter);
 route.use("/category_material", Category_MaterialRouter);
 route.use("/variation", VariationRouter);
