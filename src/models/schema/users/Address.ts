@@ -3,7 +3,7 @@ import { Schema, model } from 'mongoose';
 const addressSchema = new Schema({
   user: {
     type: Schema.Types.ObjectId,
-    ref: 'UserStore',
+    ref: 'Customer',
     required: true
   },
   country: {

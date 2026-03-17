@@ -5,7 +5,7 @@ import { NotFound, UnauthorizedError, UniqueConstrainError, BadRequest } from ".
 import asyncHandler from 'express-async-handler';
 import generateJWT from '../../middlewares/generateJWT';
 import { saveBase64Image } from '../../utils/handleImages';
-import { CustomerModel } from '../../models/schema/users/Customer';
+import { CustomerModel } from '../../models/schema/admin/POS/customer';
 import { sendEmail } from '../../utils/sendEmails';
 
 const generateOtpCode = (): string => Math.floor(100000 + Math.random() * 900000).toString();
@@ -17,7 +17,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
   const existing = await CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
   if (existing) {
     throw new BadRequest(existing.is_profile_complete
-      ? "User already exists with this email or phone."
+      ? "Customer already exists with this email or phone."
       : "You have an existing account from our store. Please login with your phone number to activate it.");
   }
 
@@ -117,7 +117,7 @@ export const verifyOtpAndLogin = asyncHandler(async (req: Request, res: Response
         userId: user._id,
         phone_number: user.phone_number,
         email: user.email,
-        username: user.username,
+        name: user.name,
         imagePath: user.imagePath
       }
     }, 200);
@@ -145,7 +145,7 @@ export const completeProfile = asyncHandler(async (req: Request, res: Response) 
   const user = await CustomerModel.findById(userId);
   if (!user) throw new NotFound("User not found.");
 
-  if (username) user.username = username;
+  if (username) user.name = username;
   if (email) user.email = email;
   if (password) user.password = password;
 
@@ -177,7 +177,7 @@ export const editProfile = asyncHandler(async (req: Request, res: Response) => {
     user.imagePath = await saveBase64Image(image, user.id, req, 'profile_images');
   }
   if (phone) user.phone_number = phone;
-  if (username) user.username = username;
+  if (username) user.name = username;
   if (email) user.email = email;
   if (password) user.password = password;
 
