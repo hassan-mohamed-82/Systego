@@ -1,4 +1,4 @@
-import { CustomerModel } from '../../models/schema/users/Customer';
+import { CustomerModel } from '../../models/schema/admin/POS/customer';
 import { ProductModel } from '../../models/schema/admin/products';
 import asyncHandler from 'express-async-handler';
 import { NotFound } from '../../Errors/NotFound';

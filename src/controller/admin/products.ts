@@ -35,6 +35,7 @@ export const createProduct = async (req: Request, res: Response) => {
     low_stock,
     cost,
     whole_price,
+    free_shipping,  
     start_quantaty,
     taxesId,
     product_has_imei,
@@ -144,6 +145,7 @@ export const createProduct = async (req: Request, res: Response) => {
     maximum_to_show,
     gallery_product: galleryUrls,
     is_featured,
+    free_shipping,
   });
 
   // إضافة Stock لو فيه warehouseId
@@ -409,6 +411,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     maximum_to_show,
     prices,
     gallery,
+    free_shipping,
     is_featured,
     code,
   } = req.body;
@@ -457,6 +460,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.different_price = different_price ?? product.different_price;
   product.show_quantity = show_quantity ?? product.show_quantity;
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
+  product.free_shipping = free_shipping ?? product.free_shipping;
   product.is_featured = is_featured ?? product.is_featured;
   product.code = code ?? product.code;
 

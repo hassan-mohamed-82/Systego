@@ -10,19 +10,19 @@ const Errors_1 = require("../../Errors");
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const generateJWT_1 = __importDefault(require("../../middlewares/generateJWT"));
 const handleImages_1 = require("../../utils/handleImages");
-const Customer_1 = require("../../models/schema/users/Customer");
+const customer_1 = require("../../models/schema/admin/POS/customer");
 const sendEmails_1 = require("../../utils/sendEmails");
 const generateOtpCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 // 1. Signup
 exports.signup = (0, express_async_handler_1.default)(async (req, res) => {
     const { username, email, phone, password, image } = req.body;
-    const existing = await Customer_1.CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
+    const existing = await customer_1.CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
     if (existing) {
         throw new Errors_1.BadRequest(existing.is_profile_complete
-            ? "User already exists with this email or phone."
+            ? "Customer already exists with this email or phone."
             : "You have an existing account from our store. Please login with your phone number to activate it.");
     }
-    const newUser = new Customer_1.CustomerModel({ username, email, phone_number: phone, password });
+    const newUser = new customer_1.CustomerModel({ username, email, phone_number: phone, password });
     if (image) {
         newUser.imagePath = await (0, handleImages_1.saveBase64Image)(image, newUser._id.toString(), req, 'profile_images');
     }
@@ -37,7 +37,7 @@ exports.login = (0, express_async_handler_1.default)(async (req, res) => {
     const identifier = req.body.identifier || req.body.email || req.body.phone;
     if (!identifier)
         throw new Errors_1.BadRequest('Please provide email, phone or username');
-    const user = await Customer_1.CustomerModel.findOne({
+    const user = await customer_1.CustomerModel.findOne({
         $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { username: identifier }]
     }).select('+password');
     // Scenario 1: User doesn't exist at all
@@ -84,7 +84,7 @@ exports.login = (0, express_async_handler_1.default)(async (req, res) => {
 exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res) => {
     const identifier = req.body.identifier || req.body.email || req.body.phone;
     const { otp } = req.body;
-    const user = await Customer_1.CustomerModel.findOne({
+    const user = await customer_1.CustomerModel.findOne({
         $or: [{ email: identifier }, { phone_number: identifier }, { username: identifier }]
     });
     if (!user || user.otp_code !== otp || (user.otp_expires_at && new Date() > user.otp_expires_at)) {
@@ -102,7 +102,7 @@ exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res
                 userId: user._id,
                 phone_number: user.phone_number,
                 email: user.email,
-                username: user.username,
+                name: user.name,
                 imagePath: user.imagePath
             }
         }, 200);
@@ -123,11 +123,11 @@ exports.completeProfile = (0, express_async_handler_1.default)(async (req, res) 
     if (password !== confirmPassword) {
         throw new Errors_1.BadRequest('Passwords do not match.');
     }
-    const user = await Customer_1.CustomerModel.findById(userId);
+    const user = await customer_1.CustomerModel.findById(userId);
     if (!user)
         throw new Errors_1.NotFound("User not found.");
     if (username)
-        user.username = username;
+        user.name = username;
     if (email)
         user.email = email;
     if (password)
@@ -147,7 +147,7 @@ exports.completeProfile = (0, express_async_handler_1.default)(async (req, res) 
 });
 // 5. Edit Profile
 exports.editProfile = (0, express_async_handler_1.default)(async (req, res) => {
-    const user = await Customer_1.CustomerModel.findById(req.params.id);
+    const user = await customer_1.CustomerModel.findById(req.params.id);
     if (!user)
         throw new Errors_1.NotFound('User not found.');
     if (user.id !== req.user?.id)
@@ -159,7 +159,7 @@ exports.editProfile = (0, express_async_handler_1.default)(async (req, res) => {
     if (phone)
         user.phone_number = phone;
     if (username)
-        user.username = username;
+        user.name = username;
     if (email)
         user.email = email;
     if (password)
@@ -172,7 +172,7 @@ exports.editProfile = (0, express_async_handler_1.default)(async (req, res) => {
 });
 // 6. Get Profile
 exports.getProfile = (0, express_async_handler_1.default)(async (req, res) => {
-    const user = await Customer_1.CustomerModel.findById(req.user?.id);
+    const user = await customer_1.CustomerModel.findById(req.user?.id);
     if (!user)
         throw new Errors_1.NotFound('User not found.');
     const { password, __v, ...userResponse } = user.toObject();
@@ -181,7 +181,7 @@ exports.getProfile = (0, express_async_handler_1.default)(async (req, res) => {
 // 7. Resend OTP
 exports.resendOtp = (0, express_async_handler_1.default)(async (req, res) => {
     const identifier = req.body.identifier || req.body.email || req.body.phone;
-    const user = await Customer_1.CustomerModel.findOne({ $or: [{ email: identifier }, { phone_number: identifier }] });
+    const user = await customer_1.CustomerModel.findOne({ $or: [{ email: identifier }, { phone_number: identifier }] });
     if (!user)
         throw new Errors_1.NotFound('User not found.');
     const otpCode = generateOtpCode();

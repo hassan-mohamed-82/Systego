@@ -17,6 +17,7 @@ const productSchema = new mongoose_1.default.Schema({
     purchase_unit: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Unit" },
     code: { type: String, unique: true, sparse: true },
     price: { type: Number, },
+    free_shipping: { type: Boolean, default: false },
     quantity: { type: Number, },
     description: { type: String },
     exp_ability: { type: Boolean, default: false },

@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const catchAsync_1 = require("../../utils/catchAsync");
+const validation_1 = require("../../middlewares/validation");
+const haspremission_1 = require("../../middlewares/haspremission");
+const Shipping_1 = require("../../controller/admin/Shipping");
+const Shipping_2 = require("../../validation/admin/Shipping");
+const route = (0, express_1.Router)();
+route.get("/settings", (0, haspremission_1.authorizePermissions)("zone", "View"), (0, catchAsync_1.catchAsync)(Shipping_1.getShippingSettings));
+route.put("/settings", (0, haspremission_1.authorizePermissions)("zone", "Edit"), (0, validation_1.validate)(Shipping_2.updateShippingSettingsSchema), (0, catchAsync_1.catchAsync)(Shipping_1.updateShippingSettings));
+route.get("/free-products", (0, haspremission_1.authorizePermissions)("product", "View"), (0, catchAsync_1.catchAsync)(Shipping_1.getFreeShippingProducts));
+route.put("/free-products", (0, haspremission_1.authorizePermissions)("product", "Edit"), (0, validation_1.validate)(Shipping_2.updateFreeShippingProductsSchema), (0, catchAsync_1.catchAsync)(Shipping_1.updateFreeShippingProducts));
+exports.default = route;

@@ -21,7 +21,7 @@ const units_1 = require("../../models/schema/admin/units");
 const Taxes_1 = require("../../models/schema/admin/Taxes");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const createProduct = async (req, res) => {
-    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, price, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, cost, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, 
+    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, price, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, cost, whole_price, free_shipping, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, 
     // بيانات المخزن
     warehouseId, quantity, } = req.body;
     if (!name)
@@ -110,6 +110,7 @@ const createProduct = async (req, res) => {
         maximum_to_show,
         gallery_product: galleryUrls,
         is_featured,
+        free_shipping,
     });
     // إضافة Stock لو فيه warehouseId
     let stock = null;
@@ -306,7 +307,7 @@ exports.getOneProduct = getOneProduct;
 // ==================== تحديث منتج ====================
 const updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, cost, price, description, ar_description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, is_featured, code, } = req.body;
+    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, cost, price, description, ar_description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, free_shipping, is_featured, code, } = req.body;
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
@@ -349,6 +350,7 @@ const updateProduct = async (req, res) => {
     product.different_price = different_price ?? product.different_price;
     product.show_quantity = show_quantity ?? product.show_quantity;
     product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
+    product.free_shipping = free_shipping ?? product.free_shipping;
     product.is_featured = is_featured ?? product.is_featured;
     product.code = code ?? product.code;
     await product.save();

@@ -4,6 +4,7 @@ import { CartModel } from "../../models/schema/users/Cart";
 import { OrderModel } from "../../models/schema/users/Order";
 import { ProductModel } from "../../models/schema/admin/products";
 import { AddressModel } from "../../models/schema/users/Address";
+import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 
@@ -30,11 +31,36 @@ export const createOrder = async (req: Request, res: Response) => {
 
         if (!address) throw new NotFound("Shipping address not found");
 
-        // ج. حساب تكلفة الشحن (بناءً على النقاش السابق: الأولوية للزون ثم المدينة)
-        const shippingCost = (address.zone as any)?.shippingCost || (address.city as any)?.shippingCost || 0;
+        // ج. تحديد ما إذا كانت السلة كلها مؤهلة للشحن المجاني (Marketing free shipping per product)
+        const productIds = cart.cartItems.map((item) => item.product);
+        const nonFreeShippingProductsCount = await ProductModel.countDocuments({
+            _id: { $in: productIds },
+            free_shipping: { $ne: true },
+        }).session(session);
+
+        const cartAllFreeShipping = nonFreeShippingProductsCount === 0;
+
+        // د. جلب إعدادات الشحن الحالية (اختيار طريقة واحدة فقط)
+        const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
+
+        const selectedMethod = shippingSettings?.shippingMethod || "zone";
+        const zoneShippingCost = (address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0;
+
+        let shippingCost = 0;
+
+        if (shippingSettings?.freeShippingEnabled || cartAllFreeShipping) {
+            shippingCost = 0;
+        } else if (selectedMethod === "flat_rate") {
+            shippingCost = Number(shippingSettings?.flatRate || 0);
+        } else if (selectedMethod === "carrier") {
+            shippingCost = Number(shippingSettings?.carrierRate || 0);
+        } else {
+            shippingCost = Number(zoneShippingCost || 0);
+        }
+
         const finalTotalPrice = cart.totalCartPrice + shippingCost;
 
-        // د. تحديث المخزن لكل منتج في السلة
+        // هـ. تحديث المخزن لكل منتج في السلة
         for (const item of cart.cartItems) {
             const product = await ProductModel.findById(item.product).session(session);
 
@@ -49,7 +75,7 @@ export const createOrder = async (req: Request, res: Response) => {
             await product.save({ session });
         }
 
-        // هـ. إنشاء الأوردر (أخذ لقطة Snapshot من البيانات الحالية)
+        // و. إنشاء الأوردر (أخذ لقطة Snapshot من البيانات الحالية)
         const order = await OrderModel.create([{
             user: userId,
             cartItems: cart.cartItems, // تخزين المنتجات بأسعارها وقت الشراء
@@ -59,13 +85,13 @@ export const createOrder = async (req: Request, res: Response) => {
                 zone: (address.zone as any).name,
             },
             shippingPrice: shippingCost,
-            totalPrice: finalTotalPrice,
+            totalOrderPrice: finalTotalPrice,
             paymentMethod,
             proofImage,
             status: 'pending'
         }], { session });
 
-        // و. مسح السلة بعد نجاح العملية
+        // ز. مسح السلة بعد نجاح العملية
         await CartModel.findOneAndDelete({ user: userId }).session(session);
 
         // إنهاء العملية بنجاح

@@ -65,6 +65,7 @@ import versionUpdaterRouter from "./versionUpdater";
 import DecimalSettingRouter from "./DecimalSetting";
 import BannerRouter from "./Banner";
 import ServiceFeeRouter from "./ServiceFee";
+import ShippingRouter from "./Shipping";
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -134,4 +135,5 @@ route.use("/version-updater", versionUpdaterRouter)
 route.use("/decimal-setting", DecimalSettingRouter)
 route.use("/banner", BannerRouter)
 route.use("/service-fees", ServiceFeeRouter)
+route.use("/shipping", ShippingRouter)
 export default route;
