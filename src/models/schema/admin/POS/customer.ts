@@ -37,7 +37,7 @@ const CustomerSchema = new Schema(
     wishlist: [
       {
         type: Schema.Types.ObjectId,
-        ref: "Products",
+        ref: "Product",
       },
     ],
     addresses: [
