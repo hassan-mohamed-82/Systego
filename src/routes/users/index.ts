@@ -5,9 +5,10 @@ import productRouter from "./products";
 import brandRouter from "./brand";
 import addressRouter from "./Address";
 import cartRouter from "./Cart";
-// import orderRouter from "./Order";
+import orderRouter from "./Order";
 // import bannerRouter from "./Banner";
 import wishlistRouter from "./wishlist";
+import paymentMethodRouter from "./paymentmethod";
 
 const userRoute = Router();
 
@@ -18,9 +19,10 @@ userRoute.use("/brand", brandRouter);
 // userRoute.use("/banner", bannerRouter);
 userRoute.use("/wishlist", wishlistRouter);
 
+userRoute.use("/payment-methods", paymentMethodRouter);
 
 userRoute.use("/address", addressRouter);
 userRoute.use("/cart", cartRouter);
-// userRoute.use("/order", orderRouter);
+userRoute.use("/order", orderRouter);
 
 export default userRoute;

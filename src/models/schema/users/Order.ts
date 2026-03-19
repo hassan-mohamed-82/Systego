@@ -37,8 +37,7 @@ const orderSchema = new Schema({
     required: true
   },
   proofImage: {
-    type: String,
-    required: true
+    type: String
   },
   status: {
     type: String,

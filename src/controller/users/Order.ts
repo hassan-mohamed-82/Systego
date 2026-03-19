@@ -5,6 +5,7 @@ import { OrderModel } from "../../models/schema/users/Order";
 import { ProductModel } from "../../models/schema/admin/products";
 import { AddressModel } from "../../models/schema/users/Address";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
+import { PaymentMethodModel } from "../../models/schema/admin/payment_methods";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 
@@ -24,6 +25,20 @@ export const createOrder = async (req: Request, res: Response) => {
             throw new BadRequest("Your cart is empty");
         }
 
+        // أ-2. تأكيد صحة وسيلة الدفع وأنها مفعلة
+        const paymentMethodDoc = await PaymentMethodModel.findOne({ 
+            _id: paymentMethod, 
+            isActive: { $ne: false } 
+        }).session(session);
+        
+        if (!paymentMethodDoc) {
+            throw new BadRequest("Invalid or inactive payment method selected");
+        }
+
+        if (paymentMethodDoc.type === "manual" && !proofImage) {
+            throw new BadRequest("Proof image is required for manual payment methods");
+        }
+
         // ب. التأكد من وجود العنوان وجلب بيانات الشحن منه (Populate Zone)
         const address = await AddressModel.findOne({ _id: shippingAddress, user: userId })
             .populate('city zone')
@@ -31,14 +46,14 @@ export const createOrder = async (req: Request, res: Response) => {
 
         if (!address) throw new NotFound("Shipping address not found");
 
-        // ج. تحديد ما إذا كانت السلة كلها مؤهلة للشحن المجاني (Marketing free shipping per product)
+        // ج. تحديد ما إذا كانت أياً من منتجات السلة مؤهلة للشحن المجاني (Marketing free shipping per product)
         const productIds = cart.cartItems.map((item) => item.product);
-        const nonFreeShippingProductsCount = await ProductModel.countDocuments({
+        const freeShippingProductsCount = await ProductModel.countDocuments({
             _id: { $in: productIds },
-            free_shipping: { $ne: true },
+            free_shipping: true,
         }).session(session);
 
-        const cartAllFreeShipping = nonFreeShippingProductsCount === 0;
+        const hasFreeShippingProduct = freeShippingProductsCount > 0;
 
         // د. جلب إعدادات الشحن الحالية (اختيار طريقة واحدة فقط)
         const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
@@ -48,7 +63,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
         let shippingCost = 0;
 
-        if (shippingSettings?.freeShippingEnabled || cartAllFreeShipping) {
+        if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
             shippingCost = 0;
         } else if (selectedMethod === "flat_rate") {
             shippingCost = Number(shippingSettings?.flatRate || 0);
@@ -58,31 +73,44 @@ export const createOrder = async (req: Request, res: Response) => {
             shippingCost = Number(zoneShippingCost || 0);
         }
 
-        const finalTotalPrice = cart.totalCartPrice + shippingCost;
+        // هـ. تحديث المخزن وإعادة احتساب أسعار المنتجات
+        let actualProductsTotal = 0;
+        const finalCartItems = [];
 
-        // هـ. تحديث المخزن لكل منتج في السلة
         for (const item of cart.cartItems) {
-            const product = await ProductModel.findById(item.product).session(session);
-
             const requestedQuantity = item.quantity ?? 1;
 
-            if (!product || product.quantity == null || product.quantity < requestedQuantity) {
-                throw new BadRequest(`Product ${product?.name || 'unknown'} is out of stock or insufficient`);
+            // استخدام findOneAndUpdate لضمان عدم حدوث Race Condition
+            const updatedProduct = await ProductModel.findOneAndUpdate(
+                { _id: item.product, quantity: { $gte: requestedQuantity } },
+                { $inc: { quantity: -requestedQuantity } },
+                { session, new: true }
+            );
+
+            if (!updatedProduct) {
+                throw new BadRequest(`Product with ID ${item.product} is out of stock or insufficient`);
             }
 
-            // خصم الكمية من المخزن
-            product.quantity -= requestedQuantity;
-            await product.save({ session });
+            const currentPrice = updatedProduct.price || 0;
+            actualProductsTotal += (currentPrice * requestedQuantity);
+
+            finalCartItems.push({
+                product: updatedProduct._id,
+                quantity: requestedQuantity,
+                price: currentPrice
+            });
         }
+
+        const finalTotalPrice = actualProductsTotal + shippingCost;
 
         // و. إنشاء الأوردر (أخذ لقطة Snapshot من البيانات الحالية)
         const order = await OrderModel.create([{
             user: userId,
-            cartItems: cart.cartItems, // تخزين المنتجات بأسعارها وقت الشراء
+            cartItems: finalCartItems, // تخزين المنتجات بأسعارها الحالية
             shippingAddress: {
                 details: `${address.street}, Bldg ${address.buildingNumber}`,
-                city: (address.city as any).name,
-                zone: (address.zone as any).name,
+                city: (address.city as any)?.name || "",
+                zone: (address.zone as any)?.name || "",
             },
             shippingPrice: shippingCost,
             totalOrderPrice: finalTotalPrice,
@@ -110,6 +138,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
 export const getMyOrders = async (req: Request, res: Response) => {
     const orders = await OrderModel.find({ user: req.user?.id })
+        .populate('paymentMethod', 'name ar_name')
         .sort({ createdAt: -1 });
 
     SuccessResponse(res, { orders });
@@ -119,7 +148,8 @@ export const getOrderDetails = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const order = await OrderModel.findOne({ _id: id, user: req.user?.id })
-        .populate('cartItems.product', 'name image');
+        .populate('cartItems.product', 'name image')
+        .populate('paymentMethod', 'name ar_name');
 
     if (!order) throw new NotFound("Order not found");
 
