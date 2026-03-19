@@ -73,7 +73,7 @@ const CustomerSchema = new mongoose_1.Schema({
     wishlist: [
         {
             type: mongoose_1.Schema.Types.ObjectId,
-            ref: "Products",
+            ref: "Product",
         },
     ],
     addresses: [

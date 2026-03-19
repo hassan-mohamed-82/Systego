@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearWishlist = exports.checkProductInWishlist = exports.getUserWishlist = exports.removeProductFromWishlist = exports.addProductToWishlist = void 0;
+exports.clearWishlist = exports.checkProductInWishlist = exports.getUserWishlist = exports.toggleWishlist = void 0;
 const customer_1 = require("../../models/schema/admin/POS/customer");
 const products_1 = require("../../models/schema/admin/products");
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
@@ -11,122 +11,76 @@ const NotFound_1 = require("../../Errors/NotFound");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const response_1 = require("../../utils/response");
 const mongoose_1 = require("mongoose");
-// Add product to user's wishlist
-exports.addProductToWishlist = (0, express_async_handler_1.default)(async (req, res) => {
+// --- 1. Toggle Product in Wishlist (Add or Remove) ---
+exports.toggleWishlist = (0, express_async_handler_1.default)(async (req, res) => {
     const { productId } = req.body;
     const userId = req.user?.id;
-    // Validate required fields
-    if (!userId || !productId) {
-        throw new BadRequest_1.BadRequest('Missing required fields: userId, productId');
-    }
-    // Check if user exists
+    if (!productId)
+        throw new BadRequest_1.BadRequest('Product ID is required');
     const user = await customer_1.CustomerModel.findById(userId);
-    if (!user) {
+    if (!user)
         throw new NotFound_1.NotFound('User not found');
+    // Check if product exists in DB
+    const productExists = await products_1.ProductModel.exists({ _id: productId });
+    if (!productExists)
+        throw new NotFound_1.NotFound('Product not found in store');
+    const productObjectId = new mongoose_1.Types.ObjectId(productId);
+    const isWishlisted = user.wishlist.some(id => id.toString() === productId);
+    let message = "";
+    if (isWishlisted) {
+        // Remove if exists
+        user.wishlist = user.wishlist.filter(id => id.toString() !== productId);
+        message = 'Product removed from wishlist';
     }
-    // Check if product exists
-    const product = await products_1.ProductModel.findById(productId);
-    if (!product) {
-        throw new NotFound_1.NotFound('Product not found');
+    else {
+        // Add if not exists
+        user.wishlist.push(productObjectId);
+        message = 'Product added to wishlist';
     }
-    // Check if product is already in wishlist
-    if (user.wishlist.includes(productId)) {
-        throw new BadRequest_1.BadRequest('Product already in wishlist');
-    }
-    // Add product to wishlist
-    user.wishlist.push(productId);
-    const updatedUser = await user.save();
-    // Populate wishlist with product details
-    const populatedUser = await customer_1.CustomerModel.findById(updatedUser._id)
-        .populate('wishlist', 'name images price stock category');
-    return (0, response_1.SuccessResponse)(res, {
-        message: 'Product added to wishlist successfully',
-        data: populatedUser?.wishlist ?? [] // Use optional chaining and provide a default value if populatedUser is null
+    await user.save();
+    (0, response_1.SuccessResponse)(res, {
+        message: isWishlisted ? "Product removed from wishlist successfully" : "Product added to wishlist successfully"
     }, 200);
+    return;
 });
-// Remove product from user's wishlist
-exports.removeProductFromWishlist = (0, express_async_handler_1.default)(async (req, res) => {
-    const { productId } = req.body;
-    const userId = req.user?.id;
-    // Validate required fields
-    if (!userId || !productId) {
-        throw new BadRequest_1.BadRequest('Missing required fields: userId, productId');
-    }
-    // Check if user exists
-    const user = await customer_1.CustomerModel.findById(userId);
-    if (!user) {
-        throw new NotFound_1.NotFound('User not found');
-    }
-    // Check if product exists in wishlist
-    if (!user.wishlist.includes(productId)) {
-        throw new NotFound_1.NotFound('Product not found in wishlist');
-    }
-    // Remove product from wishlist
-    user.wishlist = user.wishlist.filter(item => item.toString() !== productId);
-    const updatedUser = await user.save();
-    // Populate wishlist with product details
-    const populatedUser = await customer_1.CustomerModel.findById(updatedUser._id)
-        .populate('wishlist', 'name images price stock category');
-    return (0, response_1.SuccessResponse)(res, {
-        message: 'Product removed from wishlist successfully',
-        data: populatedUser?.wishlist ?? [] // Use optional chaining and provide a default value if populatedUser is null
-    }, 200);
-});
-// Get user's wishlist
+// --- 2. Get User's Wishlist (Populated) ---
 exports.getUserWishlist = (0, express_async_handler_1.default)(async (req, res) => {
     const userId = req.user?.id;
-    // Validate required field
-    if (!userId) {
-        throw new BadRequest_1.BadRequest('User ID is required');
-    }
-    // Check if user exists and populate wishlist
     const user = await customer_1.CustomerModel.findById(userId)
-        .populate('wishlist', 'name images price stock category discount');
-    if (!user) {
+        .populate({
+        path: 'wishlist',
+    });
+    if (!user)
         throw new NotFound_1.NotFound('User not found');
-    }
-    return (0, response_1.SuccessResponse)(res, {
+    (0, response_1.SuccessResponse)(res, {
         message: 'Wishlist retrieved successfully',
         data: user.wishlist
     }, 200);
+    return;
 });
-// Check if product is in user's wishlist
+// --- 3. Check Status (For single product) ---
 exports.checkProductInWishlist = (0, express_async_handler_1.default)(async (req, res) => {
     const { productId } = req.params;
     const userId = req.user?.id;
-    // Validate required fields
-    if (!userId || !productId) {
-        throw new BadRequest_1.BadRequest('Missing required fields: userId, productId');
-    }
-    // Check if user exists
     const user = await customer_1.CustomerModel.findById(userId);
-    if (!user) {
+    if (!user)
         throw new NotFound_1.NotFound('User not found');
-    }
-    // Check if product exists in wishlist
-    const isInWishlist = user.wishlist.includes(new mongoose_1.Types.ObjectId(productId));
-    return (0, response_1.SuccessResponse)(res, {
-        message: 'Product wishlist status retrieved successfully',
+    const isInWishlist = user.wishlist.some(id => id.toString() === productId);
+    (0, response_1.SuccessResponse)(res, {
+        message: 'Product wishlist status retrieved',
         data: { isInWishlist, productId }
     }, 200);
+    return;
 });
-// Clear user's entire wishlist
+// --- 4. Clear Entire Wishlist ---
 exports.clearWishlist = (0, express_async_handler_1.default)(async (req, res) => {
     const userId = req.user?.id;
-    // Validate required field
-    if (!userId) {
-        throw new BadRequest_1.BadRequest('User ID is required');
-    }
-    // Check if user exists
-    const user = await customer_1.CustomerModel.findById(userId);
-    if (!user) {
+    const user = await customer_1.CustomerModel.findByIdAndUpdate(userId, { $set: { wishlist: [] } }, { new: true });
+    if (!user)
         throw new NotFound_1.NotFound('User not found');
-    }
-    // Clear wishlist
-    user.wishlist = [];
-    const updatedUser = await user.save();
-    return (0, response_1.SuccessResponse)(res, {
+    (0, response_1.SuccessResponse)(res, {
         message: 'Wishlist cleared successfully',
-        data: updatedUser.wishlist
+        data: []
     }, 200);
+    return;
 });
