@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import { validate } from "../../middlewares/validation";
-import { authorizePermissions } from "../../middlewares/haspremission";
+import { authorizePermissions } from "../../middlewares/haspremission"; 
+
 import {
   getShippingSettings,
   updateShippingSettings,
