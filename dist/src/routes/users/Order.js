@@ -9,6 +9,7 @@ const catchAsync_1 = require("../../utils/catchAsync");
 const orderRoute = (0, express_1.Router)();
 orderRoute.get('/paymob/callback', (0, catchAsync_1.catchAsync)(Order_1.paymobCallback));
 orderRoute.post('/paymob/callback', (0, catchAsync_1.catchAsync)(Order_1.paymobCallback));
+orderRoute.post('/paymob/verify', (0, catchAsync_1.catchAsync)(Order_1.verifyPaymobPayment));
 orderRoute.use(authenticated_1.authenticated);
 orderRoute.post("/checkout", (0, validation_1.validate)(order_1.createOrderSchema), (0, catchAsync_1.catchAsync)(Order_1.createOrder));
 orderRoute.get("/my-orders", (0, catchAsync_1.catchAsync)(Order_1.getMyOrders));

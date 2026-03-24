@@ -1,14 +1,40 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBanner = exports.updateBanner = exports.getBannerById = exports.getBanners = exports.createBanner = void 0;
+exports.deleteBanner = exports.updateBanner = exports.getBannerById = exports.getBanners = exports.createBanner = exports.getBannerModules = void 0;
 const Banner_1 = require("../../models/schema/admin/Banner");
 const response_1 = require("../../utils/response");
 const Errors_1 = require("../../Errors");
 const handleImages_1 = require("../../utils/handleImages");
-const createBanner = async (req, res) => {
+const constant_1 = require("../../types/constant");
+const express_async_handler_1 = __importDefault(require("express-async-handler"));
+// 1. Get Available Banner Modules
+exports.getBannerModules = (0, express_async_handler_1.default)(async (req, res) => {
+    (0, response_1.SuccessResponse)(res, {
+        message: "Banner modules retrieved successfully",
+        modules: constant_1.BANNER_PAGES
+    });
+});
+// 2. Create Banner (With Duplicate Prevention)
+exports.createBanner = (0, express_async_handler_1.default)(async (req, res) => {
     const { name, images, isActive } = req.body;
-    if (!name || !images || !Array.isArray(images) || images.length === 0) {
-        throw new Errors_1.BadRequest("Name and an array of images are required.");
+    // Validation: name must be a non-empty array
+    if (!name || !Array.isArray(name) || name.length === 0) {
+        throw new Errors_1.BadRequest("name must be a non-empty array of page names.");
+    }
+    // --- CHECK FOR DUPLICATES ---
+    const existingBanner = await Banner_1.BannerModel.findOne({
+        name: { $in: name },
+        isActive: true
+    });
+    if (existingBanner) {
+        const duplicatedPages = existingBanner.name.filter(page => name.includes(page));
+        throw new Errors_1.BadRequest(`Active banners already exist for these pages: ${duplicatedPages.join(", ")}`);
+    }
+    if (!images || !Array.isArray(images) || images.length === 0) {
+        throw new Errors_1.BadRequest("images must be a non-empty array.");
     }
     // ✅ Process each base64 string and save it to the server
     const imageUrls = [];
@@ -25,15 +51,15 @@ const createBanner = async (req, res) => {
         images: imageUrls,
         isActive: isActive !== undefined ? isActive : true,
     });
-    (0, response_1.SuccessResponse)(res, { message: "Banner created successfully", banner });
-};
-exports.createBanner = createBanner;
-const getBanners = async (req, res) => {
+    (0, response_1.SuccessResponse)(res, { message: "Banner created successfully", banner }, 201);
+});
+// 3. Get All Banners
+exports.getBanners = (0, express_async_handler_1.default)(async (req, res) => {
     const banners = await Banner_1.BannerModel.find().sort({ createdAt: -1 });
     (0, response_1.SuccessResponse)(res, { message: "Banners retrieved successfully", banners });
-};
-exports.getBanners = getBanners;
-const getBannerById = async (req, res) => {
+});
+// 4. Get Banner By ID
+exports.getBannerById = (0, express_async_handler_1.default)(async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new Errors_1.BadRequest("Banner ID is required.");
@@ -41,9 +67,9 @@ const getBannerById = async (req, res) => {
     if (!banner)
         throw new Errors_1.NotFound("Banner not found");
     (0, response_1.SuccessResponse)(res, { message: "Banner retrieved successfully", banner });
-};
-exports.getBannerById = getBannerById;
-const updateBanner = async (req, res) => {
+});
+// 5. Update Banner (With Duplicate Prevention)
+exports.updateBanner = (0, express_async_handler_1.default)(async (req, res) => {
     const { id } = req.params;
     const { name, images, isActive } = req.body;
     if (!id)
@@ -52,11 +78,26 @@ const updateBanner = async (req, res) => {
     if (!banner)
         throw new Errors_1.NotFound("Banner not found");
     const updateData = {};
-    if (name !== undefined)
+    // Check Duplicates on Update
+    if (name !== undefined) {
+        if (!Array.isArray(name) || name.length === 0) {
+            throw new Errors_1.BadRequest("name must be a non-empty array.");
+        }
+        // Check for duplicates, excluding the current banner
+        const duplicateCheck = await Banner_1.BannerModel.findOne({
+            _id: { $ne: id },
+            name: { $in: name },
+            isActive: true
+        });
+        if (duplicateCheck) {
+            const duplicatedPages = duplicateCheck.name.filter(page => name.includes(page));
+            throw new Errors_1.BadRequest(`Another active banner is already using these pages: ${duplicatedPages.join(", ")}`);
+        }
         updateData.name = name;
+    }
     if (isActive !== undefined)
         updateData.isActive = isActive;
-    // ✅ If new images are provided, parse and OVERWRITE original images array
+    // Process Images on Update
     if (images && Array.isArray(images)) {
         const imageUrls = [];
         for (let i = 0; i < images.length; i++) {
@@ -75,9 +116,9 @@ const updateBanner = async (req, res) => {
     }
     const updatedBanner = await Banner_1.BannerModel.findByIdAndUpdate(id, updateData, { new: true });
     (0, response_1.SuccessResponse)(res, { message: "Banner updated successfully", banner: updatedBanner });
-};
-exports.updateBanner = updateBanner;
-const deleteBanner = async (req, res) => {
+});
+// 6. Delete Banner
+exports.deleteBanner = (0, express_async_handler_1.default)(async (req, res) => {
     const { id } = req.params;
     if (!id)
         throw new Errors_1.BadRequest("Banner ID is required.");
@@ -85,5 +126,4 @@ const deleteBanner = async (req, res) => {
     if (!banner)
         throw new Errors_1.NotFound("Banner not found");
     (0, response_1.SuccessResponse)(res, { message: "Banner deleted successfully" });
-};
-exports.deleteBanner = deleteBanner;
+});

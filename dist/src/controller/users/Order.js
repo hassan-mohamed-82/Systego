@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.paymobCallback = exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
+exports.verifyPaymobPayment = exports.paymobCallback = exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const axios_1 = __importDefault(require("axios"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -277,28 +277,56 @@ exports.getOrderDetails = getOrderDetails;
 const paymobCallback = async (req, res) => {
     const payload = (req.body?.obj ? req.body.obj : req.query);
     const incomingHmac = toSafeString(req.body?.hmac || req.query?.hmac, "").toLowerCase();
+    console.log("🔔 PAYMOB CALLBACK RECEIVED");
+    console.log("📦 Payload:", JSON.stringify(payload, null, 2));
+    console.log("📝 Incoming HMAC:", incomingHmac);
+    console.log("📋 Request Body:", JSON.stringify(req.body, null, 2));
+    console.log("🔍 Request Query:", JSON.stringify(req.query, null, 2));
     if (!incomingHmac) {
+        console.error("❌ Missing HMAC");
         throw new Errors_1.BadRequest("Missing Paymob HMAC");
     }
     const paymobConfig = await Paymob_1.PaymobModel.findOne();
     if (!paymobConfig) {
+        console.error("❌ Paymob Config not found");
         throw new Errors_1.BadRequest("Paymob configuration not found");
     }
     const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
-    if (expectedHmac !== incomingHmac) {
+    console.log("🔐 Expected HMAC:", expectedHmac);
+    console.log("✅ HMAC Match:", expectedHmac === incomingHmac);
+    console.log("🔑 HMAC Key used:", paymobConfig.hmac_key.substring(0, 5) + "...");
+    // TEMPORARY: Skip HMAC verification for debugging (remove in production!)
+    const SKIP_HMAC_FOR_DEBUG = process.env.SKIP_PAYMOB_HMAC === "true";
+    if (SKIP_HMAC_FOR_DEBUG) {
+        console.warn("⚠️  HMAC VERIFICATION SKIPPED (DEBUG MODE)");
+    }
+    else if (expectedHmac !== incomingHmac) {
+        console.error("❌ HMAC Mismatch");
         throw new Errors_1.BadRequest("Invalid Paymob HMAC signature");
     }
     const paymobOrderId = toSafeString(normalizeOrderId(payload.order), "");
+    const merchantOrderId = toSafeString(payload.order?.merchant_order_id, "");
     const transactionId = toSafeString(payload.id, "");
     const isSuccess = toBoolean(payload.success);
-    if (!paymobOrderId) {
-        throw new Errors_1.BadRequest("Missing Paymob order id in callback payload");
+    console.log("🎯 Paymob Order ID:", paymobOrderId);
+    console.log("🧾 Merchant Order ID:", merchantOrderId);
+    console.log("💳 Transaction ID:", transactionId);
+    console.log("✨ Is Success:", isSuccess);
+    if (!paymobOrderId && !merchantOrderId) {
+        console.error("❌ Missing Paymob and Merchant Order IDs");
+        throw new Errors_1.BadRequest("Missing order identifiers in callback payload");
     }
-    const order = await Order_1.OrderModel.findOne({ paymobOrderId });
+    let order = paymobOrderId ? await Order_1.OrderModel.findOne({ paymobOrderId }) : null;
+    if (!order && merchantOrderId && mongoose_1.default.isValidObjectId(merchantOrderId)) {
+        order = await Order_1.OrderModel.findById(merchantOrderId);
+    }
+    console.log("📌 Local Order Found:", !!order, order?._id);
     if (!order) {
+        console.error("❌ Order not found with paymobOrderId:", paymobOrderId);
         throw new Errors_1.NotFound("Order not found for this Paymob callback");
     }
     if (order.paymentStatus === "paid") {
+        console.log("⏭️  Payment already marked as paid, skipping duplicate callback");
         return (0, response_1.SuccessResponse)(res, {
             message: "Payment already confirmed",
             orderId: order._id,
@@ -308,9 +336,11 @@ const paymobCallback = async (req, res) => {
     order.paymobTransactionId = transactionId;
     order.paymobCallbackPayload = req.body?.obj || req.query;
     if (isSuccess) {
+        console.log("✔️ MARKING ORDER AS APPROVED (paid)");
         order.paymentStatus = "paid";
         order.status = "approved";
         await order.save();
+        console.log("✅ Order saved successfully:", order._id);
         return (0, response_1.SuccessResponse)(res, {
             message: "Payment callback processed successfully",
             orderId: order._id,
@@ -320,6 +350,7 @@ const paymobCallback = async (req, res) => {
     const failedSession = await mongoose_1.default.startSession();
     failedSession.startTransaction();
     try {
+        console.log("❌ MARKING ORDER AS REJECTED (payment failed)");
         if (order.paymentStatus !== "failed") {
             for (const item of order.cartItems) {
                 if (item.product && item.quantity) {
@@ -330,6 +361,7 @@ const paymobCallback = async (req, res) => {
         order.paymentStatus = "failed";
         order.status = "rejected";
         await order.save({ session: failedSession });
+        console.log("✅ Order marked as rejected and saved:", order._id);
         await failedSession.commitTransaction();
         failedSession.endSession();
     }
@@ -345,3 +377,79 @@ const paymobCallback = async (req, res) => {
     });
 };
 exports.paymobCallback = paymobCallback;
+const verifyPaymobPayment = async (req, res) => {
+    const payload = (req.body?.payload || req.body?.obj || req.body);
+    const incomingHmac = toSafeString(req.body?.hmac || payload?.hmac, "").toLowerCase();
+    if (!payload || Object.keys(payload).length === 0) {
+        throw new Errors_1.BadRequest("Missing payload");
+    }
+    if (!incomingHmac) {
+        throw new Errors_1.BadRequest("Missing hmac");
+    }
+    const paymobConfig = await Paymob_1.PaymobModel.findOne();
+    if (!paymobConfig) {
+        throw new Errors_1.BadRequest("Paymob configuration not found");
+    }
+    const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
+    const hmacMatched = expectedHmac === incomingHmac;
+    const skipHmac = process.env.SKIP_PAYMOB_HMAC === "true";
+    if (!hmacMatched && !skipHmac) {
+        return (0, response_1.SuccessResponse)(res, {
+            ok: false,
+            reason: "HMAC_MISMATCH",
+            incomingHmac,
+            expectedHmac,
+        }, 200);
+    }
+    const paymobOrderId = toSafeString(normalizeOrderId(payload.order), "");
+    const merchantOrderId = toSafeString(payload.order?.merchant_order_id, "");
+    const transactionId = toSafeString(payload.id, "");
+    const isSuccess = toBoolean(payload.success);
+    let order = paymobOrderId ? await Order_1.OrderModel.findOne({ paymobOrderId }) : null;
+    if (!order && merchantOrderId && mongoose_1.default.isValidObjectId(merchantOrderId)) {
+        order = await Order_1.OrderModel.findById(merchantOrderId);
+    }
+    if (!order) {
+        return (0, response_1.SuccessResponse)(res, {
+            ok: false,
+            reason: "ORDER_NOT_FOUND",
+            paymobOrderId,
+            merchantOrderId,
+            transactionId,
+            hmacMatched,
+        }, 200);
+    }
+    order.paymobTransactionId = transactionId;
+    order.paymobCallbackPayload = payload;
+    if (isSuccess) {
+        order.paymentStatus = "paid";
+        order.status = "approved";
+        await order.save();
+        return (0, response_1.SuccessResponse)(res, {
+            ok: true,
+            reason: "PAYMENT_CONFIRMED",
+            orderId: order._id,
+            paymentStatus: order.paymentStatus,
+            orderStatus: order.status,
+            hmacMatched,
+            paymobOrderId,
+            merchantOrderId,
+            transactionId,
+        }, 200);
+    }
+    order.paymentStatus = "failed";
+    order.status = "rejected";
+    await order.save();
+    return (0, response_1.SuccessResponse)(res, {
+        ok: true,
+        reason: "PAYMENT_FAILED",
+        orderId: order._id,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        hmacMatched,
+        paymobOrderId,
+        merchantOrderId,
+        transactionId,
+    }, 200);
+};
+exports.verifyPaymobPayment = verifyPaymobPayment;
