@@ -67,5 +67,8 @@ export const MODULES = [
 // أسماء بس، من غير ids
 export const ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"] as const;
 
+export const BANNER_PAGES = ["login", "home", "brand", "category", "signup"] as const;
+
 export type ModuleName = (typeof MODULES)[number];
 export type ActionName = (typeof ACTION_NAMES)[number];
+export type BannerPage = (typeof BANNER_PAGES)[number];
