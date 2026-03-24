@@ -1,4 +1,4 @@
-// مسار الـ Webhook المعدل للتتبع (Debug Mode)
+// controllers/users/Order.ts (أو مسار الـ Webhook بتاعك)
 import { Request, Response } from "express";
 import crypto from "crypto";
 import { OrderModel } from "../models/schema/users/Order";
@@ -17,28 +17,28 @@ export const paymobWebhook = async (req: Request, res: Response) => {
         const merchantOrderId = obj.order.merchant_order_id;
         const integrationId = obj.integration_id;
 
-        // 1. هنجيب الأوردر من الداتابيز أول حاجة
+        // 1. هنجيب الأوردر من الداتابيز
         const order = await OrderModel.findById(merchantOrderId);
         if (!order) return res.status(200).send("Order not found");
 
-        // 2. حفظ تتبع بسيط للـ webhook بدون كسر enum الخاص بحالة الطلب
+        // 2. حفظ تتبع بسيط للـ webhook (تحديث الحالة لـ pending)
         order.status = "pending";
         order.paymentStatus = "pending";
         order.paymobCallbackPayload = {
-            ...(payload?.obj || {}),
+            ...(payload.obj || {}),
             debugState: "webhook_received",
         };
+        // سطر إجباري لـ Mongoose عشان يحفظ الـ Mixed Object
+        order.markModified('paymobCallbackPayload'); 
         await order.save();
 
-        // 3. ندور على إعدادات بوابه الدفع
+        // 3. ندور على إعدادات بوابة الدفع
         const paymobConfig = await PaymobModel.findOne({ integration_id: integrationId.toString() });
         if (!paymobConfig) {
             order.status = "rejected";
             order.paymentStatus = "failed";
-            order.paymobCallbackPayload = {
-                ...(payload?.obj || {}),
-                debugState: "config_not_found",
-            };
+            order.paymobCallbackPayload.debugState = "config_not_found";
+            order.markModified('paymobCallbackPayload');
             await order.save();
             return res.status(200).send("Config not found");
         }
@@ -76,10 +76,8 @@ export const paymobWebhook = async (req: Request, res: Response) => {
         if (hashedStr.toLowerCase() !== hmacReceived) {
             order.status = "rejected";
             order.paymentStatus = "failed";
-            order.paymobCallbackPayload = {
-                ...(payload?.obj || {}),
-                debugState: "hmac_failed",
-            };
+            order.paymobCallbackPayload.debugState = "hmac_failed";
+            order.markModified('paymobCallbackPayload');
             await order.save();
             return res.status(400).send("HMAC Validation Failed");
         }
@@ -93,14 +91,18 @@ export const paymobWebhook = async (req: Request, res: Response) => {
             order.paymentStatus = "failed";
         }
 
+        // تحديث باقي الحقول المطلوبة في الـ Schema
         order.paymobTransactionId = String(obj.id || "");
-        order.paymobCallbackPayload = payload?.obj || payload;
+        order.paymobCallbackPayload = {
+            ...(payload.obj || {}),
+            debugState: "completed",
+        };
+        order.markModified('paymobCallbackPayload');
 
         await order.save();
         return res.status(200).send("OK");
 
     } catch (error: any) {
-        // لو الكود ضرب إيرور لأي سبب
         console.error("Webhook Error:", error);
         return res.status(500).send("Server Error");
     }
