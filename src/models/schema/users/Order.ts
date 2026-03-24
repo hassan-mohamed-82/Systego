@@ -36,6 +36,28 @@ const orderSchema = new Schema({
     ref: "PaymentMethod",
     required: true
   },
+  paymentGateway: {
+    type: String,
+    enum: ["manual", "paymob"],
+    default: "manual"
+  },
+  paymentStatus: {
+    type: String,
+    enum: ["unpaid", "pending", "paid", "failed"],
+    default: "unpaid"
+  },
+  paymobOrderId: {
+    type: String
+  },
+  paymobTransactionId: {
+    type: String
+  },
+  paymobIframeUrl: {
+    type: String
+  },
+  paymobCallbackPayload: {
+    type: Schema.Types.Mixed
+  },
   proofImage: {
     type: String
   },

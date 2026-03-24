@@ -7,7 +7,7 @@ const PaymobSchema=new mongoose.Schema({
     iframe_id:{type:String,required:true},
     integration_id:{type:String,required:true},
     hmac_key:{type:String,required:true},
-    payment_method_id:{type:String,required:true},
-})
+    payment_method_id:{type:mongoose.Schema.Types.ObjectId,ref:"PaymentMethod",required:true},
+},{timestamps:true})
 
 export const PaymobModel=mongoose.model("Paymob",PaymobSchema)

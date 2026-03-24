@@ -38,6 +38,28 @@ const orderSchema = new mongoose_1.Schema({
         ref: "PaymentMethod",
         required: true
     },
+    paymentGateway: {
+        type: String,
+        enum: ["manual", "paymob"],
+        default: "manual"
+    },
+    paymentStatus: {
+        type: String,
+        enum: ["unpaid", "pending", "paid", "failed"],
+        default: "unpaid"
+    },
+    paymobOrderId: {
+        type: String
+    },
+    paymobTransactionId: {
+        type: String
+    },
+    paymobIframeUrl: {
+        type: String
+    },
+    paymobCallbackPayload: {
+        type: mongoose_1.Schema.Types.Mixed
+    },
     proofImage: {
         type: String
     },

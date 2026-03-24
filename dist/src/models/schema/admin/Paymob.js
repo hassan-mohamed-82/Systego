@@ -12,6 +12,6 @@ const PaymobSchema = new mongoose_1.default.Schema({
     iframe_id: { type: String, required: true },
     integration_id: { type: String, required: true },
     hmac_key: { type: String, required: true },
-    payment_method_id: { type: String, required: true },
-});
+    payment_method_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "PaymentMethod", required: true },
+}, { timestamps: true });
 exports.PaymobModel = mongoose_1.default.model("Paymob", PaymobSchema);
