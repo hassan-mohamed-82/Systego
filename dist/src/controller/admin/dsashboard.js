@@ -12,6 +12,7 @@ const Purchase_1 = require("../../models/schema/admin/Purchase");
 const Transfer_1 = require("../../models/schema/admin/Transfer");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const response_1 = require("../../utils/response");
+const tenantService_1 = require("../../utils/tenantService");
 const mongoose_1 = __importDefault(require("mongoose"));
 // ═══════════════════════════════════════════════════════════
 // 📊 MAIN DASHBOARD API
@@ -366,6 +367,22 @@ const getDashboard = async (req, res) => {
         { $sort: { totalValue: -1 } },
     ]);
     // ═══════════════════════════════════════════════════════════
+    // 🔑 SUBSCRIPTION PLAN INFO
+    // ═══════════════════════════════════════════════════════════
+    let subscription = null;
+    try {
+        const tenantInfo = await (0, tenantService_1.getTenantInfo)();
+        subscription = {
+            plan_name: tenantInfo.package?.name || null,
+            is_active: tenantInfo.package?.status || false,
+            features: tenantInfo.features,
+        };
+    }
+    catch (error) {
+        // لو مش متوفر، نرجع null
+        subscription = null;
+    }
+    // ═══════════════════════════════════════════════════════════
     // 📤 RESPONSE
     // ═══════════════════════════════════════════════════════════
     return (0, response_1.SuccessResponse)(res, {
@@ -374,6 +391,10 @@ const getDashboard = async (req, res) => {
             start_date: startDateObj.toISOString().split("T")[0],
             end_date: endDateObj.toISOString().split("T")[0],
         },
+        // ═══════════════════════════════════════════════════════════
+        // 🔑 SUBSCRIPTION
+        // ═══════════════════════════════════════════════════════════
+        subscription,
         // ═══════════════════════════════════════════════════════════
         // 📈 CARDS
         // ═══════════════════════════════════════════════════════════

@@ -10,6 +10,7 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import { ProductModel } from "../../models/schema/admin/products";
 import { SuccessResponse } from "../../utils/response";
+import { getTenantInfo } from "../../utils/tenantService";
 import mongoose from "mongoose";
 
 // ═══════════════════════════════════════════════════════════
@@ -395,6 +396,22 @@ export const getDashboard = async (req: Request, res: Response) => {
   ]);
 
   // ═══════════════════════════════════════════════════════════
+  // 🔑 SUBSCRIPTION PLAN INFO
+  // ═══════════════════════════════════════════════════════════
+  let subscription: any = null;
+  try {
+    const tenantInfo = await getTenantInfo();
+    subscription = {
+      plan_name: tenantInfo.package?.name || null,
+      is_active: tenantInfo.package?.status || false,
+      features: tenantInfo.features,
+    };
+  } catch (error) {
+    // لو مش متوفر، نرجع null
+    subscription = null;
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // 📤 RESPONSE
   // ═══════════════════════════════════════════════════════════
   return SuccessResponse(res, {
@@ -403,6 +420,11 @@ export const getDashboard = async (req: Request, res: Response) => {
       start_date: startDateObj.toISOString().split("T")[0],
       end_date: endDateObj.toISOString().split("T")[0],
     },
+
+    // ═══════════════════════════════════════════════════════════
+    // 🔑 SUBSCRIPTION
+    // ═══════════════════════════════════════════════════════════
+    subscription,
 
     // ═══════════════════════════════════════════════════════════
     // 📈 CARDS
