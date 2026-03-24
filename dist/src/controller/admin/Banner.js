@@ -7,8 +7,12 @@ const Errors_1 = require("../../Errors");
 const handleImages_1 = require("../../utils/handleImages");
 const createBanner = async (req, res) => {
     const { name, images, isActive } = req.body;
-    if (!name || !images || !Array.isArray(images) || images.length === 0) {
-        throw new Errors_1.BadRequest("Name and an array of images are required.");
+    // name must be a non-empty array of page strings
+    if (!name || !Array.isArray(name) || name.length === 0) {
+        throw new Errors_1.BadRequest("name must be a non-empty array of page names.");
+    }
+    if (!images || !Array.isArray(images) || images.length === 0) {
+        throw new Errors_1.BadRequest("images must be a non-empty array.");
     }
     // ✅ Process each base64 string and save it to the server
     const imageUrls = [];
@@ -52,8 +56,13 @@ const updateBanner = async (req, res) => {
     if (!banner)
         throw new Errors_1.NotFound("Banner not found");
     const updateData = {};
-    if (name !== undefined)
+    // name is now an array of page strings
+    if (name !== undefined) {
+        if (!Array.isArray(name) || name.length === 0) {
+            throw new Errors_1.BadRequest("name must be a non-empty array of page names.");
+        }
         updateData.name = name;
+    }
     if (isActive !== undefined)
         updateData.isActive = isActive;
     // ✅ If new images are provided, parse and OVERWRITE original images array

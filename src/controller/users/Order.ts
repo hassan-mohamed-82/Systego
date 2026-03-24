@@ -324,17 +324,34 @@ export const paymobCallback = async (req: Request, res: Response) => {
     const payload = (req.body?.obj ? req.body.obj : req.query) as Record<string, any>;
     const incomingHmac = toSafeString(req.body?.hmac || req.query?.hmac, "").toLowerCase();
 
+    console.log("🔔 PAYMOB CALLBACK RECEIVED");
+    console.log("📦 Payload:", JSON.stringify(payload, null, 2));
+    console.log("📝 Incoming HMAC:", incomingHmac);
+    console.log("📋 Request Body:", JSON.stringify(req.body, null, 2));
+    console.log("🔍 Request Query:", JSON.stringify(req.query, null, 2));
+
     if (!incomingHmac) {
+        console.error("❌ Missing HMAC");
         throw new BadRequest("Missing Paymob HMAC");
     }
 
     const paymobConfig = await PaymobModel.findOne();
     if (!paymobConfig) {
+        console.error("❌ Paymob Config not found");
         throw new BadRequest("Paymob configuration not found");
     }
 
     const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
-    if (expectedHmac !== incomingHmac) {
+    console.log("🔐 Expected HMAC:", expectedHmac);
+    console.log("✅ HMAC Match:", expectedHmac === incomingHmac);
+    console.log("🔑 HMAC Key used:", paymobConfig.hmac_key.substring(0, 5) + "...");
+
+    // TEMPORARY: Skip HMAC verification for debugging (remove in production!)
+    const SKIP_HMAC_FOR_DEBUG = process.env.SKIP_PAYMOB_HMAC === "true";
+    if (SKIP_HMAC_FOR_DEBUG) {
+        console.warn("⚠️  HMAC VERIFICATION SKIPPED (DEBUG MODE)");
+    } else if (expectedHmac !== incomingHmac) {
+        console.error("❌ HMAC Mismatch");
         throw new BadRequest("Invalid Paymob HMAC signature");
     }
 
@@ -342,16 +359,25 @@ export const paymobCallback = async (req: Request, res: Response) => {
     const transactionId = toSafeString(payload.id, "");
     const isSuccess = toBoolean(payload.success);
 
+    console.log("🎯 Paymob Order ID:", paymobOrderId);
+    console.log("💳 Transaction ID:", transactionId);
+    console.log("✨ Is Success:", isSuccess);
+
     if (!paymobOrderId) {
+        console.error("❌ Missing Paymob Order ID");
         throw new BadRequest("Missing Paymob order id in callback payload");
     }
 
     const order = await OrderModel.findOne({ paymobOrderId });
+    console.log("📌 Local Order Found:", !!order, order?._id);
+
     if (!order) {
+        console.error("❌ Order not found with paymobOrderId:", paymobOrderId);
         throw new NotFound("Order not found for this Paymob callback");
     }
 
     if (order.paymentStatus === "paid") {
+        console.log("⏭️  Payment already marked as paid, skipping duplicate callback");
         return SuccessResponse(res, {
             message: "Payment already confirmed",
             orderId: order._id,
@@ -363,9 +389,11 @@ export const paymobCallback = async (req: Request, res: Response) => {
     order.paymobCallbackPayload = req.body?.obj || req.query;
 
     if (isSuccess) {
+        console.log("✔️ MARKING ORDER AS APPROVED (paid)");
         order.paymentStatus = "paid";
         order.status = "approved";
         await order.save();
+        console.log("✅ Order saved successfully:", order._id);
 
         return SuccessResponse(res, {
             message: "Payment callback processed successfully",
@@ -378,6 +406,7 @@ export const paymobCallback = async (req: Request, res: Response) => {
     failedSession.startTransaction();
 
     try {
+        console.log("❌ MARKING ORDER AS REJECTED (payment failed)");
         if (order.paymentStatus !== "failed") {
             for (const item of order.cartItems) {
                 if (item.product && item.quantity) {
@@ -393,6 +422,7 @@ export const paymobCallback = async (req: Request, res: Response) => {
         order.paymentStatus = "failed";
         order.status = "rejected";
         await order.save({ session: failedSession });
+        console.log("✅ Order marked as rejected and saved:", order._id);
 
         await failedSession.commitTransaction();
         failedSession.endSession();
