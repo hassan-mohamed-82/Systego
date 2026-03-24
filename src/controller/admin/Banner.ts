@@ -26,7 +26,7 @@ export const createBanner = asyncHandler(async (req: Request, res: Response): Pr
     // --- CHECK FOR DUPLICATES ---
     const existingBanner = await BannerModel.findOne({
         name: { $in: name },
-        isActive: true
+        // isActive: true
     });
 
     if (existingBanner) {
@@ -103,7 +103,7 @@ export const updateBanner = asyncHandler(async (req: Request, res: Response): Pr
         const duplicateCheck = await BannerModel.findOne({
             _id: { $ne: id },
             name: { $in: name },
-            isActive: true
+            // isActive: true
         });
 
         if (duplicateCheck) {
