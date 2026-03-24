@@ -7,8 +7,13 @@ import { saveBase64Image } from "../../utils/handleImages";
 export const createBanner = async (req: Request, res: Response) => {
   const { name, images, isActive } = req.body;
 
-  if (!name || !images || !Array.isArray(images) || images.length === 0) {
-    throw new BadRequest("Name and an array of images are required.");
+  // name must be a non-empty array of page strings
+  if (!name || !Array.isArray(name) || name.length === 0) {
+    throw new BadRequest("name must be a non-empty array of page names.");
+  }
+
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    throw new BadRequest("images must be a non-empty array.");
   }
 
   // ✅ Process each base64 string and save it to the server
@@ -62,7 +67,15 @@ export const updateBanner = async (req: Request, res: Response) => {
   if (!banner) throw new NotFound("Banner not found");
 
   const updateData: any = {};
-  if (name !== undefined) updateData.name = name;
+
+  // name is now an array of page strings
+  if (name !== undefined) {
+    if (!Array.isArray(name) || name.length === 0) {
+      throw new BadRequest("name must be a non-empty array of page names.");
+    }
+    updateData.name = name;
+  }
+
   if (isActive !== undefined) updateData.isActive = isActive;
 
   // ✅ If new images are provided, parse and OVERWRITE original images array
