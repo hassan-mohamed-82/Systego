@@ -9,8 +9,11 @@ import orderRouter from "./Order";
 // import bannerRouter from "./Banner";
 import wishlistRouter from "./wishlist";
 import paymentMethodRouter from "./paymentmethod";
+import tenantInfoRouter from "../admin/tenantInfo";
 
 const userRoute = Router();
+
+userRoute.use("/tenant-info", tenantInfoRouter)
 
 userRoute.use("/auth", authRouter);
 userRoute.use("/category", categoryRouter);
