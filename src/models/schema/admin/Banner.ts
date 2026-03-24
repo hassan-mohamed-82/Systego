@@ -3,7 +3,7 @@ import { BANNER_PAGES } from "../../../types/constant";
 
 const BannerSchema = new Schema(
   {
-    name: { type: String, enum: [...BANNER_PAGES], required: true },
+    name: [{ type: String, enum: [...BANNER_PAGES] }],
     images: [{ type: String, required: true }],
     isActive: { type: Boolean, default: true },
   },
