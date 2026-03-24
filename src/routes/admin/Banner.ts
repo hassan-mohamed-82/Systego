@@ -5,6 +5,7 @@ import {
   getBannerById,
   updateBanner,
   deleteBanner,
+  getBannerModules
 } from "../../controller/admin/Banner";
 import { validate } from "../../middlewares/validation";
 import { createBannerSchema, updateBannerSchema } from "../../validation/admin/Banner";
@@ -12,6 +13,8 @@ import { catchAsync } from "../../utils/catchAsync";
 import { authorizePermissions } from "../../middlewares/haspremission";
 
 const route = Router();
+
+route.get("/banner-modules", catchAsync(getBannerModules));
 
 route.post(
   "/",
