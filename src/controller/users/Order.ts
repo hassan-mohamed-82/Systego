@@ -1,150 +1,13 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import axios from "axios";
-import crypto from "crypto";
 import { CartModel } from "../../models/schema/users/Cart";
 import { OrderModel } from "../../models/schema/users/Order";
 import { ProductModel } from "../../models/schema/admin/products";
 import { AddressModel } from "../../models/schema/users/Address";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
 import { PaymentMethodModel } from "../../models/schema/admin/payment_methods";
-import { PaymobModel } from "../../models/schema/admin/Paymob";
-import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
-
-const PAYMOB_BASE_URL = "https://accept.paymob.com/api";
-
-const toBoolean = (value: unknown): boolean => {
-    if (typeof value === "boolean") return value;
-    if (typeof value === "string") return value.toLowerCase() === "true";
-    if (typeof value === "number") return value === 1;
-    return false;
-};
-
-const toSafeString = (value: unknown, fallback: string = "NA") => {
-    if (value === null || value === undefined) return fallback;
-    const normalized = String(value).trim();
-    return normalized.length ? normalized : fallback;
-};
-
-const normalizeOrderId = (orderRef: unknown): string => {
-    if (!orderRef) return "";
-    if (typeof orderRef === "string") return orderRef;
-
-    if (typeof orderRef === "object") {
-        const candidate = orderRef as { id?: string; _id?: string };
-        return candidate.id || candidate._id || "";
-    }
-
-    return String(orderRef);
-};
-
-const generatePaymobRedirectHmac = (payload: Record<string, any>, hmacKey: string): string => {
-    const values = [
-        toSafeString(payload.amount_cents, ""),
-        toSafeString(payload.created_at, ""),
-        toSafeString(payload.currency, ""),
-        String(toBoolean(payload.error)),
-        String(toBoolean(payload.has_parent_transaction)),
-        toSafeString(payload.id, ""),
-        toSafeString(payload.integration_id, ""),
-        String(toBoolean(payload.is_3d_secure)),
-        String(toBoolean(payload.is_auth)),
-        String(toBoolean(payload.is_capture)),
-        String(toBoolean(payload.is_refunded)),
-        String(toBoolean(payload.is_standalone_payment)),
-        toSafeString(normalizeOrderId(payload.order), ""),
-        toSafeString(payload.owner, ""),
-        String(toBoolean(payload.pending)),
-        toSafeString(payload.source_data?.pan, ""),
-        toSafeString(payload.source_data?.sub_type, ""),
-        toSafeString(payload.source_data?.type, ""),
-        String(toBoolean(payload.success)),
-    ].join("");
-
-    return crypto.createHmac("sha512", hmacKey).update(values).digest("hex");
-};
-
-const initializePaymobPayment = async ({
-    localOrderId,
-    amount,
-    paymobConfig,
-    customer,
-    address,
-}: {
-    localOrderId: string;
-    amount: number;
-    paymobConfig: any;
-    customer: any;
-    address: any;
-}) => {
-    const authResponse = await axios.post(`${PAYMOB_BASE_URL}/auth/tokens`, {
-        api_key: paymobConfig.api_key,
-    });
-    const authData = authResponse.data as any;
-
-    const authToken = authData?.token;
-    if (!authToken) throw new BadRequest("Failed to authenticate with Paymob");
-
-    const amountCents = Math.round(Number(amount) * 100);
-    if (amountCents <= 0) throw new BadRequest("Order amount is invalid for Paymob payment");
-
-    const paymobOrderResponse = await axios.post(`${PAYMOB_BASE_URL}/ecommerce/orders`, {
-        auth_token: authToken,
-        delivery_needed: false,
-        amount_cents: amountCents,
-        currency: "EGP",
-        merchant_order_id: localOrderId,
-        items: [],
-    });
-    const paymobOrderData = paymobOrderResponse.data as any;
-
-    const paymobOrderId = paymobOrderData?.id;
-    if (!paymobOrderId) throw new BadRequest("Failed to create Paymob order");
-
-    const customerName = toSafeString(customer?.name, "Customer");
-    const [firstName, ...lastNameParts] = customerName.split(" ");
-    const lastName = lastNameParts.join(" ") || "Customer";
-
-    const billingData = {
-        apartment: toSafeString(address?.apartmentNumber, "NA"),
-        email: toSafeString(customer?.email, "no-reply@example.com"),
-        floor: toSafeString(address?.floorNumber, "NA"),
-        first_name: toSafeString(firstName, "Customer"),
-        street: toSafeString(address?.street, "NA"),
-        building: toSafeString(address?.buildingNumber, "NA"),
-        phone_number: toSafeString(customer?.phone_number, "00000000000"),
-        shipping_method: "NA",
-        postal_code: "NA",
-        city: toSafeString(address?.city?.name, "NA"),
-        country: toSafeString(address?.country?.name, "EG"),
-        last_name: toSafeString(lastName, "Customer"),
-        state: toSafeString(address?.zone?.name, "NA"),
-    };
-
-    const paymentKeyResponse = await axios.post(`${PAYMOB_BASE_URL}/acceptance/payment_keys`, {
-        auth_token: authToken,
-        amount_cents: amountCents,
-        expiration: 3600,
-        order_id: paymobOrderId,
-        billing_data: billingData,
-        currency: "EGP",
-        integration_id: Number(paymobConfig.integration_id),
-        lock_order_when_paid: false,
-    });
-    const paymentKeyData = paymentKeyResponse.data as any;
-
-    const paymentToken = paymentKeyData?.token;
-    if (!paymentToken) throw new BadRequest("Failed to generate Paymob payment token");
-
-    const iframeUrl = `https://accept.paymob.com/api/acceptance/iframes/${paymobConfig.iframe_id}?payment_token=${paymentToken}`;
-
-    return {
-        paymobOrderId: String(paymobOrderId),
-        iframeUrl,
-    };
-};
 
 // (Checkout)
 export const createOrder = async (req: Request, res: Response) => {
@@ -178,7 +41,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
         // ب. التأكد من وجود العنوان وجلب بيانات الشحن منه (Populate Zone)
         const address = await AddressModel.findOne({ _id: shippingAddress, user: userId })
-            .populate('city zone country')
+            .populate('city zone')
             .session(session);
 
         if (!address) throw new NotFound("Shipping address not found");
@@ -253,39 +116,8 @@ export const createOrder = async (req: Request, res: Response) => {
             totalOrderPrice: finalTotalPrice,
             paymentMethod,
             proofImage,
-            status: 'pending',
-            paymentGateway: paymentMethodDoc.type === "automatic" ? "paymob" : "manual",
-            paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+            status: 'pending'
         }], { session });
-
-        let paymobData: { paymobOrderId: string; iframeUrl: string } | null = null;
-
-        if (paymentMethodDoc.type === "automatic") {
-            const paymobConfig = await PaymobModel.findOne({
-                payment_method_id: paymentMethodDoc._id,
-            }).session(session);
-
-            if (!paymobConfig) {
-                throw new BadRequest("Paymob settings are not configured for this payment method");
-            }
-
-            const customer = await CustomerModel.findById(userId).session(session);
-            if (!customer) {
-                throw new NotFound("Customer not found");
-            }
-
-            paymobData = await initializePaymobPayment({
-                localOrderId: order[0]._id.toString(),
-                amount: finalTotalPrice,
-                paymobConfig,
-                customer,
-                address,
-            });
-
-            order[0].paymobOrderId = paymobData.paymobOrderId;
-            order[0].paymobIframeUrl = paymobData.iframeUrl;
-            await order[0].save({ session });
-        }
 
         // ز. مسح السلة بعد نجاح العملية
         await CartModel.findOneAndDelete({ user: userId }).session(session);
@@ -294,18 +126,7 @@ export const createOrder = async (req: Request, res: Response) => {
         await session.commitTransaction();
         session.endSession();
 
-        SuccessResponse(res, {
-            message: "Order placed successfully",
-            order: order[0],
-            payment: paymobData
-                ? {
-                    gateway: "paymob",
-                    paymentStatus: "pending",
-                    iframeUrl: paymobData.iframeUrl,
-                    paymobOrderId: paymobData.paymobOrderId,
-                }
-                : null,
-        }, 201);
+        SuccessResponse(res, { message: "Order placed successfully", order: order[0] }, 201);
 
     } catch (error: any) {
         // في حالة حدوث أي خطأ، تراجع عن كل التغييرات (خصم المخزن لن يتم)
@@ -333,94 +154,4 @@ export const getOrderDetails = async (req: Request, res: Response) => {
     if (!order) throw new NotFound("Order not found");
 
     SuccessResponse(res, { order });
-};
-
-export const paymobCallback = async (req: Request, res: Response) => {
-    const payload = (req.body?.obj ? req.body.obj : req.query) as Record<string, any>;
-    const incomingHmac = toSafeString(req.body?.hmac || req.query?.hmac, "").toLowerCase();
-
-    if (!incomingHmac) {
-        throw new BadRequest("Missing Paymob HMAC");
-    }
-
-    const paymobConfig = await PaymobModel.findOne();
-    if (!paymobConfig) {
-        throw new BadRequest("Paymob configuration not found");
-    }
-
-    const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
-    if (expectedHmac !== incomingHmac) {
-        throw new BadRequest("Invalid Paymob HMAC signature");
-    }
-
-    const paymobOrderId = toSafeString(normalizeOrderId(payload.order), "");
-    const transactionId = toSafeString(payload.id, "");
-    const isSuccess = toBoolean(payload.success);
-
-    if (!paymobOrderId) {
-        throw new BadRequest("Missing Paymob order id in callback payload");
-    }
-
-    const order = await OrderModel.findOne({ paymobOrderId });
-    if (!order) {
-        throw new NotFound("Order not found for this Paymob callback");
-    }
-
-    if (order.paymentStatus === "paid") {
-        return SuccessResponse(res, {
-            message: "Payment already confirmed",
-            orderId: order._id,
-            paymentStatus: order.paymentStatus,
-        });
-    }
-
-    order.paymobTransactionId = transactionId;
-    order.paymobCallbackPayload = req.body?.obj || req.query;
-
-    if (isSuccess) {
-        order.paymentStatus = "paid";
-        order.status = "approved";
-    } else {
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
-        try {
-            if (order.paymentStatus !== "failed") {
-                for (const item of order.cartItems) {
-                    if (item.product && item.quantity) {
-                        await ProductModel.findByIdAndUpdate(
-                            item.product,
-                            { $inc: { quantity: Number(item.quantity) } },
-                            { session }
-                        );
-                    }
-                }
-            }
-
-            order.paymentStatus = "failed";
-            order.status = "rejected";
-            await order.save({ session });
-
-            await session.commitTransaction();
-            session.endSession();
-        } catch (error) {
-            await session.abortTransaction();
-            session.endSession();
-            throw error;
-        }
-
-        return SuccessResponse(res, {
-            message: "Payment marked as failed",
-            orderId: order._id,
-            paymentStatus: order.paymentStatus,
-        });
-    }
-
-    await order.save();
-
-    SuccessResponse(res, {
-        message: "Payment callback processed successfully",
-        orderId: order._id,
-        paymentStatus: order.paymentStatus,
-    });
 };
