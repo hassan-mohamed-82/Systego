@@ -7,6 +7,7 @@ const Banner_2 = require("../../validation/admin/Banner");
 const catchAsync_1 = require("../../utils/catchAsync");
 const haspremission_1 = require("../../middlewares/haspremission");
 const route = (0, express_1.Router)();
+route.get("/banner-modules", (0, catchAsync_1.catchAsync)(Banner_1.getBannerModules));
 route.post("/", (0, haspremission_1.authorizePermissions)("banner", "Add"), (0, validation_1.validate)(Banner_2.createBannerSchema), (0, catchAsync_1.catchAsync)(Banner_1.createBanner));
 route.get("/", (0, haspremission_1.authorizePermissions)("banner", "View"), (0, catchAsync_1.catchAsync)(Banner_1.getBanners));
 route.get("/:id", (0, haspremission_1.authorizePermissions)("banner", "View"), (0, catchAsync_1.catchAsync)(Banner_1.getBannerById));

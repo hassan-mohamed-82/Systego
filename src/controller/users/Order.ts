@@ -356,19 +356,24 @@ export const paymobCallback = async (req: Request, res: Response) => {
     }
 
     const paymobOrderId = toSafeString(normalizeOrderId(payload.order), "");
+    const merchantOrderId = toSafeString((payload.order as any)?.merchant_order_id, "");
     const transactionId = toSafeString(payload.id, "");
     const isSuccess = toBoolean(payload.success);
 
     console.log("🎯 Paymob Order ID:", paymobOrderId);
+    console.log("🧾 Merchant Order ID:", merchantOrderId);
     console.log("💳 Transaction ID:", transactionId);
     console.log("✨ Is Success:", isSuccess);
 
-    if (!paymobOrderId) {
-        console.error("❌ Missing Paymob Order ID");
-        throw new BadRequest("Missing Paymob order id in callback payload");
+    if (!paymobOrderId && !merchantOrderId) {
+        console.error("❌ Missing Paymob and Merchant Order IDs");
+        throw new BadRequest("Missing order identifiers in callback payload");
     }
 
-    const order = await OrderModel.findOne({ paymobOrderId });
+    let order = paymobOrderId ? await OrderModel.findOne({ paymobOrderId }) : null;
+    if (!order && merchantOrderId && mongoose.isValidObjectId(merchantOrderId)) {
+        order = await OrderModel.findById(merchantOrderId);
+    }
     console.log("📌 Local Order Found:", !!order, order?._id);
 
     if (!order) {
@@ -437,4 +442,93 @@ export const paymobCallback = async (req: Request, res: Response) => {
         orderId: order._id,
         paymentStatus: order.paymentStatus,
     });
+};
+
+export const verifyPaymobPayment = async (req: Request, res: Response) => {
+    const payload = (req.body?.payload || req.body?.obj || req.body) as Record<string, any>;
+    const incomingHmac = toSafeString(req.body?.hmac || payload?.hmac, "").toLowerCase();
+
+    if (!payload || Object.keys(payload).length === 0) {
+        throw new BadRequest("Missing payload");
+    }
+
+    if (!incomingHmac) {
+        throw new BadRequest("Missing hmac");
+    }
+
+    const paymobConfig = await PaymobModel.findOne();
+    if (!paymobConfig) {
+        throw new BadRequest("Paymob configuration not found");
+    }
+
+    const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
+    const hmacMatched = expectedHmac === incomingHmac;
+
+    const skipHmac = process.env.SKIP_PAYMOB_HMAC === "true";
+    if (!hmacMatched && !skipHmac) {
+        return SuccessResponse(res, {
+            ok: false,
+            reason: "HMAC_MISMATCH",
+            incomingHmac,
+            expectedHmac,
+        }, 200);
+    }
+
+    const paymobOrderId = toSafeString(normalizeOrderId(payload.order), "");
+    const merchantOrderId = toSafeString((payload.order as any)?.merchant_order_id, "");
+    const transactionId = toSafeString(payload.id, "");
+    const isSuccess = toBoolean(payload.success);
+
+    let order = paymobOrderId ? await OrderModel.findOne({ paymobOrderId }) : null;
+    if (!order && merchantOrderId && mongoose.isValidObjectId(merchantOrderId)) {
+        order = await OrderModel.findById(merchantOrderId);
+    }
+
+    if (!order) {
+        return SuccessResponse(res, {
+            ok: false,
+            reason: "ORDER_NOT_FOUND",
+            paymobOrderId,
+            merchantOrderId,
+            transactionId,
+            hmacMatched,
+        }, 200);
+    }
+
+    order.paymobTransactionId = transactionId;
+    order.paymobCallbackPayload = payload;
+
+    if (isSuccess) {
+        order.paymentStatus = "paid";
+        order.status = "approved";
+        await order.save();
+
+        return SuccessResponse(res, {
+            ok: true,
+            reason: "PAYMENT_CONFIRMED",
+            orderId: order._id,
+            paymentStatus: order.paymentStatus,
+            orderStatus: order.status,
+            hmacMatched,
+            paymobOrderId,
+            merchantOrderId,
+            transactionId,
+        }, 200);
+    }
+
+    order.paymentStatus = "failed";
+    order.status = "rejected";
+    await order.save();
+
+    return SuccessResponse(res, {
+        ok: true,
+        reason: "PAYMENT_FAILED",
+        orderId: order._id,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        hmacMatched,
+        paymobOrderId,
+        merchantOrderId,
+        transactionId,
+    }, 200);
 };

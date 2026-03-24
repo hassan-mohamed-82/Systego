@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticated } from '../../middlewares/authenticated';
-import { createOrder, getMyOrders, getOrderDetails, paymobCallback } from '../../controller/users/Order';
+import { createOrder, getMyOrders, getOrderDetails, paymobCallback, verifyPaymobPayment } from '../../controller/users/Order';
 import { validate } from '../../middlewares/validation';
 import { createOrderSchema } from '../../validation/users/order';
 import { catchAsync } from '../../utils/catchAsync';
@@ -9,6 +9,7 @@ const orderRoute = Router();
 
 orderRoute.get('/paymob/callback', catchAsync(paymobCallback));
 orderRoute.post('/paymob/callback', catchAsync(paymobCallback));
+orderRoute.post('/paymob/verify', catchAsync(verifyPaymobPayment));
 
 orderRoute.use(authenticated);
 

@@ -1,4 +1,4 @@
-// controllers/webhooks/paymobWebhook.ts
+// مسار الـ Webhook المعدل للتتبع (Debug Mode)
 import { Request, Response } from "express";
 import crypto from "crypto";
 import { OrderModel } from "../models/schema/users/Order";
@@ -6,7 +6,7 @@ import { PaymobModel } from "../models/schema/admin/Paymob";
 
 export const paymobWebhook = async (req: Request, res: Response) => {
     try {
-        const hmacReceived = req.query.hmac as string;
+        const hmacReceived = String(req.query.hmac || "").toLowerCase();
         const payload = req.body;
 
         if (!payload || !payload.obj) {
@@ -14,20 +14,36 @@ export const paymobWebhook = async (req: Request, res: Response) => {
         }
 
         const obj = payload.obj;
-        const merchantOrderId = obj.order.merchant_order_id; // ده الـ ID بتاعك
+        const merchantOrderId = obj.order.merchant_order_id;
         const integrationId = obj.integration_id;
 
-        // 1. بما إننا شغالين Dynamic، لازم نجيب الـ HMAC Key الخاص بالعميل ده من الداتابيز
-        // هنجيبه عن طريق الـ integration_id اللي راجع في الريكويست
+        // 1. هنجيب الأوردر من الداتابيز أول حاجة
+        const order = await OrderModel.findById(merchantOrderId);
+        if (!order) return res.status(200).send("Order not found");
+
+        // 2. حفظ تتبع بسيط للـ webhook بدون كسر enum الخاص بحالة الطلب
+        order.status = "pending";
+        order.paymentStatus = "pending";
+        order.paymobCallbackPayload = {
+            ...(payload?.obj || {}),
+            debugState: "webhook_received",
+        };
+        await order.save();
+
+        // 3. ندور على إعدادات بوابه الدفع
         const paymobConfig = await PaymobModel.findOne({ integration_id: integrationId.toString() });
-        
         if (!paymobConfig) {
-            console.error("Paymob Webhook: No config found for this integration_id");
-            return res.status(200).send("Config not found"); // بنرجع 200 عشان Paymob تبطل تبعت
+            order.status = "rejected";
+            order.paymentStatus = "failed";
+            order.paymobCallbackPayload = {
+                ...(payload?.obj || {}),
+                debugState: "config_not_found",
+            };
+            await order.save();
+            return res.status(200).send("Config not found");
         }
 
-        // 2. التحقق من الـ HMAC (طريقة Paymob في ترتيب المتغيرات ثابتة)
-        // لازم ترتبهم أبجدياً وتدمجهم في String واحد
+        // 4. تجميع الداتا لحساب الـ HMAC
         const dataStr = [
             obj.amount_cents,
             obj.created_at,
@@ -45,28 +61,30 @@ export const paymobWebhook = async (req: Request, res: Response) => {
             obj.order.id,
             obj.owner,
             obj.pending,
-            obj.source_data.pan,
-            obj.source_data.sub_type,
-            obj.source_data.type,
+            obj.source_data?.pan,
+            obj.source_data?.sub_type,
+            obj.source_data?.type,
             obj.success,
         ].join('');
 
-        // التشفير باستخدام الـ HMAC Key الخاص بالعميل من الداتابيز
         const hashedStr = crypto
             .createHmac("sha512", paymobConfig.hmac_key)
             .update(dataStr)
             .digest("hex");
 
-        // لو الـ HMAC مش متطابق، ده معناه إن فيه تلاعب في البيانات
-        if (hashedStr !== hmacReceived) {
-            console.error("Paymob Webhook: HMAC validation failed!");
+        // 5. مقارنة الـ HMAC
+        if (hashedStr.toLowerCase() !== hmacReceived) {
+            order.status = "rejected";
+            order.paymentStatus = "failed";
+            order.paymobCallbackPayload = {
+                ...(payload?.obj || {}),
+                debugState: "hmac_failed",
+            };
+            await order.save();
             return res.status(400).send("HMAC Validation Failed");
         }
 
-        // 3. تحديث حالة الأوردر في الداتابيز
-        const order = await OrderModel.findById(merchantOrderId);
-        if (!order) return res.status(200).send("Order not found");
-
+        // 6. كل حاجة تمام، نغير الحالة للنجاح أو الفشل بناءً على رد البنك
         if (obj.success === true && obj.pending === false) {
             order.status = "approved";
             order.paymentStatus = "paid";
@@ -75,12 +93,14 @@ export const paymobWebhook = async (req: Request, res: Response) => {
             order.paymentStatus = "failed";
         }
 
-        await order.save();
+        order.paymobTransactionId = String(obj.id || "");
+        order.paymobCallbackPayload = payload?.obj || payload;
 
-        // مهم جداً ترجع 200 لـ Paymob 
+        await order.save();
         return res.status(200).send("OK");
 
-    } catch (error) {
+    } catch (error: any) {
+        // لو الكود ضرب إيرور لأي سبب
         console.error("Webhook Error:", error);
         return res.status(500).send("Server Error");
     }
