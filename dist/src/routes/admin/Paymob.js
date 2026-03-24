@@ -8,7 +8,7 @@ const validation_1 = require("../../middlewares/validation");
 const haspremission_1 = require("../../middlewares/haspremission");
 const router = (0, express_1.Router)();
 router.get("/", (0, haspremission_1.authorizePermissions)("paymob", "View"), (0, catchAsync_1.catchAsync)(Paymob_1.getPaymob));
-router.post("/", (0, haspremission_1.authorizePermissions)("paymob", "Add"), (0, validation_1.validate)(Paymob_2.createPaymobSchema), (0, catchAsync_1.catchAsync)(Paymob_1.createpaymob));
+router.post("/", (0, haspremission_1.authorizePermissions)("paymob", "Add"), (0, validation_1.validate)(Paymob_2.createPaymobSchema), (0, catchAsync_1.catchAsync)(Paymob_1.createPaymob));
 router.put("/:id", (0, haspremission_1.authorizePermissions)("paymob", "Edit"), (0, validation_1.validate)(Paymob_2.updatePaymobSchema), (0, catchAsync_1.catchAsync)(Paymob_1.updatePaymob));
 router.get("/:id", (0, haspremission_1.authorizePermissions)("paymob", "View"), (0, catchAsync_1.catchAsync)(Paymob_1.getPaymobId));
 exports.default = router;
