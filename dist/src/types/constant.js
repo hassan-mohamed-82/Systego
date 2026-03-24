@@ -61,7 +61,8 @@ exports.MODULES = [
     "orders",
     "banner",
     "decimal_setting",
-    "service_fees"
+    "service_fees",
+    "courier",
 ];
 // أسماء بس، من غير ids
 exports.ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"];

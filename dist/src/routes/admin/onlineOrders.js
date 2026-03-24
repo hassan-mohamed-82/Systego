@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const onlineOrders_1 = require("../../controller/admin/onlineOrders");
+const haspremission_1 = require("../../middlewares/haspremission");
+const catchAsync_1 = require("../../utils/catchAsync");
+const router = (0, express_1.Router)();
+router.get("/", (0, haspremission_1.authorizePermissions)("orders", "View"), (0, catchAsync_1.catchAsync)(onlineOrders_1.getAllOnlineOrders));
+router.get("/:id", (0, haspremission_1.authorizePermissions)("orders", "View"), (0, catchAsync_1.catchAsync)(onlineOrders_1.getOnlineOrderById));
+router.patch("/:id/status", (0, haspremission_1.authorizePermissions)("orders", "Edit"), (0, catchAsync_1.catchAsync)(onlineOrders_1.updateOnlineOrderStatus));
+exports.default = router;

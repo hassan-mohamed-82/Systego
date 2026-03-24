@@ -67,6 +67,7 @@ import BannerRouter from "./Banner";
 import ServiceFeeRouter from "./ServiceFee";
 import ShippingRouter from "./Shipping";
 import tenantInfoRouter from "./tenantInfo";
+import onlineOrderRouter from "./onlineOrders";
 export const route = Router();
 
 route.use("/auth", authRouter);
@@ -138,5 +139,6 @@ route.use("/banner", BannerRouter)
 route.use("/service-fees", ServiceFeeRouter)
 route.use("/shipping", ShippingRouter)
 route.use("/tenant-info", tenantInfoRouter)
+route.use("/online-orders", onlineOrderRouter)
 
 export default route;
