@@ -1,7 +1,7 @@
 "use strict";
 // src/constants/permissions.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ACTION_NAMES = exports.MODULES = void 0;
+exports.BANNER_PAGES = exports.ACTION_NAMES = exports.MODULES = void 0;
 exports.MODULES = [
     "user",
     "category",
@@ -66,3 +66,4 @@ exports.MODULES = [
 ];
 // أسماء بس، من غير ids
 exports.ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"];
+exports.BANNER_PAGES = ["login", "home", "brand", "category", "signup"];
