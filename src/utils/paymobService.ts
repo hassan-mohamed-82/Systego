@@ -1,61 +1,62 @@
-// services/payment/paymobService.ts
+import axios from "axios";
+
+const BASE_URL = "https://accept.paymob.com/api";
+
+type PaymobAuthResponse = {
+    token: string;
+};
+
+type PaymobOrderResponse = {
+    id: number;
+};
+
+type PaymobPaymentKeyResponse = {
+    token: string;
+};
+
+type PaymobBillingData = Record<string, string | number | boolean | null>;
+
 export class PaymobService {
-    static async generatePaymentLink(amountCents: number, orderId: string, config: any, customerData: any) {
-        const BASE_URL = "https://accept.paymob.com/api";
+    static async getAuthToken(apiKey: string) {
+        const { data } = await axios.post<PaymobAuthResponse>(`${BASE_URL}/auth/tokens`, {
+            api_key: apiKey,
+        });
+        return data.token;
+    }
 
-        try {
-            // 1. Authentication
-            const authRes = await fetch(`${BASE_URL}/auth/tokens`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ api_key: config.api_key }),
-            });
-            const authData = await authRes.json();
-            if (!authData.token) throw new Error("Paymob Auth Failed: Invalid API Key");
+    static async createOrder(authToken: string, amountCents: number, merchantOrderId: string) {
+        const { data } = await axios.post<PaymobOrderResponse>(`${BASE_URL}/ecommerce/orders`, {
+            auth_token: authToken,
+            delivery_needed: false,
+            amount_cents: amountCents,
+            currency: "EGP",
+            merchant_order_id: merchantOrderId,
+            items: [],
+        });
+        return data.id;
+    }
 
-            // 2. Order Registration
-            const orderRes = await fetch(`${BASE_URL}/ecommerce/orders`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    auth_token: authData.token,
-                    delivery_needed: "false",
-                    amount_cents: amountCents,
-                    currency: "EGP",
-                    merchant_order_id: orderId, 
-                }),
-            });
-            const orderData = await orderRes.json();
+    static async generatePaymentKey(
+        authToken: string,
+        amountCents: number,
+        orderId: number,
+        integrationId: number,
+        billingData: PaymobBillingData
+    ) {
+        const { data } = await axios.post<PaymobPaymentKeyResponse>(`${BASE_URL}/acceptance/payment_keys`, {
+            auth_token: authToken,
+            amount_cents: amountCents,
+            expiration: 3600,
+            order_id: orderId,
+            billing_data: billingData,
+            currency: "EGP",
+            integration_id: integrationId,
+        });
 
-            // 3. Payment Key Generation
-            const paymentKeyRes = await fetch(`${BASE_URL}/acceptance/payment_keys`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    auth_token: authData.token,
-                    amount_cents: amountCents,
-                    expiration: 3600,
-                    order_id: orderData.id,
-                    currency: "EGP",
-                    integration_id: config.integration_id,
-                    billing_data: {
-                        first_name: customerData.firstName || "Customer",
-                        last_name: customerData.lastName || "Name",
-                        email: customerData.email || "test@test.com",
-                        phone_number: customerData.phone || "01000000000",
-                        apartment: "NA", floor: "NA", street: "NA", building: "NA",
-                        shipping_method: "NA", postal_code: "NA", city: "NA", country: "EG", state: "NA",
-                    }
-                }),
-            });
-            const paymentKeyData = await paymentKeyRes.json();
+        return data.token;
+    }
 
-            // 4. إرجاع اللينك
-            return `https://accept.paymob.com/api/acceptance/iframes/${config.iframe_id}?payment_token=${paymentKeyData.token}`;
-
-        } catch (error) {
-            console.error("Paymob Error:", error);
-            throw new Error("فشل في التواصل مع بوابة الدفع، تأكد من صحة بيانات بوابه الدفع في لوحة التحكم");
-        }
+    static getIframeUrl(iframeId: string, token: string) {
+        return `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${token}`;
     }
 }
