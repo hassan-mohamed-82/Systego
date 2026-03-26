@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticated } from '../../middlewares/authenticated';
+import { optionalAuthenticated } from '../../middlewares/optionalAuthenticated';
 import { createOrder, getMyOrders, getOrderDetails } from '../../controller/users/Order';
 import { validate } from '../../middlewares/validation';
 import { createOrderSchema } from '../../validation/users/order';
@@ -9,6 +9,7 @@ const orderRoute = Router();
 
 orderRoute.post("/webhook/paymob", catchAsync(paymobWebhook));
 
+orderRoute.use(optionalAuthenticated);
 
 orderRoute.post("/checkout", catchAsync(createOrder));
 orderRoute.get("/my-orders", catchAsync(getMyOrders));

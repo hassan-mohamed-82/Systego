@@ -69,7 +69,7 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
 // 2. جلب بيانات السلة وحساب الشحن
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
     const query = getCartQuery(req);
-    const userId = req.user?.id;
+    const userId = query.user;
 
     const cart = await CartModel.findOne(query).populate('cartItems.product', 'name image price price_after_discount free_shipping');
 
