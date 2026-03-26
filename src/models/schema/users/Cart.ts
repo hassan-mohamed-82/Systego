@@ -9,7 +9,6 @@ const cartSchema = new Schema({
   sessionId: {
     type: String,
     required: false,
-    index: true
   },
   cartItems: [
     {
