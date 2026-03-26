@@ -9,7 +9,6 @@ const orderRoute = Router();
 
 orderRoute.post("/webhook/paymob", catchAsync(paymobWebhook));
 
-// orderRoute.use(authenticated);
 
 orderRoute.post("/checkout", catchAsync(createOrder));
 orderRoute.get("/my-orders", catchAsync(getMyOrders));

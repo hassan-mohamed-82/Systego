@@ -11,6 +11,8 @@ import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 import { PaymobService } from "../../utils/paymobService";
+import { CityModels } from "../../models/schema/admin/City";
+import { ZoneModel } from "../../models/schema/admin/Zone";
 
 // ===============================
 // 🟢 CREATE ORDER
@@ -66,11 +68,48 @@ export const createOrder = async (req: Request, res: Response) => {
             free_shipping: true,
         }).session(session);
 
-        const shippingSettings = await ShippingSettingsModel.findOne({
-            singletonKey: "default",
-        }).session(session);
+        // const shippingSettings = await ShippingSettingsModel.findOne({
+        //     singletonKey: "default",
+        // }).session(session);
 
+        let finalAddressData: any;
         let shippingCost = 0;
+        let addressForPaymob: any;
+
+        if (typeof shippingAddress === 'string') {
+            const addressDoc = await AddressModel.findOne({ _id: shippingAddress, user: userId })
+                .populate("city zone country")
+                .session(session);
+
+            if (!addressDoc) throw new NotFound("Shipping address not found");
+
+            finalAddressData = {
+                details: `${addressDoc.street}, Bldg ${addressDoc.buildingNumber}`,
+                city: (addressDoc.city as any)?.name || "",
+                zone: (addressDoc.zone as any)?.name || "",
+            };
+            addressForPaymob = addressDoc;
+            shippingCost = Number((addressDoc.zone as any)?.shipingCost || (addressDoc.city as any)?.shipingCost || 0);
+        } else {
+            const [cityDoc, zoneDoc] = await Promise.all([
+                CityModels.findById(shippingAddress.city).session(session),
+                ZoneModel.findById(shippingAddress.zone).session(session)
+            ]);
+
+            finalAddressData = {
+                details: `${shippingAddress.street}, Bldg ${shippingAddress.buildingNumber}`,
+                city: cityDoc?.name || "",
+                zone: zoneDoc?.name || "",
+            };
+            addressForPaymob = shippingAddress; // بيانات الضيف للـ Paymob
+            shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
+        }
+
+        // --- حساب الشحن النهائي ---
+        const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
+        const hasFreeShippingProduct = (await ProductModel.countDocuments({
+            _id: { $in: cart.cartItems.map(i => i.product) }, free_shipping: true
+        }).session(session)) > 0;
 
         if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
             shippingCost = 0;
@@ -141,9 +180,9 @@ export const createOrder = async (req: Request, res: Response) => {
         // 🟢 PAYMOB
         // ===============================
         if (paymentMethodDoc.type === "automatic") {
-            const paymobConfig = await PaymobModel.findOne({
+            const paymobConfig = await PaymobModel.findOne({ 
                 payment_method_id: paymentMethodDoc._id,
-                isActive: true,
+                isActive: true 
             }).session(session);
 
             if (!paymobConfig) throw new BadRequest("Paymob not configured");
