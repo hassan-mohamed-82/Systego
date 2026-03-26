@@ -11,7 +11,6 @@ const cartSchema = new mongoose_1.Schema({
     sessionId: {
         type: String,
         required: false,
-        index: true
     },
     cartItems: [
         {
