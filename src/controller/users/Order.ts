@@ -10,25 +10,30 @@ import { PaymobModel } from "../../models/schema/admin/Paymob";
 import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
-import { PaymobService} from "../../utils/paymobService";
+import { PaymobService } from "../../utils/paymobService";
+import { CityModels } from "../../models/schema/admin/City";
+import { ZoneModel } from "../../models/schema/admin/Zone";
 
 // ===============================
 // 🟢 CREATE ORDER
 // ===============================
 export const createOrder = async (req: Request, res: Response): Promise<any> => {
     const userId = req.user?.id;
-    const sessionId = req.headers["x-session-id"];
+    const sessionId = req.headers["x-session-id"] as string;
     const { shippingAddress, paymentMethod, proofImage } = req.body;
 
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        // 1️⃣ Cart
-        const cartQuery = userId ? { user: userId } : { sessionId };
-        if (!userId && !sessionId) throw new BadRequest("User or session required");
+        // 1️⃣ تحديد السلة (Cart)
+        if (!userId && !sessionId) {
+            throw new BadRequest("User ID or Session ID is required to find your cart");
+        }
 
+        const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
         const cart = await CartModel.findOne(cartQuery).session(session);
+
         if (!cart || cart.cartItems.length === 0) {
             throw new BadRequest("Cart is empty");
         }
@@ -45,19 +50,47 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             throw new BadRequest("Proof image required for manual payment");
         }
 
-        // 3️⃣ Address
-        const address = await AddressModel.findOne({
-            _id: shippingAddress,
-            user: userId,
-        })
-            .populate("city zone country")
-            .session(session);
+        // 3️⃣ Hybrid Address Logic
+        let shippingAddressData: any;
+        let shippingCost = 0;
+        let rawAddressForPaymob: any;
 
-        if (!address) throw new NotFound("Address not found");
+        if (typeof shippingAddress === "string") {
+            // Registered user (ID): populate to get names and prices
+            const addressDoc = await AddressModel.findOne({
+                _id: shippingAddress,
+                user: userId
+            })
+                .populate("city zone country")
+                .session(session);
 
-        const populatedAddress = address as any;
+            if (!addressDoc) throw new NotFound("Address not found");
 
-        // 4️⃣ Shipping
+            const populated = addressDoc as any;
+            shippingAddressData = {
+                details: `${populated.street}`,
+                city: populated.city?.name || "",
+                zone: populated.zone?.name || "",
+            };
+            shippingCost = Number(populated.zone?.shipingCost || populated.city?.shipingCost || 0);
+            rawAddressForPaymob = populated;
+        } else {
+            // حالة الضيف (Object): نجلب الموديلات يدوياً لحساب الشحن بدقة
+            const [cityDoc, zoneDoc] = await Promise.all([
+                CityModels.findById(shippingAddress.city).session(session),
+                ZoneModel.findById(shippingAddress.zone).session(session)
+            ]);
+
+            shippingAddressData = {
+                details: `${shippingAddress.street}`,
+                city: cityDoc?.name || "",
+                zone: zoneDoc?.name || "",
+            };
+            shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
+            rawAddressForPaymob = shippingAddress;
+        }
+
+        // 4️⃣ Shipping Settings
         const productIds = cart.cartItems.map((i) => i.product);
 
         const freeShippingProductsCount = await ProductModel.countDocuments({
@@ -69,7 +102,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             singletonKey: "default",
         }).session(session);
 
-        let shippingCost = 0;
+
 
         if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
             shippingCost = 0;
@@ -77,8 +110,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             shippingCost = Number(shippingSettings.flatRate || 0);
         } else {
             shippingCost =
-                Number(populatedAddress.zone?.shipingCost) ||
-                Number(populatedAddress.city?.shipingCost) ||
+                Number(rawAddressForPaymob.zone?.shipingCost) ||
+                Number(rawAddressForPaymob.city?.shipingCost) ||
                 0;
         }
 
@@ -95,7 +128,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                 { new: true, session }
             );
 
-            if (!product) throw new BadRequest("Product out of stock");
+            if (!product) throw new BadRequest(`Product ${item.product} is out of stock`);
 
             const price = product.price || 0;
             productsTotal += price * qty;
@@ -109,17 +142,11 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         const totalPrice = productsTotal + shippingCost;
 
-        const shippingAddressData = {
-            details: `${populatedAddress.street}`,
-            city: populatedAddress.city?.name || "",
-            zone: populatedAddress.zone?.name || "",
-        };
-
         // 6️⃣ Create Order
         const order = await OrderModel.create(
             [
                 {
-                    user: userId,
+                    user: userId || null,
                     cartItems: finalItems,
                     shippingAddress: shippingAddressData,
                     shippingPrice: shippingCost,
@@ -149,8 +176,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
             if (!paymobConfig) throw new BadRequest("Paymob not configured");
 
-            const customer = await CustomerModel.findById(userId).session(session);
-            if (!customer) throw new NotFound("Customer not found");
+            // للضيوف: نحاول نجيب بيانات العميل لو موجود أو نستخدم بيانات افتراضية
+            const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
 
             const authToken = await PaymobService.getAuthToken(
                 paymobConfig.api_key
@@ -165,19 +192,19 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             );
 
             const billingData = {
-                first_name: customer.name || "Customer",
-                last_name: "User",
-                email: customer.email || "test@test.com",
-                phone_number: customer.phone_number || "01000000000",
-                apartment: "NA",
-                floor: "NA",
-                street: populatedAddress.street || "NA",
-                building: populatedAddress.buildingNumber || "NA",
+                first_name: customer?.name || "Guest",
+                last_name: "Customer",
+                email: customer?.email || "guest@systego.com",
+                phone_number: customer?.phone_number || "01000000000",
+                apartment: rawAddressForPaymob.apartmentNumber || "NA",
+                floor: rawAddressForPaymob.floorNumber || "NA",
+                street: shippingAddressData.details || "NA",
+                building: rawAddressForPaymob.buildingNumber || "NA",
                 shipping_method: "NA",
                 postal_code: "NA",
-                city: (populatedAddress.city as any)?.name || "Cairo",
+                city: shippingAddressData.city || "Cairo",
                 country: "EG",
-                state: (populatedAddress.zone as any)?.name || "NA",
+                state: shippingAddressData.zone || "NA",
             };
 
             const paymentToken = await PaymobService.generatePaymentKey(
