@@ -6,9 +6,9 @@ import { addressSchema, updateAddressSchema } from '../../validation/users/addre
 
 const addressRoute = Router();
 
-addressRoute.use(authenticated);
-
 addressRoute.get("/lists", getAllLists)
+
+addressRoute.use(authenticated);
 
 addressRoute.post("/", validate(addressSchema), addAddress);
 addressRoute.put("/:id", validate(updateAddressSchema), updateAddress);

@@ -6,7 +6,7 @@ import { addToCartSchema, updateQuantitySchema } from '../../validation/users/ca
 
 const cartRoute = Router();
 
-cartRoute.use(authenticated);
+// cartRoute.use(authenticated);
 
 cartRoute.get("/", getCart);
 cartRoute.post("/add", validate(addToCartSchema), addToCart);
