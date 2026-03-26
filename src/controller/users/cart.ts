@@ -5,17 +5,31 @@ import { AddressModel } from "../../models/schema/users/Address";
 import { Request, Response } from "express";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
+import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 
-export const addToCart = async (req: Request, res: Response) => {
+// دالة مساعدة لتحديد المعرف (User أو Session)
+const getCartQuery = (req: Request) => {
     const userId = req.user?.id;
+    const sessionId = req.body.sessionId || req.query.sessionId || req.headers['x-session-id'];
+
+    if (userId) return { user: userId };
+    if (sessionId) return { sessionId: sessionId };
+
+    throw new BadRequest("User ID or Session ID is required to manage cart");
+};
+
+// 1. إضافة منتج للسلة
+export const addToCart = asyncHandler(async (req: Request, res: Response) => {
     const { productId, quantity } = req.body;
+    const query = getCartQuery(req);
+
+    if (!mongoose.isValidObjectId(productId)) throw new BadRequest("Invalid Product ID");
 
     const item = await ProductModel.findById(productId);
-    if (!item) {
-        throw new NotFound("Product not found");
-    }
+    if (!item) throw new NotFound("Product not found");
 
-    let cart = await CartModel.findOne({ user: userId });
+    let cart = await CartModel.findOne(query);
 
     let existingQuantity = 0;
     if (cart) {
@@ -23,41 +37,46 @@ export const addToCart = async (req: Request, res: Response) => {
         if (existingItem) existingQuantity = existingItem.quantity;
     }
 
-    // التأكد إن المخزن يكفي الكمية المطلوبة + الكمية اللي موجودة أصلاً في السلة
     if ((item.quantity ?? 0) < existingQuantity + quantity) {
         throw new BadRequest("Not enough stock available");
     }
 
     if (cart) {
-        const existingItemIndex = cart.cartItems.findIndex(item => item.product.toString() === productId);
+        const existingItemIndex = cart.cartItems.findIndex(i => i.product.toString() === productId);
         if (existingItemIndex !== -1) {
             cart.cartItems[existingItemIndex].quantity += quantity;
-            cart.cartItems[existingItemIndex].price = item.price || 0; // تحديث السعر
+            cart.cartItems[existingItemIndex].price = item.price || 0;
         } else {
-            cart.cartItems.push({ product: productId, quantity, price: item.price || 0 });
+            // استخدام as any هنا مقبول مع الحفظ الذكي
+            cart.cartItems.push({ product: productId as any, quantity, price: item.price || 0 });
         }
         await cart.save();
     } else {
+        // الحل الذكي: التأكد من أنواع البيانات عند الإنشاء لأول مرة
         cart = await CartModel.create({
-            user: userId,
-            cartItems: [{ product: productId, quantity, price: item.price || 0 }],
+            ...query,
+            cartItems: [{ product: new mongoose.Types.ObjectId(productId), quantity, price: item.price || 0 }],
         });
     }
 
-    SuccessResponse(res, { message: "Cart added successfully", cart }, 201);
-};
+    SuccessResponse(res, { message: "Cart updated successfully", cart }, 201);
+});
 
-export const getCart = async (req: Request, res: Response) => {
+// 2. جلب بيانات السلة وحساب الشحن
+export const getCart = asyncHandler(async (req: Request, res: Response) => {
+    const query = getCartQuery(req);
     const userId = req.user?.id;
 
-    // استخدام findOne و populate بدلاً من تجريد البيانات
-    const cart = await CartModel.findOne({ user: userId }).populate('cartItems.product', 'name image price price_after_discount free_shipping');
+    const cart = await CartModel.findOne(query).populate('cartItems.product', 'name image price price_after_discount free_shipping');
 
     if (!cart) {
-        return SuccessResponse(res, { message: "Cart is empty", cart: { cartItems: [], totalCartPrice: 0 }, shippingCost: 0 });
+        return SuccessResponse(res, {
+            message: "Cart is empty",
+            cart: { cartItems: [], totalCartPrice: 0 },
+            shippingCost: 0
+        });
     }
 
-    // تحديث الأسعار بشكل تفاعلي لو اتغيرت في الداتابيز
     let isModified = false;
     let hasFreeShippingProduct = false;
 
@@ -67,22 +86,16 @@ export const getCart = async (req: Request, res: Response) => {
             item.price = product.price || 0;
             isModified = true;
         }
-        if (product?.free_shipping) {
-            hasFreeShippingProduct = true;
-        }
-    }
-    
-    if (isModified) {
-        // نحدث السلة عن طريق updateOne لتجنب مشاكل الـ Populate مع Mongoose save
-        const updatedItems = cart.cartItems.map(item => ({
-            product: (item.product as any)._id || item.product,
-            quantity: item.quantity,
-            price: item.price
-        }));
-        await CartModel.updateOne({ _id: cart._id }, { $set: { cartItems: updatedItems } });
+        if (product?.free_shipping) hasFreeShippingProduct = true;
     }
 
-    // حساب الشحن المبدئي للعرض في السلة
+    // هنا الـ "تعديل الذكي" لضمان عدم حدوث Error الـ Populate
+    if (isModified) {
+        // بنستخدم markModified عشان نقول لمونجوس إن الـ Array اللي جواها Objects اتغيرت
+        cart.markModified('cartItems');
+        await cart.save();
+    }
+
     const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" });
     const selectedMethod = shippingSettings?.shippingMethod || "zone";
     let shippingCost = 0;
@@ -94,63 +107,67 @@ export const getCart = async (req: Request, res: Response) => {
     } else if (selectedMethod === "carrier") {
         shippingCost = Number(shippingSettings?.carrierRate || 0);
     } else {
-        const address = await AddressModel.findOne({ user: userId }).populate('city zone');
-        shippingCost = address ? Number((address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0) : 0;
+        if (userId) {
+            const address = await AddressModel.findOne({ user: userId }).populate('city zone');
+            shippingCost = address ? Number((address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0) : 0;
+        } else {
+            shippingCost = 0;
+        }
     }
 
-    SuccessResponse(res, { 
-        message: "Cart fetched successfully", 
+    SuccessResponse(res, {
+        message: "Cart fetched successfully",
         cart,
         shippingCost
     });
-};
+});
 
-export const updateQuantity = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user?.id;
+// 3. تحديث الكمية
+export const updateQuantity = asyncHandler(async (req: Request, res: Response) => {
     const { productId, quantity } = req.body;
+    const query = getCartQuery(req);
 
-    // جلب المنتج من المخزون لمعرفة المتاح والسعر 
     const item = await ProductModel.findById(productId);
     if (!item) throw new NotFound("Product not found");
 
-    // التأكد إن الكمية المطلوبة متوفرة
     if ((item.quantity ?? 0) < quantity) {
-        throw new BadRequest("Not enough stock available to update quantity");
+        throw new BadRequest("Not enough stock available");
     }
 
-    const cart = await CartModel.findOne({ user: userId });
+    const cart = await CartModel.findOne(query);
     if (!cart) throw new NotFound("Cart not found");
 
     const itemIndex = cart.cartItems.findIndex(p => p.product.toString() === productId);
-    if (itemIndex === -1) throw new NotFound("Product not found in cart");
+    if (itemIndex === -1) throw new NotFound("Product not in cart");
 
     cart.cartItems[itemIndex].quantity = quantity;
-    cart.cartItems[itemIndex].price = item.price || 0; // تحديث السعر أيضاً
+    cart.cartItems[itemIndex].price = item.price || 0;
+
+    cart.markModified('cartItems'); // تأكيد التعديل
     await cart.save();
 
-    SuccessResponse(res, { message: "Cart updated successfully", cart });
-};
+    SuccessResponse(res, { message: "Quantity updated", cart });
+});
 
-export const removeFromCart = async (req: Request, res: Response) => {
+// 4. حذف منتج (تم استخدام findOneAndUpdate لضمان السرعة)
+export const removeFromCart = asyncHandler(async (req: Request, res: Response) => {
     const { productId } = req.params;
-    const userId = req.user?.id;
+    const query = getCartQuery(req);
 
     const cart = await CartModel.findOneAndUpdate(
-        { user: userId },
+        query,
         { $pull: { cartItems: { product: productId } } },
         { new: true }
     );
 
     SuccessResponse(res, { message: "Product removed from cart", cart });
-};
+});
 
-export const clearCart = async (req: Request, res: Response) => {
-    const userId = req.user?.id;
-
-    const cart = await CartModel.findOneAndDelete({ user: userId });
-
-    if (!cart) throw new NotFound("Cart is already empty");
+// 5. مسح السلة
+export const clearCart = asyncHandler(async (req: Request, res: Response) => {
+    const query = getCartQuery(req);
+    const cart = await CartModel.findOneAndDelete(query);
+    if (!cart) throw new NotFound("Cart is empty");
 
     SuccessResponse(res, { message: "Cart has been cleared successfully" });
-};
+});
