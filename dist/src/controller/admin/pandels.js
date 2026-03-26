@@ -19,6 +19,12 @@ const normalizeWarehouseSelection = async (payload, jwtUser, existingBundle) => 
     const allWarehousesRequested = payload?.all_warehouses === true;
     const hasWarehouseIdsArray = Array.isArray(payload?.warehouse_ids);
     const hasSingleWarehouseId = !!payload?.warehouse_id;
+    if (allWarehousesRequested && (hasSingleWarehouseId || hasWarehouseIdsArray)) {
+        throw new BadRequest_1.BadRequest("Do not send warehouse_id or warehouse_ids when all_warehouses is true");
+    }
+    if (hasSingleWarehouseId && hasWarehouseIdsArray) {
+        throw new BadRequest_1.BadRequest("Use either warehouse_id or warehouse_ids, not both");
+    }
     let allWarehouses = false;
     let warehouseIds = [];
     if (allWarehousesRequested) {

@@ -21,6 +21,14 @@ const normalizeWarehouseSelection = async (
   const hasWarehouseIdsArray = Array.isArray(payload?.warehouse_ids);
   const hasSingleWarehouseId = !!payload?.warehouse_id;
 
+  if (allWarehousesRequested && (hasSingleWarehouseId || hasWarehouseIdsArray)) {
+    throw new BadRequest("Do not send warehouse_id or warehouse_ids when all_warehouses is true");
+  }
+
+  if (hasSingleWarehouseId && hasWarehouseIdsArray) {
+    throw new BadRequest("Use either warehouse_id or warehouse_ids, not both");
+  }
+
   let allWarehouses = false;
   let warehouseIds: string[] = [];
 
