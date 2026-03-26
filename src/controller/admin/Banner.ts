@@ -6,17 +6,25 @@ import { saveBase64Image } from "../../utils/handleImages";
 import { BANNER_PAGES } from "../../types/constant";
 import asyncHandler from 'express-async-handler';
 
-// 1. Get Available Banner Modules
+// 1. Get Available Banner Modules with Usage Status
 export const getBannerModules = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    SuccessResponse(res, { 
-        message: "Banner modules retrieved successfully", 
-        modules: BANNER_PAGES 
+    const activeBanners = await BannerModel.find({ isActive: true }).select('name');
+
+    const usedPages = activeBanners.flatMap(banner => banner.name);
+
+    const modulesWithStatus = BANNER_PAGES.map(page => ({
+        name: page,
+        isUsed: usedPages.includes(page)
+    }));
+
+    SuccessResponse(res, {
+        message: "Banner modules status retrieved successfully",
+        modules: modulesWithStatus
     });
 });
-
 // 2. Create Banner (With Duplicate Prevention)
 export const createBanner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name, images, isActive } = req.body;
+    const { name, title, description, images, isActive } = req.body;
 
     // Validation: name must be a non-empty array
     if (!name || !Array.isArray(name) || name.length === 0) {
@@ -38,7 +46,7 @@ export const createBanner = asyncHandler(async (req: Request, res: Response): Pr
         throw new BadRequest("images must be a non-empty array.");
     }
 
-  // ✅ Process each base64 string and save it to the server
+    // ✅ Process each base64 string and save it to the server
     const imageUrls: string[] = [];
     for (let i = 0; i < images.length; i++) {
         const base64String = images[i];
@@ -56,6 +64,8 @@ export const createBanner = asyncHandler(async (req: Request, res: Response): Pr
 
     const banner = await BannerModel.create({
         name,
+        title,
+        description,
         images: imageUrls,
         isActive: isActive !== undefined ? isActive : true,
     });
@@ -84,7 +94,7 @@ export const getBannerById = asyncHandler(async (req: Request, res: Response): P
 // 5. Update Banner (With Duplicate Prevention)
 export const updateBanner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, images, isActive } = req.body;
+    const { name, title, description, images, isActive } = req.body;
 
     if (!id) throw new BadRequest("Banner ID is required.");
 
@@ -113,6 +123,8 @@ export const updateBanner = asyncHandler(async (req: Request, res: Response): Pr
         updateData.name = name;
     }
 
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     // Process Images on Update
