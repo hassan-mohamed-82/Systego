@@ -147,17 +147,23 @@ const initializePaymobPayment = async ({
 // (Checkout)
 export const createOrder = async (req: Request, res: Response) => {
     const userId = req.user?.id;
+    const sessionId = req.headers['x-session-id'];
     const { shippingAddress, paymentMethod, proofImage } = req.body;
 
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        const cart = await CartModel.findOne({ user: userId }).session(session);
+        // 1. تحديد سلة التسوق (مستخدم أو ضيف)
+        const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
+        if (!userId && !sessionId) throw new BadRequest("Identification (User or Session) is required");
+
+        const cart = await CartModel.findOne(cartQuery).session(session);
         if (!cart || cart.cartItems.length === 0) {
             throw new BadRequest("Your cart is empty");
         }
 
+        // 2. التحقق من طريقة الدفع
         const paymentMethodDoc = await PaymentMethodModel.findOne({
             _id: paymentMethod,
             isActive: { $ne: false }
@@ -171,6 +177,7 @@ export const createOrder = async (req: Request, res: Response) => {
             throw new BadRequest("Proof image is required for manual payment methods");
         }
 
+        // 3. جلب العنوان وحساب الشحن
         const address = await AddressModel.findOne({ _id: shippingAddress, user: userId })
             .populate("city zone country")
             .session(session);
@@ -202,6 +209,7 @@ export const createOrder = async (req: Request, res: Response) => {
             shippingCost = Number(zoneShippingCost || 0);
         }
 
+        // 4. تحديث المخزون وحساب إجمالي المنتجات
         let actualProductsTotal = 0;
         const finalCartItems = [];
 
@@ -222,7 +230,7 @@ export const createOrder = async (req: Request, res: Response) => {
             actualProductsTotal += currentPrice * requestedQuantity;
 
             finalCartItems.push({
-                product: updatedProduct._id,
+                product: updatedProduct._id.toString(), // تحويل لـ String لحل خطأ TS
                 quantity: requestedQuantity,
                 price: currentPrice
             });
@@ -235,12 +243,12 @@ export const createOrder = async (req: Request, res: Response) => {
             cartItems: finalCartItems,
             shippingAddress: {
                 details: `${address.street}, Bldg ${address.buildingNumber}`,
-                city: (address.city as any)?.name || "",
-                zone: (address.zone as any)?.name || "",
+                city: String((address.city as any)?.name || ""),
+                zone: String((address.zone as any)?.name || ""),
             },
             shippingPrice: shippingCost,
             totalOrderPrice: finalTotalPrice,
-            paymentMethod,
+            paymentMethod: paymentMethod.toString(),
             proofImage,
             status: "pending",
             paymentGateway: paymentMethodDoc.type === "automatic" ? "paymob" : "manual",
@@ -249,6 +257,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
         let paymobData: { paymobOrderId: string; iframeUrl: string } | null = null;
 
+        // 6. التعامل مع بوابة الدفع (Paymob)
         if (paymentMethodDoc.type === "automatic") {
             const paymobConfig = await PaymobModel.findOne({
                 payment_method_id: paymentMethodDoc._id,
@@ -277,7 +286,8 @@ export const createOrder = async (req: Request, res: Response) => {
             await order[0].save({ session });
         }
 
-        await CartModel.findOneAndDelete({ user: userId }).session(session);
+        // 7. مسح السلة وإتمام العملية
+        await CartModel.findOneAndDelete(cartQuery).session(session);
         await session.commitTransaction();
         session.endSession();
 
