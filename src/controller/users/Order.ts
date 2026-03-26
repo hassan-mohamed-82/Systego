@@ -12,6 +12,8 @@ import { PaymobModel } from "../../models/schema/admin/Paymob";
 import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
+import { CityModels } from "../../models/schema/admin/City";
+import { ZoneModel } from "../../models/schema/admin/Zone";
 
 const PAYMOB_BASE_URL = "https://accept.paymob.com/api";
 
@@ -147,6 +149,172 @@ const initializePaymobPayment = async ({
 };
 
 // (Checkout)
+// export const createOrder = async (req: Request, res: Response) => {
+//     const userId = req.user?.id;
+//     const sessionId = req.headers['x-session-id'];
+//     const { shippingAddress, paymentMethod, proofImage } = req.body;
+
+//     const session = await mongoose.startSession();
+//     session.startTransaction();
+
+//     try {
+//         // 1. تحديد سلة التسوق (مستخدم أو ضيف)
+//         const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
+//         if (!userId && !sessionId) throw new BadRequest("Identification (User or Session) is required");
+
+//         const cart = await CartModel.findOne(cartQuery).session(session);
+//         if (!cart || cart.cartItems.length === 0) {
+//             throw new BadRequest("Your cart is empty");
+//         }
+
+//         // 2. التحقق من طريقة الدفع
+//         const paymentMethodDoc = await PaymentMethodModel.findOne({
+//             _id: paymentMethod,
+//             isActive: { $ne: false }
+//         }).session(session);
+
+//         if (!paymentMethodDoc) {
+//             throw new BadRequest("Invalid or inactive payment method selected");
+//         }
+
+//         if (paymentMethodDoc.type === "manual" && !proofImage) {
+//             throw new BadRequest("Proof image is required for manual payment methods");
+//         }
+
+//         // 3. جلب العنوان وحساب الشحن
+//         const address = await AddressModel.findOne({ _id: shippingAddress, user: userId })
+//             .populate("city zone country")
+//             .session(session);
+
+//         if (!address) throw new NotFound("Shipping address not found");
+
+//         const productIds = cart.cartItems.map((item) => item.product);
+//         const freeShippingProductsCount = await ProductModel.countDocuments({
+//             _id: { $in: productIds },
+//             free_shipping: true,
+//         }).session(session);
+
+//         const hasFreeShippingProduct = freeShippingProductsCount > 0;
+
+//         const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
+
+//         const selectedMethod = shippingSettings?.shippingMethod || "zone";
+//         const zoneShippingCost = (address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0;
+
+//         let shippingCost = 0;
+
+//         if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
+//             shippingCost = 0;
+//         } else if (selectedMethod === "flat_rate") {
+//             shippingCost = Number(shippingSettings?.flatRate || 0);
+//         } else if (selectedMethod === "carrier") {
+//             shippingCost = Number(shippingSettings?.carrierRate || 0);
+//         } else {
+//             shippingCost = Number(zoneShippingCost || 0);
+//         }
+
+//         // 4. تحديث المخزون وحساب إجمالي المنتجات
+//         let actualProductsTotal = 0;
+//         const finalCartItems = [];
+
+//         for (const item of cart.cartItems) {
+//             const requestedQuantity = item.quantity ?? 1;
+
+//             const updatedProduct = await ProductModel.findOneAndUpdate(
+//                 { _id: item.product, quantity: { $gte: requestedQuantity } },
+//                 { $inc: { quantity: -requestedQuantity } },
+//                 { session, new: true }
+//             );
+
+//             if (!updatedProduct) {
+//                 throw new BadRequest(`Product with ID ${item.product} is out of stock or insufficient`);
+//             }
+
+//             const currentPrice = updatedProduct.price || 0;
+//             actualProductsTotal += currentPrice * requestedQuantity;
+
+//             finalCartItems.push({
+//                 product: updatedProduct._id.toString(), // تحويل لـ String لحل خطأ TS
+//                 quantity: requestedQuantity,
+//                 price: currentPrice
+//             });
+//         }
+
+//         const finalTotalPrice = actualProductsTotal + shippingCost;
+
+//         const order = await OrderModel.create([{
+//             user: userId,
+//             cartItems: finalCartItems,
+//             shippingAddress: {
+//                 details: `${address.street}, Bldg ${address.buildingNumber}`,
+//                 city: String((address.city as any)?.name || ""),
+//                 zone: String((address.zone as any)?.name || ""),
+//             },
+//             shippingPrice: shippingCost,
+//             totalOrderPrice: finalTotalPrice,
+//             paymentMethod: paymentMethod.toString(),
+//             proofImage,
+//             status: "pending",
+//             paymentGateway: paymentMethodDoc.type === "automatic" ? "paymob" : "manual",
+//             paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+//         }], { session });
+
+//         let paymobData: { paymobOrderId: string; iframeUrl: string } | null = null;
+
+//         // 6. التعامل مع بوابة الدفع (Paymob)
+//         if (paymentMethodDoc.type === "automatic") {
+//             const paymobConfig = await PaymobModel.findOne({
+//                 payment_method_id: paymentMethodDoc._id,
+//                 isActive: true,
+//             }).session(session);
+
+//             if (!paymobConfig) {
+//                 throw new BadRequest("بوابة الدفع غير مفعلة أو لم يتم إعدادها من قبل الإدارة");
+//             }
+
+//             const customer = await CustomerModel.findById(userId).session(session);
+//             if (!customer) {
+//                 throw new NotFound("Customer not found");
+//             }
+
+//             paymobData = await initializePaymobPayment({
+//                 localOrderId: order[0]._id.toString(),
+//                 amount: finalTotalPrice,
+//                 paymobConfig,
+//                 customer,
+//                 address,
+//             });
+
+//             order[0].paymobOrderId = paymobData.paymobOrderId;
+//             order[0].paymobIframeUrl = paymobData.iframeUrl;
+//             await order[0].save({ session });
+//         }
+
+//         // 7. مسح السلة وإتمام العملية
+//         await CartModel.findOneAndDelete(cartQuery).session(session);
+//         await session.commitTransaction();
+//         session.endSession();
+
+//         SuccessResponse(res, {
+//             message: "Order placed successfully",
+//             order: order[0],
+//             payment: paymobData
+//                 ? {
+//                     gateway: "paymob",
+//                     paymentStatus: "pending",
+//                     iframeUrl: paymobData.iframeUrl,
+//                     paymobOrderId: paymobData.paymobOrderId,
+//                 }
+//                 : null,
+//         }, 201);
+
+//     } catch (error: any) {
+//         await session.abortTransaction();
+//         session.endSession();
+//         throw error;
+//     }
+// };
+
 export const createOrder = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     const sessionId = req.headers['x-session-id'];
@@ -156,98 +324,88 @@ export const createOrder = async (req: Request, res: Response) => {
     session.startTransaction();
 
     try {
-        // 1. تحديد سلة التسوق (مستخدم أو ضيف)
         const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
-        if (!userId && !sessionId) throw new BadRequest("Identification (User or Session) is required");
+        if (!userId && !sessionId) throw new BadRequest("Identification required");
 
         const cart = await CartModel.findOne(cartQuery).session(session);
-        if (!cart || cart.cartItems.length === 0) {
-            throw new BadRequest("Your cart is empty");
-        }
+        if (!cart || cart.cartItems.length === 0) throw new BadRequest("Your cart is empty");
 
-        // 2. التحقق من طريقة الدفع
         const paymentMethodDoc = await PaymentMethodModel.findOne({
             _id: paymentMethod,
             isActive: { $ne: false }
         }).session(session);
 
-        if (!paymentMethodDoc) {
-            throw new BadRequest("Invalid or inactive payment method selected");
-        }
+        if (!paymentMethodDoc) throw new BadRequest("Invalid payment method");
+        if (paymentMethodDoc.type === "manual" && !proofImage) throw new BadRequest("Proof image required");
 
-        if (paymentMethodDoc.type === "manual" && !proofImage) {
-            throw new BadRequest("Proof image is required for manual payment methods");
-        }
-
-        // 3. جلب العنوان وحساب الشحن
-        const address = await AddressModel.findOne({ _id: shippingAddress, user: userId })
-            .populate("city zone country")
-            .session(session);
-
-        if (!address) throw new NotFound("Shipping address not found");
-
-        const productIds = cart.cartItems.map((item) => item.product);
-        const freeShippingProductsCount = await ProductModel.countDocuments({
-            _id: { $in: productIds },
-            free_shipping: true,
-        }).session(session);
-
-        const hasFreeShippingProduct = freeShippingProductsCount > 0;
-
-        const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
-
-        const selectedMethod = shippingSettings?.shippingMethod || "zone";
-        const zoneShippingCost = (address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0;
-
+        let finalAddressData: any;
         let shippingCost = 0;
+        let addressForPaymob: any;
+
+        if (typeof shippingAddress === 'string') {
+            const addressDoc = await AddressModel.findOne({ _id: shippingAddress, user: userId })
+                .populate("city zone country")
+                .session(session);
+
+            if (!addressDoc) throw new NotFound("Shipping address not found");
+
+            finalAddressData = {
+                details: `${addressDoc.street}, Bldg ${addressDoc.buildingNumber}`,
+                city: (addressDoc.city as any)?.name || "",
+                zone: (addressDoc.zone as any)?.name || "",
+            };
+            addressForPaymob = addressDoc;
+            shippingCost = Number((addressDoc.zone as any)?.shipingCost || (addressDoc.city as any)?.shipingCost || 0);
+        } else {
+            const [cityDoc, zoneDoc] = await Promise.all([
+                CityModels.findById(shippingAddress.city).session(session),
+                ZoneModel.findById(shippingAddress.zone).session(session)
+            ]);
+
+            finalAddressData = {
+                details: `${shippingAddress.street}, Bldg ${shippingAddress.buildingNumber}`,
+                city: cityDoc?.name || "",
+                zone: zoneDoc?.name || "",
+            };
+            addressForPaymob = shippingAddress; // بيانات الضيف للـ Paymob
+            shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
+        }
+
+        // --- حساب الشحن النهائي ---
+        const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
+        const hasFreeShippingProduct = (await ProductModel.countDocuments({
+            _id: { $in: cart.cartItems.map(i => i.product) }, free_shipping: true
+        }).session(session)) > 0;
 
         if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
             shippingCost = 0;
-        } else if (selectedMethod === "flat_rate") {
+        } else if (shippingSettings?.shippingMethod === "flat_rate") {
             shippingCost = Number(shippingSettings?.flatRate || 0);
-        } else if (selectedMethod === "carrier") {
+        } else if (shippingSettings?.shippingMethod === "carrier") {
             shippingCost = Number(shippingSettings?.carrierRate || 0);
-        } else {
-            shippingCost = Number(zoneShippingCost || 0);
         }
 
-        // 4. تحديث المخزون وحساب إجمالي المنتجات
+        // --- (تحديث المخزون والـ Cart Items كما هي في كودك) ---
         let actualProductsTotal = 0;
         const finalCartItems = [];
-
         for (const item of cart.cartItems) {
-            const requestedQuantity = item.quantity ?? 1;
-
             const updatedProduct = await ProductModel.findOneAndUpdate(
-                { _id: item.product, quantity: { $gte: requestedQuantity } },
-                { $inc: { quantity: -requestedQuantity } },
+                { _id: item.product, quantity: { $gte: item.quantity } },
+                { $inc: { quantity: -item.quantity } },
                 { session, new: true }
             );
-
-            if (!updatedProduct) {
-                throw new BadRequest(`Product with ID ${item.product} is out of stock or insufficient`);
-            }
-
-            const currentPrice = updatedProduct.price || 0;
-            actualProductsTotal += currentPrice * requestedQuantity;
-
-            finalCartItems.push({
-                product: updatedProduct._id.toString(), // تحويل لـ String لحل خطأ TS
-                quantity: requestedQuantity,
-                price: currentPrice
-            });
+            if (!updatedProduct) throw new BadRequest(`Product out of stock`);
+            actualProductsTotal += (updatedProduct.price || 0) * item.quantity;
+            finalCartItems.push({ product: updatedProduct._id.toString(), quantity: item.quantity, price: updatedProduct.price });
         }
 
         const finalTotalPrice = actualProductsTotal + shippingCost;
 
-        const order = await OrderModel.create([{
-            user: userId,
+        // --- إنشاء الأوردر ---
+        const orderArray = await OrderModel.create([{
+            user: userId || null, // يمكن أن يكون null للضيف
             cartItems: finalCartItems,
-            shippingAddress: {
-                details: `${address.street}, Bldg ${address.buildingNumber}`,
-                city: String((address.city as any)?.name || ""),
-                zone: String((address.zone as any)?.name || ""),
-            },
+            shippingAddress: finalAddressData,
             shippingPrice: shippingCost,
             totalOrderPrice: finalTotalPrice,
             paymentMethod: paymentMethod.toString(),
@@ -257,13 +415,14 @@ export const createOrder = async (req: Request, res: Response) => {
             paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
         }], { session });
 
-        let paymobData: { paymobOrderId: string; iframeUrl: string } | null = null;
+        const order = orderArray[0];
 
-        // 6. التعامل مع بوابة الدفع (Paymob)
+        // --- بوابة الدفع Paymob ---
+        let paymobData = null;
         if (paymentMethodDoc.type === "automatic") {
-            const paymobConfig = await PaymobModel.findOne({
+            const paymobConfig = await PaymobModel.findOne({ 
                 payment_method_id: paymentMethodDoc._id,
-                isActive: true,
+                isActive: true 
             }).session(session);
 
             if (!paymobConfig) {
@@ -271,40 +430,26 @@ export const createOrder = async (req: Request, res: Response) => {
             }
 
             const customer = await CustomerModel.findById(userId).session(session);
-            if (!customer) {
-                throw new NotFound("Customer not found");
+            
+            if (paymobConfig && customer) {
+                paymobData = await initializePaymobPayment({
+                    localOrderId: order._id.toString(),
+                    amount: finalTotalPrice,
+                    paymobConfig,
+                    customer,
+                    address: addressForPaymob,
+                });
+                order.paymobOrderId = paymobData.paymobOrderId;
+                order.paymobIframeUrl = paymobData.iframeUrl;
+                await order.save({ session });
             }
-
-            paymobData = await initializePaymobPayment({
-                localOrderId: order[0]._id.toString(),
-                amount: finalTotalPrice,
-                paymobConfig,
-                customer,
-                address,
-            });
-
-            order[0].paymobOrderId = paymobData.paymobOrderId;
-            order[0].paymobIframeUrl = paymobData.iframeUrl;
-            await order[0].save({ session });
         }
 
-        // 7. مسح السلة وإتمام العملية
         await CartModel.findOneAndDelete(cartQuery).session(session);
         await session.commitTransaction();
         session.endSession();
 
-        SuccessResponse(res, {
-            message: "Order placed successfully",
-            order: order[0],
-            payment: paymobData
-                ? {
-                    gateway: "paymob",
-                    paymentStatus: "pending",
-                    iframeUrl: paymobData.iframeUrl,
-                    paymobOrderId: paymobData.paymobOrderId,
-                }
-                : null,
-        }, 201);
+        SuccessResponse(res, { message: "Order placed successfully", order, payment: paymobData }, 201);
 
     } catch (error: any) {
         await session.abortTransaction();
