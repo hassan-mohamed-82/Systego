@@ -1,78 +1,42 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import { OrderModel } from "../models/schema/users/Order";
-import { PaymobModel } from "../models/schema/admin/Paymob";
+import  {OrderModel} from"../models/schema/users/Order"; // عدل على حسب مسار الموديل
 
-const toBool = (v: any) => v === true || v === "true";
+const SECRET_KEY = process.env.PAYMOB_SECRET_KEY;
 
 export const paymobWebhook = async (req: Request, res: Response) => {
-    try {
-        const payload = req.body?.obj;
-        const incomingHmac = String(req.body?.hmac || "").toLowerCase();
-
-        if (!payload) return res.status(400).send("Invalid payload");
-
-        const paymobConfig = await PaymobModel.findOne();
-        if (!paymobConfig) return res.status(400).send("No config");
-
-        // 🔐 HMAC
-        const dataStr = [
-            payload.amount_cents,
-            payload.created_at,
-            payload.currency,
-            payload.error_occured,
-            payload.has_parent_transaction,
-            payload.id,
-            payload.integration_id,
-            payload.is_3d_secure,
-            payload.is_auth,
-            payload.is_capture,
-            payload.is_refunded,
-            payload.is_standalone_payment,
-            payload.is_voided,
-            payload.order.id,
-            payload.owner,
-            payload.pending,
-            payload.source_data?.pan,
-            payload.source_data?.sub_type,
-            payload.source_data?.type,
-            payload.success,
-        ].join("");
-
-        const expectedHmac = crypto
-            .createHmac("sha512", paymobConfig.hmac_key)
-            .update(dataStr)
-            .digest("hex")
-            .toLowerCase();
-
-        if (process.env.NODE_ENV === "production" && expectedHmac !== incomingHmac) {
-            return res.status(400).send("Invalid HMAC");
-        }
-
-        const merchantOrderId = payload.order.merchant_order_id;
-
-        const order = await OrderModel.findById(merchantOrderId);
-        if (!order) return res.status(200).send("Order not found");
-
-        const isSuccess = toBool(payload.success) && !toBool(payload.pending);
-
-        order.paymobTransactionId = String(payload.id);
-        order.paymobCallbackPayload = payload;
-
-        if (isSuccess) {
-            order.paymentStatus = "paid";
-            order.status = "approved";
-        } else {
-            order.paymentStatus = "failed";
-            order.status = "rejected";
-        }
-
-        await order.save();
-
-        return res.status(200).send("OK");
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).send("Error");
+  try {
+    if (!SECRET_KEY) {
+      return res.status(500).json({ success: false, message: "PAYMOB_SECRET_KEY is not configured" });
     }
+
+    const hmacHeader = req.query.hmac as string;
+    const payload = JSON.stringify(req.body);
+
+    // توليد HMAC
+    const generatedHmac = crypto
+      .createHmac("sha512", SECRET_KEY)
+      .update(payload)
+      .digest("hex");
+
+    if (generatedHmac !== hmacHeader) {
+      return res.status(400).json({ success: false, message: "Invalid HMAC" });
+    }
+
+    // 👇 هنا تقدر تعالج بيانات الطلب
+    const data = req.body.obj;
+
+    // مثال: تحديث حالة الطلب
+    const order = await OrderModel.findById(data.order.merchant_order_id);
+    if (order) {
+      order.paymentStatus = data.success ? "paid" : "failed";
+      order.paymobCallbackPayload = data;
+      await order.save();
+    }
+
+    res.json({ status: "ok" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
 };

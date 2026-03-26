@@ -1,13 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const authenticated_1 = require("../../middlewares/authenticated");
 const Order_1 = require("../../controller/users/Order");
 const catchAsync_1 = require("../../utils/catchAsync");
 const paymobWebhook_1 = require("../../utils/paymobWebhook");
 const orderRoute = (0, express_1.Router)();
 orderRoute.post("/webhook/paymob", (0, catchAsync_1.catchAsync)(paymobWebhook_1.paymobWebhook));
-orderRoute.use(authenticated_1.authenticated);
 orderRoute.post("/checkout", (0, catchAsync_1.catchAsync)(Order_1.createOrder));
 orderRoute.get("/my-orders", (0, catchAsync_1.catchAsync)(Order_1.getMyOrders));
 orderRoute.get("/:id", (0, catchAsync_1.catchAsync)(Order_1.getOrderDetails));

@@ -42,7 +42,7 @@ const createOrder = async (req, res) => {
         if (!paymentMethodDoc)
             throw new Errors_1.BadRequest("Invalid payment method");
         if (paymentMethodDoc.type === "manual" && !proofImage) {
-            throw new Errors_1.BadRequest("Proof image required");
+            throw new Errors_1.BadRequest("Proof image required for manual payment");
         }
         // 3️⃣ Address
         const address = await Address_1.AddressModel.findOne({
@@ -54,8 +54,6 @@ const createOrder = async (req, res) => {
         if (!address)
             throw new Errors_1.NotFound("Address not found");
         const populatedAddress = address;
-        const cityName = populatedAddress.city?.name || "";
-        const zoneName = populatedAddress.zone?.name || "";
         // 4️⃣ Shipping
         const productIds = cart.cartItems.map((i) => i.product);
         const freeShippingProductsCount = await products_1.ProductModel.countDocuments({
@@ -95,16 +93,17 @@ const createOrder = async (req, res) => {
             });
         }
         const totalPrice = productsTotal + shippingCost;
+        const shippingAddressData = {
+            details: `${populatedAddress.street}`,
+            city: populatedAddress.city?.name || "",
+            zone: populatedAddress.zone?.name || "",
+        };
         // 6️⃣ Create Order
         const order = await Order_1.OrderModel.create([
             {
                 user: userId,
                 cartItems: finalItems,
-                shippingAddress: {
-                    details: `${address.street}`,
-                    city: cityName,
-                    zone: zoneName,
-                },
+                shippingAddress: shippingAddressData,
                 shippingPrice: shippingCost,
                 totalOrderPrice: totalPrice,
                 paymentMethod: paymentMethod.toString(),
@@ -116,7 +115,7 @@ const createOrder = async (req, res) => {
         ], { session });
         let paymobData = null;
         // ===============================
-        // 🟢 PAYMOB
+        // 🟢 PAYMOB INTEGRATION
         // ===============================
         if (paymentMethodDoc.type === "automatic") {
             const paymobConfig = await Paymob_1.PaymobModel.findOne({
@@ -138,13 +137,13 @@ const createOrder = async (req, res) => {
                 phone_number: customer.phone_number || "01000000000",
                 apartment: "NA",
                 floor: "NA",
-                street: address.street || "NA",
-                building: address.buildingNumber || "NA",
+                street: populatedAddress.street || "NA",
+                building: populatedAddress.buildingNumber || "NA",
                 shipping_method: "NA",
                 postal_code: "NA",
-                city: cityName || "Cairo",
+                city: populatedAddress.city?.name || "Cairo",
                 country: "EG",
-                state: zoneName || "NA",
+                state: populatedAddress.zone?.name || "NA",
             };
             const paymentToken = await paymobService_1.PaymobService.generatePaymentKey(authToken, amountCents, paymobOrderId, Number(paymobConfig.integration_id), billingData);
             const iframeUrl = paymobService_1.PaymobService.getIframeUrl(paymobConfig.iframe_id, paymentToken);
