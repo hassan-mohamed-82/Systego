@@ -202,6 +202,19 @@ export const createSale = async (req: Request, res: Response) => {
         throw new NotFound("Bundle not found");
       }
 
+      const bundleWarehouseIds = Array.isArray((bundleDoc as any).warehouse_ids)
+        ? (bundleDoc as any).warehouse_ids.map((id: any) => String(id))
+        : [];
+      const bundleIsAvailableInWarehouse =
+        (bundleDoc as any).all_warehouses !== false ||
+        bundleWarehouseIds.includes(String(warehouseId));
+
+      if (!bundleIsAvailableInWarehouse) {
+        throw new BadRequest(
+          `Bundle "${(bundleDoc as any).name}" is not assigned to warehouse ${warehouseId}`
+        );
+      }
+
       // ✅ معالجة كل منتج في الـ Bundle
       const bundleProductsProcessed: any[] = [];
 
@@ -242,8 +255,8 @@ export const createSale = async (req: Request, res: Response) => {
 
           if (!warehouseStock) {
             const product = await ProductModel.findById(productId).select("name").lean();
-            throw new NotFound(
-              `Product "${(product as any)?.name || productId}" not found in warehouse`
+            throw new BadRequest(
+              `Bundle "${bundleDoc.name}" is not available in this warehouse because product "${(product as any)?.name || productId}" is not assigned to warehouse stock`
             );
           }
 
@@ -500,8 +513,8 @@ export const createSale = async (req: Request, res: Response) => {
       });
 
       if (!warehouseStock) {
-        throw new NotFound(
-          `Product ${product_id} not found in warehouse ${warehouseId}`
+        throw new BadRequest(
+          `Product ${product_id} is not assigned to warehouse ${warehouseId}`
         );
       }
 

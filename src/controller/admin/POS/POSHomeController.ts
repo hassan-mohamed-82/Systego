@@ -307,11 +307,22 @@ export const getAllSelections = async (req: Request, res: Response) => {
 
 export const getActiveBundles = async (req: Request, res: Response) => {
   const currentDate = new Date();
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
+
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
 
   const bundles = await PandelModel.find({
     status: true,
     startdate: { $lte: currentDate },
     enddate: { $gte: currentDate },
+    $or: [
+      { all_warehouses: true },
+      { all_warehouses: { $exists: false } },
+      { warehouse_ids: String(warehouseId) },
+    ],
   }).lean();
 
   const bundlesWithDetails = await Promise.all(

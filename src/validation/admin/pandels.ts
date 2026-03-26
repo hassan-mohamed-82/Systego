@@ -8,6 +8,9 @@ const productSchema = Joi.object({
 
 export const createPandelSchema = Joi.object({
     name: Joi.string().required(),
+    warehouse_id: Joi.string().optional(),
+    warehouse_ids: Joi.array().items(Joi.string()).min(1).optional(),
+    all_warehouses: Joi.boolean().optional(),
     startdate: Joi.date().required(),
     enddate: Joi.date().required(),
     status: Joi.boolean().default(true),
@@ -18,6 +21,9 @@ export const createPandelSchema = Joi.object({
 
 export const updatePandelSchema = Joi.object({
     name: Joi.string(),
+    warehouse_id: Joi.string(),
+    warehouse_ids: Joi.array().items(Joi.string()).min(1),
+    all_warehouses: Joi.boolean(),
     startdate: Joi.date(),
     enddate: Joi.date(),
     status: Joi.boolean(),

@@ -9,6 +9,7 @@ const Order_1 = require("../models/schema/users/Order");
 const Paymob_1 = require("../models/schema/admin/Paymob");
 const paymobWebhook = async (req, res) => {
     try {
+        console.log("Paymob Body:", req.body); // ضيف السطر ده
         const hmacReceived = String(req.query.hmac || "").toLowerCase();
         const payload = req.body;
         if (!payload || !payload.obj) {

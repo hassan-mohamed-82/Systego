@@ -11,8 +11,118 @@ const handleImages_1 = require("../../utils/handleImages");
 const products_1 = require("../../models/schema/admin/products");
 const pandels_1 = require("../../models/schema/admin/pandels");
 const product_price_1 = require("../../models/schema/admin/product_price");
+const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const deleteImage_1 = require("../../utils/deleteImage");
 const mongoose_1 = __importDefault(require("mongoose"));
+const normalizeWarehouseSelection = async (payload, jwtUser, existingBundle) => {
+    const allWarehousesRequested = payload?.all_warehouses === true;
+    const hasWarehouseIdsArray = Array.isArray(payload?.warehouse_ids);
+    const hasSingleWarehouseId = !!payload?.warehouse_id;
+    let allWarehouses = false;
+    let warehouseIds = [];
+    if (allWarehousesRequested) {
+        const allWarehousesDocs = await Warehouse_1.WarehouseModel.find({}).select("_id").lean();
+        if (!allWarehousesDocs.length) {
+            throw new BadRequest_1.BadRequest("No warehouses found in system");
+        }
+        allWarehouses = true;
+        warehouseIds = allWarehousesDocs.map((w) => w._id.toString());
+    }
+    else if (hasWarehouseIdsArray) {
+        warehouseIds = payload.warehouse_ids
+            .filter((id) => !!id)
+            .map((id) => String(id));
+    }
+    else if (hasSingleWarehouseId) {
+        warehouseIds = [String(payload.warehouse_id)];
+    }
+    else if (existingBundle) {
+        const storedAll = existingBundle.all_warehouses === true;
+        const storedWarehouseIds = Array.isArray(existingBundle.warehouse_ids)
+            ? existingBundle.warehouse_ids.map((id) => String(id))
+            : [];
+        if (storedAll) {
+            const allWarehousesDocs = await Warehouse_1.WarehouseModel.find({}).select("_id").lean();
+            if (!allWarehousesDocs.length) {
+                throw new BadRequest_1.BadRequest("No warehouses found in system");
+            }
+            allWarehouses = true;
+            warehouseIds = allWarehousesDocs.map((w) => w._id.toString());
+        }
+        else if (storedWarehouseIds.length > 0) {
+            warehouseIds = storedWarehouseIds;
+        }
+    }
+    else if (jwtUser?.warehouse_id) {
+        warehouseIds = [String(jwtUser.warehouse_id)];
+    }
+    warehouseIds = Array.from(new Set(warehouseIds));
+    if (!allWarehouses && warehouseIds.length === 0) {
+        throw new BadRequest_1.BadRequest("Please select one or more warehouses, or set all_warehouses = true");
+    }
+    for (const id of warehouseIds) {
+        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+            throw new BadRequest_1.BadRequest(`Invalid warehouse id: ${id}`);
+        }
+    }
+    const existingWarehouses = await Warehouse_1.WarehouseModel.find({ _id: { $in: warehouseIds } })
+        .select("_id")
+        .lean();
+    if (existingWarehouses.length !== warehouseIds.length) {
+        throw new BadRequest_1.BadRequest("One or more selected warehouses do not exist");
+    }
+    return {
+        allWarehouses,
+        warehouseIds,
+    };
+};
+const validateProductsInWarehouses = async (products, warehouseIds) => {
+    const validatedProducts = [];
+    for (const p of products) {
+        if (!p.productId) {
+            throw new BadRequest_1.BadRequest("Each product must have productId");
+        }
+        if (!mongoose_1.default.Types.ObjectId.isValid(p.productId)) {
+            throw new BadRequest_1.BadRequest(`Invalid productId: ${p.productId}`);
+        }
+        const product = await products_1.ProductModel.findById(p.productId);
+        if (!product) {
+            throw new BadRequest_1.BadRequest(`Product ${p.productId} not found`);
+        }
+        if (p.productPriceId) {
+            if (!mongoose_1.default.Types.ObjectId.isValid(p.productPriceId)) {
+                throw new BadRequest_1.BadRequest(`Invalid productPriceId: ${p.productPriceId}`);
+            }
+            const productPrice = await product_price_1.ProductPriceModel.findOne({
+                _id: p.productPriceId,
+                productId: p.productId,
+            });
+            if (!productPrice) {
+                throw new BadRequest_1.BadRequest(`ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`);
+            }
+        }
+        else {
+            const warehousesStock = await Product_Warehouse_1.Product_WarehouseModel.find({
+                productId: p.productId,
+                warehouseId: { $in: warehouseIds },
+            })
+                .select("warehouseId")
+                .lean();
+            const existingWarehouseIds = new Set(warehousesStock.map((ws) => ws.warehouseId.toString()));
+            const missingWarehouseIds = warehouseIds.filter((wid) => !existingWarehouseIds.has(wid));
+            if (missingWarehouseIds.length > 0) {
+                throw new BadRequest_1.BadRequest(`Product ${product.name || p.productId} is not assigned to all selected warehouses. Missing in warehouses: ${missingWarehouseIds.join(", ")}`);
+            }
+        }
+        validatedProducts.push({
+            productId: p.productId,
+            productPriceId: p.productPriceId || null,
+            quantity: p.quantity || 1,
+        });
+    }
+    return validatedProducts;
+};
 // ═══════════════════════════════════════════════════════════
 // 📦 GET ALL PANDELS (Admin)
 // ═══════════════════════════════════════════════════════════
@@ -91,6 +201,7 @@ exports.getPandelById = getPandelById;
 // ═══════════════════════════════════════════════════════════
 const createPandel = async (req, res) => {
     const { name, products, images, startdate, enddate, status = true, price } = req.body;
+    const jwtUser = req.user;
     // Validation
     if (!name)
         throw new BadRequest_1.BadRequest("Name is required");
@@ -103,39 +214,8 @@ const createPandel = async (req, res) => {
         throw new BadRequest_1.BadRequest("End date is required");
     if (!price || price <= 0)
         throw new BadRequest_1.BadRequest("Valid price is required");
-    // Validate each product
-    const validatedProducts = [];
-    for (const p of products) {
-        if (!p.productId) {
-            throw new BadRequest_1.BadRequest("Each product must have productId");
-        }
-        if (!mongoose_1.default.Types.ObjectId.isValid(p.productId)) {
-            throw new BadRequest_1.BadRequest(`Invalid productId: ${p.productId}`);
-        }
-        // Check product exists
-        const product = await products_1.ProductModel.findById(p.productId);
-        if (!product) {
-            throw new BadRequest_1.BadRequest(`Product ${p.productId} not found`);
-        }
-        // If productPriceId specified, validate it
-        if (p.productPriceId) {
-            if (!mongoose_1.default.Types.ObjectId.isValid(p.productPriceId)) {
-                throw new BadRequest_1.BadRequest(`Invalid productPriceId: ${p.productPriceId}`);
-            }
-            const productPrice = await product_price_1.ProductPriceModel.findOne({
-                _id: p.productPriceId,
-                productId: p.productId,
-            });
-            if (!productPrice) {
-                throw new BadRequest_1.BadRequest(`ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`);
-            }
-        }
-        validatedProducts.push({
-            productId: p.productId,
-            productPriceId: p.productPriceId || null,
-            quantity: p.quantity || 1,
-        });
-    }
+    const { allWarehouses, warehouseIds } = await normalizeWarehouseSelection(req.body, jwtUser);
+    const validatedProducts = await validateProductsInWarehouses(products, warehouseIds);
     // Check duplicate name
     const existingPandel = await pandels_1.PandelModel.findOne({ name });
     if (existingPandel) {
@@ -158,6 +238,8 @@ const createPandel = async (req, res) => {
     const pandel = await pandels_1.PandelModel.create({
         name,
         products: validatedProducts,
+        all_warehouses: allWarehouses,
+        warehouse_ids: allWarehouses ? [] : warehouseIds,
         images: imageUrls,
         startdate: new Date(startdate),
         enddate: new Date(enddate),
@@ -186,11 +268,16 @@ exports.createPandel = createPandel;
 // ═══════════════════════════════════════════════════════════
 const updatePandel = async (req, res) => {
     const { id } = req.params;
+    const jwtUser = req.user;
     if (!id)
         throw new BadRequest_1.BadRequest("Pandel id is required");
     const pandel = await pandels_1.PandelModel.findById(id);
     if (!pandel)
         throw new Errors_1.NotFound("Pandel not found");
+    const hasWarehouseSelectionInBody = req.body.all_warehouses !== undefined ||
+        req.body.warehouse_id !== undefined ||
+        req.body.warehouse_ids !== undefined;
+    const { allWarehouses, warehouseIds } = await normalizeWarehouseSelection(req.body, jwtUser, pandel);
     const updateData = {};
     // Update name
     if (req.body.name !== undefined) {
@@ -205,31 +292,16 @@ const updatePandel = async (req, res) => {
     }
     // Update products
     if (req.body.products) {
-        const validatedProducts = [];
-        for (const p of req.body.products) {
-            if (!p.productId) {
-                throw new BadRequest_1.BadRequest("Each product must have productId");
-            }
-            const product = await products_1.ProductModel.findById(p.productId);
-            if (!product) {
-                throw new BadRequest_1.BadRequest(`Product ${p.productId} not found`);
-            }
-            if (p.productPriceId) {
-                const productPrice = await product_price_1.ProductPriceModel.findOne({
-                    _id: p.productPriceId,
-                    productId: p.productId,
-                });
-                if (!productPrice) {
-                    throw new BadRequest_1.BadRequest(`ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`);
-                }
-            }
-            validatedProducts.push({
-                productId: p.productId,
-                productPriceId: p.productPriceId || null,
-                quantity: p.quantity || 1,
-            });
-        }
+        const validatedProducts = await validateProductsInWarehouses(req.body.products, warehouseIds);
         updateData.products = validatedProducts;
+    }
+    else if (hasWarehouseSelectionInBody) {
+        const existingProducts = Array.isArray(pandel.products) ? pandel.products : [];
+        await validateProductsInWarehouses(existingProducts, warehouseIds);
+    }
+    if (hasWarehouseSelectionInBody) {
+        updateData.all_warehouses = allWarehouses;
+        updateData.warehouse_ids = allWarehouses ? [] : warehouseIds;
     }
     // Update images
     if (req.body.images) {
