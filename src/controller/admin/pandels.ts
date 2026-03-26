@@ -7,8 +7,151 @@ import { saveBase64Image } from "../../utils/handleImages";
 import { ProductModel } from "../../models/schema/admin/products";
 import { PandelModel } from "../../models/schema/admin/pandels";
 import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { deletePhotoFromServer } from "../../utils/deleteImage";
 import mongoose from "mongoose";
+
+const normalizeWarehouseSelection = async (
+  payload: any,
+  jwtUser: any,
+  existingBundle?: any
+) => {
+  const allWarehousesRequested = payload?.all_warehouses === true;
+  const hasWarehouseIdsArray = Array.isArray(payload?.warehouse_ids);
+  const hasSingleWarehouseId = !!payload?.warehouse_id;
+
+  let allWarehouses = false;
+  let warehouseIds: string[] = [];
+
+  if (allWarehousesRequested) {
+    const allWarehousesDocs = await WarehouseModel.find({}).select("_id").lean();
+    if (!allWarehousesDocs.length) {
+      throw new BadRequest("No warehouses found in system");
+    }
+
+    allWarehouses = true;
+    warehouseIds = allWarehousesDocs.map((w: any) => w._id.toString());
+  } else if (hasWarehouseIdsArray) {
+    warehouseIds = payload.warehouse_ids
+      .filter((id: any) => !!id)
+      .map((id: any) => String(id));
+  } else if (hasSingleWarehouseId) {
+    warehouseIds = [String(payload.warehouse_id)];
+  } else if (existingBundle) {
+    const storedAll = existingBundle.all_warehouses === true;
+    const storedWarehouseIds = Array.isArray(existingBundle.warehouse_ids)
+      ? existingBundle.warehouse_ids.map((id: any) => String(id))
+      : [];
+
+    if (storedAll) {
+      const allWarehousesDocs = await WarehouseModel.find({}).select("_id").lean();
+      if (!allWarehousesDocs.length) {
+        throw new BadRequest("No warehouses found in system");
+      }
+
+      allWarehouses = true;
+      warehouseIds = allWarehousesDocs.map((w: any) => w._id.toString());
+    } else if (storedWarehouseIds.length > 0) {
+      warehouseIds = storedWarehouseIds;
+    }
+  } else if (jwtUser?.warehouse_id) {
+    warehouseIds = [String(jwtUser.warehouse_id)];
+  }
+
+  warehouseIds = Array.from(new Set(warehouseIds));
+
+  if (!allWarehouses && warehouseIds.length === 0) {
+    throw new BadRequest("Please select one or more warehouses, or set all_warehouses = true");
+  }
+
+  for (const id of warehouseIds) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new BadRequest(`Invalid warehouse id: ${id}`);
+    }
+  }
+
+  const existingWarehouses = await WarehouseModel.find({ _id: { $in: warehouseIds } })
+    .select("_id")
+    .lean();
+
+  if (existingWarehouses.length !== warehouseIds.length) {
+    throw new BadRequest("One or more selected warehouses do not exist");
+  }
+
+  return {
+    allWarehouses,
+    warehouseIds,
+  };
+};
+
+const validateProductsInWarehouses = async (
+  products: any[],
+  warehouseIds: string[]
+) => {
+  const validatedProducts = [];
+
+  for (const p of products) {
+    if (!p.productId) {
+      throw new BadRequest("Each product must have productId");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(p.productId)) {
+      throw new BadRequest(`Invalid productId: ${p.productId}`);
+    }
+
+    const product = await ProductModel.findById(p.productId);
+    if (!product) {
+      throw new BadRequest(`Product ${p.productId} not found`);
+    }
+
+    if (p.productPriceId) {
+      if (!mongoose.Types.ObjectId.isValid(p.productPriceId)) {
+        throw new BadRequest(`Invalid productPriceId: ${p.productPriceId}`);
+      }
+
+      const productPrice = await ProductPriceModel.findOne({
+        _id: p.productPriceId,
+        productId: p.productId,
+      });
+
+      if (!productPrice) {
+        throw new BadRequest(
+          `ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`
+        );
+      }
+    } else {
+      const warehousesStock = await Product_WarehouseModel.find({
+        productId: p.productId,
+        warehouseId: { $in: warehouseIds },
+      })
+        .select("warehouseId")
+        .lean();
+
+      const existingWarehouseIds = new Set(
+        warehousesStock.map((ws: any) => ws.warehouseId.toString())
+      );
+
+      const missingWarehouseIds = warehouseIds.filter(
+        (wid) => !existingWarehouseIds.has(wid)
+      );
+
+      if (missingWarehouseIds.length > 0) {
+        throw new BadRequest(
+          `Product ${product.name || p.productId} is not assigned to all selected warehouses. Missing in warehouses: ${missingWarehouseIds.join(", ")}`
+        );
+      }
+    }
+
+    validatedProducts.push({
+      productId: p.productId,
+      productPriceId: p.productPriceId || null,
+      quantity: p.quantity || 1,
+    });
+  }
+
+  return validatedProducts;
+};
 
 // ═══════════════════════════════════════════════════════════
 // 📦 GET ALL PANDELS (Admin)
@@ -99,6 +242,7 @@ export const getPandelById = async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════
 export const createPandel = async (req: Request, res: Response) => {
   const { name, products, images, startdate, enddate, status = true, price } = req.body;
+  const jwtUser = req.user as any;
 
   // Validation
   if (!name) throw new BadRequest("Name is required");
@@ -109,48 +253,11 @@ export const createPandel = async (req: Request, res: Response) => {
   if (!enddate) throw new BadRequest("End date is required");
   if (!price || price <= 0) throw new BadRequest("Valid price is required");
 
-  // Validate each product
-  const validatedProducts = [];
-
-  for (const p of products) {
-    if (!p.productId) {
-      throw new BadRequest("Each product must have productId");
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(p.productId)) {
-      throw new BadRequest(`Invalid productId: ${p.productId}`);
-    }
-
-    // Check product exists
-    const product = await ProductModel.findById(p.productId);
-    if (!product) {
-      throw new BadRequest(`Product ${p.productId} not found`);
-    }
-
-    // If productPriceId specified, validate it
-    if (p.productPriceId) {
-      if (!mongoose.Types.ObjectId.isValid(p.productPriceId)) {
-        throw new BadRequest(`Invalid productPriceId: ${p.productPriceId}`);
-      }
-
-      const productPrice = await ProductPriceModel.findOne({
-        _id: p.productPriceId,
-        productId: p.productId,
-      });
-
-      if (!productPrice) {
-        throw new BadRequest(
-          `ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`
-        );
-      }
-    }
-
-    validatedProducts.push({
-      productId: p.productId,
-      productPriceId: p.productPriceId || null,
-      quantity: p.quantity || 1,
-    });
-  }
+  const { allWarehouses, warehouseIds } = await normalizeWarehouseSelection(
+    req.body,
+    jwtUser
+  );
+  const validatedProducts = await validateProductsInWarehouses(products, warehouseIds);
 
   // Check duplicate name
   const existingPandel = await PandelModel.findOne({ name });
@@ -180,6 +287,8 @@ export const createPandel = async (req: Request, res: Response) => {
   const pandel = await PandelModel.create({
     name,
     products: validatedProducts,
+    all_warehouses: allWarehouses,
+    warehouse_ids: allWarehouses ? [] : warehouseIds,
     images: imageUrls,
     startdate: new Date(startdate),
     enddate: new Date(enddate),
@@ -210,11 +319,23 @@ export const createPandel = async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════
 export const updatePandel = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const jwtUser = req.user as any;
 
   if (!id) throw new BadRequest("Pandel id is required");
 
   const pandel = await PandelModel.findById(id);
   if (!pandel) throw new NotFound("Pandel not found");
+
+  const hasWarehouseSelectionInBody =
+    req.body.all_warehouses !== undefined ||
+    req.body.warehouse_id !== undefined ||
+    req.body.warehouse_ids !== undefined;
+
+  const { allWarehouses, warehouseIds } = await normalizeWarehouseSelection(
+    req.body,
+    jwtUser,
+    pandel
+  );
 
   const updateData: any = {};
 
@@ -232,39 +353,19 @@ export const updatePandel = async (req: Request, res: Response) => {
 
   // Update products
   if (req.body.products) {
-    const validatedProducts = [];
-
-    for (const p of req.body.products) {
-      if (!p.productId) {
-        throw new BadRequest("Each product must have productId");
-      }
-
-      const product = await ProductModel.findById(p.productId);
-      if (!product) {
-        throw new BadRequest(`Product ${p.productId} not found`);
-      }
-
-      if (p.productPriceId) {
-        const productPrice = await ProductPriceModel.findOne({
-          _id: p.productPriceId,
-          productId: p.productId,
-        });
-
-        if (!productPrice) {
-          throw new BadRequest(
-            `ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`
-          );
-        }
-      }
-
-      validatedProducts.push({
-        productId: p.productId,
-        productPriceId: p.productPriceId || null,
-        quantity: p.quantity || 1,
-      });
-    }
-
+    const validatedProducts = await validateProductsInWarehouses(
+      req.body.products,
+      warehouseIds
+    );
     updateData.products = validatedProducts;
+  } else if (hasWarehouseSelectionInBody) {
+    const existingProducts = Array.isArray(pandel.products) ? pandel.products : [];
+    await validateProductsInWarehouses(existingProducts as any[], warehouseIds);
+  }
+
+  if (hasWarehouseSelectionInBody) {
+    updateData.all_warehouses = allWarehouses;
+    updateData.warehouse_ids = allWarehouses ? [] : warehouseIds;
   }
 
   // Update images

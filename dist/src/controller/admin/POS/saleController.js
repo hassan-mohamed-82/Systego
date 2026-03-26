@@ -157,6 +157,14 @@ const createSale = async (req, res) => {
             if (!bundleDoc) {
                 throw new Errors_1.NotFound("Bundle not found");
             }
+            const bundleWarehouseIds = Array.isArray(bundleDoc.warehouse_ids)
+                ? bundleDoc.warehouse_ids.map((id) => String(id))
+                : [];
+            const bundleIsAvailableInWarehouse = bundleDoc.all_warehouses !== false ||
+                bundleWarehouseIds.includes(String(warehouseId));
+            if (!bundleIsAvailableInWarehouse) {
+                throw new BadRequest_1.BadRequest(`Bundle "${bundleDoc.name}" is not assigned to warehouse ${warehouseId}`);
+            }
             // ✅ معالجة كل منتج في الـ Bundle
             const bundleProductsProcessed = [];
             for (const bundleProduct of bundleDoc.products || []) {
@@ -190,7 +198,7 @@ const createSale = async (req, res) => {
                     });
                     if (!warehouseStock) {
                         const product = await products_1.ProductModel.findById(productId).select("name").lean();
-                        throw new Errors_1.NotFound(`Product "${product?.name || productId}" not found in warehouse`);
+                        throw new BadRequest_1.BadRequest(`Bundle "${bundleDoc.name}" is not available in this warehouse because product "${product?.name || productId}" is not assigned to warehouse stock`);
                     }
                     if ((warehouseStock.quantity ?? 0) < quantity * productQty) {
                         const product = await products_1.ProductModel.findById(productId).select("name").lean();
@@ -404,7 +412,7 @@ const createSale = async (req, res) => {
                 warehouseId: warehouseId,
             });
             if (!warehouseStock) {
-                throw new Errors_1.NotFound(`Product ${product_id} not found in warehouse ${warehouseId}`);
+                throw new BadRequest_1.BadRequest(`Product ${product_id} is not assigned to warehouse ${warehouseId}`);
             }
             if ((warehouseStock.quantity ?? 0) < quantity) {
                 throw new BadRequest_1.BadRequest(`Not enough stock in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`);

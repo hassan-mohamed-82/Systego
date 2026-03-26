@@ -12,10 +12,7 @@ orderRoute.post('/paymob/callback', catchAsync(paymobCallback));
 orderRoute.post('/paymob/verify', catchAsync(verifyPaymobPayment));
 
 
-orderRoute.post("/checkout", validate(createOrderSchema), catchAsync(createOrder));
-
-orderRoute.use(authenticated);
-
+orderRoute.post("/checkout", catchAsync(createOrder));
 orderRoute.get("/my-orders", catchAsync(getMyOrders));
 orderRoute.get("/:id", catchAsync(getOrderDetails));
 

@@ -12,6 +12,9 @@ const productSchema = joi_1.default.object({
 });
 exports.createPandelSchema = joi_1.default.object({
     name: joi_1.default.string().required(),
+    warehouse_id: joi_1.default.string().optional(),
+    warehouse_ids: joi_1.default.array().items(joi_1.default.string()).min(1).optional(),
+    all_warehouses: joi_1.default.boolean().optional(),
     startdate: joi_1.default.date().required(),
     enddate: joi_1.default.date().required(),
     status: joi_1.default.boolean().default(true),
@@ -21,6 +24,9 @@ exports.createPandelSchema = joi_1.default.object({
 });
 exports.updatePandelSchema = joi_1.default.object({
     name: joi_1.default.string(),
+    warehouse_id: joi_1.default.string(),
+    warehouse_ids: joi_1.default.array().items(joi_1.default.string()).min(1),
+    all_warehouses: joi_1.default.boolean(),
     startdate: joi_1.default.date(),
     enddate: joi_1.default.date(),
     status: joi_1.default.boolean(),

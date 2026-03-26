@@ -44,12 +44,13 @@ const normalizeOrderId = (orderRef) => {
     }
     return String(orderRef);
 };
-const generatePaymobRedirectHmac = (payload, hmacKey) => {
+// الدالة الجديدة المتطابقة 100% مع ترتيب حقول Paymob في الـ Webhook
+const generatePaymobWebhookHmac = (payload, hmacKey) => {
     const values = [
         toSafeString(payload.amount_cents, ""),
         toSafeString(payload.created_at, ""),
         toSafeString(payload.currency, ""),
-        String(toBoolean(payload.error)),
+        String(toBoolean(payload.error_occured)), // تعدلت من error
         String(toBoolean(payload.has_parent_transaction)),
         toSafeString(payload.id, ""),
         toSafeString(payload.integration_id, ""),
@@ -58,7 +59,8 @@ const generatePaymobRedirectHmac = (payload, hmacKey) => {
         String(toBoolean(payload.is_capture)),
         String(toBoolean(payload.is_refunded)),
         String(toBoolean(payload.is_standalone_payment)),
-        toSafeString(normalizeOrderId(payload.order), ""),
+        String(toBoolean(payload.is_voided)), // الحقل الناقص انضاف
+        toSafeString(payload.order?.id || payload.order, ""), // تعدلت للوصول لـ id الأوردر
         toSafeString(payload.owner, ""),
         String(toBoolean(payload.pending)),
         toSafeString(payload.source_data?.pan, ""),
@@ -288,10 +290,7 @@ const paymobCallback = async (req, res) => {
     const payload = (req.body?.obj ? req.body.obj : req.query);
     const incomingHmac = toSafeString(req.body?.hmac || req.query?.hmac, "").toLowerCase();
     console.log("🔔 PAYMOB CALLBACK RECEIVED");
-    console.log("📦 Payload:", JSON.stringify(payload, null, 2));
     console.log("📝 Incoming HMAC:", incomingHmac);
-    console.log("📋 Request Body:", JSON.stringify(req.body, null, 2));
-    console.log("🔍 Request Query:", JSON.stringify(req.query, null, 2));
     if (!incomingHmac) {
         console.error("❌ Missing HMAC");
         throw new Errors_1.BadRequest("Missing Paymob HMAC");
@@ -301,11 +300,10 @@ const paymobCallback = async (req, res) => {
         console.error("❌ Paymob Config not found");
         throw new Errors_1.BadRequest("Paymob configuration not found");
     }
-    const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
+    // هنا استخدمنا الدالة الجديدة
+    const expectedHmac = generatePaymobWebhookHmac(payload, paymobConfig.hmac_key).toLowerCase();
     console.log("🔐 Expected HMAC:", expectedHmac);
     console.log("✅ HMAC Match:", expectedHmac === incomingHmac);
-    console.log("🔑 HMAC Key used:", paymobConfig.hmac_key.substring(0, 5) + "...");
-    // TEMPORARY: Skip HMAC verification for debugging (remove in production!)
     const SKIP_HMAC_FOR_DEBUG = process.env.SKIP_PAYMOB_HMAC === "true";
     if (SKIP_HMAC_FOR_DEBUG) {
         console.warn("⚠️  HMAC VERIFICATION SKIPPED (DEBUG MODE)");
@@ -330,7 +328,6 @@ const paymobCallback = async (req, res) => {
     if (!order && merchantOrderId && mongoose_1.default.isValidObjectId(merchantOrderId)) {
         order = await Order_1.OrderModel.findById(merchantOrderId);
     }
-    console.log("📌 Local Order Found:", !!order, order?._id);
     if (!order) {
         console.error("❌ Order not found with paymobOrderId:", paymobOrderId);
         throw new Errors_1.NotFound("Order not found for this Paymob callback");
@@ -400,7 +397,8 @@ const verifyPaymobPayment = async (req, res) => {
     if (!paymobConfig) {
         throw new Errors_1.BadRequest("Paymob configuration not found");
     }
-    const expectedHmac = generatePaymobRedirectHmac(payload, paymobConfig.hmac_key).toLowerCase();
+    // هنا استخدمنا الدالة الجديدة برضه
+    const expectedHmac = generatePaymobWebhookHmac(payload, paymobConfig.hmac_key).toLowerCase();
     const hmacMatched = expectedHmac === incomingHmac;
     const skipHmac = process.env.SKIP_PAYMOB_HMAC === "true";
     if (!hmacMatched && !skipHmac) {

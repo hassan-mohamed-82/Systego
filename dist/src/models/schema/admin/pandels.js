@@ -27,6 +27,13 @@ const pandelSchema = new mongoose_1.default.Schema({
     startdate: { type: Date, required: true },
     enddate: { type: Date, required: true },
     status: { type: Boolean, default: true },
+    all_warehouses: { type: Boolean, default: true },
+    warehouse_ids: [
+        {
+            type: mongoose_1.default.Schema.Types.ObjectId,
+            ref: "Warehouse",
+        },
+    ],
     images: [{ type: String }],
     products: [pandelProductSchema], // ✅ الجديد
     price: { type: Number, required: true },

@@ -6,6 +6,7 @@ import { PaymobModel } from "../models/schema/admin/Paymob";
 
 export const paymobWebhook = async (req: Request, res: Response) => {
     try {
+        console.log("Paymob Body:", req.body); // ضيف السطر ده
         const hmacReceived = String(req.query.hmac || "").toLowerCase();
         const payload = req.body;
 

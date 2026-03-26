@@ -15,7 +15,9 @@ const mongoose_1 = __importDefault(require("mongoose"));
 // دالة مساعدة لتحديد المعرف (User أو Session)
 const getCartQuery = (req) => {
     const userId = req.user?.id;
-    const sessionId = req.body.sessionId || req.query.sessionId || req.headers['x-session-id'];
+    const sessionId = req.query?.sessionId ||
+        req.headers['x-session-id'] ||
+        (req.body && req.body.sessionId);
     if (userId)
         return { user: userId };
     if (sessionId)
