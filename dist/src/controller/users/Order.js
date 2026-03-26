@@ -132,14 +132,20 @@ const initializePaymobPayment = async ({ localOrderId, amount, paymobConfig, cus
 // (Checkout)
 const createOrder = async (req, res) => {
     const userId = req.user?.id;
+    const sessionId = req.headers['x-session-id'];
     const { shippingAddress, paymentMethod, proofImage } = req.body;
     const session = await mongoose_1.default.startSession();
     session.startTransaction();
     try {
-        const cart = await Cart_1.CartModel.findOne({ user: userId }).session(session);
+        // 1. تحديد سلة التسوق (مستخدم أو ضيف)
+        const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
+        if (!userId && !sessionId)
+            throw new Errors_1.BadRequest("Identification (User or Session) is required");
+        const cart = await Cart_1.CartModel.findOne(cartQuery).session(session);
         if (!cart || cart.cartItems.length === 0) {
             throw new Errors_1.BadRequest("Your cart is empty");
         }
+        // 2. التحقق من طريقة الدفع
         const paymentMethodDoc = await payment_methods_1.PaymentMethodModel.findOne({
             _id: paymentMethod,
             isActive: { $ne: false }
@@ -150,6 +156,7 @@ const createOrder = async (req, res) => {
         if (paymentMethodDoc.type === "manual" && !proofImage) {
             throw new Errors_1.BadRequest("Proof image is required for manual payment methods");
         }
+        // 3. جلب العنوان وحساب الشحن
         const address = await Address_1.AddressModel.findOne({ _id: shippingAddress, user: userId })
             .populate("city zone country")
             .session(session);
@@ -177,6 +184,7 @@ const createOrder = async (req, res) => {
         else {
             shippingCost = Number(zoneShippingCost || 0);
         }
+        // 4. تحديث المخزون وحساب إجمالي المنتجات
         let actualProductsTotal = 0;
         const finalCartItems = [];
         for (const item of cart.cartItems) {
@@ -188,7 +196,7 @@ const createOrder = async (req, res) => {
             const currentPrice = updatedProduct.price || 0;
             actualProductsTotal += currentPrice * requestedQuantity;
             finalCartItems.push({
-                product: updatedProduct._id,
+                product: updatedProduct._id.toString(), // تحويل لـ String لحل خطأ TS
                 quantity: requestedQuantity,
                 price: currentPrice
             });
@@ -199,18 +207,19 @@ const createOrder = async (req, res) => {
                 cartItems: finalCartItems,
                 shippingAddress: {
                     details: `${address.street}, Bldg ${address.buildingNumber}`,
-                    city: address.city?.name || "",
-                    zone: address.zone?.name || "",
+                    city: String(address.city?.name || ""),
+                    zone: String(address.zone?.name || ""),
                 },
                 shippingPrice: shippingCost,
                 totalOrderPrice: finalTotalPrice,
-                paymentMethod,
+                paymentMethod: paymentMethod.toString(),
                 proofImage,
                 status: "pending",
                 paymentGateway: paymentMethodDoc.type === "automatic" ? "paymob" : "manual",
                 paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
             }], { session });
         let paymobData = null;
+        // 6. التعامل مع بوابة الدفع (Paymob)
         if (paymentMethodDoc.type === "automatic") {
             const paymobConfig = await Paymob_1.PaymobModel.findOne({
                 payment_method_id: paymentMethodDoc._id,
@@ -234,7 +243,8 @@ const createOrder = async (req, res) => {
             order[0].paymobIframeUrl = paymobData.iframeUrl;
             await order[0].save({ session });
         }
-        await Cart_1.CartModel.findOneAndDelete({ user: userId }).session(session);
+        // 7. مسح السلة وإتمام العملية
+        await Cart_1.CartModel.findOneAndDelete(cartQuery).session(session);
         await session.commitTransaction();
         session.endSession();
         (0, response_1.SuccessResponse)(res, {

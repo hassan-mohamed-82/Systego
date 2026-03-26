@@ -6,8 +6,12 @@ const cartSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Customer',
-        required: true,
-        unique: true
+        required: false,
+    },
+    sessionId: {
+        type: String,
+        required: false,
+        index: true
     },
     cartItems: [
         {
@@ -38,6 +42,9 @@ const cartSchema = new mongoose_1.Schema({
 }, {
     timestamps: true
 });
+// نستخدم sparse: true عشان يسمح بوجود قيم null في الـ user (للضيوف) أو sessionId (للمسجلين)
+cartSchema.index({ user: 1 }, { unique: true, sparse: true });
+cartSchema.index({ sessionId: 1 }, { unique: true, sparse: true });
 // Calculate total price before saving
 cartSchema.pre('save', function (next) {
     this.totalCartPrice = this.cartItems.reduce((total, item) => {
