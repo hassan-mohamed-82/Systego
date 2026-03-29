@@ -6,7 +6,8 @@ const orderSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Customer',
-        required: true
+        required: false,
+        index: { sparse: true }
     },
     cartItems: [
         {

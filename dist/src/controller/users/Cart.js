@@ -67,7 +67,7 @@ exports.addToCart = (0, express_async_handler_1.default)(async (req, res) => {
 // 2. جلب بيانات السلة وحساب الشحن
 exports.getCart = (0, express_async_handler_1.default)(async (req, res) => {
     const query = getCartQuery(req);
-    const userId = req.user?.id;
+    const userId = query.user;
     const cart = await Cart_1.CartModel.findOne(query).populate('cartItems.product', 'name image price price_after_discount free_shipping');
     if (!cart) {
         return (0, response_1.SuccessResponse)(res, {

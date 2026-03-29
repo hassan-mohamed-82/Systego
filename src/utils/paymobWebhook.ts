@@ -1,42 +1,108 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import  {OrderModel} from"../models/schema/users/Order"; // عدل على حسب مسار الموديل
+import mongoose from "mongoose";
+import { OrderModel } from "../models/schema/users/Order";
+import { PaymobModel } from "../models/schema/admin/Paymob";
 
-const SECRET_KEY = process.env.PAYMOB_SECRET_KEY;
+const valueToHmacString = (value: unknown) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+};
+
+const buildPaymobTransactionHmacPayload = (obj: any) => {
+  const parts = [
+    obj?.amount_cents,
+    obj?.created_at,
+    obj?.currency,
+    obj?.error,
+    obj?.has_parent_transaction,
+    obj?.id,
+    obj?.integration_id,
+    obj?.is_3d_secure,
+    obj?.is_auth,
+    obj?.is_capture,
+    obj?.is_refunded,
+    obj?.is_standalone_payment,
+    obj?.is_voided,
+    obj?.order?.id,
+    obj?.owner,
+    obj?.pending,
+    obj?.source_data?.pan,
+    obj?.source_data?.sub_type,
+    obj?.source_data?.type,
+    obj?.success,
+  ];
+
+  return parts.map(valueToHmacString).join("");
+};
 
 export const paymobWebhook = async (req: Request, res: Response) => {
   try {
-    if (!SECRET_KEY) {
-      return res.status(500).json({ success: false, message: "PAYMOB_SECRET_KEY is not configured" });
+    const hmacHeader = String(req.query.hmac || req.body?.hmac || "").trim();
+    const rawPayload = JSON.stringify(req.body);
+    const data = req.body?.obj || req.body;
+
+    const activePaymobConfig = await PaymobModel.findOne({ isActive: true })
+      .sort({ updatedAt: -1 })
+      .select("hmac_key")
+      .lean();
+
+    const secretKey = process.env.PAYMOB_SECRET_KEY || activePaymobConfig?.hmac_key;
+
+    if (hmacHeader) {
+      if (!secretKey) {
+        return res.status(500).json({
+          success: false,
+          message: "PAYMOB_SECRET_KEY or active Paymob hmac_key is not configured",
+        });
+      }
+
+      const generatedFromRawBody = crypto
+        .createHmac("sha512", secretKey)
+        .update(rawPayload)
+        .digest("hex");
+
+      const generatedFromObjPayload = crypto
+        .createHmac("sha512", secretKey)
+        .update(buildPaymobTransactionHmacPayload(data))
+        .digest("hex");
+
+      if (generatedFromRawBody !== hmacHeader && generatedFromObjPayload !== hmacHeader) {
+        return res.status(400).json({ success: false, message: "Invalid HMAC" });
+      }
     }
 
-    const hmacHeader = req.query.hmac as string;
-    const payload = JSON.stringify(req.body);
+    const merchantOrderId = String(data?.order?.merchant_order_id || data?.merchant_order_id || "").trim();
+    const paymobOrderId = String(data?.order?.id || data?.order || "").trim();
+    const isSuccess = data?.success === true;
 
-    // توليد HMAC
-    const generatedHmac = crypto
-      .createHmac("sha512", SECRET_KEY)
-      .update(payload)
-      .digest("hex");
+    let order = null;
 
-    if (generatedHmac !== hmacHeader) {
-      return res.status(400).json({ success: false, message: "Invalid HMAC" });
+    if (merchantOrderId && mongoose.Types.ObjectId.isValid(merchantOrderId)) {
+      order = await OrderModel.findById(merchantOrderId);
     }
 
-    // 👇 هنا تقدر تعالج بيانات الطلب
-    const data = req.body.obj;
-
-    // مثال: تحديث حالة الطلب
-    const order = await OrderModel.findById(data.order.merchant_order_id);
-    if (order) {
-      order.paymentStatus = data.success ? "paid" : "failed";
-      order.paymobCallbackPayload = data;
-      await order.save();
+    if (!order && paymobOrderId) {
+      order = await OrderModel.findOne({ paymobOrderId });
     }
 
-    res.json({ status: "ok" });
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found for Paymob callback",
+      });
+    }
+
+    order.paymentStatus = isSuccess ? "paid" : "failed";
+    order.status = isSuccess ? "approved" : "rejected";
+    order.paymobTransactionId = data?.id ? String(data.id) : order.paymobTransactionId;
+    order.paymobCallbackPayload = data;
+    await order.save();
+
+    return res.json({ status: "ok" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };

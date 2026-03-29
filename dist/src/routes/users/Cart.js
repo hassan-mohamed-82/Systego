@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const optionalAuthenticated_1 = require("../../middlewares/optionalAuthenticated");
 const cart_1 = require("../../controller/users/cart");
 const validation_1 = require("../../middlewares/validation");
 const cart_2 = require("../../validation/users/cart");
 const cartRoute = (0, express_1.Router)();
-// cartRoute.use(authenticated);
+cartRoute.use(optionalAuthenticated_1.optionalAuthenticated);
 cartRoute.get("/", cart_1.getCart);
 cartRoute.post("/add", (0, validation_1.validate)(cart_2.addToCartSchema), cart_1.addToCart);
 cartRoute.put("/update-quantity", (0, validation_1.validate)(cart_2.updateQuantitySchema), cart_1.updateQuantity);
