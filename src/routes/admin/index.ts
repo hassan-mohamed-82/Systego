@@ -69,6 +69,7 @@ import ShippingRouter from "./Shipping";
 import tenantInfoRouter from "./tenantInfo";
 import onlineOrderRouter from "./onlineOrders";
 import  GeideaRouter from "./Geidea";
+import PayableRouter from "./Payable";
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter)
@@ -142,5 +143,6 @@ route.use("/banner", BannerRouter)
 route.use("/service-fees", ServiceFeeRouter)
 route.use("/shipping", ShippingRouter)
 route.use("/online-orders", onlineOrderRouter)
+route.use("/payable", PayableRouter)
 
 export default route;

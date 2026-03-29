@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const catchAsync_1 = require("../../utils/catchAsync");
+const haspremission_1 = require("../../middlewares/haspremission");
+const Payable_1 = require("../../controller/admin/Payable");
+const route = (0, express_1.Router)();
+route.get("/", (0, haspremission_1.authorizePermissions)("purchase", "View"), (0, catchAsync_1.catchAsync)(Payable_1.getPayables));
+route.post("/installment/:id/transaction", (0, haspremission_1.authorizePermissions)("purchase", "Edit"), (0, catchAsync_1.catchAsync)(Payable_1.addPayableTransaction));
+exports.default = route;

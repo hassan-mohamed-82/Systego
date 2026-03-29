@@ -38,6 +38,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const PurchaseInstallmentSchema = new mongoose_1.Schema({
     purchase_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Purchase", required: true },
     amount: { type: Number, required: true },
+    paid_amount: { type: Number, default: 0, min: 0 },
     date: { type: Date, required: true },
     status: { type: String, enum: ["pending", "paid"], default: "pending" },
 }, { timestamps: true });

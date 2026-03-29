@@ -33,13 +33,52 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PurchaseInvoiceModel = void 0;
+exports.AccountingLedgerModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const PurchaseInvoiceSchema = new mongoose_1.Schema({
-    purchase_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "Purchase" },
-    installment_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "PurchaseInstallment" },
-    financial_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "BankAccount" },
-    amount: { type: Number, required: true },
-    date: { type: Date, required: true, default: Date.now },
+const accountingLedgerSchema = new mongoose_1.Schema({
+    account_id: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "BankAccount",
+        required: true,
+        index: true,
+    },
+    entry_type: {
+        type: String,
+        enum: ["debit", "credit"],
+        required: true,
+        index: true,
+    },
+    amount: {
+        type: Number,
+        required: true,
+        min: 0.01,
+    },
+    description: {
+        type: String,
+        trim: true,
+        default: "",
+    },
+    reference_type: {
+        type: String,
+        trim: true,
+        default: "system",
+        index: true,
+    },
+    reference_id: {
+        type: String,
+        trim: true,
+        default: "",
+        index: true,
+    },
+    entry_date: {
+        type: Date,
+        default: Date.now,
+        index: true,
+    },
+    createdBy: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: "Admin",
+        required: false,
+    },
 }, { timestamps: true });
-exports.PurchaseInvoiceModel = mongoose_1.default.model("PurchaseInvoice", PurchaseInvoiceSchema);
+exports.AccountingLedgerModel = mongoose_1.default.model("AccountingLedger", accountingLedgerSchema);
