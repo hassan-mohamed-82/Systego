@@ -4,7 +4,8 @@ const orderSchema = new Schema({
   user: {
     type: Schema.Types.ObjectId,
     ref: 'Customer',
-    required: true
+    required: false,
+    index: { sparse: true }
   },
   cartItems: [
     {
