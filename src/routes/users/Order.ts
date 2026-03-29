@@ -5,11 +5,12 @@ import { validate } from '../../middlewares/validation';
 import { createOrderSchema } from '../../validation/users/order';
 import { catchAsync } from '../../utils/catchAsync';
 import { paymobWebhook } from '../../utils/paymobWebhook';
+import { geideaWebhook } from '../../utils/geadiawebhook';
 const orderRoute = Router();
 
 orderRoute.get("/webhook/paymob", catchAsync(paymobWebhook));
 orderRoute.post("/webhook/paymob", catchAsync(paymobWebhook));
-
+orderRoute.post("/webhook/geidea", catchAsync(geideaWebhook));
 orderRoute.use(optionalAuthenticated);
 
 orderRoute.post("/checkout", catchAsync(createOrder));

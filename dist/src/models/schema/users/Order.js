@@ -41,7 +41,7 @@ const orderSchema = new mongoose_1.Schema({
     },
     paymentGateway: {
         type: String,
-        enum: ["manual", "paymob"],
+        enum: ["manual", "paymob", "geidea"],
         default: "manual"
     },
     paymentStatus: {
@@ -59,6 +59,15 @@ const orderSchema = new mongoose_1.Schema({
         type: String
     },
     paymobCallbackPayload: {
+        type: mongoose_1.Schema.Types.Mixed
+    },
+    geideaSessionId: {
+        type: String
+    },
+    geideaTransactionId: {
+        type: String
+    },
+    geideaCallbackPayload: {
         type: mongoose_1.Schema.Types.Mixed
     },
     proofImage: {

@@ -39,7 +39,7 @@ const orderSchema = new Schema({
   },
   paymentGateway: {
     type: String,
-    enum: ["manual", "paymob"],
+    enum: ["manual", "paymob", "geidea"],
     default: "manual"
   },
   paymentStatus: {
@@ -57,6 +57,15 @@ const orderSchema = new Schema({
     type: String
   },
   paymobCallbackPayload: {
+    type: Schema.Types.Mixed
+  },
+  geideaSessionId: {
+    type: String
+  },
+  geideaTransactionId: {
+    type: String
+  },
+  geideaCallbackPayload: {
     type: Schema.Types.Mixed
   },
   proofImage: {
