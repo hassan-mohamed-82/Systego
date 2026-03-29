@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
+exports.verifyPaymobPaymentStatus = exports.getOrderDetails = exports.getMyOrders = exports.createOrder = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Cart_1 = require("../../models/schema/users/Cart");
 const Order_1 = require("../../models/schema/users/Order");
@@ -298,3 +298,61 @@ const getOrderDetails = async (req, res) => {
     (0, response_1.SuccessResponse)(res, { order });
 };
 exports.getOrderDetails = getOrderDetails;
+// ===============================
+// 🟢 VERIFY PAYMOB PAYMENT STATUS
+// ===============================
+const verifyPaymobPaymentStatus = async (req, res) => {
+    const { orderId } = req.params;
+    const userId = req.user?.id;
+    const order = await Order_1.OrderModel.findOne({
+        _id: orderId,
+        user: userId,
+    });
+    if (!order)
+        throw new Errors_1.NotFound("Order not found");
+    if (order.paymentGateway !== "paymob") {
+        throw new Errors_1.BadRequest("Order is not a Paymob order");
+    }
+    if (!order.paymobOrderId) {
+        throw new Errors_1.BadRequest("Order does not have a Paymob transaction");
+    }
+    try {
+        const paymobConfig = await Paymob_1.PaymobModel.findOne({
+            isActive: true,
+        });
+        if (!paymobConfig) {
+            throw new Errors_1.BadRequest("Paymob configuration not found");
+        }
+        // Get auth token and fetch transactions
+        const authToken = await paymobService_1.PaymobService.getAuthToken(paymobConfig.api_key);
+        const transactions = await paymobService_1.PaymobService.getOrderTransactions(authToken, Number(order.paymobOrderId));
+        const status = paymobService_1.PaymobService.getLatestTransactionStatus(transactions);
+        // If payment was successful and order status is still pending, update it
+        if (status.success && order.status === "pending") {
+            order.status = "approved";
+            order.paymentStatus = "paid";
+            order.paymobTransactionId = String(status.transactionId);
+            order.paymobCallbackPayload = status;
+            await order.save();
+        }
+        // If payment failed or voided and order status is still pending, mark as rejected
+        else if ((!status.success || status.isVoided) &&
+            order.status === "pending") {
+            order.status = "rejected";
+            order.paymentStatus = "failed";
+            order.paymobCallbackPayload = status;
+            await order.save();
+        }
+        return (0, response_1.SuccessResponse)(res, {
+            orderId: order._id,
+            currentStatus: order.status,
+            paymentStatus: order.paymentStatus,
+            paymobStatus: status,
+            updated: true,
+        });
+    }
+    catch (error) {
+        throw new Errors_1.BadRequest(`Failed to verify payment: ${error.message}`);
+    }
+};
+exports.verifyPaymobPaymentStatus = verifyPaymobPaymentStatus;

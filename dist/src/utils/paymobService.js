@@ -39,5 +39,25 @@ class PaymobService {
     static getIframeUrl(iframeId, token) {
         return `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${token}`;
     }
+    static async getOrderTransactions(authToken, paymobOrderId) {
+        const { data } = await axios_1.default.get(`${BASE_URL}/ecommerce/orders/${paymobOrderId}`, {
+            params: { auth_token: authToken },
+        });
+        return data.transactions || [];
+    }
+    static getLatestTransactionStatus(transactions) {
+        if (!transactions || transactions.length === 0) {
+            return { success: false, message: "No transactions found" };
+        }
+        const latestTx = transactions[0];
+        return {
+            success: latestTx.success,
+            transactionId: latestTx.id,
+            isPending: latestTx.pending === true,
+            isVoided: latestTx.is_voided === true,
+            isRefunded: latestTx.is_refunded === true,
+            error: latestTx.error,
+        };
+    }
 }
 exports.PaymobService = PaymobService;

@@ -16,6 +16,22 @@ type PaymobPaymentKeyResponse = {
 
 type PaymobBillingData = Record<string, string | number | boolean | null>;
 
+type PaymobTransaction = {
+    id: number;
+    success: boolean;
+    error?: string;
+    is_voided?: boolean;
+    is_refunded?: boolean;
+    amount_cents: number;
+    pending?: boolean;
+};
+
+type PaymobOrderDetailsResponse = {
+    id: number;
+    success?: boolean;
+    transactions?: PaymobTransaction[];
+};
+
 export class PaymobService {
     static async getAuthToken(apiKey: string) {
         const { data } = await axios.post<PaymobAuthResponse>(`${BASE_URL}/auth/tokens`, {
@@ -58,5 +74,31 @@ export class PaymobService {
 
     static getIframeUrl(iframeId: string, token: string) {
         return `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${token}`;
+    }
+
+    static async getOrderTransactions(authToken: string, paymobOrderId: number) {
+        const { data } = await axios.get<PaymobOrderDetailsResponse>(
+            `${BASE_URL}/ecommerce/orders/${paymobOrderId}`,
+            {
+                params: { auth_token: authToken },
+            }
+        );
+        return data.transactions || [];
+    }
+
+    static getLatestTransactionStatus(transactions: PaymobTransaction[]) {
+        if (!transactions || transactions.length === 0) {
+            return { success: false, message: "No transactions found" };
+        }
+
+        const latestTx = transactions[0];
+        return {
+            success: latestTx.success,
+            transactionId: latestTx.id,
+            isPending: latestTx.pending === true,
+            isVoided: latestTx.is_voided === true,
+            isRefunded: latestTx.is_refunded === true,
+            error: latestTx.error,
+        };
     }
 }

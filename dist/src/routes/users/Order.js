@@ -13,6 +13,7 @@ orderRoute.get("/webhook/geidea", (0, catchAsync_1.catchAsync)(geadiawebhook_1.g
 orderRoute.post("/webhook/geidea", (0, catchAsync_1.catchAsync)(geadiawebhook_1.geideaWebhook));
 orderRoute.use(optionalAuthenticated_1.optionalAuthenticated);
 orderRoute.post("/checkout", (0, catchAsync_1.catchAsync)(Order_1.createOrder));
+orderRoute.get("/verify-payment/paymob/:orderId", (0, catchAsync_1.catchAsync)(Order_1.verifyPaymobPaymentStatus));
 orderRoute.get("/my-orders", (0, catchAsync_1.catchAsync)(Order_1.getMyOrders));
 orderRoute.get("/:id", (0, catchAsync_1.catchAsync)(Order_1.getOrderDetails));
 exports.default = orderRoute;
