@@ -1,9 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const catchAsync_1 = require("../../utils/catchAsync");
 const Geidea_1 = require("../../controller/admin/Geidea");
 const geideaRoute = (0, express_1.Router)();
-geideaRoute.post("/", Geidea_1.addOrUpdateGeideaConfig);
-geideaRoute.get("/", Geidea_1.getGeideaConfig);
-geideaRoute.delete("/", Geidea_1.deleteGeideaConfig);
+geideaRoute.get("/", (0, catchAsync_1.catchAsync)(Geidea_1.getGeidea));
+geideaRoute.post("/", (0, catchAsync_1.catchAsync)(Geidea_1.createGeidea));
+geideaRoute.put("/:id", (0, catchAsync_1.catchAsync)(Geidea_1.updateGeidea));
+geideaRoute.get("/:id", (0, catchAsync_1.catchAsync)(Geidea_1.getGeideaById));
+geideaRoute.delete("/:id", (0, catchAsync_1.catchAsync)(Geidea_1.deleteGeideaConfig));
 exports.default = geideaRoute;
