@@ -18,7 +18,8 @@ const normalizeWarehouseSelection = async (
   existingBundle?: any
 ) => {
   const allWarehousesRequested = payload?.all_warehouses === true;
-  const hasWarehouseIdsArray = Array.isArray(payload?.warehouse_ids);
+  const hasWarehouseIdsArray =
+    Array.isArray(payload?.warehouse_ids) && payload.warehouse_ids.length > 0;
   const hasSingleWarehouseId = !!payload?.warehouse_id;
 
   if (allWarehousesRequested && (hasSingleWarehouseId || hasWarehouseIdsArray)) {
