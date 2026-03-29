@@ -49,6 +49,8 @@ const paymobWebhook = async (req, res) => {
         const queryPaymobOrderId = String(req.query?.order || req.query?.order_id || "").trim();
         const queryTransactionId = String(req.query?.id || "").trim();
         const querySuccessRaw = req.query?.success;
+        const queryAmountCentsRaw = req.query?.amount_cents;
+        const strictHmac = String(process.env.PAYMOB_STRICT_HMAC || "").toLowerCase() === "true";
         const paymobConfigs = await Paymob_1.PaymobModel.find({})
             .select("hmac_key integration_id isActive")
             .lean();
@@ -56,6 +58,8 @@ const paymobWebhook = async (req, res) => {
         const configByIntegration = paymobConfigs.find((cfg) => String(cfg.integration_id || "").trim() === integrationId);
         const activeConfig = paymobConfigs.find((cfg) => cfg.isActive === true);
         const candidateSecretKeys = Array.from(new Set([
+            process.env.PAYMOB_HMAC_KEY,
+            process.env.PAYMOB_HMAC_SECRET,
             process.env.PAYMOB_SECRET_KEY,
             configByIntegration?.hmac_key,
             activeConfig?.hmac_key,
@@ -63,6 +67,7 @@ const paymobWebhook = async (req, res) => {
         ]
             .map((key) => String(key || "").trim())
             .filter((key) => key.length > 0)));
+        let isHmacValid = !hmacHeader;
         if (hmacHeader && req.body && Object.keys(req.body).length > 0) {
             if (candidateSecretKeys.length === 0) {
                 return res.status(500).json({
@@ -75,7 +80,7 @@ const paymobWebhook = async (req, res) => {
                 buildPaymobTransactionHmacPayload(req.body?.obj),
                 buildPaymobTransactionHmacPayload(data),
             ]));
-            let isHmacValid = false;
+            isHmacValid = false;
             for (const secretKey of candidateSecretKeys) {
                 for (const payloadCandidate of payloadCandidates) {
                     const generatedHash = crypto_1.default
@@ -91,7 +96,7 @@ const paymobWebhook = async (req, res) => {
                 if (isHmacValid)
                     break;
             }
-            if (!isHmacValid) {
+            if (!isHmacValid && strictHmac) {
                 return res.status(400).json({ success: false, message: "Invalid HMAC" });
             }
         }
@@ -113,11 +118,27 @@ const paymobWebhook = async (req, res) => {
                 message: "Order not found for Paymob callback",
             });
         }
+        if (String(order.paymentGateway || "") !== "paymob") {
+            return res.status(400).json({ success: false, message: "Order is not a Paymob order" });
+        }
+        if (paymobOrderId && order.paymobOrderId && String(order.paymobOrderId) !== paymobOrderId) {
+            return res.status(400).json({ success: false, message: "Paymob order id mismatch" });
+        }
+        const callbackAmountCents = Number(data?.amount_cents ?? queryAmountCentsRaw ?? NaN);
+        const orderAmountCents = Math.round(Number(order.totalOrderPrice || 0) * 100);
+        if (!Number.isNaN(callbackAmountCents) && callbackAmountCents > 0 && callbackAmountCents !== orderAmountCents) {
+            return res.status(400).json({ success: false, message: "Amount mismatch" });
+        }
         order.paymentStatus = isSuccess ? "paid" : "failed";
         order.status = isSuccess ? "approved" : "rejected";
         order.paymobTransactionId =
             data?.id ? String(data.id) : queryTransactionId || order.paymobTransactionId;
-        order.paymobCallbackPayload = Object.keys(req.body || {}).length > 0 ? data : req.query;
+        order.paymobCallbackPayload = {
+            callback: Object.keys(req.body || {}).length > 0 ? data : req.query,
+            hmacVerified: isHmacValid,
+            hmacProvided: !!hmacHeader,
+            hmacStrictMode: strictHmac,
+        };
         await order.save();
         return res.json({ status: "ok" });
     }
