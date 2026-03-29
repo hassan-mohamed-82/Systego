@@ -7,10 +7,12 @@ import { AddressModel } from "../../models/schema/users/Address";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
 import { PaymentMethodModel } from "../../models/schema/admin/payment_methods";
 import { PaymobModel } from "../../models/schema/admin/Paymob";
+import { GeideaModel } from "../../models/schema/admin/Geidea";
 import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 import { PaymobService } from "../../utils/paymobService";
+import { initializeGeideaPayment } from "../../utils/geadiaService";
 import { CityModels } from "../../models/schema/admin/City";
 import { ZoneModel } from "../../models/schema/admin/Zone";
 
@@ -24,6 +26,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
     const session = await mongoose.startSession();
     session.startTransaction();
+    let isTransactionCommitted = false;
 
     try {
         // 1️⃣ تحديد السلة (Cart)
@@ -142,6 +145,31 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         const totalPrice = productsTotal + shippingCost;
 
+        const geideaConfig = paymentMethodDoc.type === "automatic"
+            ? await GeideaModel.findOne({
+                payment_method_id: paymentMethodDoc._id,
+                isActive: true,
+            }).session(session)
+            : null;
+
+        const paymobConfig = paymentMethodDoc.type === "automatic"
+            ? await PaymobModel.findOne({
+                payment_method_id: paymentMethodDoc._id,
+                isActive: true,
+            }).session(session)
+            : null;
+
+        let paymentGateway: "manual" | "paymob" | "geidea" = "manual";
+        if (paymentMethodDoc.type === "automatic") {
+            if (geideaConfig) {
+                paymentGateway = "geidea";
+            } else if (paymobConfig) {
+                paymentGateway = "paymob";
+            } else {
+                throw new BadRequest("No active automatic gateway config found for selected payment method");
+            }
+        }
+
         // 6️⃣ Create Order
         const order = await OrderModel.create(
             [
@@ -154,8 +182,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                     paymentMethod: paymentMethod.toString(),
                     proofImage,
                     status: "pending",
-                    paymentGateway:
-                        paymentMethodDoc.type === "automatic" ? "paymob" : "manual",
+                    paymentGateway,
                     paymentStatus:
                         paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
                 },
@@ -163,78 +190,135 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             { session }
         );
 
-        let paymobData: any = null;
+        let paymentData: any = null;
+        let shouldClearCart = true;
 
         // ===============================
         // 🟢 PAYMOB INTEGRATION
         // ===============================
-        if (paymentMethodDoc.type === "automatic") {
-            const paymobConfig = await PaymobModel.findOne({
-                payment_method_id: paymentMethodDoc._id,
-                isActive: true,
-            }).session(session);
+        if (paymentGateway === "paymob" || paymentGateway === "geidea") {
+            try {
+                if (paymentGateway === "paymob") {
+                    if (!paymobConfig) throw new BadRequest("Paymob not configured");
 
-            if (!paymobConfig) throw new BadRequest("Paymob not configured");
+                    // للضيوف: نحاول نجيب بيانات العميل لو موجود أو نستخدم بيانات افتراضية
+                    const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
 
-            // للضيوف: نحاول نجيب بيانات العميل لو موجود أو نستخدم بيانات افتراضية
-            const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
+                    const authToken = await PaymobService.getAuthToken(
+                        paymobConfig.api_key
+                    );
 
-            const authToken = await PaymobService.getAuthToken(
-                paymobConfig.api_key
-            );
+                    const amountCents = Math.round(totalPrice * 100);
 
-            const amountCents = Math.round(totalPrice * 100);
+                    const paymobOrderId = await PaymobService.createOrder(
+                        authToken,
+                        amountCents,
+                        order[0]._id.toString()
+                    );
 
-            const paymobOrderId = await PaymobService.createOrder(
-                authToken,
-                amountCents,
-                order[0]._id.toString()
-            );
+                    const billingData = {
+                        first_name: customer?.name || "Guest",
+                        last_name: "Customer",
+                        email: customer?.email || "guest@systego.com",
+                        phone_number: customer?.phone_number || "01000000000",
+                        apartment: rawAddressForPaymob.apartmentNumber || "NA",
+                        floor: rawAddressForPaymob.floorNumber || "NA",
+                        street: shippingAddressData.details || "NA",
+                        building: rawAddressForPaymob.buildingNumber || "NA",
+                        shipping_method: "NA",
+                        postal_code: "NA",
+                        city: shippingAddressData.city || "Cairo",
+                        country: "EG",
+                        state: shippingAddressData.zone || "NA",
+                    };
 
-            const billingData = {
-                first_name: customer?.name || "Guest",
-                last_name: "Customer",
-                email: customer?.email || "guest@systego.com",
-                phone_number: customer?.phone_number || "01000000000",
-                apartment: rawAddressForPaymob.apartmentNumber || "NA",
-                floor: rawAddressForPaymob.floorNumber || "NA",
-                street: shippingAddressData.details || "NA",
-                building: rawAddressForPaymob.buildingNumber || "NA",
-                shipping_method: "NA",
-                postal_code: "NA",
-                city: shippingAddressData.city || "Cairo",
-                country: "EG",
-                state: shippingAddressData.zone || "NA",
-            };
+                    const paymentToken = await PaymobService.generatePaymentKey(
+                        authToken,
+                        amountCents,
+                        paymobOrderId,
+                        Number(paymobConfig.integration_id),
+                        billingData
+                    );
 
-            const paymentToken = await PaymobService.generatePaymentKey(
-                authToken,
-                amountCents,
-                paymobOrderId,
-                Number(paymobConfig.integration_id),
-                billingData
-            );
+                    const iframeUrl = PaymobService.getIframeUrl(
+                        paymobConfig.iframe_id,
+                        paymentToken
+                    );
 
-            const iframeUrl = PaymobService.getIframeUrl(
-                paymobConfig.iframe_id,
-                paymentToken
-            );
+                    order[0].paymobOrderId = String(paymobOrderId);
+                    order[0].paymobIframeUrl = iframeUrl;
 
-            order[0].paymobOrderId = String(paymobOrderId);
-            order[0].paymobIframeUrl = iframeUrl;
+                    await order[0].save({ session });
 
-            await order[0].save({ session });
+                    paymentData = {
+                        paymobOrderId: String(paymobOrderId),
+                        iframeUrl,
+                    };
+                } else {
+                    if (!geideaConfig) throw new BadRequest("Geidea not configured");
 
-            paymobData = {
-                paymobOrderId: String(paymobOrderId),
-                iframeUrl,
-            };
+                    const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
+
+                    const geideaPayment = await initializeGeideaPayment({
+                        localOrderId: order[0]._id.toString(),
+                        amount: totalPrice,
+                        geideaConfig: {
+                            publicKey: geideaConfig.publicKey,
+                            apiPassword: geideaConfig.apiPassword,
+                        },
+                        customer,
+                        address: rawAddressForPaymob,
+                    });
+
+                    (order[0] as any).geideaSessionId = geideaPayment.geideaSessionId;
+                    await order[0].save({ session });
+
+                    paymentData = {
+                        geideaSessionId: geideaPayment.geideaSessionId,
+                        iframeUrl: geideaPayment.iframeUrl,
+                    };
+                }
+            } catch (gatewayError: any) {
+                for (const item of finalItems) {
+                    await ProductModel.updateOne(
+                        { _id: item.product },
+                        { $inc: { quantity: item.quantity } },
+                        { session }
+                    );
+                }
+
+                order[0].status = "rejected";
+                order[0].paymentStatus = "failed";
+
+                if (paymentGateway === "paymob") {
+                    order[0].paymobCallbackPayload = {
+                        paymentInitError: gatewayError?.message || "Payment initialization failed",
+                    };
+                } else {
+                    (order[0] as any).geideaCallbackPayload = {
+                        paymentInitError: gatewayError?.message || "Payment initialization failed",
+                    };
+                    order[0].markModified("geideaCallbackPayload");
+                }
+
+                await order[0].save({ session });
+                shouldClearCart = false;
+
+                await session.commitTransaction();
+                isTransactionCommitted = true;
+                session.endSession();
+
+                throw new BadRequest(gatewayError?.message || "Payment failed. Order marked as rejected");
+            }
         }
 
         // 7️⃣ Clear cart
-        await CartModel.findOneAndDelete(cartQuery).session(session);
+        if (shouldClearCart) {
+            await CartModel.findOneAndDelete(cartQuery).session(session);
+        }
 
         await session.commitTransaction();
+        isTransactionCommitted = true;
         session.endSession();
 
         return SuccessResponse(
@@ -242,13 +326,15 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             {
                 message: "Order created successfully",
                 order: order[0],
-                payment: paymobData,
+                payment: paymentData,
             },
             201
         );
     } catch (err) {
-        await session.abortTransaction();
-        session.endSession();
+        if (!isTransactionCommitted) {
+            await session.abortTransaction();
+            session.endSession();
+        }
         throw err;
     }
 };

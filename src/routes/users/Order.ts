@@ -10,6 +10,7 @@ const orderRoute = Router();
 
 orderRoute.get("/webhook/paymob", catchAsync(paymobWebhook));
 orderRoute.post("/webhook/paymob", catchAsync(paymobWebhook));
+orderRoute.get("/webhook/geidea", catchAsync(geideaWebhook));
 orderRoute.post("/webhook/geidea", catchAsync(geideaWebhook));
 orderRoute.use(optionalAuthenticated);
 

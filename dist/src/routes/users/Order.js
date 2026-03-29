@@ -9,6 +9,7 @@ const geadiawebhook_1 = require("../../utils/geadiawebhook");
 const orderRoute = (0, express_1.Router)();
 orderRoute.get("/webhook/paymob", (0, catchAsync_1.catchAsync)(paymobWebhook_1.paymobWebhook));
 orderRoute.post("/webhook/paymob", (0, catchAsync_1.catchAsync)(paymobWebhook_1.paymobWebhook));
+orderRoute.get("/webhook/geidea", (0, catchAsync_1.catchAsync)(geadiawebhook_1.geideaWebhook));
 orderRoute.post("/webhook/geidea", (0, catchAsync_1.catchAsync)(geadiawebhook_1.geideaWebhook));
 orderRoute.use(optionalAuthenticated_1.optionalAuthenticated);
 orderRoute.post("/checkout", (0, catchAsync_1.catchAsync)(Order_1.createOrder));

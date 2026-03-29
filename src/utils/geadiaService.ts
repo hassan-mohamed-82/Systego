@@ -1,6 +1,10 @@
 import { BadRequest } from "../Errors/BadRequest";
 import axios from "axios";
 
+const GEIDEA_API_BASE_URL = process.env.GEIDEA_API_BASE_URL || "https://api.geidea.net";
+const GEIDEA_CALLBACK_URL = process.env.GEIDEA_CALLBACK_URL || "https://bcknd.systego.net/api/store/order/webhook/geidea";
+const GEIDEA_RETURN_URL = process.env.GEIDEA_RETURN_URL || "https://your-frontend.com/payment/success";
+
 type GeideaConfig = {
     publicKey: string;
     apiPassword: string;
@@ -31,13 +35,13 @@ export const initializeGeideaPayment = async ({
     const authHeader = `Basic ${credentials}`;
 
     const response = await axios.post<GeideaSessionResponse>(
-        "https://api.geidea.net/pgw/api/v1/direct/session",
+        `${GEIDEA_API_BASE_URL}/pgw/api/v1/direct/session`,
         {
             amount: amount,
             currency: "EGP",
             merchantReferenceId: localOrderId,
-            callbackUrl: "https://bcknd.systego.net/api/store/order/webhook/geidea",
-            returnUrl: "https://your-frontend.com/payment/success",
+            callbackUrl: GEIDEA_CALLBACK_URL,
+            returnUrl: GEIDEA_RETURN_URL,
             customerEmail: customer?.email || "no-reply@example.com",
             billingAddress: {
                 street: address?.street || "NA",
