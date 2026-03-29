@@ -42,34 +42,56 @@ const buildPaymobTransactionHmacPayload = (obj) => {
 };
 const paymobWebhook = async (req, res) => {
     try {
-        const hmacHeader = String(req.query.hmac || req.body?.hmac || "").trim();
+        const hmacHeader = String(req.query.hmac || req.body?.hmac || "").trim().toLowerCase();
         const rawPayload = JSON.stringify(req.body);
         const data = req.body?.obj || req.body;
         const queryMerchantOrderId = String(req.query?.merchant_order_id || "").trim();
         const queryPaymobOrderId = String(req.query?.order || req.query?.order_id || "").trim();
         const queryTransactionId = String(req.query?.id || "").trim();
         const querySuccessRaw = req.query?.success;
-        const activePaymobConfig = await Paymob_1.PaymobModel.findOne({ isActive: true })
-            .sort({ updatedAt: -1 })
-            .select("hmac_key")
+        const paymobConfigs = await Paymob_1.PaymobModel.find({})
+            .select("hmac_key integration_id isActive")
             .lean();
-        const secretKey = process.env.PAYMOB_SECRET_KEY || activePaymobConfig?.hmac_key;
+        const integrationId = String(data?.integration_id || "").trim();
+        const configByIntegration = paymobConfigs.find((cfg) => String(cfg.integration_id || "").trim() === integrationId);
+        const activeConfig = paymobConfigs.find((cfg) => cfg.isActive === true);
+        const candidateSecretKeys = Array.from(new Set([
+            process.env.PAYMOB_SECRET_KEY,
+            configByIntegration?.hmac_key,
+            activeConfig?.hmac_key,
+            ...paymobConfigs.map((cfg) => cfg.hmac_key),
+        ]
+            .map((key) => String(key || "").trim())
+            .filter((key) => key.length > 0)));
         if (hmacHeader && req.body && Object.keys(req.body).length > 0) {
-            if (!secretKey) {
+            if (candidateSecretKeys.length === 0) {
                 return res.status(500).json({
                     success: false,
-                    message: "PAYMOB_SECRET_KEY or active Paymob hmac_key is not configured",
+                    message: "No Paymob HMAC key is configured",
                 });
             }
-            const generatedFromRawBody = crypto_1.default
-                .createHmac("sha512", secretKey)
-                .update(rawPayload)
-                .digest("hex");
-            const generatedFromObjPayload = crypto_1.default
-                .createHmac("sha512", secretKey)
-                .update(buildPaymobTransactionHmacPayload(data))
-                .digest("hex");
-            if (generatedFromRawBody !== hmacHeader && generatedFromObjPayload !== hmacHeader) {
+            const payloadCandidates = Array.from(new Set([
+                rawPayload,
+                buildPaymobTransactionHmacPayload(req.body?.obj),
+                buildPaymobTransactionHmacPayload(data),
+            ]));
+            let isHmacValid = false;
+            for (const secretKey of candidateSecretKeys) {
+                for (const payloadCandidate of payloadCandidates) {
+                    const generatedHash = crypto_1.default
+                        .createHmac("sha512", secretKey)
+                        .update(payloadCandidate)
+                        .digest("hex")
+                        .toLowerCase();
+                    if (generatedHash === hmacHeader) {
+                        isHmacValid = true;
+                        break;
+                    }
+                }
+                if (isHmacValid)
+                    break;
+            }
+            if (!isHmacValid) {
                 return res.status(400).json({ success: false, message: "Invalid HMAC" });
             }
         }
