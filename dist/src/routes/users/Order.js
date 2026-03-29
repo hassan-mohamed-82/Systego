@@ -6,6 +6,7 @@ const Order_1 = require("../../controller/users/Order");
 const catchAsync_1 = require("../../utils/catchAsync");
 const paymobWebhook_1 = require("../../utils/paymobWebhook");
 const orderRoute = (0, express_1.Router)();
+orderRoute.get("/webhook/paymob", (0, catchAsync_1.catchAsync)(paymobWebhook_1.paymobWebhook));
 orderRoute.post("/webhook/paymob", (0, catchAsync_1.catchAsync)(paymobWebhook_1.paymobWebhook));
 orderRoute.use(optionalAuthenticated_1.optionalAuthenticated);
 orderRoute.post("/checkout", (0, catchAsync_1.catchAsync)(Order_1.createOrder));

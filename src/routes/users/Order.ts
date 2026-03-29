@@ -7,6 +7,7 @@ import { catchAsync } from '../../utils/catchAsync';
 import { paymobWebhook } from '../../utils/paymobWebhook';
 const orderRoute = Router();
 
+orderRoute.get("/webhook/paymob", catchAsync(paymobWebhook));
 orderRoute.post("/webhook/paymob", catchAsync(paymobWebhook));
 
 orderRoute.use(optionalAuthenticated);

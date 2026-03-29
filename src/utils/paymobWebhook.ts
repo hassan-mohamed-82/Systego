@@ -43,6 +43,11 @@ export const paymobWebhook = async (req: Request, res: Response) => {
     const rawPayload = JSON.stringify(req.body);
     const data = req.body?.obj || req.body;
 
+    const queryMerchantOrderId = String(req.query?.merchant_order_id || "").trim();
+    const queryPaymobOrderId = String(req.query?.order || req.query?.order_id || "").trim();
+    const queryTransactionId = String(req.query?.id || "").trim();
+    const querySuccessRaw = req.query?.success;
+
     const activePaymobConfig = await PaymobModel.findOne({ isActive: true })
       .sort({ updatedAt: -1 })
       .select("hmac_key")
@@ -50,7 +55,7 @@ export const paymobWebhook = async (req: Request, res: Response) => {
 
     const secretKey = process.env.PAYMOB_SECRET_KEY || activePaymobConfig?.hmac_key;
 
-    if (hmacHeader) {
+    if (hmacHeader && req.body && Object.keys(req.body).length > 0) {
       if (!secretKey) {
         return res.status(500).json({
           success: false,
@@ -73,9 +78,16 @@ export const paymobWebhook = async (req: Request, res: Response) => {
       }
     }
 
-    const merchantOrderId = String(data?.order?.merchant_order_id || data?.merchant_order_id || "").trim();
-    const paymobOrderId = String(data?.order?.id || data?.order || "").trim();
-    const isSuccess = data?.success === true;
+    const merchantOrderId = String(
+      data?.order?.merchant_order_id || data?.merchant_order_id || queryMerchantOrderId || ""
+    ).trim();
+    const paymobOrderId = String(
+      data?.order?.id || data?.order || queryPaymobOrderId || ""
+    ).trim();
+    const isSuccess =
+      data?.success === true ||
+      String(querySuccessRaw || "").toLowerCase() === "true" ||
+      String(querySuccessRaw || "") === "1";
 
     let order = null;
 
@@ -96,8 +108,9 @@ export const paymobWebhook = async (req: Request, res: Response) => {
 
     order.paymentStatus = isSuccess ? "paid" : "failed";
     order.status = isSuccess ? "approved" : "rejected";
-    order.paymobTransactionId = data?.id ? String(data.id) : order.paymobTransactionId;
-    order.paymobCallbackPayload = data;
+    order.paymobTransactionId =
+      data?.id ? String(data.id) : queryTransactionId || order.paymobTransactionId;
+    order.paymobCallbackPayload = Object.keys(req.body || {}).length > 0 ? data : req.query;
     await order.save();
 
     return res.json({ status: "ok" });
