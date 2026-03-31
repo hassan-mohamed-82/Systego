@@ -20,9 +20,10 @@ const paymobService_1 = require("../../utils/paymobService");
 const geadiaService_1 = require("../../utils/geadiaService");
 const City_1 = require("../../models/schema/admin/City");
 const Zone_1 = require("../../models/schema/admin/Zone");
+const Fawry_1 = require("../../models/schema/admin/Fawry");
+const fawryService_1 = require("../../utils/fawryService");
 // ===============================
 // 🟢 CREATE ORDER
-// ===============================
 const createOrder = async (req, res) => {
     const userId = req.user?.id;
     const sessionId = req.headers["x-session-id"];
@@ -55,13 +56,10 @@ const createOrder = async (req, res) => {
         let shippingCost = 0;
         let rawAddressForPaymob;
         if (typeof shippingAddress === "string") {
-            // Registered user (ID): populate to get names and prices
             const addressDoc = await Address_1.AddressModel.findOne({
                 _id: shippingAddress,
                 user: userId
-            })
-                .populate("city zone country")
-                .session(session);
+            }).populate("city zone country").session(session);
             if (!addressDoc)
                 throw new Errors_1.NotFound("Address not found");
             const populated = addressDoc;
@@ -74,7 +72,6 @@ const createOrder = async (req, res) => {
             rawAddressForPaymob = populated;
         }
         else {
-            // حالة الضيف (Object): نجلب الموديلات يدوياً لحساب الشحن بدقة
             const [cityDoc, zoneDoc] = await Promise.all([
                 City_1.CityModels.findById(shippingAddress.city).session(session),
                 Zone_1.ZoneModel.findById(shippingAddress.zone).session(session)
@@ -103,10 +100,7 @@ const createOrder = async (req, res) => {
             shippingCost = Number(shippingSettings.flatRate || 0);
         }
         else {
-            shippingCost =
-                Number(rawAddressForPaymob.zone?.shipingCost) ||
-                    Number(rawAddressForPaymob.city?.shipingCost) ||
-                    0;
+            shippingCost = Number(rawAddressForPaymob.zone?.shipingCost) || Number(rawAddressForPaymob.city?.shipingCost) || 0;
         }
         // 5️⃣ Products & Stock
         let productsTotal = 0;
@@ -125,33 +119,26 @@ const createOrder = async (req, res) => {
             });
         }
         const totalPrice = productsTotal + shippingCost;
+        // جلب إعدادات بوابات الدفع
         const geideaConfig = paymentMethodDoc.type === "automatic"
-            ? await Geidea_1.GeideaModel.findOne({
-                payment_method_id: paymentMethodDoc._id,
-                isActive: true,
-            }).session(session)
-            : null;
+            ? await Geidea_1.GeideaModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
         const paymobConfig = paymentMethodDoc.type === "automatic"
-            ? await Paymob_1.PaymobModel.findOne({
-                payment_method_id: paymentMethodDoc._id,
-                isActive: true,
-            }).session(session)
-            : null;
+            ? await Paymob_1.PaymobModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
+        const fawryConfig = paymentMethodDoc.type === "automatic"
+            ? await Fawry_1.FawryModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
         let paymentGateway = "manual";
         if (paymentMethodDoc.type === "automatic") {
-            if (geideaConfig) {
+            if (geideaConfig)
                 paymentGateway = "geidea";
-            }
-            else if (paymobConfig) {
+            else if (paymobConfig)
                 paymentGateway = "paymob";
-            }
-            else {
+            else if (fawryConfig)
+                paymentGateway = "fawry";
+            else
                 throw new Errors_1.BadRequest("No active automatic gateway config found for selected payment method");
-            }
         }
         // 6️⃣ Create Order
-        const order = await Order_1.OrderModel.create([
-            {
+        const order = await Order_1.OrderModel.create([{
                 user: userId || null,
                 cartItems: finalItems,
                 shippingAddress: shippingAddressData,
@@ -162,20 +149,18 @@ const createOrder = async (req, res) => {
                 status: "pending",
                 paymentGateway,
                 paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-            },
-        ], { session });
+            }], { session });
         let paymentData = null;
         let shouldClearCart = true;
         // ===============================
-        // 🟢 PAYMOB INTEGRATION
+        // 🟢 PAYMENT INTEGRATIONS
         // ===============================
-        if (paymentGateway === "paymob" || paymentGateway === "geidea") {
+        if (paymentGateway !== "manual") {
             try {
+                const customer = userId ? await customer_1.CustomerModel.findById(userId).session(session) : null;
                 if (paymentGateway === "paymob") {
                     if (!paymobConfig)
                         throw new Errors_1.BadRequest("Paymob not configured");
-                    // للضيوف: نحاول نجيب بيانات العميل لو موجود أو نستخدم بيانات افتراضية
-                    const customer = userId ? await customer_1.CustomerModel.findById(userId).session(session) : null;
                     const authToken = await paymobService_1.PaymobService.getAuthToken(paymobConfig.api_key);
                     const amountCents = Math.round(totalPrice * 100);
                     const paymobOrderId = await paymobService_1.PaymobService.createOrder(authToken, amountCents, order[0]._id.toString());
@@ -199,49 +184,72 @@ const createOrder = async (req, res) => {
                     order[0].paymobOrderId = String(paymobOrderId);
                     order[0].paymobIframeUrl = iframeUrl;
                     await order[0].save({ session });
-                    paymentData = {
-                        paymobOrderId: String(paymobOrderId),
-                        iframeUrl,
-                    };
+                    paymentData = { paymobOrderId: String(paymobOrderId), iframeUrl };
                 }
-                else {
+                else if (paymentGateway === "geidea") {
                     if (!geideaConfig)
                         throw new Errors_1.BadRequest("Geidea not configured");
-                    const customer = userId ? await customer_1.CustomerModel.findById(userId).session(session) : null;
                     const geideaPayment = await (0, geadiaService_1.initializeGeideaPayment)({
                         localOrderId: order[0]._id.toString(),
                         amount: totalPrice,
-                        geideaConfig: {
-                            publicKey: geideaConfig.publicKey,
-                            apiPassword: geideaConfig.apiPassword,
-                        },
+                        geideaConfig: { publicKey: geideaConfig.publicKey, apiPassword: geideaConfig.apiPassword },
                         customer,
                         address: rawAddressForPaymob,
                     });
                     order[0].geideaSessionId = geideaPayment.geideaSessionId;
                     await order[0].save({ session });
+                    paymentData = { geideaSessionId: geideaPayment.geideaSessionId, iframeUrl: geideaPayment.iframeUrl };
+                }
+                else if (paymentGateway === "fawry") {
+                    if (!fawryConfig)
+                        throw new Errors_1.BadRequest("Fawry not configured");
+                    const fawryItems = finalItems.map(item => ({
+                        itemId: item.product.toString(),
+                        description: "Product",
+                        price: item.price,
+                        quantity: item.quantity
+                    }));
+                    if (shippingCost > 0) {
+                        fawryItems.push({ itemId: "SHIPPING", description: "Shipping Fees", price: shippingCost, quantity: 1 });
+                    }
+                    const fawryPayment = await fawryService_1.FawryService.createChargeRequest({
+                        merchantCode: fawryConfig.merchantCode,
+                        secureKey: fawryConfig.secureKey,
+                        merchantRefNum: order[0]._id.toString(),
+                        customerProfileId: userId?.toString() || "guest",
+                        customerName: customer?.name || "Guest Customer",
+                        customerMobile: customer?.phone_number || "01000000000",
+                        customerEmail: customer?.email || "guest@systego.com",
+                        amount: totalPrice,
+                        returnUrl: process.env.FAWRY_RETURN_URL || "https://bcknd.systego.net/api/payment/success",
+                        items: fawryItems,
+                        isSandbox: fawryConfig.sandboxMode
+                    });
+                    order[0].fawryReferenceId = fawryPayment.referenceNumber;
+                    await order[0].save({ session });
                     paymentData = {
-                        geideaSessionId: geideaPayment.geideaSessionId,
-                        iframeUrl: geideaPayment.iframeUrl,
+                        referenceNumber: fawryPayment.referenceNumber,
+                        iframeUrl: fawryPayment.nextAction?.redirectUrl || null,
                     };
                 }
             }
             catch (gatewayError) {
+                // إرجاع الكميات للمخزن في حالة فشل البوابة
                 for (const item of finalItems) {
                     await products_1.ProductModel.updateOne({ _id: item.product }, { $inc: { quantity: item.quantity } }, { session });
                 }
                 order[0].status = "rejected";
                 order[0].paymentStatus = "failed";
                 if (paymentGateway === "paymob") {
-                    order[0].paymobCallbackPayload = {
-                        paymentInitError: gatewayError?.message || "Payment initialization failed",
-                    };
+                    order[0].paymobCallbackPayload = { paymentInitError: gatewayError?.message || "Payment initialization failed" };
                 }
-                else {
-                    order[0].geideaCallbackPayload = {
-                        paymentInitError: gatewayError?.message || "Payment initialization failed",
-                    };
+                else if (paymentGateway === "geidea") {
+                    order[0].geideaCallbackPayload = { paymentInitError: gatewayError?.message || "Payment initialization failed" };
                     order[0].markModified("geideaCallbackPayload");
+                }
+                else if (paymentGateway === "fawry") {
+                    order[0].fawryCallbackPayload = { paymentInitError: gatewayError?.message || "Payment initialization failed" };
+                    order[0].markModified("fawryCallbackPayload");
                 }
                 await order[0].save({ session });
                 shouldClearCart = false;

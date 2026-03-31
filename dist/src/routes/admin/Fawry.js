@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const Fawry_1 = require("../../controller/admin/Fawry");
+const router = (0, express_1.Router)();
+router.post("/", Fawry_1.createFawry);
+router.put("/:id", Fawry_1.updateFawry);
+router.get("/", Fawry_1.getFawry);
+router.get("/:id", Fawry_1.getFawryId);
+exports.default = router;
