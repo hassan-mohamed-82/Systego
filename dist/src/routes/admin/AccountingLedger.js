@@ -1,10 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const catchAsync_1 = require("../../utils/catchAsync");
-const haspremission_1 = require("../../middlewares/haspremission");
+const express_1 = __importDefault(require("express"));
 const AccountingLedger_1 = require("../../controller/admin/AccountingLedger");
-const router = (0, express_1.Router)();
-router.get("/", (0, haspremission_1.authorizePermissions)("financial_account", "View"), (0, catchAsync_1.catchAsync)(AccountingLedger_1.getLedgerEntries));
-router.get("/:id", (0, haspremission_1.authorizePermissions)("financial_account", "View"), (0, catchAsync_1.catchAsync)(AccountingLedger_1.getLedgerEntryById));
-exports.default = router;
+// Admin routing file index.ts already uses `authenticated` middleware globally 
+// at line 79: route.use(authenticated, authorizeRoles("admin", "superadmin"));
+// So we don't necessarily need to add it here, but we can if we want to be safe.
+const ledgerRoutes = express_1.default.Router();
+ledgerRoutes.get("/", AccountingLedger_1.getAccountingLedgers);
+ledgerRoutes.get("/:id", AccountingLedger_1.getAccountingLedgerById);
+exports.default = ledgerRoutes;
