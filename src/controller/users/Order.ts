@@ -23,7 +23,7 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 export const createOrder = async (req: Request, res: Response): Promise<any> => {
     const userId = req.user?.id;
     const sessionId = req.headers["x-session-id"] as string;
-    const { shippingAddress, paymentMethod, proofImage, orderType, warehouseId } = req.body;
+    const { shippingAddress, paymentMethod, proofImage, orderType = "delivery", warehouseId } = req.body;
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -60,8 +60,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         let rawAddressForPaymob: any = {};
         let resolvedWarehouseId: any = null;
 
-        if (!orderType) throw new BadRequest("orderType is required");
-        if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
+        // if (!orderType) throw new BadRequest("orderType is required");
+        // if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
 
         if (orderType === "pickup") {
             // PICKUP: require a warehouseId
