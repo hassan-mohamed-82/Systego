@@ -2,12 +2,24 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrderModel = void 0;
 const mongoose_1 = require("mongoose");
+const constant_1 = require("../../../types/constant");
 const orderSchema = new mongoose_1.Schema({
     user: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Customer',
         required: false,
         index: { sparse: true }
+    },
+    orderType: {
+        type: String,
+        enum: constant_1.ORDER_TYPES,
+        required: false,
+        default: 'delivery'
+    },
+    warehouse: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Warehouse',
+        required: false
     },
     cartItems: [
         {
@@ -41,7 +53,7 @@ const orderSchema = new mongoose_1.Schema({
     },
     paymentGateway: {
         type: String,
-        enum: ["manual", "paymob", "geidea"],
+        enum: ["manual", "paymob", "geidea", "fawry"],
         default: "manual"
     },
     paymentStatus: {

@@ -419,8 +419,17 @@ export const updateProduct = async (req: Request, res: Response) => {
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
-  if (code && code !== product.code) {
-    const existingCode = await ProductModel.findOne({ code, _id: { $ne: id } });
+  const hasVariations = Array.isArray(prices) && prices.length > 0;
+  const existingPrices = await ProductPriceModel.find({ productId: id });
+  const productHasVariations = hasVariations || existingPrices.length > 0;
+
+  // تحويل النص الفارغ إلى undefined لتجنب مشاكل قاعدة البيانات
+  const finalCode = code === "" ? undefined : code;
+
+  // لو البروداكت عنده variations، الكود مش مطلوب على البروداكت نفسه
+  // الكود بيبقى على كل variation/price
+  if (!productHasVariations && finalCode && finalCode !== product.code) {
+    const existingCode = await ProductModel.findOne({ code: finalCode, _id: { $ne: id } });
     if (existingCode) throw new BadRequest("Product code already exists");
   }
 
@@ -462,20 +471,30 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
   product.free_shipping = free_shipping ?? product.free_shipping;
   product.is_featured = is_featured ?? product.is_featured;
-  product.code = code ?? product.code;
+
+  // لو عنده variations، الكود مش بيتحط على البروداكت نفسه
+  if (productHasVariations) {
+    product.code = undefined as any;
+  } else {
+    // استخدمنا finalCode هنا بدلاً من code
+    product.code = finalCode ?? product.code;
+  }
 
   await product.save();
 
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
       let productPrice;
+      
+      // معالجة الـ code الخاص بالـ variations أيضاً في حال تم إرساله كنص فارغ
+      const priceCode = p.code === "" ? undefined : p.code;
 
       if (p._id) {
         productPrice = await ProductPriceModel.findByIdAndUpdate(
           p._id,
           {
             price: p.price,
-            code: p.code,
+            code: priceCode,
             quantity: p.quantity || 0,
             cost: p.cost || 0,
             strat_quantaty: p.strat_quantaty || 0,
@@ -495,7 +514,7 @@ export const updateProduct = async (req: Request, res: Response) => {
         productPrice = await ProductPriceModel.create({
           productId: product._id,
           price: p.price,
-          code: p.code,
+          code: priceCode,
           quantity: p.quantity || 0,
           cost: p.cost || 0,
           strat_quantaty: p.strat_quantaty || 0,
@@ -517,7 +536,6 @@ export const updateProduct = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Product updated successfully", product });
 };
-
 // ==================== حذف منتج ====================
 export const deleteProduct = async (req: Request, res: Response) => {
   const { id } = req.params;

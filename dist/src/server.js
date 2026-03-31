@@ -20,11 +20,12 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const helmet_1 = __importDefault(require("helmet"));
 const connection_1 = require("./models/connection");
 const expiry_lowstock_1 = require("./utils/expiry_lowstock");
+const ordertype_1 = require("./seed/ordertype");
 require("./utils/bookingcheck");
 // dotenv.config();
 const app = (0, express_1.default)();
 // 🧩 Connect to DB
-(0, connection_1.connectDB)();
+(0, connection_1.connectDB)().then(() => (0, ordertype_1.seedOrderTypes)());
 // 🧠 Security & middleware
 app.use((0, helmet_1.default)({ crossOriginResourcePolicy: false }));
 app.use((0, cors_1.default)({ origin: "*" }));

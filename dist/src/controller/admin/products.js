@@ -311,8 +311,15 @@ const updateProduct = async (req, res) => {
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
-    if (code && code !== product.code) {
-        const existingCode = await products_1.ProductModel.findOne({ code, _id: { $ne: id } });
+    const hasVariations = Array.isArray(prices) && prices.length > 0;
+    const existingPrices = await product_price_1.ProductPriceModel.find({ productId: id });
+    const productHasVariations = hasVariations || existingPrices.length > 0;
+    // تحويل النص الفارغ إلى undefined لتجنب مشاكل قاعدة البيانات
+    const finalCode = code === "" ? undefined : code;
+    // لو البروداكت عنده variations، الكود مش مطلوب على البروداكت نفسه
+    // الكود بيبقى على كل variation/price
+    if (!productHasVariations && finalCode && finalCode !== product.code) {
+        const existingCode = await products_1.ProductModel.findOne({ code: finalCode, _id: { $ne: id } });
         if (existingCode)
             throw new BadRequest_1.BadRequest("Product code already exists");
     }
@@ -352,15 +359,24 @@ const updateProduct = async (req, res) => {
     product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
     product.free_shipping = free_shipping ?? product.free_shipping;
     product.is_featured = is_featured ?? product.is_featured;
-    product.code = code ?? product.code;
+    // لو عنده variations، الكود مش بيتحط على البروداكت نفسه
+    if (productHasVariations) {
+        product.code = undefined;
+    }
+    else {
+        // استخدمنا finalCode هنا بدلاً من code
+        product.code = finalCode ?? product.code;
+    }
     await product.save();
     if (prices && Array.isArray(prices)) {
         for (const p of prices) {
             let productPrice;
+            // معالجة الـ code الخاص بالـ variations أيضاً في حال تم إرساله كنص فارغ
+            const priceCode = p.code === "" ? undefined : p.code;
             if (p._id) {
                 productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, {
                     price: p.price,
-                    code: p.code,
+                    code: priceCode,
                     quantity: p.quantity || 0,
                     cost: p.cost || 0,
                     strat_quantaty: p.strat_quantaty || 0,
@@ -379,7 +395,7 @@ const updateProduct = async (req, res) => {
                 productPrice = await product_price_1.ProductPriceModel.create({
                     productId: product._id,
                     price: p.price,
-                    code: p.code,
+                    code: priceCode,
                     quantity: p.quantity || 0,
                     cost: p.cost || 0,
                     strat_quantaty: p.strat_quantaty || 0,
