@@ -15,10 +15,11 @@ import { PaymobService } from "../../utils/paymobService";
 import { initializeGeideaPayment } from "../../utils/geadiaService";
 import { CityModels } from "../../models/schema/admin/City";
 import { ZoneModel } from "../../models/schema/admin/Zone";
+import { FawryModel } from "../../models/schema/admin/Fawry";
+import { FawryService } from "../../utils/fawryService";
 
 // ===============================
 // 🟢 CREATE ORDER
-// ===============================
 export const createOrder = async (req: Request, res: Response): Promise<any> => {
     const userId = req.user?.id;
     const sessionId = req.headers["x-session-id"] as string;
@@ -59,13 +60,10 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         let rawAddressForPaymob: any;
 
         if (typeof shippingAddress === "string") {
-            // Registered user (ID): populate to get names and prices
             const addressDoc = await AddressModel.findOne({
                 _id: shippingAddress,
                 user: userId
-            })
-                .populate("city zone country")
-                .session(session);
+            }).populate("city zone country").session(session);
 
             if (!addressDoc) throw new NotFound("Address not found");
 
@@ -78,7 +76,6 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             shippingCost = Number(populated.zone?.shipingCost || populated.city?.shipingCost || 0);
             rawAddressForPaymob = populated;
         } else {
-            // حالة الضيف (Object): نجلب الموديلات يدوياً لحساب الشحن بدقة
             const [cityDoc, zoneDoc] = await Promise.all([
                 CityModels.findById(shippingAddress.city).session(session),
                 ZoneModel.findById(shippingAddress.zone).session(session)
@@ -95,7 +92,6 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         // 4️⃣ Shipping Settings
         const productIds = cart.cartItems.map((i) => i.product);
-
         const freeShippingProductsCount = await ProductModel.countDocuments({
             _id: { $in: productIds },
             free_shipping: true,
@@ -105,17 +101,12 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             singletonKey: "default",
         }).session(session);
 
-
-
         if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
             shippingCost = 0;
         } else if (shippingSettings?.shippingMethod === "flat_rate") {
             shippingCost = Number(shippingSettings.flatRate || 0);
         } else {
-            shippingCost =
-                Number(rawAddressForPaymob.zone?.shipingCost) ||
-                Number(rawAddressForPaymob.city?.shipingCost) ||
-                0;
+            shippingCost = Number(rawAddressForPaymob.zone?.shipingCost) || Number(rawAddressForPaymob.city?.shipingCost) || 0;
         }
 
         // 5️⃣ Products & Stock
@@ -145,48 +136,38 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         const totalPrice = productsTotal + shippingCost;
 
+        // جلب إعدادات بوابات الدفع
         const geideaConfig = paymentMethodDoc.type === "automatic"
-            ? await GeideaModel.findOne({
-                payment_method_id: paymentMethodDoc._id,
-                isActive: true,
-            }).session(session)
-            : null;
+            ? await GeideaModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
 
         const paymobConfig = paymentMethodDoc.type === "automatic"
-            ? await PaymobModel.findOne({
-                payment_method_id: paymentMethodDoc._id,
-                isActive: true,
-            }).session(session)
-            : null;
+            ? await PaymobModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
 
-        let paymentGateway: "manual" | "paymob" | "geidea" = "manual";
+        const fawryConfig = paymentMethodDoc.type === "automatic"
+            ? await FawryModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
+
+        let paymentGateway: "manual" | "paymob" | "geidea" | "fawry" = "manual";
         if (paymentMethodDoc.type === "automatic") {
-            if (geideaConfig) {
-                paymentGateway = "geidea";
-            } else if (paymobConfig) {
-                paymentGateway = "paymob";
-            } else {
-                throw new BadRequest("No active automatic gateway config found for selected payment method");
-            }
+            if (geideaConfig) paymentGateway = "geidea";
+            else if (paymobConfig) paymentGateway = "paymob";
+            else if (fawryConfig) paymentGateway = "fawry";
+            else throw new BadRequest("No active automatic gateway config found for selected payment method");
         }
 
         // 6️⃣ Create Order
         const order = await OrderModel.create(
-            [
-                {
-                    user: userId || null,
-                    cartItems: finalItems,
-                    shippingAddress: shippingAddressData,
-                    shippingPrice: shippingCost,
-                    totalOrderPrice: totalPrice,
-                    paymentMethod: paymentMethod.toString(),
-                    proofImage,
-                    status: "pending",
-                    paymentGateway,
-                    paymentStatus:
-                        paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-                },
-            ],
+            [{
+                user: userId || null,
+                cartItems: finalItems,
+                shippingAddress: shippingAddressData,
+                shippingPrice: shippingCost,
+                totalOrderPrice: totalPrice,
+                paymentMethod: paymentMethod.toString(),
+                proofImage,
+                status: "pending",
+                paymentGateway,
+                paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+            }],
             { session }
         );
 
@@ -194,27 +175,18 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         let shouldClearCart = true;
 
         // ===============================
-        // 🟢 PAYMOB INTEGRATION
+        // 🟢 PAYMENT INTEGRATIONS
         // ===============================
-        if (paymentGateway === "paymob" || paymentGateway === "geidea") {
+        if (paymentGateway !== "manual") {
             try {
+                const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
+
                 if (paymentGateway === "paymob") {
                     if (!paymobConfig) throw new BadRequest("Paymob not configured");
 
-                    // للضيوف: نحاول نجيب بيانات العميل لو موجود أو نستخدم بيانات افتراضية
-                    const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
-
-                    const authToken = await PaymobService.getAuthToken(
-                        paymobConfig.api_key
-                    );
-
+                    const authToken = await PaymobService.getAuthToken(paymobConfig.api_key);
                     const amountCents = Math.round(totalPrice * 100);
-
-                    const paymobOrderId = await PaymobService.createOrder(
-                        authToken,
-                        amountCents,
-                        order[0]._id.toString()
-                    );
+                    const paymobOrderId = await PaymobService.createOrder(authToken, amountCents, order[0]._id.toString());
 
                     const billingData = {
                         first_name: customer?.name || "Guest",
@@ -233,39 +205,24 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                     };
 
                     const paymentToken = await PaymobService.generatePaymentKey(
-                        authToken,
-                        amountCents,
-                        paymobOrderId,
-                        Number(paymobConfig.integration_id),
-                        billingData
+                        authToken, amountCents, paymobOrderId, Number(paymobConfig.integration_id), billingData
                     );
 
-                    const iframeUrl = PaymobService.getIframeUrl(
-                        paymobConfig.iframe_id,
-                        paymentToken
-                    );
+                    const iframeUrl = PaymobService.getIframeUrl(paymobConfig.iframe_id, paymentToken);
 
                     order[0].paymobOrderId = String(paymobOrderId);
                     order[0].paymobIframeUrl = iframeUrl;
-
                     await order[0].save({ session });
 
-                    paymentData = {
-                        paymobOrderId: String(paymobOrderId),
-                        iframeUrl,
-                    };
-                } else {
-                    if (!geideaConfig) throw new BadRequest("Geidea not configured");
+                    paymentData = { paymobOrderId: String(paymobOrderId), iframeUrl };
 
-                    const customer = userId ? await CustomerModel.findById(userId).session(session) : null;
+                } else if (paymentGateway === "geidea") {
+                    if (!geideaConfig) throw new BadRequest("Geidea not configured");
 
                     const geideaPayment = await initializeGeideaPayment({
                         localOrderId: order[0]._id.toString(),
                         amount: totalPrice,
-                        geideaConfig: {
-                            publicKey: geideaConfig.publicKey,
-                            apiPassword: geideaConfig.apiPassword,
-                        },
+                        geideaConfig: { publicKey: geideaConfig.publicKey, apiPassword: geideaConfig.apiPassword },
                         customer,
                         address: rawAddressForPaymob,
                     });
@@ -273,12 +230,46 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                     (order[0] as any).geideaSessionId = geideaPayment.geideaSessionId;
                     await order[0].save({ session });
 
+                    paymentData = { geideaSessionId: geideaPayment.geideaSessionId, iframeUrl: geideaPayment.iframeUrl };
+
+                } else if (paymentGateway === "fawry") {
+                    if (!fawryConfig) throw new BadRequest("Fawry not configured");
+
+                    const fawryItems = finalItems.map(item => ({
+                        itemId: item.product.toString(),
+                        description: "Product",
+                        price: item.price,
+                        quantity: item.quantity
+                    }));
+
+                    if (shippingCost > 0) {
+                        fawryItems.push({ itemId: "SHIPPING", description: "Shipping Fees", price: shippingCost, quantity: 1 });
+                    }
+
+                    const fawryPayment: any = await FawryService.createChargeRequest({
+                        merchantCode: fawryConfig.merchantCode,
+                        secureKey: fawryConfig.secureKey,
+                        merchantRefNum: order[0]._id.toString(),
+                        customerProfileId: userId?.toString() || "guest",
+                        customerName: customer?.name || "Guest Customer",
+                        customerMobile: customer?.phone_number || "01000000000",
+                        customerEmail: customer?.email || "guest@systego.com",
+                        amount: totalPrice,
+                        returnUrl: process.env.FAWRY_RETURN_URL || "https://bcknd.systego.net/api/payment/success",
+                        items: fawryItems,
+                        isSandbox: fawryConfig.sandboxMode
+                    });
+
+                    (order[0] as any).fawryReferenceId = fawryPayment.referenceNumber;
+                    await order[0].save({ session });
+
                     paymentData = {
-                        geideaSessionId: geideaPayment.geideaSessionId,
-                        iframeUrl: geideaPayment.iframeUrl,
+                        referenceNumber: fawryPayment.referenceNumber,
+                        iframeUrl: fawryPayment.nextAction?.redirectUrl || null,
                     };
                 }
             } catch (gatewayError: any) {
+                // إرجاع الكميات للمخزن في حالة فشل البوابة
                 for (const item of finalItems) {
                     await ProductModel.updateOne(
                         { _id: item.product },
@@ -291,14 +282,13 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                 order[0].paymentStatus = "failed";
 
                 if (paymentGateway === "paymob") {
-                    order[0].paymobCallbackPayload = {
-                        paymentInitError: gatewayError?.message || "Payment initialization failed",
-                    };
-                } else {
-                    (order[0] as any).geideaCallbackPayload = {
-                        paymentInitError: gatewayError?.message || "Payment initialization failed",
-                    };
+                    order[0].paymobCallbackPayload = { paymentInitError: gatewayError?.message || "Payment initialization failed" };
+                } else if (paymentGateway === "geidea") {
+                    (order[0] as any).geideaCallbackPayload = { paymentInitError: gatewayError?.message || "Payment initialization failed" };
                     order[0].markModified("geideaCallbackPayload");
+                } else if (paymentGateway === "fawry") {
+                    (order[0] as any).fawryCallbackPayload = { paymentInitError: gatewayError?.message || "Payment initialization failed" };
+                    order[0].markModified("fawryCallbackPayload");
                 }
 
                 await order[0].save({ session });
@@ -321,15 +311,12 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         isTransactionCommitted = true;
         session.endSession();
 
-        return SuccessResponse(
-            res,
-            {
-                message: "Order created successfully",
-                order: order[0],
-                payment: paymentData,
-            },
-            201
-        );
+        return SuccessResponse(res, {
+            message: "Order created successfully",
+            order: order[0],
+            payment: paymentData,
+        }, 201);
+
     } catch (err) {
         if (!isTransactionCommitted) {
             await session.abortTransaction();

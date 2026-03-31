@@ -72,6 +72,7 @@ import  GeideaRouter from "./Geidea";
 import PayableRouter from "./Payable";
 import ReceivableRouter from "./Receivable";
 import AccountingLedgerRouter from "./AccountingLedger";
+import FawryRouter from "./Fawry";
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter)
@@ -148,5 +149,6 @@ route.use("/online-orders", onlineOrderRouter)
 route.use("/payable", PayableRouter)
 route.use("/receivable", ReceivableRouter)
 route.use("/ledger", AccountingLedgerRouter)
+route.use("/fawry", FawryRouter)
 
 export default route;
