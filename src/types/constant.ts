@@ -61,6 +61,7 @@ export const MODULES = [
   "decimal_setting",
   "service_fees",
   "courier",
+  "orderType",
   
 ] as const;
 
@@ -69,6 +70,10 @@ export const ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"] as const
 
 export const BANNER_PAGES = ["login", "home", "brand", "category", "signup"] as const;
 
+export const ORDER_TYPES = ["delivery", "pickup"] as const;
+
 export type ModuleName = (typeof MODULES)[number];
 export type ActionName = (typeof ACTION_NAMES)[number];
 export type BannerPage = (typeof BANNER_PAGES)[number];
+export type OrderType = (typeof ORDER_TYPES)[number];
+

@@ -10,6 +10,8 @@ import bannerRouter from "./banner";
 import wishlistRouter from "./wishlist";
 import paymentMethodRouter from "./paymentmethod";
 import tenantInfoRouter from "../admin/tenantInfo";
+import orderTypeRouter from "./ordertype";
+import warehouseRouter from "./Warehouse";
 
 const userRoute = Router();
 
@@ -27,5 +29,7 @@ userRoute.use("/payment-methods", paymentMethodRouter);
 userRoute.use("/address", addressRouter);
 userRoute.use("/cart", cartRouter);
 userRoute.use("/order", orderRouter);
+userRoute.use("/order-type", orderTypeRouter);
+userRoute.use("/warehouse", warehouseRouter);
 
 export default userRoute;

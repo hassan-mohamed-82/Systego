@@ -15,6 +15,7 @@ import { PaymobService } from "../../utils/paymobService";
 import { initializeGeideaPayment } from "../../utils/geadiaService";
 import { CityModels } from "../../models/schema/admin/City";
 import { ZoneModel } from "../../models/schema/admin/Zone";
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { FawryModel } from "../../models/schema/admin/Fawry";
 import { FawryService } from "../../utils/fawryService";
 
@@ -23,7 +24,7 @@ import { FawryService } from "../../utils/fawryService";
 export const createOrder = async (req: Request, res: Response): Promise<any> => {
     const userId = req.user?.id;
     const sessionId = req.headers["x-session-id"] as string;
-    const { shippingAddress, paymentMethod, proofImage } = req.body;
+    const { shippingAddress, paymentMethod, proofImage, orderType, warehouseId } = req.body;
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -54,59 +55,85 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             throw new BadRequest("Proof image required for manual payment");
         }
 
-        // 3️⃣ Hybrid Address Logic
-        let shippingAddressData: any;
+        // 3️⃣ Address / Warehouse Logic based on orderType
+        let shippingAddressData: any = null;
         let shippingCost = 0;
-        let rawAddressForPaymob: any;
+        let rawAddressForPaymob: any = {};
+        let resolvedWarehouseId: any = null;
 
-        if (typeof shippingAddress === "string") {
-            const addressDoc = await AddressModel.findOne({
-                _id: shippingAddress,
-                user: userId
-            }).populate("city zone country").session(session);
+        if (!orderType) throw new BadRequest("orderType is required");
+        if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
 
-            if (!addressDoc) throw new NotFound("Address not found");
-
-            const populated = addressDoc as any;
-            shippingAddressData = {
-                details: `${populated.street}`,
-                city: populated.city?.name || "",
-                zone: populated.zone?.name || "",
-            };
-            shippingCost = Number(populated.zone?.shipingCost || populated.city?.shipingCost || 0);
-            rawAddressForPaymob = populated;
+        if (orderType === "pickup") {
+            // PICKUP: require a warehouseId
+            if (!warehouseId) throw new BadRequest("warehouseId is required for pickup orders");
+            const warehouse = await WarehouseModel.findOne({ _id: warehouseId, Is_Online: true }).session(session);
+            if (!warehouse) throw new NotFound("Warehouse not found or not available");
+            resolvedWarehouseId = warehouse._id;
+            shippingCost = 0; // no shipping for pickup
         } else {
-            const [cityDoc, zoneDoc] = await Promise.all([
-                CityModels.findById(shippingAddress.city).session(session),
-                ZoneModel.findById(shippingAddress.zone).session(session)
-            ]);
+            // DELIVERY: require a shippingAddress
+            if (!shippingAddress) throw new BadRequest("shippingAddress is required for delivery orders");
 
-            shippingAddressData = {
-                details: `${shippingAddress.street}`,
-                city: cityDoc?.name || "",
-                zone: zoneDoc?.name || "",
-            };
-            shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
-            rawAddressForPaymob = shippingAddress;
-        }
+            if (typeof shippingAddress === "string") {
+            // Registered user (ID): populate to get names and prices
+                const addressDoc = await AddressModel.findOne({
+                    _id: shippingAddress,
+                    user: userId
+                })
+                    .populate("city zone country")
+                    .session(session);
+
+                if (!addressDoc) throw new NotFound("Address not found");
+
+                const populated = addressDoc as any;
+                shippingAddressData = {
+                    details: `${populated.street}`,
+                    city: populated.city?.name || "",
+                    zone: populated.zone?.name || "",
+                };
+                shippingCost = Number(populated.zone?.shipingCost || populated.city?.shipingCost || 0);
+                rawAddressForPaymob = populated;
+            } else {
+            // حالة الضيف (Object): نجلب الموديلات يدوياً لحساب الشحن بدقة
+                const [cityDoc, zoneDoc] = await Promise.all([
+                    CityModels.findById(shippingAddress.city).session(session),
+                    ZoneModel.findById(shippingAddress.zone).session(session)
+                ]);
+
+                shippingAddressData = {
+                    details: `${shippingAddress.street}`,
+                    city: cityDoc?.name || "",
+                    zone: zoneDoc?.name || "",
+                };
+                shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
+                rawAddressForPaymob = shippingAddress;
+            }
 
         // 4️⃣ Shipping Settings
-        const productIds = cart.cartItems.map((i) => i.product);
-        const freeShippingProductsCount = await ProductModel.countDocuments({
-            _id: { $in: productIds },
-            free_shipping: true,
-        }).session(session);
+            const productIds = cart.cartItems.map((i) => i.product);
 
-        const shippingSettings = await ShippingSettingsModel.findOne({
-            singletonKey: "default",
-        }).session(session);
+            const freeShippingProductsCount = await ProductModel.countDocuments({
+                _id: { $in: productIds },
+                free_shipping: true,
+            }).session(session);
 
-        if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
-            shippingCost = 0;
-        } else if (shippingSettings?.shippingMethod === "flat_rate") {
-            shippingCost = Number(shippingSettings.flatRate || 0);
-        } else {
-            shippingCost = Number(rawAddressForPaymob.zone?.shipingCost) || Number(rawAddressForPaymob.city?.shipingCost) || 0;
+            const shippingSettings = await ShippingSettingsModel.findOne({
+                singletonKey: "default",
+            }).session(session);
+
+
+
+            if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
+                shippingCost = 0;
+            } else if (shippingSettings?.shippingMethod === "flat_rate") {
+                shippingCost = Number(shippingSettings.flatRate || 0);
+            } else {
+                shippingCost =
+                    Number(rawAddressForPaymob.zone?.shipingCost) ||
+                    Number(rawAddressForPaymob.city?.shipingCost) ||
+                    0;
+            }
         }
 
         // 5️⃣ Products & Stock
@@ -156,18 +183,23 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         // 6️⃣ Create Order
         const order = await OrderModel.create(
-            [{
-                user: userId || null,
-                cartItems: finalItems,
-                shippingAddress: shippingAddressData,
-                shippingPrice: shippingCost,
-                totalOrderPrice: totalPrice,
-                paymentMethod: paymentMethod.toString(),
-                proofImage,
-                status: "pending",
-                paymentGateway,
-                paymentStatus: paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-            }],
+            [
+                {
+                    user: userId || null,
+                    orderType,
+                    warehouse: resolvedWarehouseId || undefined,
+                    cartItems: finalItems,
+                    shippingAddress: shippingAddressData,
+                    shippingPrice: shippingCost,
+                    totalOrderPrice: totalPrice,
+                    paymentMethod: paymentMethod.toString(),
+                    proofImage,
+                    status: "pending",
+                    paymentGateway,
+                    paymentStatus:
+                        paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+                },
+            ],
             { session }
         );
 
