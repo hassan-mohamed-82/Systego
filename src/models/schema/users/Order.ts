@@ -51,7 +51,7 @@ const orderSchema = new Schema({
   },
   paymentGateway: {
     type: String,
-    enum: ["manual", "paymob", "geidea"],
+    enum: ["manual", "paymob", "geidea","fawry"],
     default: "manual"
   },
   paymentStatus: {
