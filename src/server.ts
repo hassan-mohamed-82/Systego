@@ -16,13 +16,14 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { connectDB } from "./models/connection";
 import { startCron } from "./utils/expiry_lowstock";
+import { seedOrderTypes } from "./seed/ordertype";
 import "./utils/bookingcheck"
 
 // dotenv.config();
 const app = express();
 
 // 🧩 Connect to DB
-connectDB();
+connectDB().then(() => seedOrderTypes());
 
 // 🧠 Security & middleware
 app.use(helmet({ crossOriginResourcePolicy: false }));

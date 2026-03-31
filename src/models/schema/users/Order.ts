@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { ORDER_TYPES } from '../../../types/constant';
 
 const orderSchema = new Schema({
   user: {
@@ -6,6 +7,17 @@ const orderSchema = new Schema({
     ref: 'Customer',
     required: false,
     index: { sparse: true }
+  },
+  orderType: {
+    type: String,
+    enum: ORDER_TYPES,
+    required: true,
+    default: 'delivery'
+  },
+  warehouse: {
+    type: Schema.Types.ObjectId,
+    ref: 'Warehouse',
+    required: false
   },
   cartItems: [
     {
