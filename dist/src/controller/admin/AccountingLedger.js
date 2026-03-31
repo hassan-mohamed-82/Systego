@@ -1,68 +1,137 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLedgerEntryById = exports.getLedgerEntries = void 0;
-const mongoose_1 = __importDefault(require("mongoose"));
-const AccountingLedger_1 = require("../../models/schema/admin/AccountingLedger");
-const Errors_1 = require("../../Errors");
+exports.getAccountingLedgerById = exports.getAccountingLedgers = void 0;
+const Revenue_1 = require("../../models/schema/admin/Revenue");
 const response_1 = require("../../utils/response");
-const getLedgerEntries = async (req, res) => {
-    const { account_id, entry_type, start_date, end_date, reference_type, reference_id } = req.query;
-    const filter = {};
-    if (account_id) {
-        if (!mongoose_1.default.Types.ObjectId.isValid(String(account_id))) {
-            throw new Errors_1.BadRequest("Invalid account_id");
+const getAccountingLedgers = async (req, res) => {
+    try {
+        const { page = 1, limit = 10, transactionType, actionType, startDate, endDate, } = req.query;
+        const currentPage = parseInt(page, 10) || 1;
+        const itemsPerPage = parseInt(limit, 10) || 10;
+        const skip = (currentPage - 1) * itemsPerPage;
+        let dateFilter = {};
+        if (startDate || endDate) {
+            if (startDate)
+                dateFilter.$gte = new Date(startDate);
+            if (endDate)
+                dateFilter.$lte = new Date(endDate);
         }
-        filter.account_id = account_id;
-    }
-    if (entry_type) {
-        if (!["debit", "credit"].includes(String(entry_type))) {
-            throw new Errors_1.BadRequest("entry_type must be debit or credit");
+        else {
+            dateFilter = null;
         }
-        filter.entry_type = entry_type;
+        // Instead of querying a central collection, we create an aggregation 
+        // using $unionWith across Revenues, Expenses, Purchases, and Sales.
+        const pipeline = [
+            {
+                $project: {
+                    transactionType: { $literal: "Revenue" },
+                    actionType: { $literal: "credit" },
+                    amount: "$amount",
+                    date: { $ifNull: ["$date", "$createdAt"] },
+                    reference_id: "$_id",
+                    reference: "$name",
+                    note: "$note",
+                }
+            },
+            {
+                $unionWith: {
+                    coll: "expenses",
+                    pipeline: [
+                        {
+                            $project: {
+                                transactionType: { $literal: "Expense" },
+                                actionType: { $literal: "debit" },
+                                amount: "$amount",
+                                date: { $ifNull: ["$date", "$createdAt"] },
+                                reference_id: "$_id",
+                                reference: "$name",
+                                note: "$note",
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unionWith: {
+                    coll: "purchases",
+                    pipeline: [
+                        {
+                            $project: {
+                                transactionType: { $literal: "Purchase" },
+                                actionType: { $literal: "debit" },
+                                amount: "$grand_total",
+                                date: { $ifNull: ["$date", "$createdAt"] },
+                                reference_id: "$_id",
+                                reference: "$reference",
+                                note: "$note",
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                $unionWith: {
+                    coll: "sales",
+                    pipeline: [
+                        {
+                            $project: {
+                                transactionType: { $literal: "Sale" },
+                                actionType: { $literal: "credit" },
+                                amount: "$paid_amount",
+                                date: { $ifNull: ["$date", "$createdAt"] },
+                                reference_id: "$_id",
+                                reference: "$reference",
+                                note: "$note",
+                            }
+                        }
+                    ]
+                }
+            }
+        ];
+        // Global Match Filter on the unified stream
+        const matchFilter = {};
+        if (transactionType)
+            matchFilter.transactionType = transactionType;
+        if (actionType)
+            matchFilter.actionType = actionType;
+        if (dateFilter)
+            matchFilter.date = dateFilter;
+        if (Object.keys(matchFilter).length > 0) {
+            pipeline.push({ $match: matchFilter });
+        }
+        // Sort globally
+        pipeline.push({ $sort: { date: -1 } });
+        // We do a facet to get both the count and the paginated documents in 1 query
+        pipeline.push({
+            $facet: {
+                metadata: [{ $count: "total" }],
+                data: [{ $skip: skip }, { $limit: itemsPerPage }]
+            }
+        });
+        const result = await Revenue_1.RevenueModel.aggregate(pipeline);
+        const totalCount = result[0]?.metadata[0]?.total || 0;
+        const ledgers = result[0]?.data || [];
+        const totalPages = Math.ceil(totalCount / itemsPerPage);
+        return (0, response_1.SuccessResponse)(res, {
+            message: "Ledgers retrieved successfully",
+            data: {
+                ledgers,
+                pagination: {
+                    currentPage,
+                    itemsPerPage,
+                    totalPages,
+                    totalCount,
+                },
+            },
+        });
     }
-    if (reference_type)
-        filter.reference_type = reference_type;
-    if (reference_id)
-        filter.reference_id = reference_id;
-    if (start_date || end_date) {
-        filter.entry_date = {};
-        if (start_date)
-            filter.entry_date.$gte = new Date(String(start_date));
-        if (end_date)
-            filter.entry_date.$lte = new Date(new Date(String(end_date)).setHours(23, 59, 59, 999));
+    catch (error) {
+        res.status(500).json({ message: error.message });
     }
-    const ledgerEntries = await AccountingLedger_1.AccountingLedgerModel.find(filter)
-        .populate("account_id", "name balance")
-        .sort({ entry_date: -1, createdAt: -1 });
-    const totals = ledgerEntries.reduce((acc, item) => {
-        if (item.entry_type === "debit")
-            acc.total_debit += Number(item.amount || 0);
-        else
-            acc.total_credit += Number(item.amount || 0);
-        return acc;
-    }, { total_debit: 0, total_credit: 0 });
-    return (0, response_1.SuccessResponse)(res, {
-        message: "Ledger entries retrieved successfully",
-        count: ledgerEntries.length,
-        totals,
-        ledgerEntries,
-    });
 };
-exports.getLedgerEntries = getLedgerEntries;
-const getLedgerEntryById = async (req, res) => {
-    const { id } = req.params;
-    if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
-        throw new Errors_1.BadRequest("Valid ledger entry id is required");
-    }
-    const ledgerEntry = await AccountingLedger_1.AccountingLedgerModel.findById(id).populate("account_id", "name balance");
-    if (!ledgerEntry)
-        throw new Errors_1.NotFound("Ledger entry not found");
-    return (0, response_1.SuccessResponse)(res, {
-        message: "Ledger entry retrieved successfully",
-        ledgerEntry,
-    });
+exports.getAccountingLedgers = getAccountingLedgers;
+const getAccountingLedgerById = async (req, res) => {
+    // Not heavily used if we do not route single clicks, but stubbed if needed
+    res.status(404).json({ message: "Detailed view not mapped for aggregated entities." });
 };
-exports.getLedgerEntryById = getLedgerEntryById;
+exports.getAccountingLedgerById = getAccountingLedgerById;
