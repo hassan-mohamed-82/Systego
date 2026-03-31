@@ -419,7 +419,13 @@ export const updateProduct = async (req: Request, res: Response) => {
   const product = await ProductModel.findById(id);
   if (!product) throw new NotFound("Product not found");
 
-  if (code && code !== product.code) {
+  const hasVariations = Array.isArray(prices) && prices.length > 0;
+  const existingPrices = await ProductPriceModel.find({ productId: id });
+  const productHasVariations = hasVariations || existingPrices.length > 0;
+
+  // لو البروداكت عنده variations، الكود مش مطلوب على البروداكت نفسه
+  // الكود بيبقى على كل variation/price
+  if (!productHasVariations && code && code !== product.code) {
     const existingCode = await ProductModel.findOne({ code, _id: { $ne: id } });
     if (existingCode) throw new BadRequest("Product code already exists");
   }
@@ -462,7 +468,13 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
   product.free_shipping = free_shipping ?? product.free_shipping;
   product.is_featured = is_featured ?? product.is_featured;
-  product.code = code ?? product.code;
+
+  // لو عنده variations، الكود مش بيتحط على البروداكت نفسه
+  if (productHasVariations) {
+    product.code = undefined as any;
+  } else {
+    product.code = code ?? product.code;
+  }
 
   await product.save();
 
