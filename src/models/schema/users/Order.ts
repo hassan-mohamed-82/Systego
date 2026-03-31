@@ -11,7 +11,7 @@ const orderSchema = new Schema({
   orderType: {
     type: String,
     enum: ORDER_TYPES,
-    required: true,
+    required: false,
     default: 'delivery'
   },
   warehouse: {
