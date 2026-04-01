@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import path from "path";
+
 // __dirname in your compiled file is dist/src/
 // We go up two directories to hit the root where the .env file lives
 const envPath = path.join(__dirname, '../../.env');
@@ -17,13 +18,9 @@ import helmet from "helmet";
 import { connectDB } from "./models/connection";
 import { startCron } from "./utils/expiry_lowstock";
 import { seedOrderTypes } from "./seed/ordertype";
-import "./utils/bookingcheck"
+import "./utils/bookingcheck";
 
-// dotenv.config();
 const app = express();
-
-// 🧩 Connect to DB
-connectDB().then(() => seedOrderTypes());
 
 // 🧠 Security & middleware
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -62,12 +59,32 @@ io.on("connection", (socket) => {
   });
 });
 
-// 🕒 Start cron jobs
-startCron(io);
-
 const PORT = process.env.PORT || 3000;
 
-// 🚀 Start server
-server.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
-});
+// ==========================================
+// 🚀 التعديل الأهم: دالة مجمعة لتشغيل السيرفر
+// ==========================================
+const startServer = async () => {
+  try {
+    // 1. استنى الداتا بيز تـ connect الأول
+    await connectDB();
+    
+    // 2. بعدين استنى الـ seed يخلص
+    await seedOrderTypes();
+
+    // 3. دلوقتي بس تقدر تشغل الـ crons والسيرفر بأمان
+    startCron(io);
+
+    server.listen(PORT, () => {
+      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    });
+
+  } catch (error) {
+    // لو الداتا بيز فشلت، اقفل السيرفر بدل ما يفضل شغال على الفاضي ويجيب errors
+    console.error("❌ Failed to start the server due to database connection error!");
+    process.exit(1); 
+  }
+};
+
+// شغل الدالة
+startServer();
