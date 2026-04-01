@@ -427,7 +427,6 @@ export const updateProduct = async (req: Request, res: Response) => {
   const finalCode = code === "" ? undefined : code;
 
   // لو البروداكت عنده variations، الكود مش مطلوب على البروداكت نفسه
-  // الكود بيبقى على كل variation/price
   if (!productHasVariations && finalCode && finalCode !== product.code) {
     const existingCode = await ProductModel.findOne({ code: finalCode, _id: { $ne: id } });
     if (existingCode) throw new BadRequest("Product code already exists");
@@ -476,7 +475,6 @@ export const updateProduct = async (req: Request, res: Response) => {
   if (productHasVariations) {
     product.code = undefined as any;
   } else {
-    // استخدمنا finalCode هنا بدلاً من code
     product.code = finalCode ?? product.code;
   }
 
@@ -486,8 +484,26 @@ export const updateProduct = async (req: Request, res: Response) => {
     for (const p of prices) {
       let productPrice;
       
-      // معالجة الـ code الخاص بالـ variations أيضاً في حال تم إرساله كنص فارغ
+      // معالجة الـ code الخاص بالـ variations
       const priceCode = p.code === "" ? undefined : p.code;
+
+      // ==========================================
+      // إضافة التعديل الجديد: فحص تكرار كود السعر قبل التعديل أو الإنشاء
+      // ==========================================
+      if (priceCode) {
+        const query: any = { code: priceCode };
+        
+        // لو بنعمل Update لسعر موجود بالفعل، نستثنيه من البحث عشان مايطلعش إيرور على نفسه
+        if (p._id) {
+          query._id = { $ne: p._id };
+        }
+
+        const existingPriceCode = await ProductPriceModel.findOne(query);
+        if (existingPriceCode) {
+          throw new BadRequest(`Product price code '${priceCode}' already exists in another variation`);
+        }
+      }
+      // ==========================================
 
       if (p._id) {
         productPrice = await ProductPriceModel.findByIdAndUpdate(

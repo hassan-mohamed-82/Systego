@@ -317,7 +317,6 @@ const updateProduct = async (req, res) => {
     // تحويل النص الفارغ إلى undefined لتجنب مشاكل قاعدة البيانات
     const finalCode = code === "" ? undefined : code;
     // لو البروداكت عنده variations، الكود مش مطلوب على البروداكت نفسه
-    // الكود بيبقى على كل variation/price
     if (!productHasVariations && finalCode && finalCode !== product.code) {
         const existingCode = await products_1.ProductModel.findOne({ code: finalCode, _id: { $ne: id } });
         if (existingCode)
@@ -364,15 +363,29 @@ const updateProduct = async (req, res) => {
         product.code = undefined;
     }
     else {
-        // استخدمنا finalCode هنا بدلاً من code
         product.code = finalCode ?? product.code;
     }
     await product.save();
     if (prices && Array.isArray(prices)) {
         for (const p of prices) {
             let productPrice;
-            // معالجة الـ code الخاص بالـ variations أيضاً في حال تم إرساله كنص فارغ
+            // معالجة الـ code الخاص بالـ variations
             const priceCode = p.code === "" ? undefined : p.code;
+            // ==========================================
+            // إضافة التعديل الجديد: فحص تكرار كود السعر قبل التعديل أو الإنشاء
+            // ==========================================
+            if (priceCode) {
+                const query = { code: priceCode };
+                // لو بنعمل Update لسعر موجود بالفعل، نستثنيه من البحث عشان مايطلعش إيرور على نفسه
+                if (p._id) {
+                    query._id = { $ne: p._id };
+                }
+                const existingPriceCode = await product_price_1.ProductPriceModel.findOne(query);
+                if (existingPriceCode) {
+                    throw new BadRequest_1.BadRequest(`Product price code '${priceCode}' already exists in another variation`);
+                }
+            }
+            // ==========================================
             if (p._id) {
                 productPrice = await product_price_1.ProductPriceModel.findByIdAndUpdate(p._id, {
                     price: p.price,
