@@ -38,6 +38,7 @@ import CustomerGroupRouter from "./POS/customerGroupRoutes"
 import CustomerRouter from "./customerRoutes"
 import GiftCardRouter from "./POS/giftCardRoutes"
 import PosHomeRouter from "./POS/POSHomeRoutes"
+import POSBookingRouter from "./POS/BookingRoutes"
 import CashierShiftRouter from "./POS/CashierShiftRoutes"
 import BookingRouter from "./Booking"
 import PopupRouter from "./Popup"
@@ -123,6 +124,7 @@ route.use("/pos_customer", CustomerGroupRouter)
 route.use("/customer", CustomerRouter)
 route.use("/gift-card", GiftCardRouter)
 route.use("/pos-home", PosHomeRouter)
+route.use("/pos-booking", POSBookingRouter)
 route.use("/cashier-shift", CashierShiftRouter)
 route.use("/point", PointRouter)
 route.use("/redeem-points", redeem_PointsRouter)
