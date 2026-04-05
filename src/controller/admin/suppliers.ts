@@ -94,6 +94,15 @@ export const getSupplierById = async (req: Request, res: Response) => {
   });
 };
 
+export const getCountriesWithCities = async (req: Request, res: Response) => {
+  const countries = await CountryModel.find().populate("cities").lean();
+
+  SuccessResponse(res, {
+    message: "Countries and cities fetched successfully",
+    countries,
+  });
+};
+
 
 // ==================== Supplier Single Page ====================
 export const getSupplierSinglePage = async (req: Request, res: Response) => {

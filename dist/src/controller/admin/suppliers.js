@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSupplier = exports.updateSupplier = exports.getSupplierSinglePage = exports.getSupplierById = exports.getSuppliers = exports.createSupplier = void 0;
+exports.deleteSupplier = exports.updateSupplier = exports.getSupplierSinglePage = exports.getCountriesWithCities = exports.getSupplierById = exports.getSuppliers = exports.createSupplier = void 0;
 const suppliers_1 = require("../../models/schema/admin/suppliers");
 const handleImages_1 = require("../../utils/handleImages");
 const BadRequest_1 = require("../../Errors/BadRequest");
@@ -70,6 +70,14 @@ const getSupplierById = async (req, res) => {
     });
 };
 exports.getSupplierById = getSupplierById;
+const getCountriesWithCities = async (req, res) => {
+    const countries = await Country_1.CountryModel.find().populate("cities").lean();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Countries and cities fetched successfully",
+        countries,
+    });
+};
+exports.getCountriesWithCities = getCountriesWithCities;
 // ==================== Supplier Single Page ====================
 const getSupplierSinglePage = async (req, res) => {
     const { id } = req.params;

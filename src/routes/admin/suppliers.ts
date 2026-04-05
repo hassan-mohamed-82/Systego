@@ -1,8 +1,8 @@
 import { Router } from "express";
-import {createSupplier,getSupplierById,getSuppliers,updateSupplier,deleteSupplier,getSupplierSinglePage
+import {createSupplier,getSupplierById,getSuppliers,updateSupplier,deleteSupplier,getSupplierSinglePage,getCountriesWithCities
 } from "../../controller/admin/suppliers"
 import {validate} from"../../middlewares/validation";
-import {createSupplierSchema,updateSupplierSchema} from "../../validation/admin/suppliers"
+import {createSupplierSchema,updateSupplierSchema}from "../../validation/admin/suppliers"
 import { catchAsync } from "../../utils/catchAsync";
 import { authenticated } from "../../middlewares/authenticated";
 import {authorizePermissions} from "../../middlewares/haspremission"
@@ -11,6 +11,7 @@ const route = Router();
 
 route.post("/" ,authorizePermissions("Supplier","Add"),validate(createSupplierSchema), catchAsync(createSupplier));
 route.get("/",authorizePermissions("Supplier","View"),catchAsync(getSuppliers));
+route.get("/countries",authorizePermissions("Supplier","View"),catchAsync(getCountriesWithCities));
 route.get("/:id/details",authorizePermissions("Supplier","View"),catchAsync(getSupplierSinglePage));
 route.get("/:id" ,authorizePermissions("Supplier","View"),catchAsync(getSupplierById));
 route.put("/:id" ,authorizePermissions("Supplier","Edit"),validate(updateSupplierSchema), catchAsync(updateSupplier));
