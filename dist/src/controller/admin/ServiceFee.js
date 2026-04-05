@@ -96,7 +96,7 @@ const toggleServiceFeeStatus = async (req, res) => {
 };
 exports.toggleServiceFeeStatus = toggleServiceFeeStatus;
 const getallwarehouses = async (req, res) => {
-    const warehouses = await Warehouse_1.WarehouseModel.find({ status: "active" }).select("name");
+    const warehouses = await Warehouse_1.WarehouseModel.find().select("name");
     (0, response_1.SuccessResponse)(res, { message: "Warehouses retrieved successfully", warehouses });
 };
 exports.getallwarehouses = getallwarehouses;

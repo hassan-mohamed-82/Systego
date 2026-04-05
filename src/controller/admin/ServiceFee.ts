@@ -98,6 +98,6 @@ export const toggleServiceFeeStatus = async (req: Request, res: Response) => {
 };
 
 export const getallwarehouses= async (req: Request, res: Response) => {
-    const warehouses = await WarehouseModel.find({ status: "active" }).select("name");
+    const warehouses = await WarehouseModel.find().select("name");
     SuccessResponse(res, { message: "Warehouses retrieved successfully", warehouses });
 }
