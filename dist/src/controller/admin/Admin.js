@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSelectionData = exports.deleteUser = exports.updateUser = exports.getUserPermissions = exports.getUserById = exports.getAllUsers = exports.formatUserResponse = exports.createUser = void 0;
+exports.formatUserResponseDetailed = formatUserResponseDetailed;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const User_1 = require("../../models/schema/admin/User");
@@ -93,7 +94,7 @@ const formatUserResponse = (user) => {
         company_name: user.company_name || null,
         image_url: user.image_url || null,
         status: user.status,
-        role: user.role,
+        role: user.role, // "superadmin" or "admin"
         role_id: user.role_id?._id || user.role_id || null,
         role_name: user.role_id?.name || (user.role === "superadmin" ? "Super Admin" : null),
         warehouse_id: user.warehouse_id?._id || user.warehouse_id || null,
@@ -173,7 +174,7 @@ const getUserPermissions = async (req, res, next) => {
         throw new Errors_1.BadRequest("Invalid user ID");
     }
     const user = await User_1.UserModel.findById(id)
-        .select("username email role role_id")
+        .select("username email role role_id warehouse_id") // ضفنا warehouse_id عشان الـ check يشتغل صح
         .populate("role_id", "name permissions");
     if (!user) {
         throw new Errors_1.NotFound("User not found");
@@ -350,23 +351,37 @@ function formatUserResponseDetailed(user) {
             hasAllPermissions: true,
         };
     }
-    // لو admin عادي
-    if (user.role_id && user.role_id.permissions) {
-        base.role_id = {
-            id: user.role_id._id,
+    // تجهيز الرول بشكل آمن
+    let formattedRole = null;
+    if (user.role_id && typeof user.role_id === 'object') {
+        formattedRole = {
+            id: user.role_id._id?.toString(),
             name: user.role_id.name,
             status: user.role_id.status,
-            permissions: user.role_id.permissions.map((perm) => ({
-                module: perm.module,
-                actions: perm.actions.map((act) => ({
-                    id: act._id?.toString(),
-                    action: act.action,
-                })),
-            })),
+            permissions: user.role_id.permissions
+                ? user.role_id.permissions.map((perm) => ({
+                    module: perm.module,
+                    actions: perm.actions
+                        ? perm.actions.map((act) => ({
+                            id: act._id?.toString(),
+                            action: act.action,
+                        }))
+                        : [],
+                }))
+                : [],
         };
     }
+    else {
+        // لو الرول مش معمولها populate (عبارة عن ID فقط)
+        formattedRole = user.role_id?.toString() || null;
+    }
+    // بنمسح الـ role_id القديم عشان نرجع الشكل الأنضف
+    if (base.role_id)
+        delete base.role_id;
     return {
         ...base,
+        // سميناها role_data عشان ما تعملش Override لحقل base.role اللي جواه كلمة "admin"
+        role_data: formattedRole,
         isSuperAdmin: false,
     };
 }
@@ -374,14 +389,24 @@ function formatUserResponseDetailed(user) {
 // Get Selection Data (Warehouses + Roles)
 // =========================
 const getSelectionData = async (req, res, next) => {
-    const [warehouses, roles] = await Promise.all([
-        Warehouse_1.WarehouseModel.find().select("_id name"),
-        roles_1.RoleModel.find({ status: "active" }).select("_id name"),
-    ]);
-    (0, response_1.SuccessResponse)(res, {
-        message: "Selection data fetched successfully",
-        warehouses: warehouses.map((w) => ({ id: w._id, name: w.name })),
-        roles: roles.map((r) => ({ id: r._id, name: r.name })),
-    });
+    try {
+        const [warehouses, roles] = await Promise.all([
+            Warehouse_1.WarehouseModel.find().select("_id name"),
+            // شيلنا فلتر { status: "active" } عشان الرولز ترجع ونراجع الداتا، وضفنا ال status للـ select
+            roles_1.RoleModel.find().select("_id name status"),
+        ]);
+        (0, response_1.SuccessResponse)(res, {
+            message: "Selection data fetched successfully",
+            warehouses: warehouses.map((w) => ({ id: w._id, name: w.name })),
+            roles: roles.map((r) => ({
+                id: r._id,
+                name: r.name,
+                status: r.status // ضفناها هنا مؤقتاً عشان تتأكد من قيمتها في الداتابيز
+            })),
+        });
+    }
+    catch (error) {
+        next(error);
+    }
 };
 exports.getSelectionData = getSelectionData;
