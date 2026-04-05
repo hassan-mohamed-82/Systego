@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getLowStockProducts = exports.deletemanyproducts = exports.importProductsFromExcel = exports.modelsforselect = exports.generateProductCode = exports.generateBarcodeImageController = exports.getProductByCode = exports.deleteProduct = exports.updateProduct = exports.getOneProduct = exports.getProduct = exports.createProduct = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const products_1 = require("../../models/schema/admin/products");
 const product_price_1 = require("../../models/schema/admin/product_price");
 const product_price_2 = require("../../models/schema/admin/product_price");
@@ -378,7 +379,8 @@ const updateProduct = async (req, res) => {
                 const query = { code: priceCode };
                 // لو بنعمل Update لسعر موجود بالفعل، نستثنيه من البحث عشان مايطلعش إيرور على نفسه
                 if (p._id) {
-                    query._id = { $ne: p._id };
+                    // التعديل الجوهري هنا: تحويل الـ String إلى ObjectId عشان الـ $ne تشتغل بشكل سليم
+                    query._id = { $ne: new mongoose_1.default.Types.ObjectId(p._id) };
                 }
                 const existingPriceCode = await product_price_1.ProductPriceModel.findOne(query);
                 if (existingPriceCode) {

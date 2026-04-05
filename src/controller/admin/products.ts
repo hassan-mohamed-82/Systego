@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { ProductModel } from "../../models/schema/admin/products";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 import { ProductPriceOptionModel } from "../../models/schema/admin/product_price";
@@ -495,7 +496,8 @@ export const updateProduct = async (req: Request, res: Response) => {
         
         // لو بنعمل Update لسعر موجود بالفعل، نستثنيه من البحث عشان مايطلعش إيرور على نفسه
         if (p._id) {
-          query._id = { $ne: p._id };
+          // التعديل الجوهري هنا: تحويل الـ String إلى ObjectId عشان الـ $ne تشتغل بشكل سليم
+          query._id = { $ne: new mongoose.Types.ObjectId(p._id) }; 
         }
 
         const existingPriceCode = await ProductPriceModel.findOne(query);

@@ -44,6 +44,7 @@ const customerGroupRoutes_1 = __importDefault(require("./POS/customerGroupRoutes
 const customerRoutes_1 = __importDefault(require("./customerRoutes"));
 const giftCardRoutes_1 = __importDefault(require("./POS/giftCardRoutes"));
 const POSHomeRoutes_1 = __importDefault(require("./POS/POSHomeRoutes"));
+const BookingRoutes_1 = __importDefault(require("./POS/BookingRoutes"));
 const CashierShiftRoutes_1 = __importDefault(require("./POS/CashierShiftRoutes"));
 const Booking_1 = __importDefault(require("./Booking"));
 const Popup_1 = __importDefault(require("./Popup"));
@@ -127,6 +128,7 @@ exports.route.use("/pos_customer", customerGroupRoutes_1.default);
 exports.route.use("/customer", customerRoutes_1.default);
 exports.route.use("/gift-card", giftCardRoutes_1.default);
 exports.route.use("/pos-home", POSHomeRoutes_1.default);
+exports.route.use("/pos-booking", BookingRoutes_1.default);
 exports.route.use("/cashier-shift", CashierShiftRoutes_1.default);
 exports.route.use("/point", points_1.default);
 exports.route.use("/redeem-points", redeem_Points_1.default);

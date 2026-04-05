@@ -1,21 +1,7 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
-
-
-
-// dotenv.config();
-// export const connectDB = async () => {
-//   try {
-//     await mongoose.connect(process.env.MongoDB_URI || "",)
-//     console.log("MongoDB connected successfully");
-
-//   } catch (error) {
-//     console.error("MongoDB connection failed:", error);
-//     // process.exit(1); // Exit the process with failure
-//   }
-// };
-
+dotenv.config();
 
 export const connectDB = async () => {
   try {
@@ -25,7 +11,12 @@ export const connectDB = async () => {
       console.error("CRITICAL: MongoDB_URI is undefined. The .env file failed to load!");
       return; // Return instead of throwing, so the server stays alive!
     }
-    await mongoose.connect(uri);
+
+    // التعديل هنا: إضافة { family: 4 } كمعامل ثانٍ
+    await mongoose.connect(uri, {
+      family: 4
+    });
+    
     console.log("MongoDB connected successfully");
 
   } catch (error) {
@@ -33,19 +24,3 @@ export const connectDB = async () => {
     throw error;
   }
 };
-
-// import mongoose from "mongoose";
-
-// export const connectDB = async () => {
-//   try {
-//     await mongoose.connect('mongodb://62.84.185.153:27017/systegoMongo', {
-//       user: 'admin',
-//       pass: 'MONGO@3030',
-//       authSource: 'admin'
-//     })
-//     console.log("MongoDB connected successfully");
-//   } catch (error) {
-//     console.error("MongoDB connection failed:", error);
-//     process.exit(1);
-//   }
-// };

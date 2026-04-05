@@ -5,16 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.connectDB = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-// dotenv.config();
-// export const connectDB = async () => {
-//   try {
-//     await mongoose.connect(process.env.MongoDB_URI || "",)
-//     console.log("MongoDB connected successfully");
-//   } catch (error) {
-//     console.error("MongoDB connection failed:", error);
-//     // process.exit(1); // Exit the process with failure
-//   }
-// };
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 const connectDB = async () => {
     try {
         const uri = process.env.MongoDB_URI;
@@ -22,7 +14,10 @@ const connectDB = async () => {
             console.error("CRITICAL: MongoDB_URI is undefined. The .env file failed to load!");
             return; // Return instead of throwing, so the server stays alive!
         }
-        await mongoose_1.default.connect(uri);
+        // التعديل هنا: إضافة { family: 4 } كمعامل ثانٍ
+        await mongoose_1.default.connect(uri, {
+            family: 4
+        });
         console.log("MongoDB connected successfully");
     }
     catch (error) {
@@ -31,17 +26,3 @@ const connectDB = async () => {
     }
 };
 exports.connectDB = connectDB;
-// import mongoose from "mongoose";
-// export const connectDB = async () => {
-//   try {
-//     await mongoose.connect('mongodb://62.84.185.153:27017/systegoMongo', {
-//       user: 'admin',
-//       pass: 'MONGO@3030',
-//       authSource: 'admin'
-//     })
-//     console.log("MongoDB connected successfully");
-//   } catch (error) {
-//     console.error("MongoDB connection failed:", error);
-//     process.exit(1);
-//   }
-// };
