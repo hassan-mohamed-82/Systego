@@ -11,4 +11,5 @@ router.get("/low-stock", (0, haspremission_1.authorizePermissions)("product_ware
 router.put("/:id", (0, haspremission_1.authorizePermissions)("product_warehouse", "Edit"), (0, catchAsync_1.catchAsync)(product_warehouse_1.updateProductStock));
 router.get("/:warehouseId", (0, haspremission_1.authorizePermissions)("product_warehouse", "View"), (0, catchAsync_1.catchAsync)(product_warehouse_1.getWarehouseProducts));
 router.get("/", (0, haspremission_1.authorizePermissions)("product_warehouse", "View"), (0, catchAsync_1.catchAsync)(product_warehouse_1.getAllStocks));
+router.get("/stock/:id", (0, haspremission_1.authorizePermissions)("product_warehouse", "View"), (0, catchAsync_1.catchAsync)(product_warehouse_1.getStockById));
 exports.default = router;

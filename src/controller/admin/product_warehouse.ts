@@ -441,3 +441,56 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
     products: formattedProducts,
   });
 };
+
+
+// ==================== جلب تفاصيل مخزون معين بالـ ID ====================
+export const getStockById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  // التحقق من أن الـ ID المبعوت بصيغة صحيحة
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("Invalid Stock ID");
+  }
+
+  // البحث عن الستوك وعمل populate للبيانات المرتبطة
+  const stock = await Product_WarehouseModel.findById(id)
+    .populate({
+      path: "productId",
+      populate: [{ path: "categoryId" }, { path: "brandId" }], // لو حابب تجيب بيانات أكتر
+      select: "name ar_name code price image categoryId brandId", 
+    })
+    .populate("productPriceId", "price code quantity")
+    .populate("warehouseId", "name address")
+    .lean();
+
+  if (!stock) {
+    throw new NotFound("Stock not found");
+  }
+
+  // لو محتاج تجيب الـ Options الخاصة بالـ variation زي ما عملت في getWarehouseProducts
+  let variationOptions: any[] = [];
+  if (stock.productPriceId) {
+    const priceOptions = await ProductPriceOptionModel.find({
+      product_price_id: stock.productPriceId._id,
+    }).lean();
+
+    variationOptions = await Promise.all(
+      priceOptions.map(async (po: any) => {
+        if (!po.option_id) return null;
+        const option = await mongoose.model("Option").findById(po.option_id)
+          .populate("variationId", "name ar_name")
+          .lean();
+        return option;
+      })
+    );
+    variationOptions = variationOptions.filter((o) => o !== null);
+  }
+
+  SuccessResponse(res, {
+    message: "Stock details fetched successfully",
+    stock: {
+      ...stock,
+      variationOptions, // إرجاع الخيارات مع النتيجة
+    },
+  });
+};

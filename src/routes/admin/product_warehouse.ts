@@ -8,6 +8,7 @@ import {
   // transferStock,
   getAllStocks,
   getLowStockProducts,
+  getStockById
 } from "../../controller/admin/product_warehouse";
 import { authorizePermissions } from "../../middlewares/haspremission";
 
@@ -19,5 +20,5 @@ router.get("/low-stock", authorizePermissions("product_warehouse", "View"), catc
 router.put("/:id", authorizePermissions("product_warehouse", "Edit"), catchAsync(updateProductStock));
 router.get("/:warehouseId", authorizePermissions("product_warehouse", "View"), catchAsync(getWarehouseProducts));
 router.get("/", authorizePermissions("product_warehouse", "View"), catchAsync(getAllStocks));
-
+router.get("/stock/:id", authorizePermissions("product_warehouse", "View"), catchAsync(getStockById));
 export default router;

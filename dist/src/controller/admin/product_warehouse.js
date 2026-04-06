@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLowStockProducts = exports.getAllStocks = exports.transferStock = exports.getWarehouseProducts = exports.removeProductFromWarehouse = exports.updateProductStock = exports.addProductToWarehouse = void 0;
+exports.getStockById = exports.getLowStockProducts = exports.getAllStocks = exports.transferStock = exports.getWarehouseProducts = exports.removeProductFromWarehouse = exports.updateProductStock = exports.addProductToWarehouse = void 0;
 const products_1 = require("../../models/schema/admin/products");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
@@ -386,3 +386,48 @@ const getLowStockProducts = async (req, res) => {
     });
 };
 exports.getLowStockProducts = getLowStockProducts;
+// ==================== جلب تفاصيل مخزون معين بالـ ID ====================
+const getStockById = async (req, res) => {
+    const { id } = req.params;
+    // التحقق من أن الـ ID المبعوت بصيغة صحيحة
+    if (!id || !mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new BadRequest_1.BadRequest("Invalid Stock ID");
+    }
+    // البحث عن الستوك وعمل populate للبيانات المرتبطة
+    const stock = await Product_Warehouse_1.Product_WarehouseModel.findById(id)
+        .populate({
+        path: "productId",
+        populate: [{ path: "categoryId" }, { path: "brandId" }], // لو حابب تجيب بيانات أكتر
+        select: "name ar_name code price image categoryId brandId",
+    })
+        .populate("productPriceId", "price code quantity")
+        .populate("warehouseId", "name address")
+        .lean();
+    if (!stock) {
+        throw new NotFound_1.NotFound("Stock not found");
+    }
+    // لو محتاج تجيب الـ Options الخاصة بالـ variation زي ما عملت في getWarehouseProducts
+    let variationOptions = [];
+    if (stock.productPriceId) {
+        const priceOptions = await product_price_1.ProductPriceOptionModel.find({
+            product_price_id: stock.productPriceId._id,
+        }).lean();
+        variationOptions = await Promise.all(priceOptions.map(async (po) => {
+            if (!po.option_id)
+                return null;
+            const option = await mongoose_1.default.model("Option").findById(po.option_id)
+                .populate("variationId", "name ar_name")
+                .lean();
+            return option;
+        }));
+        variationOptions = variationOptions.filter((o) => o !== null);
+    }
+    (0, response_1.SuccessResponse)(res, {
+        message: "Stock details fetched successfully",
+        stock: {
+            ...stock,
+            variationOptions, // إرجاع الخيارات مع النتيجة
+        },
+    });
+};
+exports.getStockById = getStockById;
