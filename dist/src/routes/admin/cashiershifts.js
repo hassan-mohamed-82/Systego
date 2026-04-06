@@ -6,4 +6,5 @@ const haspremission_1 = require("../../middlewares/haspremission");
 const router = (0, express_1.Router)();
 router.get("/", (0, haspremission_1.authorizePermissions)("cashier_shift", "View"), cashiershifts_1.getAllCashierShifts);
 router.get("/:id", (0, haspremission_1.authorizePermissions)("cashier_shift", "View"), cashiershifts_1.getCashierShiftDetails);
+router.post("/close/:id", (0, haspremission_1.authorizePermissions)("cashier_shift", "Edit"), cashiershifts_1.closeCashierShift);
 exports.default = router;

@@ -176,3 +176,70 @@ export const getCashierShiftDetails = async (req: Request, res: Response) => {
     expenses,
   });
 };
+
+export const closeCashierShift = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  // التحقق من صحة الـ ID
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("Invalid shift id");
+  }
+
+  // 1) البحث عن الشيفت
+  const shift = await CashierShift.findById(id);
+
+  if (!shift) {
+    throw new NotFound("Cashier shift not found");
+  }
+
+  // 2) التأكد أن الشيفت مفتوح بالفعل وليس مغلقاً مسبقاً
+  if (shift.status === "closed") {
+    throw new BadRequest("This shift is already closed");
+  }
+
+  const shiftStartTime = new Date(shift.start_time || shift.createdAt);
+
+  // 3) حساب إجمالي المبيعات التي تمت خلال هذا الشيفت
+  const sales = await SaleModel.find({
+    shift_id: shift._id,
+    order_pending: 0,
+    createdAt: { $gte: shiftStartTime },
+  })
+    .select("grand_total")
+    .lean();
+
+  const totalSales = sales.reduce(
+    (sum, s: any) => sum + (s.grand_total || 0),
+    0
+  );
+
+  // 4) حساب إجمالي المصروفات التي تمت خلال هذا الشيفت
+  const expenses = await ExpenseModel.find({
+    shift_id: shift._id,
+    createdAt: { $gte: shiftStartTime },
+  })
+    .select("amount")
+    .lean();
+
+  const totalExpenses = expenses.reduce(
+    (sum, e: any) => sum + (e.amount || 0),
+    0
+  );
+
+  const netCashInDrawer = totalSales - totalExpenses;
+
+  // 5) تحديث بيانات الشيفت وإغلاقه
+  shift.status = "closed";
+  shift.end_time = new Date(); // تسجيل وقت الإغلاق
+  shift.total_sale_amount = totalSales; // حفظ المبيعات النهائية
+  shift.total_expenses = totalExpenses; // حفظ المصروفات النهائية
+  shift.net_cash_in_drawer = netCashInDrawer; // حفظ صافي الدرج النهائي
+
+  await shift.save();
+
+  // إرجاع الرد بنجاح
+  return SuccessResponse(res, {
+    message: "Cashier shift closed successfully",
+    shift,
+  });
+};
