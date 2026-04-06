@@ -1,7 +1,7 @@
 import Joi from "joi";
 
 export const signupSchema = Joi.object({
-  username: Joi.string().min(3).max(50).required().messages({
+  name: Joi.string().min(3).max(50).required().messages({
     "string.min": "Name must be at least 3 characters long",
     "string.max": "Name cannot exceed 50 characters",
     "any.required": "Name is required",
@@ -22,7 +22,7 @@ export const signupSchema = Joi.object({
 
 export const loginSchema = Joi.object({
   identifier: Joi.string().required().messages({
-    "any.required": "Email, Phone, or Username is required",
+    "any.required": "Email, Phone, or name is required",
   }),
   password: Joi.string().allow(""), // Allowed empty for POS users triggering OTP
 });
@@ -42,7 +42,7 @@ export const resendOtpSchema = Joi.object({
 // For POS users completing their profile
 export const completeProfileSchema = Joi.object({
   userId: Joi.string().required(),
-  username: Joi.string().min(3).max(50).required(),
+  name: Joi.string().min(3).max(50).required(),
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
   confirmPassword: Joi.string().valid(Joi.ref("password")).required().messages({
@@ -52,7 +52,7 @@ export const completeProfileSchema = Joi.object({
 });
 
 export const editProfileSchema = Joi.object({
-  username: Joi.string().min(3).max(50),
+  name: Joi.string().min(3).max(50),
   email: Joi.string().email(),
   phone: Joi.string(),
   password: Joi.string().min(6),
