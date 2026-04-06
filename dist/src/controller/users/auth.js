@@ -15,14 +15,14 @@ const sendEmails_1 = require("../../utils/sendEmails");
 const generateOtpCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 // 1. Signup
 exports.signup = (0, express_async_handler_1.default)(async (req, res) => {
-    const { username, email, phone, password, image } = req.body;
+    const { name, email, phone, password, image } = req.body;
     const existing = await customer_1.CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
     if (existing) {
         throw new Errors_1.BadRequest(existing.is_profile_complete
             ? "Customer already exists with this email or phone."
             : "You have an existing account from our store. Please login with your phone number to activate it.");
     }
-    const newUser = new customer_1.CustomerModel({ username, email, phone_number: phone, password });
+    const newUser = new customer_1.CustomerModel({ name, email, phone_number: phone, password });
     if (image) {
         newUser.imagePath = await (0, handleImages_1.saveBase64Image)(image, newUser._id.toString(), req, 'profile_images');
     }
@@ -36,9 +36,9 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res) => {
 exports.login = (0, express_async_handler_1.default)(async (req, res) => {
     const identifier = req.body.identifier || req.body.email || req.body.phone;
     if (!identifier)
-        throw new Errors_1.BadRequest('Please provide email, phone or username');
+        throw new Errors_1.BadRequest('Please provide email, phone or name');
     const user = await customer_1.CustomerModel.findOne({
-        $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { username: identifier }]
+        $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { name: identifier }]
     }).select('+password');
     // Scenario 1: User doesn't exist at all
     if (!user) {
@@ -85,7 +85,7 @@ exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res
     const identifier = req.body.identifier || req.body.email || req.body.phone;
     const { otp } = req.body;
     const user = await customer_1.CustomerModel.findOne({
-        $or: [{ email: identifier }, { phone_number: identifier }, { username: identifier }]
+        $or: [{ email: identifier }, { phone_number: identifier }, { name: identifier }]
     });
     if (!user || user.otp_code !== otp || (user.otp_expires_at && new Date() > user.otp_expires_at)) {
         throw new Errors_1.BadRequest('Invalid or expired OTP code.');
@@ -93,7 +93,7 @@ exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res
     user.otp_code = undefined;
     user.otp_expires_at = undefined;
     await user.save();
-    // If POS client, they MUST complete their profile (set password/username)
+    // If POS client, they MUST complete their profile (set password/name)
     if (!user.is_profile_complete) {
         return (0, response_1.SuccessResponse)(res, {
             message: 'OTP verified. Please set your account details.',
@@ -119,15 +119,15 @@ exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res
 });
 // 4. Complete Profile (The bridge from POS to Online)
 exports.completeProfile = (0, express_async_handler_1.default)(async (req, res) => {
-    const { userId, username, email, password, confirmPassword, image } = req.body;
+    const { userId, name, email, password, confirmPassword, image } = req.body;
     if (password !== confirmPassword) {
         throw new Errors_1.BadRequest('Passwords do not match.');
     }
     const user = await customer_1.CustomerModel.findById(userId);
     if (!user)
         throw new Errors_1.NotFound("User not found.");
-    if (username)
-        user.name = username;
+    if (name)
+        user.name = name;
     if (email)
         user.email = email;
     if (password)
@@ -152,14 +152,14 @@ exports.editProfile = (0, express_async_handler_1.default)(async (req, res) => {
         throw new Errors_1.NotFound('User not found.');
     if (user.id !== req.user?.id)
         throw new Errors_1.UnauthorizedError('Not authorized.');
-    const { phone, username, email, password, image } = req.body;
+    const { phone, name, email, password, image } = req.body;
     if (image) {
         user.imagePath = await (0, handleImages_1.saveBase64Image)(image, user.id, req, 'profile_images');
     }
     if (phone)
         user.phone_number = phone;
-    if (username)
-        user.name = username;
+    if (name)
+        user.name = name;
     if (email)
         user.email = email;
     if (password)
