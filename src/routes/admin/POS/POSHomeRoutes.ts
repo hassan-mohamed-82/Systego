@@ -1,7 +1,20 @@
 import express from 'express';
 import { getAllCategorys, getAllBrands, getProductsByCategory,
    getCashiers , getProductsByBrand, getAllSelections, getFeaturedProducts ,
-selectCashier,getActiveBundles} from '../../../controller/admin/POS/POSHomeController';
+selectCashier,getActiveBundles,
+getWarehouses,
+getAccounts,
+getTaxes,
+getDiscounts,
+getCoupons,
+getGiftCards,
+getPaymentMethods,
+getCustomers,
+getCustomerGroups,
+getDueCustomers,
+getCurrency,
+getCountries,
+getServiceFees} from '../../../controller/admin/POS/POSHomeController';
 import { authorizePermissions } from '../../../middlewares/haspremission';
 
 const router = express.Router();
@@ -25,4 +38,17 @@ router.get('/selections',authorizePermissions("POS","View"), getAllSelections);
 
 router.get('/featured',authorizePermissions("POS","View"), getFeaturedProducts);
 
+router.get('/warehouses', authorizePermissions("POS", "View"), getWarehouses);
+router.get('/accounts', authorizePermissions("POS", "View"), getAccounts);
+router.get('/taxes', authorizePermissions("POS", "View"), getTaxes);
+router.get('/discounts', authorizePermissions("POS", "View"), getDiscounts);
+router.get('/coupons', authorizePermissions("POS", "View"), getCoupons);
+router.get('/gift-cards', authorizePermissions("POS", "View"), getGiftCards);
+router.get('/payment-methods', authorizePermissions("POS", "View"), getPaymentMethods);
+router.get('/customers', authorizePermissions("POS", "View"), getCustomers);
+router.get('/customer-groups', authorizePermissions("POS", "View"), getCustomerGroups);
+router.get('/due-customers', authorizePermissions("POS", "View"), getDueCustomers);
+router.get('/currency', authorizePermissions("POS", "View"), getCurrency);
+router.get('/countries', authorizePermissions("POS", "View"), getCountries);
+router.get('/service-fees', authorizePermissions("POS", "View"), getServiceFees);
 export default router;

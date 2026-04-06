@@ -16,4 +16,17 @@ router.get('/categories/:categoryId/products', (0, haspremission_1.authorizePerm
 router.get('/brands/:brandId/products', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getProductsByBrand);
 router.get('/selections', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getAllSelections);
 router.get('/featured', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getFeaturedProducts);
+router.get('/warehouses', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getWarehouses);
+router.get('/accounts', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getAccounts);
+router.get('/taxes', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getTaxes);
+router.get('/discounts', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getDiscounts);
+router.get('/coupons', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getCoupons);
+router.get('/gift-cards', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getGiftCards);
+router.get('/payment-methods', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getPaymentMethods);
+router.get('/customers', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getCustomers);
+router.get('/customer-groups', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getCustomerGroups);
+router.get('/due-customers', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getDueCustomers);
+router.get('/currency', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getCurrency);
+router.get('/countries', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getCountries);
+router.get('/service-fees', (0, haspremission_1.authorizePermissions)("POS", "View"), POSHomeController_1.getServiceFees);
 exports.default = router;

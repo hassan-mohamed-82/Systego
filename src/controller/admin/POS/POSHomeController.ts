@@ -506,3 +506,100 @@ export const selectCashier = async (req: Request, res: Response) => {
     financialAccounts, // دي اللي تظهر في شاشة الـ POS
   });
 };
+
+
+
+// 1. Warehouses
+export const getWarehouses = async (req: Request, res: Response) => {
+    const warehouseId = req.user?.warehouse_id;
+    const warehouses = await WarehouseModel.find(warehouseId ? { _id: warehouseId } : {}).select('name');
+    SuccessResponse(res, { message: "Warehouses list", data: warehouses });
+};
+
+// 2. Bank Accounts
+export const getAccounts = async (req: Request, res: Response) => {
+    const warehouseId = req.user?.warehouse_id;
+    const accounts = await BankAccountModel.find({
+        in_POS: true,
+        status: true,
+        ...(warehouseId ? { warehouseId } : {}),
+    }).select('name balance warehouseId');
+    SuccessResponse(res, { message: "Accounts list", data: accounts });
+};
+
+// 3. Taxes
+export const getTaxes = async (req: Request, res: Response) => {
+    const taxes = await TaxesModel.find().select('name status amount type');
+    SuccessResponse(res, { message: "Taxes list", data: taxes });
+};
+
+// 4. Discounts
+export const getDiscounts = async (req: Request, res: Response) => {
+    const discounts = await DiscountModel.find().select('name status amount type');
+    SuccessResponse(res, { message: "Discounts list", data: discounts });
+};
+
+// 5. Coupons
+export const getCoupons = async (req: Request, res: Response) => {
+    const coupons = await CouponModel.find().select('coupon_code amount type minimum_amount quantity available expired_date');
+    SuccessResponse(res, { message: "Coupons list", data: coupons });
+};
+
+// 6. Gift Cards
+export const getGiftCards = async (req: Request, res: Response) => {
+    const giftCards = await GiftCardModel.find().select('code amount');
+    SuccessResponse(res, { message: "Gift Cards list", data: giftCards });
+};
+
+// 7. Payment Methods
+export const getPaymentMethods = async (req: Request, res: Response) => {
+    const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
+    SuccessResponse(res, { message: "Payment Methods list", data: paymentMethods });
+};
+
+// 8. Customers
+export const getCustomers = async (req: Request, res: Response) => {
+    const customers = await CustomerModel.find().select('name phone_number email address');
+    SuccessResponse(res, { message: "Customers list", data: customers });
+};
+
+// 9. Customer Groups
+export const getCustomerGroups = async (req: Request, res: Response) => {
+    const customerGroups = await CustomerGroupModel.find().select('name');
+    SuccessResponse(res, { message: "Customer Groups list", data: customerGroups });
+};
+
+// 10. Due Customers
+export const getDueCustomers = async (req: Request, res: Response) => {
+    const dueCustomers = await CustomerModel.find({ is_Due: true }).select('name phone_number email address amount_Due');
+    SuccessResponse(res, { message: "Due Customers list", data: dueCustomers });
+};
+
+// 11. Currency
+export const getCurrency = async (req: Request, res: Response) => {
+    // تم تصحيح المسافات في الـ select لتجنب أي أخطاء
+    const currency = await CurrencyModel.find({ isdefault: true }).select('name ar_name amount');
+    SuccessResponse(res, { message: "Currency list", data: currency });
+};
+
+// 12. Countries and Cities
+export const getCountries = async (req: Request, res: Response) => {
+    const countries = await CountryModel.find()
+        .select("name ar_name")
+        .populate({
+            path: "cities",
+            select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
+        });
+    SuccessResponse(res, { message: "Countries list", data: countries });
+};
+
+// 13. Service Fees
+export const getServiceFees = async (req: Request, res: Response) => {
+    const warehouseId = req.user?.warehouse_id;
+    const serviceFees = await ServiceFeeModel.find({
+        status: true,
+        module: 'pos',
+        $or: warehouseId ? [{ warehouseId }, { warehouseId: null }] : [{ warehouseId: null }],
+    }).select('title amount type module warehouseId');
+    SuccessResponse(res, { message: "Service fees list", data: serviceFees });
+};
