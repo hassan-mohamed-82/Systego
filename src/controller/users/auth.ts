@@ -12,7 +12,7 @@ const generateOtpCode = (): string => Math.floor(100000 + Math.random() * 900000
 
 // 1. Signup
 export const signup = asyncHandler(async (req: Request, res: Response) => {
-  const { username, email, phone, password, image } = req.body;
+  const { name, email, phone, password, image } = req.body;
 
   const existing = await CustomerModel.findOne({ $or: [{ email }, { phone_number: phone }] });
   if (existing) {
@@ -21,7 +21,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
       : "You have an existing account from our store. Please login with your phone number to activate it.");
   }
 
-  const newUser = new CustomerModel({ username, email, phone_number: phone, password });
+  const newUser = new CustomerModel({ name, email, phone_number: phone, password });
 
   if (image) {
     newUser.imagePath = await saveBase64Image(image, newUser._id.toString(), req, 'profile_images');
@@ -38,10 +38,10 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
 // 2. Login (The Main Router for Frontend)
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const identifier = req.body.identifier || req.body.email || req.body.phone;
-  if (!identifier) throw new BadRequest('Please provide email, phone or username');
+  if (!identifier) throw new BadRequest('Please provide email, phone or name');
 
   const user = await CustomerModel.findOne({
-    $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { username: identifier }]
+    $or: [{ email: identifier.toLowerCase() }, { phone_number: identifier }, { name: identifier }]
   }).select('+password');
 
   // Scenario 1: User doesn't exist at all
@@ -97,7 +97,7 @@ export const verifyOtpAndLogin = asyncHandler(async (req: Request, res: Response
   const { otp } = req.body;
 
   const user = await CustomerModel.findOne({
-    $or: [{ email: identifier }, { phone_number: identifier }, { username: identifier }]
+    $or: [{ email: identifier }, { phone_number: identifier }, { name: identifier }]
   });
 
   if (!user || user.otp_code !== otp || (user.otp_expires_at && new Date() > user.otp_expires_at)) {
@@ -108,7 +108,7 @@ export const verifyOtpAndLogin = asyncHandler(async (req: Request, res: Response
   user.otp_expires_at = undefined as any;
   await user.save();
 
-  // If POS client, they MUST complete their profile (set password/username)
+  // If POS client, they MUST complete their profile (set password/name)
   if (!user.is_profile_complete) {
     return SuccessResponse(res, {
       message: 'OTP verified. Please set your account details.',
@@ -136,7 +136,7 @@ export const verifyOtpAndLogin = asyncHandler(async (req: Request, res: Response
 
 // 4. Complete Profile (The bridge from POS to Online)
 export const completeProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { userId, username, email, password, confirmPassword, image } = req.body;
+  const { userId, name, email, password, confirmPassword, image } = req.body;
 
   if (password !== confirmPassword) {
     throw new BadRequest('Passwords do not match.');
@@ -145,7 +145,7 @@ export const completeProfile = asyncHandler(async (req: Request, res: Response) 
   const user = await CustomerModel.findById(userId);
   if (!user) throw new NotFound("User not found.");
 
-  if (username) user.name = username;
+  if (name) user.name = name;
   if (email) user.email = email;
   if (password) user.password = password;
 
@@ -171,13 +171,13 @@ export const editProfile = asyncHandler(async (req: Request, res: Response) => {
   if (!user) throw new NotFound('User not found.');
   if (user.id !== req.user?.id) throw new UnauthorizedError('Not authorized.');
 
-  const { phone, username, email, password, image } = req.body;
+  const { phone, name, email, password, image } = req.body;
 
   if (image) {
     user.imagePath = await saveBase64Image(image, user.id, req, 'profile_images');
   }
   if (phone) user.phone_number = phone;
-  if (username) user.name = username;
+  if (name) user.name = name;
   if (email) user.email = email;
   if (password) user.password = password;
 
