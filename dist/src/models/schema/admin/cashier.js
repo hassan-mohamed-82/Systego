@@ -16,15 +16,28 @@ const CashierSchema = new mongoose_1.default.Schema({
     status: { type: Boolean, default: true },
     cashier_active: { type: Boolean, default: false },
     bankAccounts: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "BankAccount" }],
+    printer_type: { type: String, enum: ["USB", "NETWORK"] },
+    // إجبار إدخال البيانات لو النوع NETWORK
+    printer_IP: {
+        type: String,
+        required: function () { return this.printer_type === "NETWORK"; }
+    },
+    printer_port: {
+        type: Number,
+        required: function () { return this.printer_type === "NETWORK"; }
+    },
+    Printer_name: {
+        type: String,
+        required: function () { return this.printer_type === "NETWORK"; }
+    },
 }, { timestamps: true });
-// ✅ Virtual للـ users بس - بإسم مختلف
+// ✅ Virtual للـ users
 CashierSchema.virtual("warehouseUsers", {
     ref: "User",
     localField: "warehouse_id",
     foreignField: "warehouseId",
     justOne: false,
 });
-// ❌ امسح الـ virtual بتاع bankAccounts لأنه موجود كـ field
 CashierSchema.set("toJSON", { virtuals: true });
 CashierSchema.set("toObject", { virtuals: true });
 exports.CashierModel = mongoose_1.default.model("Cashier", CashierSchema);

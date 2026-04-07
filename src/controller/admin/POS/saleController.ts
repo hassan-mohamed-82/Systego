@@ -20,7 +20,7 @@ import { UserModel } from '../../../models/schema/admin/User';
 import bcrypt from "bcryptjs";
 import { Product_WarehouseModel } from '../../../models/schema/admin/Product_Warehouse';
 import { ServiceFeeModel } from '../../../models/schema/admin/ServiceFee';
-
+import { CashierModel } from "../../../models/schema/admin/cashier";
 const STORE_INFO = {
   name: "SYSTEGO",
   phone: "01134567",
@@ -28,6 +28,7 @@ const STORE_INFO = {
 };
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
+
 
 export const createSale = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
@@ -732,12 +733,37 @@ export const createSale = async (req: Request, res: Response) => {
     return item;
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // ✅ الجديد: جلب بيانات الكاشير (إعدادات الطابعة) بناءً على الماكينة المرتبطة بالشيفت
+  // ═══════════════════════════════════════════════════════════
+  const currentMachineId = openShift.cashier_id;
+  const cashierMachine = await CashierModel.findById(currentMachineId);
 
+  let printerSettings = null;
+  if (cashierMachine) {
+    printerSettings = {
+      printer_type: cashierMachine.printer_type || "USB",
+      printer_IP: cashierMachine.printer_IP || null,
+      printer_port: cashierMachine.printer_port || null,
+      Printer_name: cashierMachine.Printer_name || null,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // إرجاع الاستجابة النهائية
+  // ═══════════════════════════════════════════════════════════
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`
       : "Sale created successfully",
-    store: STORE_INFO,
+    
+    // ✅ المتغير بتاعك لو موجود في الكود الأصلي (لو مش موجود شيله)
+    // store: STORE_INFO, 
+    
+    // ✅ الجديد: إعدادات الطابعة
+    printer_settings: printerSettings,
+
+    // الباقي زي ما هو بالظبط
     sale: fullSale,
     items: formattedItems,
     service_fees: appliedServiceFees,
@@ -754,7 +780,6 @@ export const createSale = async (req: Request, res: Response) => {
     },
   });
 };
-
 export const getAllSales = async (req: Request, res: Response) => {
   const sales = await SaleModel.find({ order_pending: 0 }) // ✅ المكتملة بس
     .select("reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt")
