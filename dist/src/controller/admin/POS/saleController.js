@@ -25,6 +25,7 @@ const User_1 = require("../../../models/schema/admin/User");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Product_Warehouse_1 = require("../../../models/schema/admin/Product_Warehouse");
 const ServiceFee_1 = require("../../../models/schema/admin/ServiceFee");
+const cashier_1 = require("../../../models/schema/admin/cashier");
 const STORE_INFO = {
     name: "SYSTEGO",
     phone: "01134567",
@@ -599,11 +600,32 @@ const createSale = async (req, res) => {
         }
         return item;
     });
+    // ═══════════════════════════════════════════════════════════
+    // ✅ الجديد: جلب بيانات الكاشير (إعدادات الطابعة) بناءً على الماكينة المرتبطة بالشيفت
+    // ═══════════════════════════════════════════════════════════
+    const currentMachineId = openShift.cashier_id;
+    const cashierMachine = await cashier_1.CashierModel.findById(currentMachineId);
+    let printerSettings = null;
+    if (cashierMachine) {
+        printerSettings = {
+            printer_type: cashierMachine.printer_type || "USB",
+            printer_IP: cashierMachine.printer_IP || null,
+            printer_port: cashierMachine.printer_port || null,
+            Printer_name: cashierMachine.Printer_name || null,
+        };
+    }
+    // ═══════════════════════════════════════════════════════════
+    // إرجاع الاستجابة النهائية
+    // ═══════════════════════════════════════════════════════════
     return (0, response_1.SuccessResponse)(res, {
         message: isDue
             ? `Due sale created. Amount owed: ${remainingAmount}`
             : "Sale created successfully",
-        store: STORE_INFO,
+        // ✅ المتغير بتاعك لو موجود في الكود الأصلي (لو مش موجود شيله)
+        // store: STORE_INFO, 
+        // ✅ الجديد: إعدادات الطابعة
+        printer_settings: printerSettings,
+        // الباقي زي ما هو بالظبط
         sale: fullSale,
         items: formattedItems,
         service_fees: appliedServiceFees,

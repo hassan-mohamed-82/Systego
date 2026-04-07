@@ -6,10 +6,27 @@ import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 export const createCashier = async (req: Request, res: Response) => {
-  const { name, ar_name, warehouse_id, status, bankAccounts } = req.body;
+  const { 
+    name, 
+    ar_name, 
+    warehouse_id, 
+    status, 
+    bankAccounts, 
+    printer_type, 
+    printer_IP, 
+    printer_port, 
+    Printer_name 
+  } = req.body;
 
   if (!name || !ar_name || !warehouse_id) {
     throw new BadRequest("name, ar_name and warehouse_id are required");
+  }
+
+  // ✅ التحقق من بيانات الطابعة لو نوعها شبكة
+  if (printer_type === "NETWORK") {
+    if (!printer_IP || !printer_port || !Printer_name) {
+      throw new BadRequest("printer_IP, printer_port, and Printer_name are required when printer_type is NETWORK");
+    }
   }
 
   const existingCashier = await CashierModel.findOne({ name, warehouse_id });
@@ -23,6 +40,10 @@ export const createCashier = async (req: Request, res: Response) => {
     warehouse_id,
     status,
     bankAccounts: bankAccounts || [],
+    printer_type,
+    printer_IP,
+    printer_port,
+    Printer_name,
   });
 
   SuccessResponse(res, { message: "Cashier created successfully", cashier });
@@ -39,8 +60,7 @@ export const getCashiers = async (req: Request, res: Response) => {
   const cashiers = await CashierModel.find()
     .populate("warehouse_id", "name")
     .populate("bankAccounts", "name balance status in_POS")
-    .populate("warehouseUsers", "username email role status"); // الـ virtual
-
+    .populate("warehouseUsers", "username email role status");
 
   SuccessResponse(res, {
     message: "Cashiers fetched successfully",
@@ -71,6 +91,10 @@ export const updateCashier = async (req: Request, res: Response) => {
     bankAccounts,
     addBankAccount,
     removeBankAccount,
+    printer_type,
+    printer_IP,
+    printer_port,
+    Printer_name
   } = req.body;
 
   const updateQuery: any = {};
@@ -81,6 +105,26 @@ export const updateCashier = async (req: Request, res: Response) => {
   if (ar_name !== undefined) setFields.ar_name = ar_name;
   if (warehouse_id !== undefined) setFields.warehouse_id = warehouse_id;
   if (status !== undefined) setFields.status = status;
+  
+  // حقول الطابعة
+  if (printer_type !== undefined) setFields.printer_type = printer_type;
+  if (printer_IP !== undefined) setFields.printer_IP = printer_IP;
+  if (printer_port !== undefined) setFields.printer_port = printer_port;
+  if (Printer_name !== undefined) setFields.Printer_name = Printer_name;
+
+  // ✅ التحقق أثناء التعديل لو بيغير الطابعة لـ NETWORK 
+  // (للتأكد إنه باعت باقي البيانات المطلوبة)
+  if (setFields.printer_type === "NETWORK") {
+    // يجب توفير البيانات إما في الـ body أو تكون موجودة مسبقاً، بس بنفضل نأكد عليها هنا
+    if (!printer_IP && !printer_port && !Printer_name) {
+       throw new BadRequest("You must provide printer_IP, printer_port, and Printer_name when changing printer_type to NETWORK");
+    }
+  } else if (setFields.printer_type === "USB") {
+    // اختياري: لو غير لـ USB ممكن تفضي حقول الـ Network علشان الداتا تكون نظيفة
+    setFields.printer_IP = null;
+    setFields.printer_port = null;
+    setFields.Printer_name = null;
+  }
 
   // استبدال كل الـ bankAccounts
   if (bankAccounts !== undefined) setFields.bankAccounts = bankAccounts;
@@ -96,7 +140,7 @@ export const updateCashier = async (req: Request, res: Response) => {
 
   const cashier = await CashierModel.findByIdAndUpdate(id, updateQuery, {
     new: true,
-    runValidators: true,
+    runValidators: true, // هينفذ الـ validation بتاع الموديل
   })
     .populate("warehouse_id", "name")
     .populate("bankAccounts", "name balance");
@@ -105,7 +149,6 @@ export const updateCashier = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { message: "Cashier updated successfully", cashier });
 };
-
 // جلب كل الـ Bank Accounts (للاختيار منها)
 export const getBankAccounts = async (req: Request, res: Response) => {
   const bankAccounts = await BankAccountModel.find({ status: true, in_POS: true }).select(
