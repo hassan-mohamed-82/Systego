@@ -32,11 +32,7 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
                 as: "stockEntries"
             }
         },
-        {
-            $addFields: {
-                quantity: { $sum: "$stockEntries.quantity" }
-            }
-        },
+        
 
         // ربط القسم (Populate Category)
         {
@@ -64,7 +60,6 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
         // تنظيف البيانات النهائية
         {
             $project: {
-                stockEntries: 0,
                 categoryData: 0,
                 __v: 0
             }
