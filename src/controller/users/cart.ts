@@ -1,6 +1,8 @@
 import { CartModel } from "../../models/schema/users/Cart";
 import { ProductModel } from "../../models/schema/admin/products";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import { AddressModel } from "../../models/schema/users/Address";
 import { Request, Response } from "express";
 import { SuccessResponse } from "../../utils/response";
@@ -41,7 +43,28 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
         if (existingItem) existingQuantity = existingItem.quantity;
     }
 
-    if ((item.quantity ?? 0) < existingQuantity + quantity) {
+    // جلب المخازن الأونلاين والكمية المتاحة فيها
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
+    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+
+    const stockData = await Product_WarehouseModel.aggregate([
+        {
+            $match: {
+                productId: new mongoose.Types.ObjectId(productId),
+                warehouseId: { $in: onlineWarehouseIds },
+            },
+        },
+        {
+            $group: {
+                _id: "$productId",
+                totalQuantity: { $sum: "$quantity" },
+            },
+        },
+    ]);
+
+    const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
+
+    if (availableStock < existingQuantity + quantity) {
         throw new BadRequest("Not enough stock available");
     }
 
@@ -134,7 +157,28 @@ export const updateQuantity = asyncHandler(async (req: Request, res: Response) =
     const item = await ProductModel.findById(productId);
     if (!item) throw new NotFound("Product not found");
 
-    if ((item.quantity ?? 0) < quantity) {
+    // جلب المخازن الأونلاين والكمية المتاحة فيها
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
+    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+
+    const stockData = await Product_WarehouseModel.aggregate([
+        {
+            $match: {
+                productId: new mongoose.Types.ObjectId(productId),
+                warehouseId: { $in: onlineWarehouseIds },
+            },
+        },
+        {
+            $group: {
+                _id: "$productId",
+                totalQuantity: { $sum: "$quantity" },
+            },
+        },
+    ]);
+
+    const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
+
+    if (availableStock < quantity) {
         throw new BadRequest("Not enough stock available");
     }
 
