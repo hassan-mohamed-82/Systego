@@ -1,16 +1,20 @@
-import { ProductModel } from '../../models/schema/admin/products';
-import asyncHandler from 'express-async-handler';
-import { NotFound } from '../../Errors/NotFound';
-import { SuccessResponse } from '../../utils/response';
 import { Request, Response } from "express";
-import { CustomerModel } from '../../models/schema/admin/POS/customer';
 import mongoose from 'mongoose';
+import asyncHandler from 'express-async-handler';
+import { ProductModel } from '../../models/schema/admin/products';
+import { WarehouseModel } from '../../models/schema/admin/Warehouse';
+import { CustomerModel } from '../../models/schema/admin/POS/customer';
+import { SuccessResponse } from '../../utils/response';
+import { NotFound } from '../../Errors/NotFound';
 
-// 1. Get All Products (With Wishlist Status & Quantity)
+// 1. Get All Products (With Online Quantity & Wishlist Status)
 export const getAllProducts = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    let wishlistIds: mongoose.Types.ObjectId[] = [];
+    // الخطوة 1: جلب الـ IDs للمخازن الأونلاين فقط لتقليل الـ Lookups جوه الـ Pipeline
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select('_id');
+    const onlineWarehouseIds = onlineWarehouses.map(w => w._id);
 
-    // 1. جلب قائمة الـ Wishlist لليوزر لو موجود
+    // الخطوة 2: جلب قائمة الـ Wishlist للمستخدم الحالي
+    let wishlistIds: mongoose.Types.ObjectId[] = [];
     if (req.user?.id) {
         const user = await CustomerModel.findById(req.user.id).select('wishlist');
         if (user) {
@@ -18,23 +22,38 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
         }
     }
 
-    // 2. خط الإنتاج (Aggregation Pipeline)
+    // الخطوة 3: الـ Aggregation Pipeline الرئيسي
     const productsWithStatus = await ProductModel.aggregate([
-        // ترتيب المنتجات للأحدث
+        // ترتيب المنتجات (الأحدث أولاً)
         { $sort: { created_at: -1 } },
 
-        // ربط وحساب الكمية من المخازن
+        // حساب الكمية من مخازن الأونلاين فقط
         {
             $lookup: {
-                from: "product_warehouses", // تأكد من اسم الـ collection في الداتابيز
-                localField: "_id",
-                foreignField: "productId",
-                as: "stockEntries"
+                from: "product_warehouses",
+                let: { productId: "$_id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$productId", "$$productId"] },
+                                    { $in: ["$warehouseId", onlineWarehouseIds] } // فلترة مباشرة بالـ IDs
+                                ]
+                            }
+                        }
+                    }
+                ],
+                as: "onlineStocks"
             }
         },
-        
+        {
+            $addFields: {
+                quantity: { $sum: "$onlineStocks.quantity" }
+            }
+        },
 
-        // ربط القسم (Populate Category)
+        // ربط وجلب بيانات القسم (Category)
         {
             $lookup: {
                 from: "categories",
@@ -45,7 +64,7 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
         },
         { $unwind: { path: "$categoryData", preserveNullAndEmptyArrays: true } },
 
-        // إضافة حالة المفضلة وحقول القسم المختارة
+        // إضافة حالة المفضلة وتنسيق شكل القسم
         {
             $addFields: {
                 is_favorite: { $in: ["$_id", wishlistIds] },
@@ -57,9 +76,10 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
             }
         },
 
-        // تنظيف البيانات النهائية
+        // إخفاء الحقول الوسيطة والزائدة
         {
             $project: {
+                onlineStocks: 0,
                 categoryData: 0,
                 __v: 0
             }
@@ -72,13 +92,17 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
     }, 200);
 });
 
-// 2. Get Product By ID (With Wishlist Status & Quantity)
+// 2. Get Product By ID (With Online Quantity & Wishlist Status)
 export const getProductById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     
     if (!mongoose.Types.ObjectId.isValid(id)) {
         throw new NotFound('Invalid Product ID');
     }
+
+    // نفس خطوات الفلترة المسبقة للمخازن والـ Wishlist
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select('_id');
+    const onlineWarehouseIds = onlineWarehouses.map(w => w._id);
 
     let wishlistIds: mongoose.Types.ObjectId[] = [];
     if (req.user?.id) {
@@ -89,25 +113,31 @@ export const getProductById = asyncHandler(async (req: Request, res: Response): 
     }
 
     const product = await ProductModel.aggregate([
-        // تحديد المنتج المطلوب فقط
         { $match: { _id: new mongoose.Types.ObjectId(id) } },
-
-        // حساب الكمية
         {
             $lookup: {
                 from: "product_warehouses",
-                localField: "_id",
-                foreignField: "productId",
-                as: "stockEntries"
+                let: { productId: "$_id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$productId", "$$productId"] },
+                                    { $in: ["$warehouseId", onlineWarehouseIds] }
+                                ]
+                            }
+                        }
+                    }
+                ],
+                as: "onlineStocks"
             }
         },
         {
             $addFields: {
-                quantity: { $sum: "$stockEntries.quantity" }
+                quantity: { $sum: "$onlineStocks.quantity" }
             }
         },
-
-        // ربط القسم
         {
             $lookup: {
                 from: "categories",
@@ -117,8 +147,6 @@ export const getProductById = asyncHandler(async (req: Request, res: Response): 
             }
         },
         { $unwind: { path: "$categoryData", preserveNullAndEmptyArrays: true } },
-
-        // الحالة النهائية
         {
             $addFields: {
                 is_favorite: { $in: ["$_id", wishlistIds] },
@@ -131,7 +159,7 @@ export const getProductById = asyncHandler(async (req: Request, res: Response): 
         },
         {
             $project: {
-                stockEntries: 0,
+                onlineStocks: 0,
                 categoryData: 0,
                 __v: 0
             }
@@ -144,6 +172,6 @@ export const getProductById = asyncHandler(async (req: Request, res: Response): 
 
     return SuccessResponse(res, {
         message: 'Product retrieved successfully',
-        data: product[0] // الـ aggregate ديماً بترجع array، بناخد أول عنصر
+        data: product[0]
     }, 200);
 });
