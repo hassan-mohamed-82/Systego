@@ -37,7 +37,7 @@ exports.BannerModel = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const constant_1 = require("../../../types/constant");
 const BannerSchema = new mongoose_1.Schema({
-    name: [{ type: String, enum: [...constant_1.BANNER_PAGES] }],
+    name: [{ type: String, enum: constant_1.BANNER_PAGES }],
     title: { type: String, required: false },
     description: { type: String, required: false },
     images: [{ type: String, required: true }],

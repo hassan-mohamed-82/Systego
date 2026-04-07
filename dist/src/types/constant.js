@@ -67,5 +67,6 @@ exports.MODULES = [
 ];
 // أسماء بس، من غير ids
 exports.ACTION_NAMES = ["View", "Add", "Edit", "Delete", "Status"];
+// export const BANNER_PAGES = ["login", "home", "brand", "category", "signup"] as const;
 exports.BANNER_PAGES = ["login", "home", "brand", "category", "signup"];
 exports.ORDER_TYPES = ["delivery", "pickup"];
