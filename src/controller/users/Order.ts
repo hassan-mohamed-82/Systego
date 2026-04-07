@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { CartModel } from "../../models/schema/users/Cart";
 import { OrderModel } from "../../models/schema/users/Order";
 import { ProductModel } from "../../models/schema/admin/products";
+import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import { AddressModel } from "../../models/schema/users/Address";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
 import { PaymentMethodModel } from "../../models/schema/admin/payment_methods";
@@ -140,16 +141,37 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         let productsTotal = 0;
         const finalItems: any[] = [];
 
+        // تحديد مخزن الأونلاين للطلبات الـ delivery لو مش معروف
+        if (orderType === "delivery" && !resolvedWarehouseId) {
+            const onlineWarehouse = await WarehouseModel.findOne({ Is_Online: true }).session(session);
+            if (!onlineWarehouse) throw new BadRequest("No online warehouse available for delivery");
+            resolvedWarehouseId = onlineWarehouse._id;
+        }
+
         for (const item of cart.cartItems) {
             const qty = item.quantity ?? 1;
 
-            const product = await ProductModel.findOneAndUpdate(
-                { _id: item.product, quantity: { $gte: qty } },
+            // خصم من مخزن الأونلاين (Product_Warehouse)
+            const warehouseStock = await Product_WarehouseModel.findOneAndUpdate(
+                { 
+                    productId: item.product, 
+                    warehouseId: resolvedWarehouseId,
+                    quantity: { $gte: qty } 
+                },
                 { $inc: { quantity: -qty } },
                 { new: true, session }
             );
 
-            if (!product) throw new BadRequest(`Product ${item.product} is out of stock`);
+            if (!warehouseStock) throw new BadRequest(`Product ${item.product} is out of stock in the selected warehouse`);
+
+            // تحديث الكمية الإجمالية في موديل المنتج (اختياري للمزامنة)
+            const product = await ProductModel.findByIdAndUpdate(
+                item.product,
+                { $inc: { quantity: -qty } },
+                { new: true, session }
+            );
+
+            if (!product) throw new BadRequest(`Product ${item.product} not found`);
 
             const price = product.price || 0;
             productsTotal += price * qty;
@@ -303,6 +325,11 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             } catch (gatewayError: any) {
                 // إرجاع الكميات للمخزن في حالة فشل البوابة
                 for (const item of finalItems) {
+                    await Product_WarehouseModel.updateOne(
+                        { productId: item.product, warehouseId: resolvedWarehouseId },
+                        { $inc: { quantity: item.quantity } },
+                        { session }
+                    );
                     await ProductModel.updateOne(
                         { _id: item.product },
                         { $inc: { quantity: item.quantity } },
