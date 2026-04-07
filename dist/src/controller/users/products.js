@@ -9,48 +9,128 @@ const express_async_handler_1 = __importDefault(require("express-async-handler")
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
 const customer_1 = require("../../models/schema/admin/POS/customer");
-// 1. Get All Products (With Wishlist Status)
+const mongoose_1 = __importDefault(require("mongoose"));
+// 1. Get All Products (With Wishlist Status & Quantity)
 exports.getAllProducts = (0, express_async_handler_1.default)(async (req, res) => {
-    const products = await products_1.ProductModel.find().sort({ created_at: -1 });
     let wishlistIds = [];
+    // 1. جلب قائمة الـ Wishlist لليوزر لو موجود
     if (req.user?.id) {
         const user = await customer_1.CustomerModel.findById(req.user.id).select('wishlist');
         if (user) {
-            wishlistIds = user.wishlist.map(id => id.toString());
+            wishlistIds = user.wishlist.map(id => new mongoose_1.default.Types.ObjectId(id.toString()));
         }
     }
-    const productsWithStatus = products.map(product => {
-        const productObj = product.toObject();
-        return {
-            ...productObj,
-            is_favorite: wishlistIds.includes(productObj._id.toString())
-        };
-    });
+    // 2. خط الإنتاج (Aggregation Pipeline)
+    const productsWithStatus = await products_1.ProductModel.aggregate([
+        // ترتيب المنتجات للأحدث
+        { $sort: { created_at: -1 } },
+        // ربط وحساب الكمية من المخازن
+        {
+            $lookup: {
+                from: "product_warehouses", // تأكد من اسم الـ collection في الداتابيز
+                localField: "_id",
+                foreignField: "productId",
+                as: "stockEntries"
+            }
+        },
+        // ربط القسم (Populate Category)
+        {
+            $lookup: {
+                from: "categories",
+                localField: "categoryId",
+                foreignField: "_id",
+                as: "categoryData"
+            }
+        },
+        { $unwind: { path: "$categoryData", preserveNullAndEmptyArrays: true } },
+        // إضافة حالة المفضلة وحقول القسم المختارة
+        {
+            $addFields: {
+                is_favorite: { $in: ["$_id", wishlistIds] },
+                categoryId: {
+                    _id: "$categoryData._id",
+                    name: "$categoryData.name",
+                    ar_name: "$categoryData.ar_name"
+                }
+            }
+        },
+        // تنظيف البيانات النهائية
+        {
+            $project: {
+                categoryData: 0,
+                __v: 0
+            }
+        }
+    ]);
     return (0, response_1.SuccessResponse)(res, {
         message: 'Products retrieved successfully',
         data: productsWithStatus
     }, 200);
 });
-// 2. Get Product By ID (With Wishlist Status)
+// 2. Get Product By ID (With Wishlist Status & Quantity)
 exports.getProductById = (0, express_async_handler_1.default)(async (req, res) => {
     const { id } = req.params;
-    const product = await products_1.ProductModel.findById(id);
-    if (!product) {
-        throw new NotFound_1.NotFound('Product not found');
+    if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+        throw new NotFound_1.NotFound('Invalid Product ID');
     }
-    let isFavorite = false;
+    let wishlistIds = [];
     if (req.user?.id) {
         const user = await customer_1.CustomerModel.findById(req.user.id).select('wishlist');
         if (user) {
-            isFavorite = user.wishlist.some(wishId => wishId.toString() === id);
+            wishlistIds = user.wishlist.map(id => new mongoose_1.default.Types.ObjectId(id.toString()));
         }
     }
-    const productData = {
-        ...product.toObject(),
-        is_favorite: isFavorite
-    };
+    const product = await products_1.ProductModel.aggregate([
+        // تحديد المنتج المطلوب فقط
+        { $match: { _id: new mongoose_1.default.Types.ObjectId(id) } },
+        // حساب الكمية
+        {
+            $lookup: {
+                from: "product_warehouses",
+                localField: "_id",
+                foreignField: "productId",
+                as: "stockEntries"
+            }
+        },
+        {
+            $addFields: {
+                quantity: { $sum: "$stockEntries.quantity" }
+            }
+        },
+        // ربط القسم
+        {
+            $lookup: {
+                from: "categories",
+                localField: "categoryId",
+                foreignField: "_id",
+                as: "categoryData"
+            }
+        },
+        { $unwind: { path: "$categoryData", preserveNullAndEmptyArrays: true } },
+        // الحالة النهائية
+        {
+            $addFields: {
+                is_favorite: { $in: ["$_id", wishlistIds] },
+                categoryId: {
+                    _id: "$categoryData._id",
+                    name: "$categoryData.name",
+                    ar_name: "$categoryData.ar_name"
+                }
+            }
+        },
+        {
+            $project: {
+                stockEntries: 0,
+                categoryData: 0,
+                __v: 0
+            }
+        }
+    ]);
+    if (!product || product.length === 0) {
+        throw new NotFound_1.NotFound('Product not found');
+    }
     return (0, response_1.SuccessResponse)(res, {
         message: 'Product retrieved successfully',
-        data: productData
+        data: product[0] // الـ aggregate ديماً بترجع array، بناخد أول عنصر
     }, 200);
 });
