@@ -7,6 +7,8 @@ exports.clearCart = exports.removeFromCart = exports.updateQuantity = exports.ge
 const Cart_1 = require("../../models/schema/users/Cart");
 const products_1 = require("../../models/schema/admin/products");
 const ShippingSettings_1 = require("../../models/schema/admin/ShippingSettings");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
+const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const Address_1 = require("../../models/schema/users/Address");
 const response_1 = require("../../utils/response");
 const Errors_1 = require("../../Errors");
@@ -40,7 +42,25 @@ exports.addToCart = (0, express_async_handler_1.default)(async (req, res) => {
         if (existingItem)
             existingQuantity = existingItem.quantity;
     }
-    if ((item.quantity ?? 0) < existingQuantity + quantity) {
+    // جلب المخازن الأونلاين والكمية المتاحة فيها
+    const onlineWarehouses = await Warehouse_1.WarehouseModel.find({ Is_Online: true }).select("_id");
+    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+    const stockData = await Product_Warehouse_1.Product_WarehouseModel.aggregate([
+        {
+            $match: {
+                productId: new mongoose_1.default.Types.ObjectId(productId),
+                warehouseId: { $in: onlineWarehouseIds },
+            },
+        },
+        {
+            $group: {
+                _id: "$productId",
+                totalQuantity: { $sum: "$quantity" },
+            },
+        },
+    ]);
+    const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
+    if (availableStock < existingQuantity + quantity) {
         throw new Errors_1.BadRequest("Not enough stock available");
     }
     if (cart) {
@@ -127,7 +147,25 @@ exports.updateQuantity = (0, express_async_handler_1.default)(async (req, res) =
     const item = await products_1.ProductModel.findById(productId);
     if (!item)
         throw new Errors_1.NotFound("Product not found");
-    if ((item.quantity ?? 0) < quantity) {
+    // جلب المخازن الأونلاين والكمية المتاحة فيها
+    const onlineWarehouses = await Warehouse_1.WarehouseModel.find({ Is_Online: true }).select("_id");
+    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+    const stockData = await Product_Warehouse_1.Product_WarehouseModel.aggregate([
+        {
+            $match: {
+                productId: new mongoose_1.default.Types.ObjectId(productId),
+                warehouseId: { $in: onlineWarehouseIds },
+            },
+        },
+        {
+            $group: {
+                _id: "$productId",
+                totalQuantity: { $sum: "$quantity" },
+            },
+        },
+    ]);
+    const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
+    if (availableStock < quantity) {
         throw new Errors_1.BadRequest("Not enough stock available");
     }
     const cart = await Cart_1.CartModel.findOne(query);
