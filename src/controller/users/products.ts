@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import mongoose from 'mongoose';
 import asyncHandler from 'express-async-handler';
 import { ProductModel } from '../../models/schema/admin/products';
-import { WarehouseModel } from '../../models/schema/admin/Warehouse'; // تأكد من المسار
+import { WarehouseModel } from '../../models/schema/admin/Warehouse';
 import { CustomerModel } from '../../models/schema/admin/POS/customer';
 import { SuccessResponse } from '../../utils/response';
 import { NotFound } from '../../Errors/NotFound';
