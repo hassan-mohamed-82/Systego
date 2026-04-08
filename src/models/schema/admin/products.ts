@@ -30,7 +30,7 @@ const productSchema = new mongoose.Schema(
     maximum_to_show: { type: Number },
     gallery_product: [{ type: String }],
     is_featured: { type: Boolean, default: false },
-    Is_Online: { type: Boolean, default: false }
+    Is_Online: { type: Boolean, default: true }
   },
   { timestamps: true }
 );

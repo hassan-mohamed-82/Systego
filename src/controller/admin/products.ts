@@ -47,6 +47,7 @@ export const createProduct = async (req: Request, res: Response) => {
     gallery_product,
     is_featured,
     code,
+    Is_Online,
     // بيانات المخزن
     warehouseId,
     quantity,
@@ -147,6 +148,7 @@ export const createProduct = async (req: Request, res: Response) => {
     gallery_product: galleryUrls,
     is_featured,
     free_shipping,
+    Is_Online,
   });
 
   // إضافة Stock لو فيه warehouseId
@@ -415,6 +417,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     free_shipping,
     is_featured,
     code,
+    Is_Online,
   } = req.body;
 
   const product = await ProductModel.findById(id);
@@ -471,6 +474,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
   product.free_shipping = free_shipping ?? product.free_shipping;
   product.is_featured = is_featured ?? product.is_featured;
+  product.Is_Online = Is_Online ?? product.Is_Online;
 
   // لو عنده variations، الكود مش بيتحط على البروداكت نفسه
   if (productHasVariations) {

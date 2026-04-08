@@ -43,7 +43,8 @@ export const createProductSchema = Joi.object({
   maximum_to_show: Joi.number().optional(),
   gallery_product: Joi.array().items(Joi.string()).optional(), 
   prices: Joi.array().items(priceSchema).optional(),
-  is_featured: Joi.boolean().optional()
+  is_featured: Joi.boolean().optional(),
+  Is_Online: Joi.boolean().optional(),
 });
 
 export const updateProductSchema = Joi.object({
@@ -74,5 +75,6 @@ export const updateProductSchema = Joi.object({
   maximum_to_show: Joi.number().optional(),
   gallery_product: Joi.array().items(Joi.string()).optional(), 
   prices: Joi.array().items(priceSchema).optional(),
-  is_featured: Joi.boolean().optional()
+  is_featured: Joi.boolean().optional(),
+  Is_Online: Joi.boolean().optional(),
 });
