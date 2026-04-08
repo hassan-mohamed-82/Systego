@@ -11,7 +11,7 @@ import ExcelJS from "exceljs";
 
 
 export const createcategory = async (req: Request, res: Response) => {
-  const { name, ar_name, image, parentId } = req.body;
+  const { name, ar_name, image, parentId , Is_Online } = req.body;
   
   if (!name) throw new BadRequest("Category name is required");
   
@@ -28,6 +28,7 @@ export const createcategory = async (req: Request, res: Response) => {
     ar_name,
     image: imageUrl,
     parentId: parentId && parentId !== "" ? parentId : undefined,  // 👈 لو فاضي يبقى undefined
+    Is_Online: Is_Online || true,
   });
   
   SuccessResponse(res, { message: "Category created successfully", category });
@@ -103,10 +104,11 @@ export const updateCategory = async (req: Request, res: Response) => {
   const category = await CategoryModel.findById(id);
   if (!category) throw new NotFound("Category not found");
 
-  const { name, ar_name, parentId, image } = req.body;
+  const { name, ar_name, parentId, image , Is_Online } = req.body;
 
   if (name !== undefined) category.name = name;
   if (ar_name !== undefined) category.ar_name = ar_name;
+  if (Is_Online !== undefined) category.Is_Online = Is_Online;
   
   // 👈 لو parentId فاضي أو null، شيله
   if (parentId !== undefined) {

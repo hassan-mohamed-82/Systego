@@ -391,6 +391,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 export const getMyOrders = async (req: Request, res: Response) => {
     const orders = await OrderModel.find({ user: req.user?.id })
         .populate("paymentMethod", "name ar_name")
+        .populate("warehouse", "name")
         .sort({ createdAt: -1 });
 
     SuccessResponse(res, { orders });
@@ -405,7 +406,8 @@ export const getOrderDetails = async (req: Request, res: Response) => {
         user: req.user?.id,
     })
         .populate("cartItems.product", "name image")
-        .populate("paymentMethod", "name ar_name");
+        .populate("paymentMethod", "name ar_name")
+        .populate("warehouse", "name");
 
     if (!order) throw new NotFound("Order not found");
 
