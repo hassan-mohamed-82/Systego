@@ -11,66 +11,96 @@ import mongoose from "mongoose";
 
 // ==================== إضافة منتج لمخزن (مع دعم الـ Variations) ====================
 export const addProductToWarehouse = async (req: Request, res: Response) => {
-  const { productId, productPriceId, warehouseId, quantity, low_stock } = req.body;
+  const { warehouseId, products, productId, productPriceId, quantity, low_stock } = req.body;
 
-  if (!productId) throw new BadRequest("Product ID is required");
   if (!warehouseId) throw new BadRequest("Warehouse ID is required");
 
-  const product = await ProductModel.findById(productId);
-  if (!product) throw new NotFound("Product not found");
+  let productsToAdd = products;
+
+  // Support old format (single product)
+  if (!productsToAdd && productId) {
+    productsToAdd = [{ productId, productPriceId, quantity, low_stock }];
+  }
+
+  if (!productsToAdd || !Array.isArray(productsToAdd) || productsToAdd.length === 0) {
+    throw new BadRequest("Products array or a single product is required");
+  }
 
   const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) throw new NotFound("Warehouse not found");
 
-  // ✅ لو فيه productPriceId، نتحقق منه
-  if (productPriceId) {
-    const productPrice = await ProductPriceModel.findById(productPriceId);
-    if (!productPrice) throw new NotFound("Product variation not found");
+  const results = [];
+  let totalQuantityAdded = 0;
+  let totalProductsAdded = 0;
 
-    // التأكد من أن الـ variation تابع للمنتج الصحيح
-    if (productPrice.productId.toString() !== productId) {
-      throw new BadRequest("Product variation does not belong to this product");
+  // Loop through products to validate and add
+  for (const item of productsToAdd) {
+    const itemProductId = item.productId;
+    const itemProductPriceId = item.productPriceId;
+    const itemQuantity = item.quantity || 0;
+    const itemLowStock = item.low_stock || 0;
+
+    if (!itemProductId) throw new BadRequest("Product ID is required in all items");
+
+    const product = await ProductModel.findById(itemProductId);
+    if (!product) throw new NotFound(`Product ${itemProductId} not found`);
+
+    // ✅ لو فيه productPriceId، نتحقق منه
+    if (itemProductPriceId) {
+      const productPrice = await ProductPriceModel.findById(itemProductPriceId);
+      if (!productPrice) throw new NotFound(`Product variation ${itemProductPriceId} not found`);
+
+      // التأكد من أن الـ variation تابع للمنتج الصحيح
+      if (productPrice.productId.toString() !== itemProductId.toString()) {
+        throw new BadRequest(`Product variation does not belong to this product`);
+      }
     }
-  }
 
-  // ✅ بناء query للبحث عن المنتج/الـ variation في المخزن
-  const existingQuery: any = { productId, warehouseId };
-  if (productPriceId) {
-    existingQuery.productPriceId = productPriceId;
-  } else {
-    existingQuery.productPriceId = null;
-  }
+    // ✅ بناء query للبحث عن المنتج/الـ variation في المخزن
+    const existingQuery: any = { productId: itemProductId, warehouseId };
+    if (itemProductPriceId) {
+      existingQuery.productPriceId = itemProductPriceId;
+    } else {
+      existingQuery.productPriceId = null;
+    }
 
-  const existingStock = await Product_WarehouseModel.findOne(existingQuery);
-  if (existingStock) {
-    const variationText = productPriceId ? " (this variation)" : "";
-    throw new BadRequest(`Product${variationText} already exists in this warehouse`);
-  }
+    const existingStock = await Product_WarehouseModel.findOne(existingQuery);
+    if (existingStock) {
+      const variationText = itemProductPriceId ? " (this variation)" : "";
+      throw new BadRequest(`Product ${product.name || itemProductId}${variationText} already exists in this warehouse`);
+    }
 
-  const stock = await Product_WarehouseModel.create({
-    productId,
-    productPriceId: productPriceId || null,
-    warehouseId,
-    quantity: quantity || 0,
-    low_stock: low_stock || 0,
-  });
+    const stock = await Product_WarehouseModel.create({
+      productId: itemProductId,
+      productPriceId: itemProductPriceId || null,
+      warehouseId,
+      quantity: itemQuantity,
+      low_stock: itemLowStock,
+    });
+
+    results.push(stock._id);
+    totalQuantityAdded += itemQuantity;
+    totalProductsAdded += 1;
+  }
 
   await WarehouseModel.findByIdAndUpdate(warehouseId, {
     $inc: {
-      number_of_products: 1,
-      stock_Quantity: quantity || 0,
+      number_of_products: totalProductsAdded,
+      stock_Quantity: totalQuantityAdded,
     },
   });
 
   // populate للـ response
-  const populatedStock = await Product_WarehouseModel.findById(stock._id)
+  const populatedStocks = await Product_WarehouseModel.find({ _id: { $in: results } })
     .populate("productId", "name ar_name image price")
     .populate("productPriceId", "price code")
     .populate("warehouseId", "name address");
 
   SuccessResponse(res, {
-    message: "Product added to warehouse successfully",
-    stock: populatedStock,
+    message: "Products added to warehouse successfully",
+    stocks: populatedStocks,
+    // Return single object in 'stock' property if only 1 was added for backward compatibility
+    stock: populatedStocks.length === 1 ? populatedStocks[0] : populatedStocks,
   });
 };
 
