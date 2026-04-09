@@ -10,10 +10,12 @@ exports.createCategorySchema = joi_1.default.object({
     ar_name: joi_1.default.string().required(),
     image: joi_1.default.string().optional().allow("", null),
     parentId: joi_1.default.string().optional().allow("", null),
+    Is_Online: joi_1.default.boolean().optional(),
 });
 exports.updateCategorySchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
     ar_name: joi_1.default.string().optional(),
     image: joi_1.default.string().optional().allow("", null),
     parentId: joi_1.default.string().optional().allow("", null),
+    Is_Online: joi_1.default.boolean().optional(),
 });

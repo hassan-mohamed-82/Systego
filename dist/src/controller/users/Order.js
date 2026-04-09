@@ -335,6 +335,7 @@ exports.createOrder = createOrder;
 const getMyOrders = async (req, res) => {
     const orders = await Order_1.OrderModel.find({ user: req.user?.id })
         .populate("paymentMethod", "name ar_name")
+        .populate("warehouse", "name")
         .sort({ createdAt: -1 });
     (0, response_1.SuccessResponse)(res, { orders });
 };
@@ -348,7 +349,8 @@ const getOrderDetails = async (req, res) => {
         user: req.user?.id,
     })
         .populate("cartItems.product", "name image")
-        .populate("paymentMethod", "name ar_name");
+        .populate("paymentMethod", "name ar_name")
+        .populate("warehouse", "name");
     if (!order)
         throw new Errors_1.NotFound("Order not found");
     (0, response_1.SuccessResponse)(res, { order });

@@ -33,6 +33,7 @@ const productSchema = new mongoose_1.default.Schema({
     show_quantity: { type: Boolean, default: true },
     maximum_to_show: { type: Number },
     gallery_product: [{ type: String }],
-    is_featured: { type: Boolean, default: false }
+    is_featured: { type: Boolean, default: false },
+    Is_Online: { type: Boolean, default: true }
 }, { timestamps: true });
 exports.ProductModel = mongoose_1.default.model("Product", productSchema);

@@ -41,6 +41,7 @@ const categorySchema = new mongoose_1.Schema({
     image: { type: String },
     parentId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Category" },
     product_quantity: { type: Number, default: 0 },
+    Is_Online: { type: Boolean, default: true },
 }, { timestamps: true });
 categorySchema.virtual("products", {
     ref: "Product",

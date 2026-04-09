@@ -22,7 +22,7 @@ const units_1 = require("../../models/schema/admin/units");
 const Taxes_1 = require("../../models/schema/admin/Taxes");
 const Product_Warehouse_1 = require("../../models/schema/admin/Product_Warehouse");
 const createProduct = async (req, res) => {
-    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, price, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, cost, whole_price, free_shipping, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, 
+    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, price, ar_description, description, exp_ability, minimum_quantity_sale, low_stock, cost, whole_price, free_shipping, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery_product, is_featured, code, Is_Online, 
     // بيانات المخزن
     warehouseId, quantity, } = req.body;
     if (!name)
@@ -112,6 +112,7 @@ const createProduct = async (req, res) => {
         gallery_product: galleryUrls,
         is_featured,
         free_shipping,
+        Is_Online,
     });
     // إضافة Stock لو فيه warehouseId
     let stock = null;
@@ -308,7 +309,7 @@ exports.getOneProduct = getOneProduct;
 // ==================== تحديث منتج ====================
 const updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, cost, price, description, ar_description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, free_shipping, is_featured, code, } = req.body;
+    const { name, ar_name, image, categoryId, brandId, product_unit, sale_unit, purchase_unit, cost, price, description, ar_description, exp_ability, minimum_quantity_sale, low_stock, whole_price, start_quantaty, taxesId, product_has_imei, different_price, show_quantity, maximum_to_show, prices, gallery, free_shipping, is_featured, code, Is_Online, } = req.body;
     const product = await products_1.ProductModel.findById(id);
     if (!product)
         throw new NotFound_1.NotFound("Product not found");
@@ -359,6 +360,7 @@ const updateProduct = async (req, res) => {
     product.maximum_to_show = maximum_to_show ?? product.maximum_to_show;
     product.free_shipping = free_shipping ?? product.free_shipping;
     product.is_featured = is_featured ?? product.is_featured;
+    product.Is_Online = Is_Online ?? product.Is_Online;
     // لو عنده variations، الكود مش بيتحط على البروداكت نفسه
     if (productHasVariations) {
         product.code = undefined;
@@ -465,11 +467,47 @@ const deleteProduct = async (req, res) => {
 exports.deleteProduct = deleteProduct;
 // ==================== جلب منتج بالكود ====================
 const getProductByCode = async (req, res) => {
+    // نستقبل المتغير (code) والذي قد يحتوي على كود، اسم، أو كلمة "all"
     const { code } = req.body;
     if (!code)
-        throw new BadRequest_1.BadRequest("Code is required");
-    // أولاً: دور في ProductPrice
-    const productPrice = await product_price_1.ProductPriceModel.findOne({ code }).lean();
+        throw new BadRequest_1.BadRequest("Search term (code or name) is required");
+    // تنظيف الكلمة والتأكد من حالتها
+    const searchTerm = code.toString().trim();
+    const isAll = searchTerm.toLowerCase() === "all";
+    // ---------------------------------------------------------
+    // الحالة الأولى: إذا كانت الكلمة "all"، نرجع كل المنتجات
+    // ---------------------------------------------------------
+    if (isAll) {
+        const products = await products_1.ProductModel.find()
+            .populate("categoryId")
+            .populate("brandId")
+            .populate("taxesId")
+            .lean();
+        const categories = await category_1.CategoryModel.find().lean();
+        const brands = await brand_1.BrandModel.find().lean();
+        const variations = await Variation_1.VariationModel.find().lean();
+        // جلب المخزون لكل المنتجات
+        const productIds = products.map(p => p._id);
+        const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: { $in: productIds } })
+            .populate("warehouseId", "name address")
+            .lean();
+        // ربط المخزون بكل منتج
+        const productsWithStock = products.map((product) => {
+            const productStocks = stocks.filter(s => String(s.productId) === String(product._id));
+            const totalQuantity = productStocks.reduce((sum, s) => sum + s.quantity, 0);
+            return { ...product, totalQuantity, stocks: productStocks };
+        });
+        return (0, response_1.SuccessResponse)(res, {
+            products: productsWithStock, // لاحظ: مصفوفة products
+            categories,
+            brands,
+            variations,
+        });
+    }
+    // ---------------------------------------------------------
+    // الحالة الثانية: دور في ProductPrice (نبحث هنا تطابق دقيق بالكود)
+    // ---------------------------------------------------------
+    const productPrice = await product_price_1.ProductPriceModel.findOne({ code: searchTerm }).lean();
     if (productPrice) {
         const product = await products_1.ProductModel.findById(productPrice.productId)
             .populate("categoryId")
@@ -489,7 +527,7 @@ const getProductByCode = async (req, res) => {
             const option = po.option_id;
             if (!option || !option._id)
                 return;
-            const variation = variations.find((v) => v.options.some((opt) => opt._id.toString() === option._id.toString()));
+            const variation = variations.find((v) => v.options.some((opt) => String(opt._id) === String(option._id)));
             if (variation) {
                 if (!groupedOptions[variation.name])
                     groupedOptions[variation.name] = [];
@@ -504,7 +542,6 @@ const getProductByCode = async (req, res) => {
             ...productPrice,
             variations: variationsArray,
         };
-        // Get stocks
         const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: product._id })
             .populate("warehouseId", "name address")
             .lean();
@@ -520,28 +557,37 @@ const getProductByCode = async (req, res) => {
             variations,
         });
     }
-    // ثانياً: دور في Product
-    const product = await products_1.ProductModel.findOne({ code })
+    // ---------------------------------------------------------
+    // الحالة الثالثة: دور في Product بالـ Code أو الـ Name
+    // ---------------------------------------------------------
+    const products = await products_1.ProductModel.find({
+        $or: [
+            { code: searchTerm }, // بحث دقيق بالكود
+            { name: { $regex: searchTerm, $options: "i" } } // بحث جزئي بالاسم (غير حساس للأحرف)
+        ]
+    })
         .populate("categoryId")
         .populate("brandId")
         .populate("taxesId")
         .lean();
-    if (!product)
-        throw new NotFound_1.NotFound("No product found for this code");
+    if (!products || products.length === 0)
+        throw new NotFound_1.NotFound("No products found for this search term");
     const categories = await category_1.CategoryModel.find().lean();
     const brands = await brand_1.BrandModel.find().lean();
     const variations = await Variation_1.VariationModel.find().lean();
-    // Get stocks
-    const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: product._id })
+    // جلب المخزون لكل المنتجات التي طابقت البحث
+    const productIds = products.map(p => p._id);
+    const stocks = await Product_Warehouse_1.Product_WarehouseModel.find({ productId: { $in: productIds } })
         .populate("warehouseId", "name address")
         .lean();
-    const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
-    (0, response_1.SuccessResponse)(res, {
-        product: {
-            ...product,
-            totalQuantity,
-            stocks,
-        },
+    // تجميع المخزون لكل منتج في المصفوفة
+    const productsWithStock = products.map(product => {
+        const productStocks = stocks.filter(s => String(s.productId) === String(product._id));
+        const totalQuantity = productStocks.reduce((sum, s) => sum + s.quantity, 0);
+        return { ...product, totalQuantity, stocks: productStocks };
+    });
+    return (0, response_1.SuccessResponse)(res, {
+        products: productsWithStock, // ترجع كمصفوفة لأن البحث بالاسم قد يحتوي نتائج متعددة
         categories,
         brands,
         variations,

@@ -13,7 +13,7 @@ const products_1 = require("../../models/schema/admin/products");
 const mongoose_1 = __importDefault(require("mongoose"));
 const exceljs_1 = __importDefault(require("exceljs"));
 const createcategory = async (req, res) => {
-    const { name, ar_name, image, parentId } = req.body;
+    const { name, ar_name, image, parentId, Is_Online } = req.body;
     if (!name)
         throw new BadRequest_1.BadRequest("Category name is required");
     const existingCategory = await category_1.CategoryModel.findOne({ name });
@@ -28,6 +28,7 @@ const createcategory = async (req, res) => {
         ar_name,
         image: imageUrl,
         parentId: parentId && parentId !== "" ? parentId : undefined, // 👈 لو فاضي يبقى undefined
+        Is_Online: Is_Online || true,
     });
     (0, response_1.SuccessResponse)(res, { message: "Category created successfully", category });
 };
@@ -91,11 +92,13 @@ const updateCategory = async (req, res) => {
     const category = await category_1.CategoryModel.findById(id);
     if (!category)
         throw new Errors_1.NotFound("Category not found");
-    const { name, ar_name, parentId, image } = req.body;
+    const { name, ar_name, parentId, image, Is_Online } = req.body;
     if (name !== undefined)
         category.name = name;
     if (ar_name !== undefined)
         category.ar_name = ar_name;
+    if (Is_Online !== undefined)
+        category.Is_Online = Is_Online;
     // 👈 لو parentId فاضي أو null، شيله
     if (parentId !== undefined) {
         category.parentId = parentId && parentId !== "" ? parentId : undefined;

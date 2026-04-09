@@ -597,12 +597,54 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
 // ==================== جلب منتج بالكود ====================
 export const getProductByCode = async (req: Request, res: Response) => {
-  const { code } = req.body;
+  // نستقبل المتغير (code) والذي قد يحتوي على كود، اسم، أو كلمة "all"
+  const { code } = req.body; 
 
-  if (!code) throw new BadRequest("Code is required");
+  if (!code) throw new BadRequest("Search term (code or name) is required");
 
-  // أولاً: دور في ProductPrice
-  const productPrice = await ProductPriceModel.findOne({ code }).lean();
+  // تنظيف الكلمة والتأكد من حالتها
+  const searchTerm = code.toString().trim();
+  const isAll = searchTerm.toLowerCase() === "all";
+
+  // ---------------------------------------------------------
+  // الحالة الأولى: إذا كانت الكلمة "all"، نرجع كل المنتجات
+  // ---------------------------------------------------------
+  if (isAll) {
+    const products = await ProductModel.find()
+      .populate("categoryId")
+      .populate("brandId")
+      .populate("taxesId")
+      .lean();
+
+    const categories = await CategoryModel.find().lean();
+    const brands = await BrandModel.find().lean();
+    const variations = await VariationModel.find().lean();
+
+    // جلب المخزون لكل المنتجات
+    const productIds = products.map(p => p._id);
+    const stocks = await Product_WarehouseModel.find({ productId: { $in: productIds } })
+      .populate("warehouseId", "name address")
+      .lean();
+
+    // ربط المخزون بكل منتج
+    const productsWithStock = products.map((product) => {
+      const productStocks = stocks.filter(s => String(s.productId) === String(product._id));
+      const totalQuantity = productStocks.reduce((sum, s) => sum + s.quantity, 0);
+      return { ...product, totalQuantity, stocks: productStocks };
+    });
+
+    return SuccessResponse(res, {
+      products: productsWithStock, // لاحظ: مصفوفة products
+      categories,
+      brands,
+      variations,
+    });
+  }
+
+  // ---------------------------------------------------------
+  // الحالة الثانية: دور في ProductPrice (نبحث هنا تطابق دقيق بالكود)
+  // ---------------------------------------------------------
+  const productPrice = await ProductPriceModel.findOne({ code: searchTerm }).lean();
 
   if (productPrice) {
     const product = await ProductModel.findById(productPrice.productId)
@@ -628,7 +670,7 @@ export const getProductByCode = async (req: Request, res: Response) => {
       if (!option || !option._id) return;
 
       const variation = variations.find((v: any) =>
-        v.options.some((opt: any) => opt._id.toString() === option._id.toString())
+        v.options.some((opt: any) => String(opt._id) === String(option._id))
       );
 
       if (variation) {
@@ -647,14 +689,13 @@ export const getProductByCode = async (req: Request, res: Response) => {
       variations: variationsArray,
     };
 
-    // Get stocks
     const stocks = await Product_WarehouseModel.find({ productId: product._id })
       .populate("warehouseId", "name address")
       .lean();
     const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
 
     return SuccessResponse(res, {
-      product: {
+      product: { // هنا ترجع Object واحد لأنه تطابق مع تسعيرة محددة
         ...product,
         totalQuantity,
         stocks,
@@ -665,31 +706,41 @@ export const getProductByCode = async (req: Request, res: Response) => {
     });
   }
 
-  // ثانياً: دور في Product
-  const product = await ProductModel.findOne({ code })
+  // ---------------------------------------------------------
+  // الحالة الثالثة: دور في Product بالـ Code أو الـ Name
+  // ---------------------------------------------------------
+  const products = await ProductModel.find({
+    $or: [
+      { code: searchTerm }, // بحث دقيق بالكود
+      { name: { $regex: searchTerm, $options: "i" } } // بحث جزئي بالاسم (غير حساس للأحرف)
+    ]
+  })
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
 
-  if (!product) throw new NotFound("No product found for this code");
+  if (!products || products.length === 0) throw new NotFound("No products found for this search term");
 
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
   const variations = await VariationModel.find().lean();
 
-  // Get stocks
-  const stocks = await Product_WarehouseModel.find({ productId: product._id })
+  // جلب المخزون لكل المنتجات التي طابقت البحث
+  const productIds = products.map(p => p._id);
+  const stocks = await Product_WarehouseModel.find({ productId: { $in: productIds } })
     .populate("warehouseId", "name address")
     .lean();
-  const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
 
-  SuccessResponse(res, {
-    product: {
-      ...product,
-      totalQuantity,
-      stocks,
-    },
+  // تجميع المخزون لكل منتج في المصفوفة
+  const productsWithStock = products.map(product => {
+    const productStocks = stocks.filter(s => String(s.productId) === String(product._id));
+    const totalQuantity = productStocks.reduce((sum, s) => sum + s.quantity, 0);
+    return { ...product, totalQuantity, stocks: productStocks };
+  });
+
+  return SuccessResponse(res, {
+    products: productsWithStock, // ترجع كمصفوفة لأن البحث بالاسم قد يحتوي نتائج متعددة
     categories,
     brands,
     variations,
