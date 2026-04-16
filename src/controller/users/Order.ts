@@ -62,8 +62,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
         let rawAddressForPaymob: any = {};
         let resolvedWarehouseId: any = null;
 
-        // if (!orderType) throw new BadRequest("orderType is required");
-        // if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
+        if (!orderType) throw new BadRequest("orderType is required");
+        if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
 
         if (orderType === "pickup") {
             // PICKUP: require a warehouseId
