@@ -17,9 +17,9 @@ const mongoose_1 = __importDefault(require("mongoose"));
 // دالة مساعدة لتحديد المعرف (User أو Session)
 const getCartQuery = (req) => {
     const userId = req.user?.id;
-    const sessionId = req.query?.sessionId ||
-        req.headers['x-session-id'] ||
-        (req.body && req.body.sessionId);
+    const sessionId = req.headers['x-session-id'] ||
+        (req.body && req.body.sessionId) ||
+        req.query?.sessionId;
     if (userId)
         return { user: userId };
     if (sessionId)
@@ -29,20 +29,13 @@ const getCartQuery = (req) => {
 // 1. إضافة منتج للسلة
 exports.addToCart = (0, express_async_handler_1.default)(async (req, res) => {
     const { productId, quantity } = req.body;
-    const query = getCartQuery(req);
-    if (!mongoose_1.default.isValidObjectId(productId))
-        throw new Errors_1.BadRequest("Invalid Product ID");
-    const item = await products_1.ProductModel.findById(productId);
-    if (!item)
-        throw new Errors_1.NotFound("Product not found");
-    let cart = await Cart_1.CartModel.findOne(query);
-    let existingQuantity = 0;
-    if (cart) {
-        const existingItem = cart.cartItems.find(p => p.product.toString() === productId);
-        if (existingItem)
-            existingQuantity = existingItem.quantity;
+    if (!mongoose_1.default.isValidObjectId(productId)) {
+        throw new Errors_1.BadRequest("Product ID is invalid");
     }
-    // جلب المخازن الأونلاين والكمية المتاحة فيها
+    const product = await products_1.ProductModel.findById(productId);
+    if (!product)
+        throw new Errors_1.NotFound("Product not found");
+    const query = getCartQuery(req);
     const onlineWarehouses = await Warehouse_1.WarehouseModel.find({ Is_Online: true }).select("_id");
     const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
     const stockData = await Product_Warehouse_1.Product_WarehouseModel.aggregate([
@@ -60,30 +53,89 @@ exports.addToCart = (0, express_async_handler_1.default)(async (req, res) => {
         },
     ]);
     const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
-    if (availableStock < existingQuantity + quantity) {
-        throw new Errors_1.BadRequest("Not enough stock available");
+    // جلب السلة الحالية لمعرفة الكمية الموجودة مسبقاً من هذا المنتج
+    let cart = await Cart_1.CartModel.findOneAndUpdate(query, { $setOnInsert: { cartItems: [], totalCartPrice: 0 } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    const existingItem = cart.cartItems.find(i => i.product.toString() === productId);
+    const existingQuantity = existingItem ? existingItem.quantity : 0;
+    // التأكد من أن الكمية المطلوبة + الموجودة لا تتخطى المخزون
+    if (availableStock < (existingQuantity + quantity)) {
+        throw new Errors_1.BadRequest(`Stock is not enough. Available stock: ${availableStock}`);
     }
-    if (cart) {
-        const existingItemIndex = cart.cartItems.findIndex(i => i.product.toString() === productId);
-        if (existingItemIndex !== -1) {
-            cart.cartItems[existingItemIndex].quantity += quantity;
-            cart.cartItems[existingItemIndex].price = item.price || 0;
-        }
-        else {
-            // استخدام as any هنا مقبول مع الحفظ الذكي
-            cart.cartItems.push({ product: productId, quantity, price: item.price || 0 });
-        }
-        await cart.save();
+    // --- تحديث محتويات السلة ---
+    if (existingItem) {
+        // إذا كان المنتج موجوداً، نقوم بتحديث الكمية والسعر الحالي
+        const itemIndex = cart.cartItems.findIndex(i => i.product.toString() === productId);
+        cart.cartItems[itemIndex].quantity += quantity;
+        cart.cartItems[itemIndex].price = product.price || 0;
     }
     else {
-        // الحل الذكي: التأكد من أنواع البيانات عند الإنشاء لأول مرة
-        cart = await Cart_1.CartModel.create({
-            ...query,
-            cartItems: [{ product: new mongoose_1.default.Types.ObjectId(productId), quantity, price: item.price || 0 }],
+        // إذا كان منتجاً جديداً، نضيفه للمصفوفة
+        cart.cartItems.push({
+            product: new mongoose_1.default.Types.ObjectId(productId),
+            quantity: quantity,
+            price: product.price || 0
         });
     }
-    (0, response_1.SuccessResponse)(res, { message: "Cart updated successfully", cart }, 201);
+    cart.markModified('cartItems');
+    await cart.save();
+    (0, response_1.SuccessResponse)(res, {
+        message: "Cart updated successfully",
+        cart
+    }, 201);
 });
+// 1. إضافة منتج للسلة
+// export const addToCart = asyncHandler(async (req: Request, res: Response) => {
+//     const { productId, quantity } = req.body;
+//     const query = getCartQuery(req);
+//     if (!mongoose.isValidObjectId(productId)) throw new BadRequest("Invalid Product ID");
+//     const item = await ProductModel.findById(productId);
+//     if (!item) throw new NotFound("Product not found");
+//     let cart = await CartModel.findOne(query);
+//     let existingQuantity = 0;
+//     if (cart) {
+//         const existingItem = cart.cartItems.find(p => p.product.toString() === productId);
+//         if (existingItem) existingQuantity = existingItem.quantity;
+//     }
+//     // جلب المخازن الأونلاين والكمية المتاحة فيها
+//     const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
+//     const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+//     const stockData = await Product_WarehouseModel.aggregate([
+//         {
+//             $match: {
+//                 productId: new mongoose.Types.ObjectId(productId),
+//                 warehouseId: { $in: onlineWarehouseIds },
+//             },
+//         },
+//         {
+//             $group: {
+//                 _id: "$productId",
+//                 totalQuantity: { $sum: "$quantity" },
+//             },
+//         },
+//     ]);
+//     const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
+//     if (availableStock < existingQuantity + quantity) {
+//         throw new BadRequest("Not enough stock available");
+//     }
+//     if (cart) {
+//         const existingItemIndex = cart.cartItems.findIndex(i => i.product.toString() === productId);
+//         if (existingItemIndex !== -1) {
+//             cart.cartItems[existingItemIndex].quantity += quantity;
+//             cart.cartItems[existingItemIndex].price = item.price || 0;
+//         } else {
+//             // استخدام as any هنا مقبول مع الحفظ الذكي
+//             cart.cartItems.push({ product: productId as any, quantity, price: item.price || 0 });
+//         }
+//         await cart.save();
+//     } else {
+//         // الحل الذكي: التأكد من أنواع البيانات عند الإنشاء لأول مرة
+//         cart = await CartModel.create({
+//             ...query,
+//             cartItems: [{ product: new mongoose.Types.ObjectId(productId), quantity, price: item.price || 0 }],
+//         });
+//     }
+//     SuccessResponse(res, { message: "Cart updated successfully", cart }, 201);
+// });
 // 2. جلب بيانات السلة وحساب الشحن
 exports.getCart = (0, express_async_handler_1.default)(async (req, res) => {
     const query = getCartQuery(req);

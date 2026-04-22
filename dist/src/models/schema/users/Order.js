@@ -13,7 +13,7 @@ const orderSchema = new mongoose_1.Schema({
     orderType: {
         type: String,
         enum: constant_1.ORDER_TYPES,
-        required: false,
+        required: true,
         default: 'delivery'
     },
     warehouse: {

@@ -58,8 +58,10 @@ const createOrder = async (req, res) => {
         let shippingCost = 0;
         let rawAddressForPaymob = {};
         let resolvedWarehouseId = null;
-        // if (!orderType) throw new BadRequest("orderType is required");
-        // if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
+        if (!orderType)
+            throw new Errors_1.BadRequest("orderType is required");
+        if (orderType !== "pickup" && orderType !== "delivery")
+            throw new Errors_1.BadRequest("Invalid orderType");
         if (orderType === "pickup") {
             // PICKUP: require a warehouseId
             if (!warehouseId)

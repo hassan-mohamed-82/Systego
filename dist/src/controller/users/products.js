@@ -82,6 +82,7 @@ exports.getAllProducts = (0, express_async_handler_1.default)(async (req, res) =
                 quantity: "$totalQuantity",
                 is_favorite: 1,
                 category: 1,
+                brandId: "$productInfo.brandId",
                 created_at: "$productInfo.created_at"
             }
         },

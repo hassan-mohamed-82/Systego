@@ -12,7 +12,39 @@ const generateJWT_1 = __importDefault(require("../../middlewares/generateJWT"));
 const handleImages_1 = require("../../utils/handleImages");
 const customer_1 = require("../../models/schema/admin/POS/customer");
 const sendEmails_1 = require("../../utils/sendEmails");
+const Cart_1 = require("../../models/schema/users/Cart");
 const generateOtpCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+// function to merge guest cart with user cart
+const mergeCarts = async (userId, sessionId) => {
+    if (!sessionId)
+        return;
+    const guestCart = await Cart_1.CartModel.findOne({ sessionId });
+    const userCart = await Cart_1.CartModel.findOne({ user: userId });
+    if (guestCart) {
+        if (userCart) {
+            // merge products from guest cart to user cart
+            guestCart.cartItems.forEach(guestItem => {
+                const existingItem = userCart.cartItems.find(item => item.product.toString() === guestItem.product.toString());
+                if (existingItem) {
+                    existingItem.quantity += guestItem.quantity;
+                }
+                else {
+                    userCart.cartItems.push(guestItem);
+                }
+            });
+            userCart.markModified('cartItems');
+            await userCart.save();
+            // delete guest cart after moving its contents
+            await Cart_1.CartModel.deleteOne({ _id: guestCart._id });
+        }
+        else {
+            // transfer ownership of guest cart to user directly
+            guestCart.user = userId;
+            guestCart.sessionId = undefined; // important to avoid index issues
+            await guestCart.save();
+        }
+    }
+};
 // 1. Signup
 exports.signup = (0, express_async_handler_1.default)(async (req, res) => {
     const { name, email, phone, password, image } = req.body;
@@ -71,6 +103,9 @@ exports.login = (0, express_async_handler_1.default)(async (req, res) => {
     const isMatch = await bcryptjs_1.default.compare(req.body.password, user.password || '');
     if (!isMatch)
         throw new Errors_1.BadRequest('Incorrect password.');
+    // --- الدمج الذكي للسلة عند تسجيل الدخول ---
+    const sessionId = req.headers['x-session-id'] || req.body.sessionId;
+    await mergeCarts(user.id, sessionId);
     const token = await (0, generateJWT_1.default)({ id: user.id });
     const { password, __v, ...userResponse } = user.toObject();
     return (0, response_1.SuccessResponse)(res, {
@@ -103,11 +138,14 @@ exports.verifyOtpAndLogin = (0, express_async_handler_1.default)(async (req, res
                 phone_number: user.phone_number,
                 email: user.email,
                 name: user.name,
-                imagePath: user.imagePath
+                imagePath: user.imagePath,
+                is_profile_complete: user.is_profile_complete,
             }
         }, 200);
     }
-    // If somehow a complete user used OTP (e.g., forget password flow)
+    // --- الدمج الذكي للسلة بعد التحقق من OTP ---
+    const sessionId = req.headers['x-session-id'] || req.body.sessionId;
+    await mergeCarts(user.id, sessionId);
     const token = await (0, generateJWT_1.default)({ id: user.id });
     const { password, __v, ...userResponse } = user.toObject();
     return (0, response_1.SuccessResponse)(res, {
@@ -136,6 +174,9 @@ exports.completeProfile = (0, express_async_handler_1.default)(async (req, res) 
         user.imagePath = await (0, handleImages_1.saveBase64Image)(image, user._id.toString(), req, 'profile_images');
     }
     await user.save();
+    // --- الدمج الذكي للسلة بعد إكمال البروفايل ---
+    const sessionId = req.headers['x-session-id'] || req.body.sessionId;
+    await mergeCarts(user.id, sessionId);
     const token = await (0, generateJWT_1.default)({ id: user.id });
     const { password: _, __v, ...userResponse } = user.toObject();
     return (0, response_1.SuccessResponse)(res, {
