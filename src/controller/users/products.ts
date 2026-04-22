@@ -86,6 +86,7 @@ export const getAllProducts = asyncHandler(async (req: Request, res: Response): 
                 quantity: "$totalQuantity",
                 is_favorite: 1,
                 category: 1,
+                brandId:"$productInfo.brandId",
                 created_at: "$productInfo.created_at"
             }
         },
