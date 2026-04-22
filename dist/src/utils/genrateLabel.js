@@ -519,7 +519,7 @@ const createPDFA4 = async (labelsData, labelConfig, paperConfig) => {
 // ==================================================================
 // Generate Labels PDF (Main Export)
 // ==================================================================
-const generateLabelsPDF = async (products, labelConfig, paperSize) => {
+const generateLabelsPDF = async (products, labelConfig, paperSize, businessName = "") => {
     const paperConfig = exports.PAPER_CONFIGS[paperSize];
     if (!paperConfig) {
         throw new NotFound_1.NotFound(`Paper size not found. Available: ${Object.keys(exports.PAPER_CONFIGS).join(", ")}`);
@@ -536,7 +536,7 @@ const generateLabelsPDF = async (products, labelConfig, paperSize) => {
         const labelData = {
             productName: product.name,
             brandName: product.brandId?.name || "",
-            businessName: "WegoStation",
+            businessName: businessName,
             price: priceDoc.price,
             promotionalPrice: priceDoc.promotionalPrice || null,
             barcode: priceDoc.code || "",

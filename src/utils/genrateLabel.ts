@@ -635,7 +635,8 @@ const createPDFA4 = async (
 export const generateLabelsPDF = async (
   products: { productId: string; productPriceId: string; quantity: number }[],
   labelConfig: LabelConfig,
-  paperSize: string
+  paperSize: string,
+  businessName: string = ""
 ): Promise<Buffer> => {
   const paperConfig = PAPER_CONFIGS[paperSize];
   if (!paperConfig) {
@@ -657,7 +658,7 @@ export const generateLabelsPDF = async (
     const labelData: LabelData = {
       productName: product.name,
       brandName: (product.brandId as any)?.name || "",
-      businessName: "WegoStation",
+      businessName: businessName,
       price: priceDoc.price,
       promotionalPrice: priceDoc.promotionalPrice || null,
       barcode: priceDoc.code || "",

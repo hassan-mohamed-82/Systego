@@ -159,6 +159,8 @@ import { generateLabelsPDF, PAPER_CONFIGS } from "../../utils/genrateLabel";
 import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
 import { LabelSize } from "../../types/generateLabel";
+import { UserModel } from "../../models/schema/admin/User";
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 
 // ============================================
 // Get Available Label Sizes
@@ -309,7 +311,23 @@ export const generateLabelsController = async (req: Request, res: Response) => {
   // it should send { useRectangularLayout: true } in labelConfig here.
   const finalConfig = { ...defaultLabelConfig, ...labelConfig };
 
-  const pdfBuffer = await generateLabelsPDF(products, finalConfig, paperSize);
+  // ✅ Fetch business name dynamically from the logged-in user
+  const jwtUser = req.user as any;
+  let businessName = "";
+  if (jwtUser?.id || jwtUser?._id) {
+    const userId = jwtUser.id || jwtUser._id;
+    const user = await UserModel.findById(userId).select("company_name warehouse_id").lean();
+    if (user?.company_name) {
+      businessName = user.company_name;
+    } else if (user?.warehouse_id) {
+      const warehouse = await WarehouseModel.findById(user.warehouse_id).select("name").lean();
+      if (warehouse?.name) {
+        businessName = warehouse.name;
+      }
+    }
+  }
+
+  const pdfBuffer = await generateLabelsPDF(products, finalConfig, paperSize, businessName);
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(

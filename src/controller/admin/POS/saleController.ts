@@ -21,10 +21,36 @@ import bcrypt from "bcryptjs";
 import { Product_WarehouseModel } from '../../../models/schema/admin/Product_Warehouse';
 import { ServiceFeeModel } from '../../../models/schema/admin/ServiceFee';
 import { CashierModel } from "../../../models/schema/admin/cashier";
-const STORE_INFO = {
-  name: "SYSTEGO",
-  phone: "01134567",
-  address: "Cairo, Egypt",
+
+// ✅ Dynamic store info - بيجيب البيانات من اليوزر اللي عامل login أو الـ Warehouse بتاعه
+const getStoreInfo = async (userId: string) => {
+  const user = await UserModel.findById(userId)
+    .select("company_name phone address warehouse_id")
+    .lean();
+
+  if (user?.company_name) {
+    return {
+      name: user.company_name,
+      phone: user.phone || "",
+      address: user.address || "",
+    };
+  }
+
+  // Fallback: لو مفيش company_name، جيب من الـ Warehouse
+  if (user?.warehouse_id) {
+    const warehouse = await WarehouseModel.findById(user.warehouse_id)
+      .select("name phone address")
+      .lean();
+    if (warehouse) {
+      return {
+        name: warehouse.name,
+        phone: warehouse.phone || "",
+        address: warehouse.address || "",
+      };
+    }
+  }
+
+  return { name: "", phone: "", address: "" };
 };
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
@@ -752,13 +778,16 @@ export const createSale = async (req: Request, res: Response) => {
   // ═══════════════════════════════════════════════════════════
   // إرجاع الاستجابة النهائية
   // ═══════════════════════════════════════════════════════════
+  // ✅ جيب بيانات المحل بشكل ديناميكي من اليوزر اللي عامل login
+  const storeInfo = await getStoreInfo(cashierId);
+
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`
       : "Sale created successfully",
     
-    // ✅ المتغير بتاعك لو موجود في الكود الأصلي (لو مش موجود شيله)
-    // store: STORE_INFO, 
+    // ✅ بيانات المحل ديناميكية حسب اليوزر اللي عامل login
+    store: storeInfo,
     
     // ✅ الجديد: إعدادات الطابعة
     printer_settings: printerSettings,

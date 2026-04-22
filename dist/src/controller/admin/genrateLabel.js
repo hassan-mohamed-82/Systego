@@ -9,6 +9,8 @@ exports.generateLabelsController = exports.getAvailableLabelSizes = void 0;
 const genrateLabel_1 = require("../../utils/genrateLabel");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const response_1 = require("../../utils/response");
+const User_1 = require("../../models/schema/admin/User");
+const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 // ============================================
 // Get Available Label Sizes
 // ============================================
@@ -147,7 +149,23 @@ const generateLabelsController = async (req, res) => {
     // If the Frontend sees "useRectangularLayout: true" in the size list, 
     // it should send { useRectangularLayout: true } in labelConfig here.
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };
-    const pdfBuffer = await (0, genrateLabel_1.generateLabelsPDF)(products, finalConfig, paperSize);
+    // ✅ Fetch business name dynamically from the logged-in user
+    const jwtUser = req.user;
+    let businessName = "";
+    if (jwtUser?.id || jwtUser?._id) {
+        const userId = jwtUser.id || jwtUser._id;
+        const user = await User_1.UserModel.findById(userId).select("company_name warehouse_id").lean();
+        if (user?.company_name) {
+            businessName = user.company_name;
+        }
+        else if (user?.warehouse_id) {
+            const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id).select("name").lean();
+            if (warehouse?.name) {
+                businessName = warehouse.name;
+            }
+        }
+    }
+    const pdfBuffer = await (0, genrateLabel_1.generateLabelsPDF)(products, finalConfig, paperSize, businessName);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename=labels_${paperSize}_${Date.now()}.pdf`);
     res.send(pdfBuffer);

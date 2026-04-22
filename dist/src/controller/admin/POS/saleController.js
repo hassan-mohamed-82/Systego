@@ -26,10 +26,32 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Product_Warehouse_1 = require("../../../models/schema/admin/Product_Warehouse");
 const ServiceFee_1 = require("../../../models/schema/admin/ServiceFee");
 const cashier_1 = require("../../../models/schema/admin/cashier");
-const STORE_INFO = {
-    name: "SYSTEGO",
-    phone: "01134567",
-    address: "Cairo, Egypt",
+// ✅ Dynamic store info - بيجيب البيانات من اليوزر اللي عامل login أو الـ Warehouse بتاعه
+const getStoreInfo = async (userId) => {
+    const user = await User_1.UserModel.findById(userId)
+        .select("company_name phone address warehouse_id")
+        .lean();
+    if (user?.company_name) {
+        return {
+            name: user.company_name,
+            phone: user.phone || "",
+            address: user.address || "",
+        };
+    }
+    // Fallback: لو مفيش company_name، جيب من الـ Warehouse
+    if (user?.warehouse_id) {
+        const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id)
+            .select("name phone address")
+            .lean();
+        if (warehouse) {
+            return {
+                name: warehouse.name,
+                phone: warehouse.phone || "",
+                address: warehouse.address || "",
+            };
+        }
+    }
+    return { name: "", phone: "", address: "" };
 };
 const roundCurrency = (value) => Math.round(value * 100) / 100;
 const createSale = async (req, res) => {
@@ -617,12 +639,14 @@ const createSale = async (req, res) => {
     // ═══════════════════════════════════════════════════════════
     // إرجاع الاستجابة النهائية
     // ═══════════════════════════════════════════════════════════
+    // ✅ جيب بيانات المحل بشكل ديناميكي من اليوزر اللي عامل login
+    const storeInfo = await getStoreInfo(cashierId);
     return (0, response_1.SuccessResponse)(res, {
         message: isDue
             ? `Due sale created. Amount owed: ${remainingAmount}`
             : "Sale created successfully",
-        // ✅ المتغير بتاعك لو موجود في الكود الأصلي (لو مش موجود شيله)
-        // store: STORE_INFO, 
+        // ✅ بيانات المحل ديناميكية حسب اليوزر اللي عامل login
+        store: storeInfo,
         // ✅ الجديد: إعدادات الطابعة
         printer_settings: printerSettings,
         // الباقي زي ما هو بالظبط
