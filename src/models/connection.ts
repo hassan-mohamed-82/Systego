@@ -16,20 +16,9 @@ export const connectDB = async () => {
     await mongoose.connect(uri, {
       family: 4
     });
-    
+
     console.log("MongoDB connected successfully");
 
-    // 🛠️ Auto-fix for Cart Indexes (Run once to fix E11000 errors)
-    try {
-      const db = mongoose.connection.db;
-      if (db) {
-        const cartCollection = db.collection('carts');
-        await cartCollection.dropIndex("user_1").catch(() => {});
-        await cartCollection.dropIndex("sessionId_1").catch(() => {});
-      }
-    } catch (indexError) {
-      // Ignore if indexes don't exist or drop fails
-    }
 
   } catch (error) {
     console.error("MongoDB connection failed:", error);
