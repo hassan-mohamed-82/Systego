@@ -5,12 +5,12 @@ const cartSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Customer',
     required: false,
-    index: { unique: true, sparse: true }
+    // index: { unique: true, sparse: true }
   },
   sessionId: {
     type: String,
     required: false,
-    index: { unique: true, sparse: true }
+    // index: { unique: true, sparse: true }
   },
   cartItems: [
     {
@@ -67,6 +67,10 @@ const cartSchema = new Schema({
 }, {
   timestamps: true
 });
+
+// Explicitly define sparse unique indexes to allow multiple guest carts
+cartSchema.index({ user: 1 }, { unique: true, sparse: true });
+cartSchema.index({ sessionId: 1 }, { unique: true, sparse: true });
 
 // Calculate total price before saving
 cartSchema.pre('save', function (next) {
