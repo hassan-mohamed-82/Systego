@@ -19,6 +19,9 @@ import { ZoneModel } from "../../models/schema/admin/Zone";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { FawryModel } from "../../models/schema/admin/Fawry";
 import { FawryService } from "../../utils/fawryService";
+import { CouponModel } from "../../models/schema/admin/coupons";
+import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
+import { TaxesModel } from "../../models/schema/admin/Taxes";
 
 // ===============================
 // 🟢 CREATE ORDER
@@ -139,6 +142,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         // 5️⃣ Products & Stock
         let productsTotal = 0;
+        let totalTaxAmount = 0;
         const finalItems: any[] = [];
 
         // تحديد مخزن الأونلاين للطلبات الـ delivery لو مش معروف
@@ -150,40 +154,101 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
 
         for (const item of cart.cartItems) {
             const qty = item.quantity ?? 1;
+            const variantId = item.variant;
 
             // خصم من مخزن الأونلاين (Product_Warehouse)
+            const stockQuery: any = { 
+                productId: item.product, 
+                warehouseId: resolvedWarehouseId,
+                quantity: { $gte: qty } 
+            };
+
+            if (variantId) {
+                stockQuery.productPriceId = variantId;
+            } else {
+                stockQuery.productPriceId = null;
+            }
+
             const warehouseStock = await Product_WarehouseModel.findOneAndUpdate(
-                { 
-                    productId: item.product, 
-                    warehouseId: resolvedWarehouseId,
-                    quantity: { $gte: qty } 
-                },
+                stockQuery,
                 { $inc: { quantity: -qty } },
                 { new: true, session }
             );
 
-            if (!warehouseStock) throw new BadRequest(`Product ${item.product} is out of stock in the selected warehouse`);
+            if (!warehouseStock) throw new BadRequest(`Product ${item.product} ${variantId ? `(Variant: ${variantId})` : ""} is out of stock in the selected warehouse`);
 
-            // تحديث الكمية الإجمالية في موديل المنتج (اختياري للمزامنة)
+            // تحديث الكمية الإجمالية في موديل المنتج
             const product = await ProductModel.findByIdAndUpdate(
                 item.product,
                 { $inc: { quantity: -qty } },
                 { new: true, session }
-            );
+            ).populate("taxesId");
 
             if (!product) throw new BadRequest(`Product ${item.product} not found`);
 
-            const price = product.price || 0;
+            if (variantId) {
+                await mongoose.model("ProductPrice").findByIdAndUpdate(
+                    variantId,
+                    { $inc: { quantity: -qty } },
+                    { new: true, session }
+                );
+            }
+
+            const price = item.price || 0;
             productsTotal += price * qty;
 
+            // حساب الضرائب لهذا المنتج
+            if (product.taxesId) {
+                const tax = product.taxesId as any;
+                if (tax.status) {
+                    if (tax.type === "percentage") {
+                        totalTaxAmount += (price * qty * tax.amount) / 100;
+                    } else {
+                        totalTaxAmount += tax.amount * qty;
+                    }
+                }
+            }
+
             finalItems.push({
-                product: product._id.toString(),
+                product: item.product.toString(),
+                variant: variantId ? variantId.toString() : undefined,
                 quantity: qty,
                 price,
             });
         }
 
-        const totalPrice = productsTotal + shippingCost;
+        // حساب مصاريف الخدمة
+        const activeFees = await ServiceFeeModel.find({ module: "online", status: true }).session(session);
+        let totalServiceFee = 0;
+        activeFees.forEach(fee => {
+            if (fee.type === "percentage") {
+                totalServiceFee += (productsTotal * fee.amount) / 100;
+            } else {
+                totalServiceFee += fee.amount;
+            }
+        });
+
+        // حساب خصم الكوبون
+        let couponDiscount = 0;
+        let appliedCouponId = null;
+        if (cart.coupon) {
+            const coupon = await CouponModel.findById(cart.coupon).session(session);
+            if (coupon && coupon.available > 0 && new Date(coupon.expired_date) > new Date()) {
+                if (productsTotal >= (coupon.minimum_amount_for_use || 0)) {
+                    if (coupon.type === "percentage") {
+                        couponDiscount = (productsTotal * coupon.amount) / 100;
+                    } else {
+                        couponDiscount = coupon.amount;
+                    }
+                    appliedCouponId = coupon._id;
+                    // خصم من كمية الكوبون
+                    coupon.available -= 1;
+                    await coupon.save({ session });
+                }
+            }
+        }
+
+        const totalPrice = (productsTotal + shippingCost + totalServiceFee + totalTaxAmount) - couponDiscount;
 
         // جلب إعدادات بوابات الدفع
         const geideaConfig = paymentMethodDoc.type === "automatic"
@@ -213,7 +278,12 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                     cartItems: finalItems,
                     shippingAddress: shippingAddressData,
                     shippingPrice: shippingCost,
-                    totalOrderPrice: totalPrice,
+                    totalOrderPrice: productsTotal, // السعر الأساسي للمنتجات
+                    totalPriceAfterDiscount: totalPrice, // السعر النهائي بعد كل الإضافات والخصومات
+                    taxAmount: totalTaxAmount,
+                    serviceFee: totalServiceFee,
+                    coupon: appliedCouponId,
+                    couponDiscount: couponDiscount,
                     paymentMethod: paymentMethod.toString(),
                     proofImage,
                     status: "pending",
@@ -405,7 +475,11 @@ export const getOrderDetails = async (req: Request, res: Response) => {
         _id: req.params.id,
         user: req.user?.id,
     })
-        .populate("cartItems.product", "name image")
+        .populate("cartItems.product", "name ar_name image")
+        .populate({
+            path: "cartItems.variant",
+            populate: { path: "productId", select: "name ar_name" }
+        })
         .populate("paymentMethod", "name ar_name")
         .populate("warehouse", "name");
 

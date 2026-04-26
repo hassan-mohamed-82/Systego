@@ -29,6 +29,11 @@ const cartSchema = new Schema({
         type: Number,
         required: true,
         min: 0
+      },
+      variant: {
+        type: Schema.Types.ObjectId,
+        ref: 'ProductPrice',
+        required: false
       }
     }
   ],
@@ -37,6 +42,27 @@ const cartSchema = new Schema({
     required: true,
     default: 0,
     min: 0
+  },
+  coupon: {
+    type: Schema.Types.ObjectId,
+    ref: 'Coupon',
+    required: false
+  },
+  couponDiscount: {
+    type: Number,
+    default: 0
+  },
+  serviceFee: {
+    type: Number,
+    default: 0
+  },
+  taxAmount: {
+    type: Number,
+    default: 0
+  },
+  totalPriceAfterDiscount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
@@ -48,6 +74,10 @@ cartSchema.pre('save', function (next) {
     this.totalCartPrice = this.cartItems.reduce((total, item) => {
       return total + (item.price * item.quantity);
     }, 0);
+
+    // Final total calculation
+    this.totalPriceAfterDiscount = (this.totalCartPrice + this.serviceFee + this.taxAmount) - this.couponDiscount;
+    if (this.totalPriceAfterDiscount < 0) this.totalPriceAfterDiscount = 0;
   }
   next();
 });
