@@ -35,13 +35,17 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
     let isTransactionCommitted = false;
 
     try {
-        // 1️⃣ تحديد السلة (Cart)
+        // 1️⃣ Find Cart
         if (!userId && !sessionId) {
             throw new BadRequest("User ID or Session ID is required to find your cart");
         }
 
         const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
-        const cart = await CartModel.findOne(cartQuery).session(session);
+
+        // 2️⃣ Get Cart and Prepared Data
+        const cart = await CartModel.findOne(cartQuery)
+            .populate({ path: 'cartItems.product', select: 'name ar_name free_shipping' })
+            .session(session);
 
         if (!cart || cart.cartItems.length === 0) {
             throw new BadRequest("Cart is empty");
@@ -59,11 +63,11 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             throw new BadRequest("Proof image required for manual payment");
         }
 
-        // 3️⃣ Address / Warehouse Logic based on orderType
-        let shippingAddressData: any = null;
+        // 3️⃣ Address, Warehouse, Shipping Cost
         let shippingCost = 0;
-        let rawAddressForPaymob: any = {};
         let resolvedWarehouseId: any = null;
+        let shippingAddressData: any = null;
+        let rawAddressForPaymob: any = {};
 
         if (!orderType) throw new BadRequest("orderType is required");
         if (orderType !== "pickup" && orderType !== "delivery") throw new BadRequest("Invalid orderType");
@@ -75,182 +79,82 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             if (!warehouse) throw new NotFound("Warehouse not found or not available");
             resolvedWarehouseId = warehouse._id;
             shippingCost = 0; // no shipping for pickup
-        } else {
-            // DELIVERY: require a shippingAddress
-            if (!shippingAddress) throw new BadRequest("shippingAddress is required for delivery orders");
+        }
+        else if (orderType === "delivery") {
+            // 1. تحديد المخزن
+            const onlineWarehouse = await WarehouseModel.findOne({ Is_Online: true }).session(session);
+            if (!onlineWarehouse) throw new BadRequest("No online warehouse available");
+            resolvedWarehouseId = onlineWarehouse._id;
 
+            // 2. جلب العنوان وحساب التكلفة المبدئية
+            let initialShippingCost = 0;
             if (typeof shippingAddress === "string") {
-            // Registered user (ID): populate to get names and prices
-                const addressDoc = await AddressModel.findOne({
-                    _id: shippingAddress,
-                    user: userId
-                })
-                    .populate("city zone country")
-                    .session(session);
-
+                const addressDoc = await AddressModel.findOne({ _id: shippingAddress, user: userId }).populate("city zone country").session(session);
                 if (!addressDoc) throw new NotFound("Address not found");
-
-                const populated = addressDoc as any;
-                shippingAddressData = {
-                    details: `${populated.street}`,
-                    city: populated.city?.name || "",
-                    zone: populated.zone?.name || "",
-                };
-                shippingCost = Number(populated.zone?.shipingCost || populated.city?.shipingCost || 0);
-                rawAddressForPaymob = populated;
+                shippingAddressData = { details: addressDoc.street, city: (addressDoc as any).city?.name, zone: (addressDoc as any).zone?.name };
+                initialShippingCost = Number((addressDoc as any).zone?.shipingCost || (addressDoc as any).city?.shipingCost || 0);
             } else {
-            // حالة الضيف (Object): نجلب الموديلات يدوياً لحساب الشحن بدقة
                 const [cityDoc, zoneDoc] = await Promise.all([
                     CityModels.findById(shippingAddress.city).session(session),
                     ZoneModel.findById(shippingAddress.zone).session(session)
                 ]);
-
-                shippingAddressData = {
-                    details: `${shippingAddress.street}`,
-                    city: cityDoc?.name || "",
-                    zone: zoneDoc?.name || "",
-                };
-                shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
-                rawAddressForPaymob = shippingAddress;
+                shippingAddressData = { details: shippingAddress.street, city: cityDoc?.name, zone: zoneDoc?.name };
+                initialShippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
             }
 
-        // 4️⃣ Shipping Settings
-            const productIds = cart.cartItems.map((i) => i.product);
+            // 3. تطبيق قواعد الشحن (Free / Flat Rate / Zone Rate)
+            const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
+            const hasFreeShippingProduct = cart.cartItems.some((i: any) => i.product.free_shipping);
 
-            const freeShippingProductsCount = await ProductModel.countDocuments({
-                _id: { $in: productIds },
-                free_shipping: true,
-            }).session(session);
-
-            const shippingSettings = await ShippingSettingsModel.findOne({
-                singletonKey: "default",
-            }).session(session);
-
-
-
-            if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
+            if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
                 shippingCost = 0;
             } else if (shippingSettings?.shippingMethod === "flat_rate") {
                 shippingCost = Number(shippingSettings.flatRate || 0);
             } else {
-                shippingCost =
-                    Number(rawAddressForPaymob.zone?.shipingCost) ||
-                    Number(rawAddressForPaymob.city?.shipingCost) ||
-                    0;
+                shippingCost = initialShippingCost; // نعتمد هنا على الحسبة اللي عملناها فوق من الـ Zone/City
             }
         }
 
-        // 5️⃣ Products & Stock
-        let productsTotal = 0;
-        let totalTaxAmount = 0;
+        // 4️⃣ Warehouse discount and prepare items
         const finalItems: any[] = [];
-
-        // تحديد مخزن الأونلاين للطلبات الـ delivery لو مش معروف
-        if (orderType === "delivery" && !resolvedWarehouseId) {
-            const onlineWarehouse = await WarehouseModel.findOne({ Is_Online: true }).session(session);
-            if (!onlineWarehouse) throw new BadRequest("No online warehouse available for delivery");
-            resolvedWarehouseId = onlineWarehouse._id;
-        }
-
         for (const item of cart.cartItems) {
-            const qty = item.quantity ?? 1;
+            const qty = item.quantity;
             const variantId = item.variant;
 
-            // خصم من مخزن الأونلاين (Product_Warehouse)
-            const stockQuery: any = { 
-                productId: item.product, 
-                warehouseId: resolvedWarehouseId,
-                quantity: { $gte: qty } 
-            };
-
-            if (variantId) {
-                stockQuery.productPriceId = variantId;
-            } else {
-                stockQuery.productPriceId = null;
-            }
-
-            const warehouseStock = await Product_WarehouseModel.findOneAndUpdate(
-                stockQuery,
+            const stockUpdate = await Product_WarehouseModel.findOneAndUpdate(
+                { productId: item.product._id, warehouseId: resolvedWarehouseId, productPriceId: variantId || null, quantity: { $gte: qty } },
                 { $inc: { quantity: -qty } },
                 { new: true, session }
             );
+            if (!stockUpdate) throw new BadRequest(`Product ${(item.product as any).name} is not available in the warehouse`);
 
-            if (!warehouseStock) throw new BadRequest(`Product ${item.product} ${variantId ? `(Variant: ${variantId})` : ""} is out of stock in the selected warehouse`);
+            await ProductModel.findByIdAndUpdate(item.product._id, { $inc: { quantity: -qty } }, { session });
+            if (variantId) await mongoose.model("ProductPrice").findByIdAndUpdate(variantId, { $inc: { quantity: -qty } }, { session });
 
-            // تحديث الكمية الإجمالية في موديل المنتج
-            const product = await ProductModel.findByIdAndUpdate(
-                item.product,
-                { $inc: { quantity: -qty } },
-                { new: true, session }
-            ).populate("taxesId");
-
-            if (!product) throw new BadRequest(`Product ${item.product} not found`);
-
-            if (variantId) {
-                await mongoose.model("ProductPrice").findByIdAndUpdate(
-                    variantId,
-                    { $inc: { quantity: -qty } },
-                    { new: true, session }
-                );
-            }
-
-            const price = item.price || 0;
-            productsTotal += price * qty;
-
-            // حساب الضرائب لهذا المنتج
-            if (product.taxesId) {
-                const tax = product.taxesId as any;
-                if (tax.status) {
-                    if (tax.type === "percentage") {
-                        totalTaxAmount += (price * qty * tax.amount) / 100;
-                    } else {
-                        totalTaxAmount += tax.amount * qty;
-                    }
-                }
-            }
-
-            finalItems.push({
-                product: item.product.toString(),
-                variant: variantId ? variantId.toString() : undefined,
-                quantity: qty,
-                price,
-            });
+            finalItems.push({ product: item.product._id, variant: variantId, quantity: qty, price: item.price });
         }
 
-        // حساب مصاريف الخدمة
-        const activeFees = await ServiceFeeModel.find({ module: "online", status: true }).session(session);
-        let totalServiceFee = 0;
-        activeFees.forEach(fee => {
-            if (fee.type === "percentage") {
-                totalServiceFee += (productsTotal * fee.amount) / 100;
-            } else {
-                totalServiceFee += fee.amount;
-            }
-        });
-
-        // حساب خصم الكوبون
+        // 5️⃣ Final calculations from cart
+        const productsTotal = cart.totalCartPrice;
+        const totalTaxAmount = cart.taxAmount || 0;
+        const totalServiceFee = cart.serviceFee || 0;
         let couponDiscount = 0;
         let appliedCouponId = null;
+
+
         if (cart.coupon) {
             const coupon = await CouponModel.findById(cart.coupon).session(session);
-            if (coupon && coupon.available > 0 && new Date(coupon.expired_date) > new Date()) {
-                if (productsTotal >= (coupon.minimum_amount_for_use || 0)) {
-                    if (coupon.type === "percentage") {
-                        couponDiscount = (productsTotal * coupon.amount) / 100;
-                    } else {
-                        couponDiscount = coupon.amount;
-                    }
-                    appliedCouponId = coupon._id;
-                    // خصم من كمية الكوبون
-                    coupon.available -= 1;
-                    await coupon.save({ session });
-                }
+            if (coupon && coupon.available > 0) {
+                couponDiscount = cart.couponDiscount;
+                appliedCouponId = coupon._id;
+                coupon.available -= 1;
+                await coupon.save({ session });
             }
         }
 
         const totalPrice = (productsTotal + shippingCost + totalServiceFee + totalTaxAmount) - couponDiscount;
 
-        // جلب إعدادات بوابات الدفع
+        // 6️⃣ Get payment gateways configurations
         const geideaConfig = paymentMethodDoc.type === "automatic"
             ? await GeideaModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
 
@@ -268,7 +172,7 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
             else throw new BadRequest("No active automatic gateway config found for selected payment method");
         }
 
-        // 6️⃣ Create Order
+        // 7️⃣ Create Order
         const order = await OrderModel.create(
             [
                 {
@@ -278,8 +182,8 @@ export const createOrder = async (req: Request, res: Response): Promise<any> => 
                     cartItems: finalItems,
                     shippingAddress: shippingAddressData,
                     shippingPrice: shippingCost,
-                    totalOrderPrice: productsTotal, // السعر الأساسي للمنتجات
-                    totalPriceAfterDiscount: totalPrice, // السعر النهائي بعد كل الإضافات والخصومات
+                    totalOrderPrice: productsTotal, // old price
+                    totalPriceAfterDiscount: totalPrice, // new price after discount
                     taxAmount: totalTaxAmount,
                     serviceFee: totalServiceFee,
                     coupon: appliedCouponId,

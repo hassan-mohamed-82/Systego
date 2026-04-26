@@ -1,481 +1,225 @@
+import { Request, Response } from "express";
+import mongoose from 'mongoose';
+import asyncHandler from 'express-async-handler';
 import { CartModel } from "../../models/schema/users/Cart";
 import { ProductModel } from "../../models/schema/admin/products";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
 import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
-import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { CouponModel } from "../../models/schema/admin/coupons";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import { AddressModel } from "../../models/schema/users/Address";
-import { Request, Response } from "express";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
-import asyncHandler from 'express-async-handler';
-import mongoose from 'mongoose';
 
-// دالة مساعدة لتحديد المعرف (User أو Session)
+// --- دالة مساعدة لجلب معرف السلة ---
 const getCartQuery = (req: Request) => {
     const userId = req.user?.id;
-
-    const sessionId =
-        req.headers['x-session-id'] ||
-        (req.body && req.body.sessionId) ||
-        req.query?.sessionId;
+    const sessionId = req.headers['x-session-id'] || req.body?.sessionId;
 
     if (userId) return { user: userId };
     if (sessionId) return { sessionId: sessionId };
-
-    throw new BadRequest("User ID or Session ID is required to manage cart");
+    throw new BadRequest("User ID or Session ID is required");
 };
 
-// 1. إضافة منتج للسلة
-export const addToCart = asyncHandler(async (req: Request, res: Response) => {
-    const { productId, productVariantId, quantity } = req.body;
+// --- دالة الحسابات المركزية ---
+const calculateCartTotals = async (cart: any, userId?: string) => {
+    let totalCartPrice = 0;
+    let totalTaxAmount = 0;
+    let hasFreeShippingProduct = false;
 
-    if (!mongoose.isValidObjectId(productId)) {
-        throw new BadRequest("Product ID is invalid");
-    }
+    for (const item of cart.cartItems) {
+        const product = item.product as any;
+        const variant = item.variant as any;
 
-    const product = await ProductModel.findById(productId);
-    if (!product) throw new NotFound("Product not found");
+        // جلب السعر الأحدث (بعد الخصم إن وجد)
+        const currentPrice = variant ? variant.price : (product.price_after_discount || product.price || 0);
+        item.price = currentPrice;
 
-    let price = product.price || 0;
-    if (productVariantId) {
-        if (!mongoose.isValidObjectId(productVariantId)) {
-            throw new BadRequest("Product Variant ID is invalid");
+        if (product.free_shipping) hasFreeShippingProduct = true;
+
+        if (product.taxesId?.status) {
+            const tax = product.taxesId;
+            const itemTotal = currentPrice * item.quantity;
+            totalTaxAmount += tax.type === "percentage" ? (itemTotal * tax.amount) / 100 : tax.amount * item.quantity;
         }
-        const variant = await ProductPriceModel.findById(productVariantId);
-        if (!variant) throw new NotFound("Product Variant not found");
-        price = variant.price;
+        totalCartPrice += currentPrice * item.quantity;
     }
 
+    const activeFees = await ServiceFeeModel.find({ module: "online", status: true });
+    let totalServiceFee = 0;
+    activeFees.forEach(fee => {
+        totalServiceFee += fee.type === "percentage" ? (totalCartPrice * fee.amount) / 100 : fee.amount;
+    });
+
+    const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" });
+    let shippingCost = 0;
+    if (!(shippingSettings?.freeShippingEnabled || hasFreeShippingProduct)) {
+        if (shippingSettings?.shippingMethod === "flat_rate") {
+            shippingCost = Number(shippingSettings.flatRate || 0);
+        } else if (userId) {
+            const address = await AddressModel.findOne({ user: userId }).populate('city zone');
+            shippingCost = address ? Number((address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0) : 0;
+        }
+    }
+
+    cart.totalCartPrice = totalCartPrice;
+    cart.taxAmount = totalTaxAmount;
+    cart.serviceFee = totalServiceFee;
+
+    // --- إعادة حساب الكوبون (Coupon Recalculation) ---
+    if (cart.coupon) {
+        const coupon = await CouponModel.findById(cart.coupon);
+        if (coupon && coupon.available > 0 && new Date(coupon.expired_date) > new Date()) {
+            if (totalCartPrice >= (coupon.minimum_amount_for_use || 0)) {
+                cart.couponDiscount = coupon.type === "percentage" ? (totalCartPrice * coupon.amount) / 100 : coupon.amount;
+            } else {
+                // إذا قل السعر عن الحد الأدنى، نحذف الكوبون
+                cart.coupon = undefined;
+                cart.couponDiscount = 0;
+            }
+        } else {
+            // إذا انتهى الكوبون أو نفذت كميته، نحذفه
+            cart.coupon = undefined;
+            cart.couponDiscount = 0;
+        }
+    }
+
+    return { totalCartPrice, shippingCost };
+};
+
+// 1. مزامنة السلة بالكامل (The Sync Endpoint)
+export const syncCart = asyncHandler(async (req: Request, res: Response) => {
+    const { items } = req.body;
     const query = getCartQuery(req);
 
     const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
-    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+    const onlineWarehouseIds = onlineWarehouses.map(w => w._id);
 
-    const stockMatch: any = {
-        productId: new mongoose.Types.ObjectId(productId),
-        warehouseId: { $in: onlineWarehouseIds },
-    };
+    const validatedItems = [];
 
-    if (productVariantId) {
-        stockMatch.productPriceId = new mongoose.Types.ObjectId(productVariantId);
-    } else {
-        stockMatch.productPriceId = null;
-    }
+    for (const item of items) {
+        const { productId, productVariantId, quantity } = item;
 
-    const stockData = await Product_WarehouseModel.aggregate([
-        { $match: stockMatch },
-        {
-            $group: {
-                _id: "$productId",
-                totalQuantity: { $sum: "$quantity" },
-            },
-        },
-    ]);
+        const stockMatch: any = {
+            productId: new mongoose.Types.ObjectId(productId),
+            warehouseId: { $in: onlineWarehouseIds },
+            productPriceId: productVariantId ? new mongoose.Types.ObjectId(productVariantId) : null
+        };
 
-    const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
+        const stock = await Product_WarehouseModel.aggregate([
+            { $match: stockMatch },
+            { $group: { _id: null, total: { $sum: "$quantity" } } }
+        ]);
 
-    // جلب السلة الحالية لمعرفة الكمية الموجودة مسبقاً من هذا المنتج (بنفس الفاريانت)
-    let cart = await CartModel.findOneAndUpdate(
-        query,
-        { $setOnInsert: { cartItems: [], totalCartPrice: 0 } },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+        const availableStock = stock[0]?.total || 0;
+        if (quantity > availableStock) {
+            throw new BadRequest(`Product ${productId} only has ${availableStock} in stock`);
+        }
 
-    const existingItem = cart.cartItems.find(i =>
-        i.product.toString() === productId &&
-        (productVariantId ? i.variant?.toString() === productVariantId : !i.variant)
-    );
-    const existingQuantity = existingItem ? existingItem.quantity : 0;
+        let currentPrice = 0;
+        if (productVariantId) {
+            const variant = await ProductPriceModel.findById(productVariantId);
+            currentPrice = variant?.price || 0;
+        } else {
+            const product = await ProductModel.findById(productId);
+            currentPrice = product?.price || 0;
+        }
 
-    // التأكد من أن الكمية المطلوبة + الموجودة لا تتخطى المخزون
-    if (availableStock < (existingQuantity + quantity)) {
-        throw new BadRequest(`Stock is not enough. Available stock: ${availableStock}`);
-    }
-
-    // --- تحديث محتويات السلة ---
-    if (existingItem) {
-        // إذا كان المنتج موجوداً، نقوم بتحديث الكمية والسعر الحالي
-        const itemIndex = cart.cartItems.findIndex(i =>
-            i.product.toString() === productId &&
-            (productVariantId ? i.variant?.toString() === productVariantId : !i.variant)
-        );
-        cart.cartItems[itemIndex].quantity += quantity;
-        cart.cartItems[itemIndex].price = price;
-    } else {
-        // إذا كان منتجاً جديداً، نضيفه للمصفوفة
-        cart.cartItems.push({
-            product: new mongoose.Types.ObjectId(productId) as any,
-            variant: productVariantId ? new mongoose.Types.ObjectId(productVariantId) as any : undefined,
+        validatedItems.push({
+            product: productId,
+            variant: productVariantId || undefined,
             quantity: quantity,
-            price: price
+            price: currentPrice
         });
     }
 
-    cart.markModified('cartItems');
+    // تحديث السلة
+    await CartModel.findOneAndUpdate(
+        query,
+        { cartItems: validatedItems },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
-    await cart.save();
+    // جلب السلة كاملة مع الحسابات (حل مشكلة fullCart is possibly null)
+    const fullCart = await CartModel.findOne(query)
+        .populate({
+            path: 'cartItems.product',
+            select: 'name ar_name image price price_after_discount free_shipping taxesId',
+            populate: { path: 'taxesId' }
+        })
+        .populate('cartItems.variant');
 
-    SuccessResponse(res, {
-        message: "Cart updated successfully",
-        cart
-    }, 201);
+    if (!fullCart) throw new NotFound("Cart processing failed");
+
+    const { shippingCost } = await calculateCartTotals(fullCart, (query as any).user);
+    await fullCart.save();
+
+    SuccessResponse(res, { message: "Cart synced successfully", cart: fullCart, shippingCost }, 200);
 });
 
-// 1. إضافة منتج للسلة
-// export const addToCart = asyncHandler(async (req: Request, res: Response) => {
-//     const { productId, quantity } = req.body;
-//     const query = getCartQuery(req);
-
-//     if (!mongoose.isValidObjectId(productId)) throw new BadRequest("Invalid Product ID");
-
-//     const item = await ProductModel.findById(productId);
-//     if (!item) throw new NotFound("Product not found");
-
-//     let cart = await CartModel.findOne(query);
-
-//     let existingQuantity = 0;
-//     if (cart) {
-//         const existingItem = cart.cartItems.find(p => p.product.toString() === productId);
-//         if (existingItem) existingQuantity = existingItem.quantity;
-//     }
-
-//     // جلب المخازن الأونلاين والكمية المتاحة فيها
-//     const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
-//     const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
-
-//     const stockData = await Product_WarehouseModel.aggregate([
-//         {
-//             $match: {
-//                 productId: new mongoose.Types.ObjectId(productId),
-//                 warehouseId: { $in: onlineWarehouseIds },
-//             },
-//         },
-//         {
-//             $group: {
-//                 _id: "$productId",
-//                 totalQuantity: { $sum: "$quantity" },
-//             },
-//         },
-//     ]);
-
-//     const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
-
-//     if (availableStock < existingQuantity + quantity) {
-//         throw new BadRequest("Not enough stock available");
-//     }
-
-//     if (cart) {
-//         const existingItemIndex = cart.cartItems.findIndex(i => i.product.toString() === productId);
-//         if (existingItemIndex !== -1) {
-//             cart.cartItems[existingItemIndex].quantity += quantity;
-//             cart.cartItems[existingItemIndex].price = item.price || 0;
-//         } else {
-//             // استخدام as any هنا مقبول مع الحفظ الذكي
-//             cart.cartItems.push({ product: productId as any, quantity, price: item.price || 0 });
-//         }
-//         await cart.save();
-//     } else {
-//         // الحل الذكي: التأكد من أنواع البيانات عند الإنشاء لأول مرة
-//         cart = await CartModel.create({
-//             ...query,
-//             cartItems: [{ product: new mongoose.Types.ObjectId(productId), quantity, price: item.price || 0 }],
-//         });
-//     }
-
-//     SuccessResponse(res, { message: "Cart updated successfully", cart }, 201);
-// });
-
-// 2. جلب بيانات السلة وحساب الشحن
+// 2. جلب السلة
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
     const query = getCartQuery(req);
-    const userId = query.user;
-
     const cart = await CartModel.findOne(query)
         .populate({
             path: 'cartItems.product',
             select: 'name ar_name image price price_after_discount free_shipping taxesId',
             populate: { path: 'taxesId' }
         })
-        .populate({
-            path: 'cartItems.variant',
-            populate: {
-                path: 'productId',
-                select: 'name ar_name'
-            }
-        });
+        .populate('cartItems.variant');
 
-    if (!cart) {
-        return SuccessResponse(res, {
-            message: "Cart is empty",
-            cart: { cartItems: [], totalCartPrice: 0 },
-            shippingCost: 0
-        });
+    if (!cart || cart.cartItems.length === 0) {
+        return SuccessResponse(res, { message: "Empty", cart: { cartItems: [] }, shippingCost: 0 });
     }
 
-    const formattedCartItems = await Promise.all(cart.cartItems.map(async (item: any) => {
-        if (item.variant) {
-            const options = await mongoose.model("ProductPriceOption").find({ product_price_id: item.variant._id })
-                .populate({
-                    path: "option_id",
-                    populate: { path: "variationId", select: "name ar_name" }
-                }).lean();
-
-            const groupedOptions: Record<string, any[]> = {};
-            options.forEach((po: any) => {
-                const opt = po.option_id;
-                if (!opt || !opt.variationId) return;
-                const varName = opt.variationId.name;
-                if (!groupedOptions[varName]) groupedOptions[varName] = [];
-                groupedOptions[varName].push({
-                    _id: opt._id,
-                    name: opt.name,
-                    variationName: varName,
-                    variationArName: opt.variationId.ar_name
-                });
-            });
-
-            const variationsArray = Object.keys(groupedOptions).map(name => ({
-                name,
-                options: groupedOptions[name]
-            }));
-
-            return {
-                ...item.toObject(),
-                variantDetails: {
-                    ...item.variant.toObject(),
-                    variations: variationsArray
-                }
-            };
-        }
-        return item.toObject();
-    }));
-
-    let isModified = false;
-    let hasFreeShippingProduct = false;
-    let totalTaxAmount = 0;
-    let totalCartPrice = 0;
-
-    for (const item of cart.cartItems) {
-        const product = item.product as any;
-        const variant = item.variant as any;
-
-        let currentPrice = product?.price || 0;
-        if (variant) {
-            currentPrice = variant.price;
-        }
-
-        if (currentPrice !== item.price) {
-            item.price = currentPrice;
-            isModified = true;
-        }
-
-        if (product?.free_shipping) hasFreeShippingProduct = true;
-
-        // حساب الضرائب
-        if (product?.taxesId) {
-            const tax = product.taxesId as any;
-            if (tax.status) {
-                const itemTotal = item.price * item.quantity;
-                if (tax.type === "percentage") {
-                    totalTaxAmount += (itemTotal * tax.amount) / 100;
-                } else {
-                    totalTaxAmount += tax.amount * item.quantity;
-                }
-            }
-        }
-        totalCartPrice += item.price * item.quantity;
-    }
-
-    // حساب مصاريف الخدمة (Service Fees)
-    const activeFees = await ServiceFeeModel.find({ module: "online", status: true });
-    let totalServiceFee = 0;
-    activeFees.forEach(fee => {
-        if (fee.type === "percentage") {
-            totalServiceFee += (totalCartPrice * fee.amount) / 100;
-        } else {
-            totalServiceFee += fee.amount;
-        }
-    });
-
-    cart.taxAmount = totalTaxAmount;
-    cart.serviceFee = totalServiceFee;
-    cart.totalCartPrice = totalCartPrice;
-
-    // إعادة حساب خصم الكوبون لو موجود
-    if (cart.coupon) {
-        const coupon = await CouponModel.findById(cart.coupon);
-        if (coupon && coupon.available > 0 && new Date(coupon.expired_date) > new Date()) {
-            if (totalCartPrice >= (coupon.minimum_amount_for_use || 0)) {
-                if (coupon.type === "percentage") {
-                    cart.couponDiscount = (totalCartPrice * coupon.amount) / 100;
-                } else {
-                    cart.couponDiscount = coupon.amount;
-                }
-            } else {
-                cart.coupon = undefined;
-                cart.couponDiscount = 0;
-            }
-        } else {
-            cart.coupon = undefined;
-            cart.couponDiscount = 0;
-        }
-    }
-
-    cart.markModified('cartItems');
+    const { shippingCost } = await calculateCartTotals(cart, (query as any).user);
     await cart.save();
-
-    const shippingSettings = await ShippingSettingsModel.findOne({ singletonKey: "default" });
-    const selectedMethod = shippingSettings?.shippingMethod || "zone";
-    let shippingCost = 0;
-
-    if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
-        shippingCost = 0;
-    } else if (selectedMethod === "flat_rate") {
-        shippingCost = Number(shippingSettings?.flatRate || 0);
-    } else if (selectedMethod === "carrier") {
-        shippingCost = Number(shippingSettings?.carrierRate || 0);
-    } else {
-        if (userId) {
-            const address = await AddressModel.findOne({ user: userId }).populate('city zone');
-            shippingCost = address ? Number((address.zone as any)?.shipingCost || (address.city as any)?.shipingCost || 0) : 0;
-        } else {
-            shippingCost = 0;
-        }
-    }
-
-    SuccessResponse(res, {
-        message: "Cart fetched successfully",
-        cart: {
-            ...cart.toObject(),
-            cartItems: formattedCartItems
-        },
-        shippingCost
-    });
+    SuccessResponse(res, { cart, shippingCost });
 });
 
-// 6. تطبيق الكوبون
+// 3. تطبيق كوبون
 export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
     const { couponCode } = req.body;
     const query = getCartQuery(req);
 
-    const coupon = await CouponModel.findOne({ coupon_code: couponCode });
-    if (!coupon) throw new NotFound("Coupon not found");
+    const cart = await CartModel.findOne(query)
+        .populate({ path: 'cartItems.product', populate: { path: 'taxesId' } })
+        .populate('cartItems.variant');
 
-    if (coupon.available <= 0) throw new BadRequest("Coupon is out of stock");
-    if (new Date(coupon.expired_date) < new Date()) throw new BadRequest("Coupon has expired");
+    if (!cart) throw new NotFound("Cart is empty");
 
-    const cart = await CartModel.findOne(query);
-    if (!cart) throw new NotFound("Cart not found");
-
-    if (cart.totalCartPrice < (coupon.minimum_amount_for_use || 0)) {
-        throw new BadRequest(`Cart total must be at least ${coupon.minimum_amount_for_use} to use this coupon`);
+    if (!couponCode) {
+        cart.coupon = undefined;
+        cart.couponDiscount = 0;
+        await calculateCartTotals(cart, (query as any).user);
+        await cart.save();
+        return SuccessResponse(res, { message: "Coupon removed successfully", cart });
     }
 
-    let discount = 0;
-    if (coupon.type === "percentage") {
-        discount = (cart.totalCartPrice * coupon.amount) / 100;
-    } else {
-        discount = coupon.amount;
+    const coupon = await CouponModel.findOne({
+        coupon_code: couponCode,
+        available: { $gt: 0 },
+        expired_date: { $gt: new Date() }
+    });
+
+    if (!coupon) throw new BadRequest("Invalid coupon");
+
+    const { totalCartPrice } = await calculateCartTotals(cart, (query as any).user);
+    if (totalCartPrice < (coupon.minimum_amount_for_use || 0)) {
+        throw new BadRequest(`Minimum order is ${coupon.minimum_amount_for_use}`);
     }
 
     cart.coupon = coupon._id as any;
-    cart.couponDiscount = discount;
-    await cart.save();
+    cart.couponDiscount = coupon.type === "percentage" ? (totalCartPrice * coupon.amount) / 100 : coupon.amount;
 
+    await cart.save();
     SuccessResponse(res, { message: "Coupon applied successfully", cart });
 });
 
-// 3. تحديث الكمية
-export const updateQuantity = asyncHandler(async (req: Request, res: Response) => {
-    const { productId, productVariantId, quantity } = req.body;
-    const query = getCartQuery(req);
-
-    const product = await ProductModel.findById(productId);
-    if (!product) throw new NotFound("Product not found");
-
-    let price = product.price || 0;
-    if (productVariantId) {
-        const variant = await ProductPriceModel.findById(productVariantId);
-        if (!variant) throw new NotFound("Product Variant not found");
-        price = variant.price;
-    }
-
-    // جلب المخازن الأونلاين والكمية المتاحة فيها
-    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
-    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
-
-    const stockMatch: any = {
-        productId: new mongoose.Types.ObjectId(productId),
-        warehouseId: { $in: onlineWarehouseIds },
-    };
-    if (productVariantId) stockMatch.productPriceId = new mongoose.Types.ObjectId(productVariantId);
-    else stockMatch.productPriceId = null;
-
-    const stockData = await Product_WarehouseModel.aggregate([
-        { $match: stockMatch },
-        {
-            $group: {
-                _id: "$productId",
-                totalQuantity: { $sum: "$quantity" },
-            },
-        },
-    ]);
-
-    const availableStock = stockData.length > 0 ? stockData[0].totalQuantity : 0;
-
-    if (availableStock < quantity) {
-        throw new BadRequest("Not enough stock available");
-    }
-
-    const cart = await CartModel.findOne(query);
-    if (!cart) throw new NotFound("Cart not found");
-
-    const itemIndex = cart.cartItems.findIndex(p =>
-        p.product.toString() === productId &&
-        (productVariantId ? p.variant?.toString() === productVariantId : !p.variant)
-    );
-    if (itemIndex === -1) throw new NotFound("Product not in cart");
-
-    cart.cartItems[itemIndex].quantity = quantity;
-    cart.cartItems[itemIndex].price = price;
-
-    cart.markModified('cartItems'); // تأكيد التعديل
-    await cart.save();
-
-    SuccessResponse(res, { message: "Quantity updated", cart });
-});
-
-// 4. حذف منتج
-export const removeFromCart = asyncHandler(async (req: Request, res: Response) => {
-    const { productId } = req.params;
-    const { productVariantId } = req.query; // استلام productVariantId من الـ Query
-    const query = getCartQuery(req);
-
-    const pullQuery: any = { product: productId };
-    if (productVariantId) {
-        pullQuery.variant = productVariantId;
-    } else {
-        pullQuery.variant = { $exists: false }; // أو null حسب التخزين
-    }
-
-    const cart = await CartModel.findOneAndUpdate(
-        query,
-        { $pull: { cartItems: pullQuery } },
-        { new: true }
-    );
-
-    SuccessResponse(res, { message: "Product removed from cart", cart });
-});
-
-// 5. مسح السلة
+// 4. مسح السلة
 export const clearCart = asyncHandler(async (req: Request, res: Response) => {
-    const query = getCartQuery(req);
-    const cart = await CartModel.findOneAndDelete(query);
-    if (!cart) throw new NotFound("Cart is empty");
-
-    SuccessResponse(res, { message: "Cart has been cleared successfully" });
+    await CartModel.findOneAndDelete(getCartQuery(req));
+    SuccessResponse(res, { message: "Cart cleared" });
 });
