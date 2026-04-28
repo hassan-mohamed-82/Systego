@@ -5,12 +5,12 @@ const cartSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Customer',
     required: false,
-    index: { unique: true, sparse: true }
+    // index: { unique: true, sparse: true }
   },
   sessionId: {
     type: String,
     required: false,
-    index: { unique: true, sparse: true }
+    // index: { unique: true, sparse: true }
   },
   cartItems: [
     {
@@ -29,6 +29,11 @@ const cartSchema = new Schema({
         type: Number,
         required: true,
         min: 0
+      },
+      variant: {
+        type: Schema.Types.ObjectId,
+        ref: 'ProductPrice',
+        required: false
       }
     }
   ],
@@ -37,10 +42,35 @@ const cartSchema = new Schema({
     required: true,
     default: 0,
     min: 0
+  },
+  coupon: {
+    type: Schema.Types.ObjectId,
+    ref: 'Coupon',
+    required: false
+  },
+  couponDiscount: {
+    type: Number,
+    default: 0
+  },
+  serviceFee: {
+    type: Number,
+    default: 0
+  },
+  taxAmount: {
+    type: Number,
+    default: 0
+  },
+  totalPriceAfterDiscount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
 });
+
+// Explicitly define sparse unique indexes to allow multiple guest carts
+cartSchema.index({ user: 1 }, { unique: true, sparse: true });
+cartSchema.index({ sessionId: 1 }, { unique: true, sparse: true });
 
 // Calculate total price before saving
 cartSchema.pre('save', function (next) {
@@ -48,6 +78,10 @@ cartSchema.pre('save', function (next) {
     this.totalCartPrice = this.cartItems.reduce((total, item) => {
       return total + (item.price * item.quantity);
     }, 0);
+
+    // Final total calculation
+    this.totalPriceAfterDiscount = (this.totalCartPrice + this.serviceFee + this.taxAmount) - this.couponDiscount;
+    if (this.totalPriceAfterDiscount < 0) this.totalPriceAfterDiscount = 0;
   }
   next();
 });

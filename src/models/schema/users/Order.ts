@@ -27,6 +27,11 @@ const orderSchema = new Schema({
       },
       quantity: Number,
       price: Number,
+      variant: {
+        type: Schema.Types.ObjectId,
+        ref: "ProductPrice",
+        required: false
+      },
     },
   ],
   shippingAddress: {
@@ -43,6 +48,27 @@ const orderSchema = new Schema({
   totalOrderPrice: {
     type: Number,
     required: true
+  },
+  coupon: {
+    type: Schema.Types.ObjectId,
+    ref: 'Coupon',
+    required: false
+  },
+  couponDiscount: {
+    type: Number,
+    default: 0
+  },
+  serviceFee: {
+    type: Number,
+    default: 0
+  },
+  taxAmount: {
+    type: Number,
+    default: 0
+  },
+  totalPriceAfterDiscount: {
+    type: Number,
+    default: 0
   },
   paymentMethod: {
     type: Schema.Types.ObjectId,

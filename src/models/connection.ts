@@ -16,8 +16,9 @@ export const connectDB = async () => {
     await mongoose.connect(uri, {
       family: 4
     });
-    
+
     console.log("MongoDB connected successfully");
+
 
   } catch (error) {
     console.error("MongoDB connection failed:", error);

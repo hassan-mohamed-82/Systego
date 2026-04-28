@@ -16,8 +16,7 @@ orderRoute.post("/webhook/geidea", catchAsync(geideaWebhook));
 orderRoute.get("/webhook/fawry", catchAsync(fawryWebhook));
 orderRoute.post("/webhook/fawry", catchAsync(fawryWebhook));
 orderRoute.use(optionalAuthenticated);
-
-orderRoute.post("/checkout", catchAsync(createOrder));
+orderRoute.post("/checkout", validate(createOrderSchema), catchAsync(createOrder));
 orderRoute.get("/verify-payment/paymob/:orderId", catchAsync(verifyPaymobPaymentStatus));
 orderRoute.get("/my-orders", catchAsync(getMyOrders));
 orderRoute.get("/:id", catchAsync(getOrderDetails));
