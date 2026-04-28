@@ -75,6 +75,7 @@ import ReceivableRouter from "./Receivable";
 import AccountingLedgerRouter from "./AccountingLedger";
 import FawryRouter from "./Fawry";
 import orderTypeRouter from "./ordertype";
+import ProfileRouter from "./ProfileRoutes";
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter)
@@ -82,6 +83,7 @@ route.use("/tenant-info", tenantInfoRouter)
 route.use("/auth", authRouter);
 route.use(authenticated, authorizeRoles("admin", "superadmin"));
 route.use(enforceWarehouseScope);
+route.use("/profile", ProfileRouter);
 route.use("/brand", brandRouter);
 route.use("/admin", AdminRouter);
 route.use("/permission", permissionRouter);

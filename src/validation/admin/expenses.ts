@@ -15,6 +15,7 @@ name: Joi.string().max(100).required().messages({
   financial_accountId: Joi.string().hex().length(24).required().messages({
     "any.required": "Financial Account ID is required",
   }),
+  warehouse_id: Joi.string().hex().length(24).optional(),
 
 });
 
@@ -34,4 +35,5 @@ export const updateExpenseSchema = Joi.object({
   financial_accountId: Joi.string().hex().length(24).messages({
     "string.length": "Financial Account ID must be a valid 24-character hex string",
   }),
+  warehouse_id: Joi.string().hex().length(24).optional(),
 });

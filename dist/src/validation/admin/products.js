@@ -47,6 +47,8 @@ exports.createProductSchema = joi_1.default.object({
     prices: joi_1.default.array().items(exports.priceSchema).optional(),
     is_featured: joi_1.default.boolean().optional(),
     Is_Online: joi_1.default.boolean().optional(),
+    warehouseId: exports.objectId.optional(),
+    warehouse_id: exports.objectId.optional(),
 });
 exports.updateProductSchema = joi_1.default.object({
     name: joi_1.default.string().optional(),
@@ -78,4 +80,7 @@ exports.updateProductSchema = joi_1.default.object({
     prices: joi_1.default.array().items(exports.priceSchema).optional(),
     is_featured: joi_1.default.boolean().optional(),
     Is_Online: joi_1.default.boolean().optional(),
+    warehouseId: exports.objectId.optional(),
+    warehouse_id: exports.objectId.optional(),
+    gallery: joi_1.default.array().items(joi_1.default.string()).optional(),
 });

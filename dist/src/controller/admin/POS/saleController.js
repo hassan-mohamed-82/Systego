@@ -203,14 +203,23 @@ const createSale = async (req, res) => {
                 }
                 // ✅ تحقق من الـ Stock
                 if (productPriceId) {
-                    // منتج مع Variation
+                    // منتج مع Variation - التحقق من المخزن بدل الكمية العامة
                     const priceDoc = await product_price_1.ProductPriceModel.findById(productPriceId);
                     if (!priceDoc) {
                         throw new Errors_1.NotFound(`Product variation ${productPriceId} not found`);
                     }
-                    if ((priceDoc.quantity ?? 0) < quantity * productQty) {
+                    const variationWarehouseStock = await Product_Warehouse_1.Product_WarehouseModel.findOne({
+                        productId: productId,
+                        productPriceId: productPriceId,
+                        warehouseId: warehouseId,
+                    });
+                    if (!variationWarehouseStock) {
                         const product = await products_1.ProductModel.findById(productId).select("name").lean();
-                        throw new BadRequest_1.BadRequest(`Not enough stock for "${product?.name || "product"}" variation in bundle "${bundleDoc.name}". Available: ${priceDoc.quantity}, Required: ${quantity * productQty}`);
+                        throw new BadRequest_1.BadRequest(`Bundle "${bundleDoc.name}" - variation for "${product?.name || productId}" is not assigned to this warehouse`);
+                    }
+                    if ((variationWarehouseStock.quantity ?? 0) < quantity * productQty) {
+                        const product = await products_1.ProductModel.findById(productId).select("name").lean();
+                        throw new BadRequest_1.BadRequest(`Not enough stock for "${product?.name || "product"}" variation in bundle "${bundleDoc.name}". Available: ${variationWarehouseStock.quantity}, Required: ${quantity * productQty}`);
                     }
                 }
                 else {
@@ -422,8 +431,17 @@ const createSale = async (req, res) => {
             if (!priceDoc) {
                 throw new Errors_1.NotFound("Product price (variation) not found");
             }
-            if ((priceDoc.quantity ?? 0) < quantity) {
-                throw new BadRequest_1.BadRequest(`Not enough stock for variation, available: ${priceDoc.quantity ?? 0}, required: ${quantity}`);
+            // ✅ التحقق من المخزن (warehouse-specific) بدل الكمية العامة
+            const variationWarehouseStock = await Product_Warehouse_1.Product_WarehouseModel.findOne({
+                productId: product_id,
+                productPriceId: product_price_id,
+                warehouseId: warehouseId,
+            });
+            if (!variationWarehouseStock) {
+                throw new BadRequest_1.BadRequest(`Product variation is not assigned to warehouse`);
+            }
+            if ((variationWarehouseStock.quantity ?? 0) < quantity) {
+                throw new BadRequest_1.BadRequest(`Not enough stock for variation in warehouse, available: ${variationWarehouseStock.quantity ?? 0}, required: ${quantity}`);
             }
         }
         else {
@@ -540,11 +558,15 @@ const createSale = async (req, res) => {
         // ✅ خصم كميات المنتجات العادية
         for (const p of processedProducts) {
             if (p.product_price_id) {
+                // ✅ خصم من مخزن المنتج (Variation-specific, Warehouse-specific)
+                await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({ productId: p.product_id, productPriceId: p.product_price_id, warehouseId: warehouseId }, { $inc: { quantity: -p.quantity } });
+                // ✅ خصم من الكمية العامة للـ Variation
                 await product_price_1.ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
                     $inc: { quantity: -p.quantity },
                 });
-                await products_1.ProductModel.findByIdAndUpdate(p.product_id, {
-                    $inc: { quantity: -p.quantity },
+                // ✅ خصم من إجمالي المخزن
+                await Warehouse_1.WarehouseModel.findByIdAndUpdate(warehouseId, {
+                    $inc: { stock_Quantity: -p.quantity },
                 });
             }
             else if (p.product_id) {
@@ -562,12 +584,13 @@ const createSale = async (req, res) => {
             for (const bp of b.products) {
                 const deductQty = b.quantity * bp.quantity;
                 if (bp.productPriceId) {
-                    // منتج مع Variation
+                    // منتج مع Variation - خصم من المخزن + الـ Variation
+                    await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({ productId: bp.productId, productPriceId: bp.productPriceId, warehouseId: warehouseId }, { $inc: { quantity: -deductQty } });
                     await product_price_1.ProductPriceModel.findByIdAndUpdate(bp.productPriceId, {
                         $inc: { quantity: -deductQty },
                     });
-                    await products_1.ProductModel.findByIdAndUpdate(bp.productId, {
-                        $inc: { quantity: -deductQty },
+                    await Warehouse_1.WarehouseModel.findByIdAndUpdate(warehouseId, {
+                        $inc: { stock_Quantity: -deductQty },
                     });
                 }
                 else {

@@ -45,6 +45,8 @@ export const createProductSchema = Joi.object({
   prices: Joi.array().items(priceSchema).optional(),
   is_featured: Joi.boolean().optional(),
   Is_Online: Joi.boolean().optional(),
+  warehouseId: objectId.optional(),
+  warehouse_id: objectId.optional(),
 });
 
 export const updateProductSchema = Joi.object({
@@ -77,4 +79,7 @@ export const updateProductSchema = Joi.object({
   prices: Joi.array().items(priceSchema).optional(),
   is_featured: Joi.boolean().optional(),
   Is_Online: Joi.boolean().optional(),
+  warehouseId: objectId.optional(),
+  warehouse_id: objectId.optional(),
+  gallery: Joi.array().items(Joi.string()).optional(),
 });
