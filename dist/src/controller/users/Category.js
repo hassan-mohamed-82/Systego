@@ -9,13 +9,13 @@ const express_async_handler_1 = __importDefault(require("express-async-handler")
 const NotFound_1 = require("../../Errors/NotFound");
 const response_1 = require("../../utils/response");
 exports.getAllCategorys = (0, express_async_handler_1.default)(async (req, res) => {
-    const categories = await category_1.CategoryModel.find()
+    const categories = await category_1.CategoryModel.find({ Is_Online: true })
         .sort({ created_at: -1 });
     return (0, response_1.SuccessResponse)(res, { message: 'Categorys retrieved successfully', data: categories }, 200);
 });
 exports.getCategoryById = (0, express_async_handler_1.default)(async (req, res) => {
     const id = req.params.id;
-    const category = await category_1.CategoryModel.findOne({ _id: id });
+    const category = await category_1.CategoryModel.findOne({ _id: id, Is_Online: true });
     if (!category) {
         throw new NotFound_1.NotFound('Category not found');
     }

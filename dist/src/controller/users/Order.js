@@ -24,6 +24,7 @@ const Zone_1 = require("../../models/schema/admin/Zone");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 const Fawry_1 = require("../../models/schema/admin/Fawry");
 const fawryService_1 = require("../../utils/fawryService");
+const coupons_1 = require("../../models/schema/admin/coupons");
 // ===============================
 // 🟢 CREATE ORDER
 const createOrder = async (req, res) => {
@@ -34,12 +35,15 @@ const createOrder = async (req, res) => {
     session.startTransaction();
     let isTransactionCommitted = false;
     try {
-        // 1️⃣ تحديد السلة (Cart)
+        // 1️⃣ Find Cart
         if (!userId && !sessionId) {
             throw new Errors_1.BadRequest("User ID or Session ID is required to find your cart");
         }
         const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
-        const cart = await Cart_1.CartModel.findOne(cartQuery).session(session);
+        // 2️⃣ Get Cart and Prepared Data
+        const cart = await Cart_1.CartModel.findOne(cartQuery)
+            .populate({ path: 'cartItems.product', select: 'name ar_name free_shipping' })
+            .session(session);
         if (!cart || cart.cartItems.length === 0) {
             throw new Errors_1.BadRequest("Cart is empty");
         }
@@ -53,11 +57,11 @@ const createOrder = async (req, res) => {
         if (paymentMethodDoc.type === "manual" && !proofImage) {
             throw new Errors_1.BadRequest("Proof image required for manual payment");
         }
-        // 3️⃣ Address / Warehouse Logic based on orderType
-        let shippingAddressData = null;
+        // 3️⃣ Address, Warehouse, Shipping Cost
         let shippingCost = 0;
-        let rawAddressForPaymob = {};
         let resolvedWarehouseId = null;
+        let shippingAddressData = null;
+        let rawAddressForPaymob = {};
         if (!orderType)
             throw new Errors_1.BadRequest("orderType is required");
         if (orderType !== "pickup" && orderType !== "delivery")
@@ -72,99 +76,72 @@ const createOrder = async (req, res) => {
             resolvedWarehouseId = warehouse._id;
             shippingCost = 0; // no shipping for pickup
         }
-        else {
-            // DELIVERY: require a shippingAddress
-            if (!shippingAddress)
-                throw new Errors_1.BadRequest("shippingAddress is required for delivery orders");
+        else if (orderType === "delivery") {
+            // 1. تحديد المخزن
+            const onlineWarehouse = await Warehouse_1.WarehouseModel.findOne({ Is_Online: true }).session(session);
+            if (!onlineWarehouse)
+                throw new Errors_1.BadRequest("No online warehouse available");
+            resolvedWarehouseId = onlineWarehouse._id;
+            // 2. جلب العنوان وحساب التكلفة المبدئية
+            let initialShippingCost = 0;
             if (typeof shippingAddress === "string") {
-                // Registered user (ID): populate to get names and prices
-                const addressDoc = await Address_1.AddressModel.findOne({
-                    _id: shippingAddress,
-                    user: userId
-                })
-                    .populate("city zone country")
-                    .session(session);
+                const addressDoc = await Address_1.AddressModel.findOne({ _id: shippingAddress, user: userId }).populate("city zone country").session(session);
                 if (!addressDoc)
                     throw new Errors_1.NotFound("Address not found");
-                const populated = addressDoc;
-                shippingAddressData = {
-                    details: `${populated.street}`,
-                    city: populated.city?.name || "",
-                    zone: populated.zone?.name || "",
-                };
-                shippingCost = Number(populated.zone?.shipingCost || populated.city?.shipingCost || 0);
-                rawAddressForPaymob = populated;
+                shippingAddressData = { details: addressDoc.street, city: addressDoc.city?.name, zone: addressDoc.zone?.name };
+                initialShippingCost = Number(addressDoc.zone?.shipingCost || addressDoc.city?.shipingCost || 0);
             }
             else {
-                // حالة الضيف (Object): نجلب الموديلات يدوياً لحساب الشحن بدقة
                 const [cityDoc, zoneDoc] = await Promise.all([
                     City_1.CityModels.findById(shippingAddress.city).session(session),
                     Zone_1.ZoneModel.findById(shippingAddress.zone).session(session)
                 ]);
-                shippingAddressData = {
-                    details: `${shippingAddress.street}`,
-                    city: cityDoc?.name || "",
-                    zone: zoneDoc?.name || "",
-                };
-                shippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
-                rawAddressForPaymob = shippingAddress;
+                shippingAddressData = { details: shippingAddress.street, city: cityDoc?.name, zone: zoneDoc?.name };
+                initialShippingCost = Number(zoneDoc?.shipingCost || cityDoc?.shipingCost || 0);
             }
-            // 4️⃣ Shipping Settings
-            const productIds = cart.cartItems.map((i) => i.product);
-            const freeShippingProductsCount = await products_1.ProductModel.countDocuments({
-                _id: { $in: productIds },
-                free_shipping: true,
-            }).session(session);
-            const shippingSettings = await ShippingSettings_1.ShippingSettingsModel.findOne({
-                singletonKey: "default",
-            }).session(session);
-            if (shippingSettings?.freeShippingEnabled || freeShippingProductsCount > 0) {
+            // 3. تطبيق قواعد الشحن (Free / Flat Rate / Zone Rate)
+            const shippingSettings = await ShippingSettings_1.ShippingSettingsModel.findOne({ singletonKey: "default" }).session(session);
+            const hasFreeShippingProduct = cart.cartItems.some((i) => i.product.free_shipping);
+            if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
                 shippingCost = 0;
             }
             else if (shippingSettings?.shippingMethod === "flat_rate") {
                 shippingCost = Number(shippingSettings.flatRate || 0);
             }
             else {
-                shippingCost =
-                    Number(rawAddressForPaymob.zone?.shipingCost) ||
-                        Number(rawAddressForPaymob.city?.shipingCost) ||
-                        0;
+                shippingCost = initialShippingCost; // نعتمد هنا على الحسبة اللي عملناها فوق من الـ Zone/City
             }
         }
-        // 5️⃣ Products & Stock
-        let productsTotal = 0;
+        // 4️⃣ Warehouse discount and prepare items
         const finalItems = [];
-        // تحديد مخزن الأونلاين للطلبات الـ delivery لو مش معروف
-        if (orderType === "delivery" && !resolvedWarehouseId) {
-            const onlineWarehouse = await Warehouse_1.WarehouseModel.findOne({ Is_Online: true }).session(session);
-            if (!onlineWarehouse)
-                throw new Errors_1.BadRequest("No online warehouse available for delivery");
-            resolvedWarehouseId = onlineWarehouse._id;
-        }
         for (const item of cart.cartItems) {
-            const qty = item.quantity ?? 1;
-            // خصم من مخزن الأونلاين (Product_Warehouse)
-            const warehouseStock = await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({
-                productId: item.product,
-                warehouseId: resolvedWarehouseId,
-                quantity: { $gte: qty }
-            }, { $inc: { quantity: -qty } }, { new: true, session });
-            if (!warehouseStock)
-                throw new Errors_1.BadRequest(`Product ${item.product} is out of stock in the selected warehouse`);
-            // تحديث الكمية الإجمالية في موديل المنتج (اختياري للمزامنة)
-            const product = await products_1.ProductModel.findByIdAndUpdate(item.product, { $inc: { quantity: -qty } }, { new: true, session });
-            if (!product)
-                throw new Errors_1.BadRequest(`Product ${item.product} not found`);
-            const price = product.price || 0;
-            productsTotal += price * qty;
-            finalItems.push({
-                product: product._id.toString(),
-                quantity: qty,
-                price,
-            });
+            const qty = item.quantity;
+            const variantId = item.variant;
+            const stockUpdate = await Product_Warehouse_1.Product_WarehouseModel.findOneAndUpdate({ productId: item.product._id, warehouseId: resolvedWarehouseId, productPriceId: variantId || null, quantity: { $gte: qty } }, { $inc: { quantity: -qty } }, { new: true, session });
+            if (!stockUpdate)
+                throw new Errors_1.BadRequest(`Product ${item.product.name} is not available in the warehouse`);
+            await products_1.ProductModel.findByIdAndUpdate(item.product._id, { $inc: { quantity: -qty } }, { session });
+            if (variantId)
+                await mongoose_1.default.model("ProductPrice").findByIdAndUpdate(variantId, { $inc: { quantity: -qty } }, { session });
+            finalItems.push({ product: item.product._id, variant: variantId, quantity: qty, price: item.price });
         }
-        const totalPrice = productsTotal + shippingCost;
-        // جلب إعدادات بوابات الدفع
+        // 5️⃣ Final calculations from cart
+        const productsTotal = cart.totalCartPrice;
+        const totalTaxAmount = cart.taxAmount || 0;
+        const totalServiceFee = cart.serviceFee || 0;
+        let couponDiscount = 0;
+        let appliedCouponId = null;
+        if (cart.coupon) {
+            const coupon = await coupons_1.CouponModel.findById(cart.coupon).session(session);
+            if (coupon && coupon.available > 0) {
+                couponDiscount = cart.couponDiscount;
+                appliedCouponId = coupon._id;
+                coupon.available -= 1;
+                await coupon.save({ session });
+            }
+        }
+        const totalPrice = (productsTotal + shippingCost + totalServiceFee + totalTaxAmount) - couponDiscount;
+        // 6️⃣ Get payment gateways configurations
         const geideaConfig = paymentMethodDoc.type === "automatic"
             ? await Geidea_1.GeideaModel.findOne({ payment_method_id: paymentMethodDoc._id, isActive: true }).session(session) : null;
         const paymobConfig = paymentMethodDoc.type === "automatic"
@@ -182,7 +159,7 @@ const createOrder = async (req, res) => {
             else
                 throw new Errors_1.BadRequest("No active automatic gateway config found for selected payment method");
         }
-        // 6️⃣ Create Order
+        // 7️⃣ Create Order
         const order = await Order_1.OrderModel.create([
             {
                 user: userId || null,
@@ -191,7 +168,12 @@ const createOrder = async (req, res) => {
                 cartItems: finalItems,
                 shippingAddress: shippingAddressData,
                 shippingPrice: shippingCost,
-                totalOrderPrice: totalPrice,
+                totalOrderPrice: productsTotal, // old price
+                totalPriceAfterDiscount: totalPrice, // new price after discount
+                taxAmount: totalTaxAmount,
+                serviceFee: totalServiceFee,
+                coupon: appliedCouponId,
+                couponDiscount: couponDiscount,
                 paymentMethod: paymentMethod.toString(),
                 proofImage,
                 status: "pending",
@@ -350,7 +332,11 @@ const getOrderDetails = async (req, res) => {
         _id: req.params.id,
         user: req.user?.id,
     })
-        .populate("cartItems.product", "name image")
+        .populate("cartItems.product", "name ar_name image")
+        .populate({
+        path: "cartItems.variant",
+        populate: { path: "productId", select: "name ar_name" }
+    })
         .populate("paymentMethod", "name ar_name")
         .populate("warehouse", "name");
     if (!order)

@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const optionalAuthenticated_1 = require("../../middlewares/optionalAuthenticated");
 const Order_1 = require("../../controller/users/Order");
+const validation_1 = require("../../middlewares/validation");
+const order_1 = require("../../validation/users/order");
 const catchAsync_1 = require("../../utils/catchAsync");
 const paymobWebhook_1 = require("../../utils/paymobWebhook");
 const geadiawebhook_1 = require("../../utils/geadiawebhook");
@@ -15,7 +17,7 @@ orderRoute.post("/webhook/geidea", (0, catchAsync_1.catchAsync)(geadiawebhook_1.
 orderRoute.get("/webhook/fawry", (0, catchAsync_1.catchAsync)(fawryWebhook_1.fawryWebhook));
 orderRoute.post("/webhook/fawry", (0, catchAsync_1.catchAsync)(fawryWebhook_1.fawryWebhook));
 orderRoute.use(optionalAuthenticated_1.optionalAuthenticated);
-orderRoute.post("/checkout", (0, catchAsync_1.catchAsync)(Order_1.createOrder));
+orderRoute.post("/checkout", (0, validation_1.validate)(order_1.createOrderSchema), (0, catchAsync_1.catchAsync)(Order_1.createOrder));
 orderRoute.get("/verify-payment/paymob/:orderId", (0, catchAsync_1.catchAsync)(Order_1.verifyPaymobPaymentStatus));
 orderRoute.get("/my-orders", (0, catchAsync_1.catchAsync)(Order_1.getMyOrders));
 orderRoute.get("/:id", (0, catchAsync_1.catchAsync)(Order_1.getOrderDetails));

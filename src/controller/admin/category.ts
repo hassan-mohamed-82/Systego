@@ -110,11 +110,11 @@ export const updateCategory = async (req: Request, res: Response) => {
   if (ar_name !== undefined) category.ar_name = ar_name;
   if (Is_Online !== undefined) category.Is_Online = Is_Online;
   
-  // 👈 لو parentId فاضي أو null، شيله
   if (parentId !== undefined) {
     category.parentId = parentId && parentId !== "" ? parentId : undefined;
   }
   if (image) {
+    
     category.image = await saveBase64Image(
       image,
       Date.now().toString(),

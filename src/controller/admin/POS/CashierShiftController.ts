@@ -20,26 +20,16 @@ export const startcashierShift = async (req: Request, res: Response) => {
   const warehouseId = (req.user as any)?.warehouse_id;
   const { cashier_id } = req.body;
 
-  if (!cashierman_id) {
-    throw new NotFound("Cashier user not found in token");
-  }
-  if (!warehouseId) {
-    throw new NotFound("Warehouse ID is required");
-  }
+  if (!cashierman_id) throw new NotFound("User not found");
+  if (!warehouseId) throw new NotFound("Warehouse ID is required");
 
-  const cashierUser = await UserModel.findById(cashierman_id);
-  if (!cashierUser) {
-    throw new NotFound("Cashier user not found");
-  }
-
-  // ✅ لو فيه شيفت مفتوح، دخّله عليه على طول
+  // ✅ هل اليوزر عنده شيفت مفتوح؟
   const existingShift = await CashierShift.findOne({
     cashierman_id,
     status: "open",
-  }).populate("cashier_id", "name code");
+  });
 
   if (existingShift) {
-    // جيب بيانات الكاشير المرتبط بالشيفت
     const cashierDoc = await CashierModel.findById(existingShift.cashier_id);
 
     return SuccessResponse(res, {
@@ -50,64 +40,67 @@ export const startcashierShift = async (req: Request, res: Response) => {
     });
   }
 
-  // ✅ لو مفيش شيفت مفتوح، لازم يختار كاشير
   if (!cashier_id) {
-    throw new BadRequest("Cashier ID is required to start a new shift");
+    throw new BadRequest("Cashier ID is required");
   }
 
-  // 🔒 امنع أن نفس الكاشير (CashierModel) يشتغل مع حد تاني
-  const cashierDoc = await CashierModel.findOneAndUpdate(
-    {
-      _id: cashier_id,
-      warehouse_id: warehouseId,
-      status: true,
-      cashier_active: false,
-    },
-    { $set: { cashier_active: true } },
-    { new: true }
-  );
+  // 🔥 check من الـ shift
+  const busyShift = await CashierShift.findOne({
+    cashier_id,
+    status: "open",
+  });
+
+  if (busyShift) {
+    throw new BadRequest("Cashier already has an open shift");
+  }
+
+  const cashierDoc = await CashierModel.findOne({
+    _id: cashier_id,
+    warehouse_id: warehouseId,
+    status: true,
+  });
 
   if (!cashierDoc) {
-    throw new BadRequest("Cashier already in use or not found");
+    throw new NotFound("Cashier not found");
   }
 
-  // ✅ نفتح شيفت جديد
-  const cashierShift = new CashierShift({
+  // ✅ افتح الشيفت
+  const cashierShift = await CashierShift.create({
     start_time: new Date(),
     cashierman_id,
     cashier_id,
     status: "open",
   });
 
-  const savedShift = await cashierShift.save();
+  // ✅ بعد ما الشيفت اتفتح فعلًا
+  await CashierModel.updateOne(
+    { _id: cashier_id },
+    { $set: { cashier_active: true } }
+  );
 
   SuccessResponse(res, {
     message: "Cashier shift started successfully",
-    isExisting: false,
-    shift: savedShift,
+    shift: cashierShift,
     cashier: cashierDoc,
   });
 };
 
-
 export const endShiftWithReport = async (req: Request, res: Response) => {
   const { password } = req.body;
   const jwtUser = req.user;
+
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
   const userId = jwtUser.id;
-  const warehouseId = (jwtUser as any)?.warehouse_id;
 
-  // 1) هات اليوزر وتأكد من الباسورد
-  const user = await UserModel.findById(userId).select(
-    "+password_hash +role +positionId"
-  );
+  // ✅ 1) تحقق من اليوزر والباسورد
+  const user = await UserModel.findById(userId).select("+password_hash");
   if (!user) throw new NotFound("User not found");
 
   const isMatch = await bcrypt.compare(password, user.password_hash);
   if (!isMatch) throw new BadRequest("Wrong password");
 
-  // 2) آخر شيفت مفتوح لليوزر ده
+  // ✅ 2) هات الشيفت المفتوح (source of truth)
   const shift = await CashierShift.findOne({
     cashierman_id: user._id,
     status: "open",
@@ -115,15 +108,17 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
 
   if (!shift) throw new NotFound("No open cashier shift found");
 
-  // ✅ بداية اليوم الحالي (12:00 AM)
+  // ✅ 3) تحديد تاريخ الفلترة (الأحدث بين بداية اليوم وبداية الشيفت)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  // ✅ استخدم الأحدث: بداية الشيفت أو بداية اليوم
   const shiftStartTime = new Date(shift.start_time || Date.now());
-  const filterFromDate = shiftStartTime > todayStart ? shiftStartTime : todayStart;
 
-  // 3) المبيعات المكتملة في الشيفت ده فقط
+  const filterFromDate = new Date(
+    Math.max(shiftStartTime.getTime(), todayStart.getTime())
+  );
+
+  // ✅ 4) المبيعات
   const completedSales = await SaleModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
@@ -137,24 +132,16 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     (sum, s: any) => sum + (s.grand_total || 0),
     0
   );
+
   const totalOrders = completedSales.length;
   const saleIds = completedSales.map((s: any) => s._id);
 
-  // 4) إجمالي المدفوعات من PaymentModel مجمعة حسب الحساب المالي
-  interface PaymentsAggRow {
-    _id: mongoose.Types.ObjectId;
-    totalAmount: number;
-  }
-
+  // ✅ 5) المدفوعات مجمعة حسب الحساب
   let paymentsByAccount: Record<string, number> = {};
 
-  if (saleIds.length > 0) {
-    const paymentsAgg: PaymentsAggRow[] = await PaymentModel.aggregate([
-      {
-        $match: {
-          sale_id: { $in: saleIds },
-        },
-      },
+  if (saleIds.length) {
+    const paymentsAgg = await PaymentModel.aggregate([
+      { $match: { sale_id: { $in: saleIds } } },
       { $unwind: "$financials" },
       {
         $group: {
@@ -164,24 +151,14 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
       },
     ]);
 
-    paymentsByAccount = paymentsAgg.reduce(
-      (acc: Record<string, number>, row: PaymentsAggRow) => {
-        if (row._id) {
-          acc[row._id.toString()] = row.totalAmount;
-        }
-        return acc;
-      },
-      {}
-    );
+    paymentsByAccount = paymentsAgg.reduce((acc: any, row: any) => {
+      if (row._id) acc[row._id.toString()] = row.totalAmount;
+      return acc;
+    }, {});
   }
 
-  // 5) مصروفات الشيفت مجمعة حسب الحساب المالي
-  interface ExpensesAggRow {
-    _id: mongoose.Types.ObjectId;
-    totalAmount: number;
-  }
-
-  const expensesAgg: ExpensesAggRow[] = await ExpenseModel.aggregate([
+  // ✅ 6) المصروفات
+  const expensesAgg = await ExpenseModel.aggregate([
     {
       $match: {
         shift_id: shift._id,
@@ -197,39 +174,31 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     },
   ]);
 
-  const expensesByAccount = expensesAgg.reduce(
-    (acc: Record<string, number>, row: ExpensesAggRow) => {
-      if (row._id) {
-        acc[row._id.toString()] = row.totalAmount;
-      }
-      return acc;
-    },
-    {}
-  );
+  const expensesByAccount = expensesAgg.reduce((acc: any, row: any) => {
+    if (row._id) acc[row._id.toString()] = row.totalAmount;
+    return acc;
+  }, {});
 
   const totalExpenses = Object.values(expensesByAccount).reduce(
-    (sum, v) => sum + v,
+    (sum: number, v: any) => sum + v,
     0
   );
 
   const netCashInDrawer = totalSales - totalExpenses;
 
-  // 6) هات بيانات الحسابات المالية اللي اتستخدمت
-  const allAccountIds = Array.from(
-    new Set([
+  // ✅ 7) الحسابات المستخدمة
+  const allAccountIds = [
+    ...new Set([
       ...Object.keys(paymentsByAccount),
       ...Object.keys(expensesByAccount),
-    ])
-  ).filter((id) => !!id);
+    ]),
+  ];
 
   let accounts: any[] = [];
-  if (allAccountIds.length > 0) {
-    const accountObjectIds = allAccountIds.map(
-      (id) => new mongoose.Types.ObjectId(id)
-    );
 
+  if (allAccountIds.length) {
     accounts = await BankAccountModel.find({
-      _id: { $in: accountObjectIds },
+      _id: { $in: allAccountIds },
     })
       .select("name type")
       .lean();
@@ -239,22 +208,23 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     accounts.map((a: any) => [a._id.toString(), a])
   );
 
-  // 7) بناء الـ summary ديناميك لكل حساب مالي
+  // ✅ 8) summary لكل حساب
   const accountRows = allAccountIds.map((id) => {
     const acc = accountsMap.get(id);
+
     const salesAmount = paymentsByAccount[id] || 0;
     const expensesAmount = expensesByAccount[id] || 0;
 
     return {
       account_id: id,
-      name: acc?.name || "Unknown account",
+      name: acc?.name || "Unknown",
       salesAmount,
       expensesAmount,
       net: salesAmount - expensesAmount,
     };
   });
 
-  // 8) مصروفات مفصلة
+  // ✅ 9) تفاصيل المصروفات
   const expenses = await ExpenseModel.find({
     shift_id: shift._id,
     cashier_id: user._id,
@@ -275,6 +245,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
       : null,
   }));
 
+  // ✅ 10) بناء التقرير
   const report = {
     financialSummary: {
       totals: {
@@ -293,11 +264,12 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     },
   };
 
-  // ✅ حدّث الـ shift object بالقيم المحسوبة
-  const shiftData = (shift as any).toObject ? (shift as any).toObject() : shift;
+  // ✅ 11) تجهيز بيانات الشيفت
+  const shiftData =
+    (shift as any).toObject?.() || shift;
 
   return SuccessResponse(res, {
-    message: "Shift report preview (shift is still open)",
+    message: "Shift report preview (still open)",
     shift: {
       ...shiftData,
       total_sale_amount: totalSales,
@@ -307,22 +279,12 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     report,
   });
 };
-
 export const endshiftcashier = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");
 
-  const cashierman_id = jwtUser.id;               // User من الـ JWT
-  const warehouseId = jwtUser.warehouse_id;
+  const cashierman_id = jwtUser.id;
 
-  if (!cashierman_id) {
-    throw new NotFound("Cashier user not found in token");
-  }
-  if (!warehouseId) {
-    throw new NotFound("Warehouse ID is required");
-  }
-
-  // 🔎 هات آخر شيفت مفتوح لليوزر ده (زي endShiftWithReport)
   const shift = await CashierShift.findOne({
     cashierman_id,
     status: "open",
@@ -333,26 +295,18 @@ export const endshiftcashier = async (req: Request, res: Response) => {
   }
 
   if (shift.end_time) {
-    throw new BadRequest("Cashier shift already ended");
+    throw new BadRequest("Shift already ended");
   }
 
-  // الكاشير (CashierModel) اللي كان مستخدم في الشيفت
-  const cashier_id = shift.cashier_id;
-
-  // ✅ نقفل الشيفت (لو عندك داتا قديمة ناقصة cashier_id استخدم الاختيار اللي تحت)
+  // ✅ اقفل الشيفت
   shift.end_time = new Date();
   shift.status = "closed";
-  await shift.save(); // أو الخيار B تحت
+  await shift.save();
 
-  // ✅ نرجع الكاشير متاح تاني في نفس الـ warehouse
-  if (cashier_id) {
+  // ✅ رجّع الكاشير متاح (بدون شروط تقفل التحديث)
+  if (shift.cashier_id) {
     await CashierModel.updateOne(
-      {
-        _id: cashier_id,
-        warehouse_id: warehouseId,
-        status: true,
-        cashier_active: true, // كان مستخدم في الشيفت
-      },
+      { _id: shift.cashier_id },
       { $set: { cashier_active: false } }
     );
   }
@@ -362,7 +316,6 @@ export const endshiftcashier = async (req: Request, res: Response) => {
     shift,
   });
 };
-
 
 
 export const getCashierUsers = async (req: Request, res: Response) => {

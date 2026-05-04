@@ -99,7 +99,6 @@ const updateCategory = async (req, res) => {
         category.ar_name = ar_name;
     if (Is_Online !== undefined)
         category.Is_Online = Is_Online;
-    // 👈 لو parentId فاضي أو null، شيله
     if (parentId !== undefined) {
         category.parentId = parentId && parentId !== "" ? parentId : undefined;
     }

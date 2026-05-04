@@ -17,43 +17,61 @@ const CashierSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     ar_name: { type: String, required: true },
+
     warehouse_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Warehouse",
       required: true,
     },
+
+    // ✅ الكاشير متاح في النظام
     status: { type: Boolean, default: true },
+
+    // ✅ false = متاح / true = مشغول في شيفت
     cashier_active: { type: Boolean, default: false },
-    bankAccounts: [{ type: mongoose.Schema.Types.ObjectId, ref: "BankAccount" }],
-    
+
+    bankAccounts: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "BankAccount" },
+    ],
+
     printer_type: { type: String, enum: ["USB", "NETWORK"] },
-    
-    // إجبار إدخال البيانات لو النوع NETWORK
-    printer_IP: { 
-      type: String, 
-      required: function(this: any) { return this.printer_type === "NETWORK"; } 
+
+    printer_IP: {
+      type: String,
+      required: function (this: any) {
+        return this.printer_type === "NETWORK";
+      },
+      match: [/^(\d{1,3}\.){3}\d{1,3}$/, "Invalid IP address"],
     },
-    printer_port: { 
-      type: Number, 
-      required: function(this: any) { return this.printer_type === "NETWORK"; } 
+
+    printer_port: {
+      type: Number,
+      required: function (this: any) {
+        return this.printer_type === "NETWORK";
+      },
     },
-    Printer_name: { 
-      type: String, 
-      required: function(this: any) { return this.printer_type === "NETWORK"; } 
+
+    Printer_name: {
+      type: String,
+      required: function (this: any) {
+        return this.printer_type === "NETWORK";
+      },
     },
   },
   { timestamps: true }
 );
 
-// ✅ Virtual للـ users
+// Virtual
 CashierSchema.virtual("warehouseUsers", {
   ref: "User",
   localField: "warehouse_id",
   foreignField: "warehouseId",
-  justOne: false,
 });
 
 CashierSchema.set("toJSON", { virtuals: true });
 CashierSchema.set("toObject", { virtuals: true });
 
-export const CashierModel = mongoose.model<CashierDoc>("Cashier", CashierSchema);
+export const CashierModel = mongoose.model<CashierDoc>(
+  "Cashier",
+  CashierSchema
+);

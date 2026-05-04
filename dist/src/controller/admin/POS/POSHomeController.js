@@ -22,6 +22,7 @@ const cashier_1 = require("../../../models/schema/admin/cashier");
 const BadRequest_1 = require("../../../Errors/BadRequest");
 const Product_Warehouse_1 = require("../../../models/schema/admin/Product_Warehouse");
 const ServiceFee_1 = require("../../../models/schema/admin/ServiceFee");
+const CashierShift_1 = require("../../../models/schema/admin/POS/CashierShift");
 // get all category 
 const getAllCategorys = async (req, res) => {
     const jwtUser = req.user;
@@ -357,10 +358,10 @@ const getCashiers = async (req, res) => {
     }
     const cashiers = await cashier_1.CashierModel.find({
         warehouse_id: warehouseId,
-        status: true, // لسه موجود في السيستم
-        cashier_active: false, // مش حد عامل بيه شيفت دلوقتي
+        status: true,
+        cashier_active: false, // ✅ المتاحين فقط
     })
-        .populate("warehouse_id", "name")
+        .select("_id name ar_name cashier_active")
         .lean();
     (0, response_1.SuccessResponse)(res, {
         cashiers,
@@ -368,7 +369,7 @@ const getCashiers = async (req, res) => {
 };
 exports.getCashiers = getCashiers;
 const selectCashier = async (req, res) => {
-    const warehouseId = req.user?.warehouse_id; // من الـ JWT
+    const warehouseId = req.user?.warehouse_id;
     if (!warehouseId) {
         throw new Errors_1.NotFound("Warehouse ID is required");
     }
@@ -376,33 +377,35 @@ const selectCashier = async (req, res) => {
     if (!cashier_id) {
         throw new BadRequest_1.BadRequest("Cashier ID is required");
     }
-    // ✅ نجيب كاشير مش شغال حاليًا في نفس الـ warehouse
-    //   بس من غير ما نعدّل cashier_active هنا
+    // ✅ check من الـ shift (source of truth)
+    const busyShift = await CashierShift_1.CashierShift.findOne({
+        cashier_id,
+        status: "open",
+    });
+    if (busyShift) {
+        throw new BadRequest_1.BadRequest("Cashier already in use");
+    }
     const cashier = await cashier_1.CashierModel.findOne({
         _id: cashier_id,
         warehouse_id: warehouseId,
         status: true,
-        cashier_active: false, // نتأكد إنه مش مستخدم في شيفت تاني
     })
-        .populate("warehouse_id", "name")
+        .select("_id name ar_name cashier_active")
         .lean();
     if (!cashier) {
-        throw new Errors_1.NotFound("Cashier not found or already in use");
+        throw new Errors_1.NotFound("Cashier not found");
     }
-    // ✅ كل الفايننشيال أكاونتس بتاعة نفس الـ warehouse:
-    //    - شغّالة (status = true)
-    //    - ظاهرة في الـ POS (in_POS = true)
     const financialAccounts = await Financial_Account_1.BankAccountModel.find({
-        warehouseId: warehouseId, // من السكيمة: warehouseId
+        warehouseId: warehouseId,
         status: true,
         in_POS: true,
     })
-        .select("_id name image balance description status in_POS warehouseId")
+        .select("_id name image balance")
         .lean();
     return (0, response_1.SuccessResponse)(res, {
         message: "Cashier selected successfully",
         cashier,
-        financialAccounts, // دي اللي تظهر في شاشة الـ POS
+        financialAccounts,
     });
 };
 exports.selectCashier = selectCashier;
