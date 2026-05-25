@@ -117,9 +117,9 @@ export const generateLabelsController = async (req: Request, res: Response) => {
   }
 
   for (const product of products) {
-    if (!product.productId || !product.productPriceId || !product.quantity) {
+    if (!product.productId || !product.quantity) {
       throw new BadRequest(
-        "Each product must have productId, productPriceId, and quantity"
+        "Each product must have productId and quantity"
       );
     }
     if (product.quantity < 1) {

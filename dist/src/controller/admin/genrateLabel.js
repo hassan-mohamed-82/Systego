@@ -106,8 +106,8 @@ const generateLabelsController = async (req, res) => {
         throw new BadRequest_1.BadRequest(`Invalid paper size. Available: ${Object.keys(genrateLabel_1.PAPER_CONFIGS).join(", ")}`);
     }
     for (const product of products) {
-        if (!product.productId || !product.productPriceId || !product.quantity) {
-            throw new BadRequest_1.BadRequest("Each product must have productId, productPriceId, and quantity");
+        if (!product.productId || !product.quantity) {
+            throw new BadRequest_1.BadRequest("Each product must have productId and quantity");
         }
         if (product.quantity < 1) {
             throw new BadRequest_1.BadRequest("Quantity must be at least 1");

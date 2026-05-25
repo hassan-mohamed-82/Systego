@@ -651,17 +651,31 @@ export const generateLabelsPDF = async (
     const product = await ProductModel.findById(item.productId).populate("brandId");
     if (!product) throw new NotFound(`Product not found: ${item.productId}`);
 
-    const productPrice = await ProductPriceModel.findById(item.productPriceId);
-    if (!productPrice) throw new NotFound(`Product price not found: ${item.productPriceId}`);
+    let price = (product as any).price;
+    let promotionalPrice = null;
+    let barcode = (product as any).code || "";
 
-    const priceDoc = productPrice as any;
+    if (item.productPriceId) {
+      try {
+        const productPrice = await ProductPriceModel.findById(item.productPriceId);
+        if (productPrice) {
+          const priceDoc = productPrice as any;
+          price = priceDoc.price || price;
+          promotionalPrice = priceDoc.promotionalPrice || null;
+          barcode = priceDoc.code || barcode;
+        }
+      } catch (err) {
+        // Ignore invalid ObjectId errors and just use base product properties
+      }
+    }
+
     const labelData: LabelData = {
-      productName: product.name,
+      productName: (product as any).name,
       brandName: (product.brandId as any)?.name || "",
       businessName: businessName,
-      price: priceDoc.price,
-      promotionalPrice: priceDoc.promotionalPrice || null,
-      barcode: priceDoc.code || "",
+      price: price,
+      promotionalPrice: promotionalPrice,
+      barcode: barcode,
     };
 
     // إضافة الـ label حسب الكمية المطلوبة
