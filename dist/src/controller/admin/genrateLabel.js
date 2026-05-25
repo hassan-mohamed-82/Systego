@@ -4,9 +4,7 @@ exports.generateLabelsController = exports.getAvailableLabelSizes = void 0;
 const genrateLabel_1 = require("../../utils/genrateLabel");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const response_1 = require("../../utils/response");
-// ✅ استيراد Models
-const User_1 = require("../../models/schema/admin/User");
-const Warehouse_1 = require("../../models/schema/admin/Warehouse");
+const storehelper_1 = require("../../utils/storehelper");
 // ============================================
 // Get Available Label Sizes
 // ============================================
@@ -129,37 +127,14 @@ const generateLabelsController = async (req, res) => {
         brandSize: 8,
     };
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };
-    // ✅ جلب اسم البراند من اليوزر الحالي أو المخزن الخاص به
-    let businessName = "";
+    // ✅ 1. استخراج الـ ID الخاص باليوزر اللي بيعمل الطلب
     const jwtUser = req.user;
-    if (jwtUser?.id || jwtUser?._id) {
-        const userId = jwtUser.id || jwtUser._id;
-        const user = await User_1.UserModel.findById(userId).select("company_name warehouse_id role").lean();
-        if (user?.company_name) {
-            businessName = user.company_name;
-        }
-        else if (user?.warehouse_id) {
-            const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id).select("name").lean();
-            if (warehouse?.name) {
-                businessName = warehouse.name;
-            }
-        }
-    }
-    // Fallback: لو مفيش اسم شركة لليوزر ولا مخزن، جيب من السوبر أدمن
-    if (!businessName) {
-        const superAdmin = await User_1.UserModel.findOne({ role: "superadmin" })
-            .select("company_name warehouse_id")
-            .lean();
-        if (superAdmin?.company_name) {
-            businessName = superAdmin.company_name;
-        }
-        else if (superAdmin?.warehouse_id) {
-            const warehouse = await Warehouse_1.WarehouseModel.findById(superAdmin.warehouse_id).select("name").lean();
-            if (warehouse?.name) {
-                businessName = warehouse.name;
-            }
-        }
-    }
+    const userId = jwtUser?.id || jwtUser?._id;
+    // ✅ 2. استخدام دالة getStoreInfo الديناميكية لجلب بيانات المحل/البراند
+    const storeInfo = await (0, storehelper_1.getStoreInfo)(userId);
+    // ✅ 3. تعيين اسم البزنس اللي هينطبع على الـ Label
+    const businessName = storeInfo.name;
+    // توليد ملف الـ PDF
     const pdfBuffer = await (0, genrateLabel_1.generateLabelsPDF)(products, finalConfig, paperSize, businessName);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename=labels_${paperSize}_${Date.now()}.pdf`);

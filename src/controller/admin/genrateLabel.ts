@@ -8,6 +8,7 @@ import { LabelSize } from "../../types/generateLabel";
 import { UserModel } from "../../models/schema/admin/User";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse"; 
+import { getStoreInfo } from "../../utils/storehelper";
 
 // ============================================
 // Get Available Label Sizes
@@ -142,39 +143,17 @@ export const generateLabelsController = async (req: Request, res: Response) => {
 
   const finalConfig = { ...defaultLabelConfig, ...labelConfig };
 
-  // ✅ جلب اسم البراند من اليوزر الحالي أو المخزن الخاص به
-  let businessName = "";
+  // ✅ 1. استخراج الـ ID الخاص باليوزر اللي بيعمل الطلب
   const jwtUser = req.user as any;
+  const userId = jwtUser?.id || jwtUser?._id;
 
-  if (jwtUser?.id || jwtUser?._id) {
-    const userId = jwtUser.id || jwtUser._id;
-    const user = await UserModel.findById(userId).select("company_name warehouse_id role").lean();
-    if (user?.company_name) {
-      businessName = user.company_name;
-    } else if (user?.warehouse_id) {
-      const warehouse = await WarehouseModel.findById(user.warehouse_id).select("name").lean();
-      if (warehouse?.name) {
-        businessName = warehouse.name;
-      }
-    }
-  }
+  // ✅ 2. استخدام دالة getStoreInfo الديناميكية لجلب بيانات المحل/البراند
+  const storeInfo = await getStoreInfo(userId);
+  
+  // ✅ 3. تعيين اسم البزنس اللي هينطبع على الـ Label
+  const businessName = storeInfo.name;
 
-  // Fallback: لو مفيش اسم شركة لليوزر ولا مخزن، جيب من السوبر أدمن
-  if (!businessName) {
-    const superAdmin = await UserModel.findOne({ role: "superadmin" })
-      .select("company_name warehouse_id")
-      .lean();
-
-    if (superAdmin?.company_name) {
-      businessName = superAdmin.company_name;
-    } else if (superAdmin?.warehouse_id) {
-      const warehouse = await WarehouseModel.findById(superAdmin.warehouse_id).select("name").lean();
-      if (warehouse?.name) {
-        businessName = warehouse.name;
-      }
-    }
-  }
-
+  // توليد ملف الـ PDF
   const pdfBuffer = await generateLabelsPDF(products, finalConfig, paperSize, businessName);
 
   res.setHeader("Content-Type", "application/pdf");
