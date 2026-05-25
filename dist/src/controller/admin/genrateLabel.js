@@ -1,22 +1,16 @@
 "use strict";
-// import { Request, Response } from "express";
-// import { generateLabelsPDF, PAPER_CONFIGS } from "../../utils/genrateLabel";
-// import { BadRequest } from "../../Errors/BadRequest";
-// import { SuccessResponse } from "../../utils/response";
-// import { LabelSize } from "../../types/generateLabel";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateLabelsController = exports.getAvailableLabelSizes = void 0;
 const genrateLabel_1 = require("../../utils/genrateLabel");
 const BadRequest_1 = require("../../Errors/BadRequest");
 const response_1 = require("../../utils/response");
+// ✅ استيراد Models
 const User_1 = require("../../models/schema/admin/User");
 const Warehouse_1 = require("../../models/schema/admin/Warehouse");
 // ============================================
 // Get Available Label Sizes
 // ============================================
 const getAvailableLabelSizes = async (req, res) => {
-    // We added 'useRectangularLayout' to sizes that are wide/short 
-    // and benefit from the Grid layout (like the image you shared).
     const labelSizes = [
         {
             id: "100x50",
@@ -27,7 +21,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "100mm × 50mm",
             recommended: false,
             useCase: "كراتين - منتجات كبيرة",
-            // useRectangularLayout: true, // Supports the new layout
         },
         {
             id: "80x50",
@@ -38,7 +31,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "80mm × 50mm",
             recommended: false,
             useCase: "منتجات كبيرة",
-            // useRectangularLayout: true,
         },
         {
             id: "57x45",
@@ -49,7 +41,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "57mm × 45mm",
             recommended: true,
             useCase: "Xprinter XP-370B وما شابه",
-            // useRectangularLayout: true,
         },
         {
             id: "57x40",
@@ -60,7 +51,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "57mm × 40mm",
             recommended: true,
             useCase: "طابعات POS - فواتير",
-            // useRectangularLayout: true,
         },
         {
             id: "50x30",
@@ -71,7 +61,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "50mm × 30mm",
             recommended: true,
             useCase: "منتجات متوسطة",
-            // useRectangularLayout: true,
         },
         {
             id: "50x25",
@@ -82,7 +71,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "50mm × 25mm",
             recommended: false,
             useCase: "منتجات صغيرة",
-            // useRectangularLayout: true, // Ideally fits the image you sent
         },
         {
             id: "40x30",
@@ -93,7 +81,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "40mm × 30mm",
             recommended: false,
             useCase: "منتجات صغيرة",
-            // useRectangularLayout: true,
         },
         {
             id: "38x25",
@@ -104,7 +91,6 @@ const getAvailableLabelSizes = async (req, res) => {
             labelSize: "38mm × 25mm",
             recommended: true,
             useCase: "أدوية - منتجات صغيرة",
-            // useRectangularLayout: true,
         },
     ];
     (0, response_1.SuccessResponse)(res, { labelSizes });
@@ -114,7 +100,6 @@ exports.getAvailableLabelSizes = getAvailableLabelSizes;
 // Generate Labels PDF
 // ============================================
 const generateLabelsController = async (req, res) => {
-    // 1. Extract params, including the config from Frontend
     const { products, labelConfig, paperSize } = req.body;
     if (!products || !Array.isArray(products) || products.length === 0) {
         throw new BadRequest_1.BadRequest("Products array is required");
@@ -142,26 +127,37 @@ const generateLabelsController = async (req, res) => {
         promotionalPriceSize: 13,
         businessNameSize: 7,
         brandSize: 8,
-        // // Default to FALSE unless the frontend sends it specifically
-        // useRectangularLayout: false
     };
-    // 2. Merge defaults with user request
-    // If the Frontend sees "useRectangularLayout: true" in the size list, 
-    // it should send { useRectangularLayout: true } in labelConfig here.
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };
-    // ✅ Fetch business name dynamically from the logged-in user
-    const jwtUser = req.user;
+    // ✅ جلب اسم البراند من السوبر أدمن (صاحب البزنس)
     let businessName = "";
-    if (jwtUser?.id || jwtUser?._id) {
-        const userId = jwtUser.id || jwtUser._id;
-        const user = await User_1.UserModel.findById(userId).select("company_name warehouse_id").lean();
-        if (user?.company_name) {
-            businessName = user.company_name;
+    // 1. جيب اسم البراند من الـ superadmin
+    const superAdmin = await User_1.UserModel.findOne({ role: "superadmin" })
+        .select("company_name warehouse_id")
+        .lean();
+    if (superAdmin?.company_name) {
+        businessName = superAdmin.company_name;
+    }
+    else if (superAdmin?.warehouse_id) {
+        const warehouse = await Warehouse_1.WarehouseModel.findById(superAdmin.warehouse_id).select("name").lean();
+        if (warehouse?.name) {
+            businessName = warehouse.name;
         }
-        else if (user?.warehouse_id) {
-            const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id).select("name").lean();
-            if (warehouse?.name) {
-                businessName = warehouse.name;
+    }
+    else {
+        // Fallback: لو مفيش superadmin، جرب اليوزر الحالي
+        const jwtUser = req.user;
+        if (jwtUser?.id || jwtUser?._id) {
+            const userId = jwtUser.id || jwtUser._id;
+            const user = await User_1.UserModel.findById(userId).select("company_name warehouse_id").lean();
+            if (user?.company_name) {
+                businessName = user.company_name;
+            }
+            else if (user?.warehouse_id) {
+                const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id).select("name").lean();
+                if (warehouse?.name) {
+                    businessName = warehouse.name;
+                }
             }
         }
     }

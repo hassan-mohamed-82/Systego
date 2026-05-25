@@ -26,8 +26,33 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const Product_Warehouse_1 = require("../../../models/schema/admin/Product_Warehouse");
 const ServiceFee_1 = require("../../../models/schema/admin/ServiceFee");
 const cashier_1 = require("../../../models/schema/admin/cashier");
-// ✅ Dynamic store info - بيجيب البيانات من اليوزر اللي عامل login أو الـ Warehouse بتاعه
+// ✅ Dynamic store info - بيجيب اسم البراند من السوبر أدمن (صاحب البزنس)
 const getStoreInfo = async (userId) => {
+    // 1. جيب اسم البراند من الـ superadmin (صاحب البزنس)
+    const superAdmin = await User_1.UserModel.findOne({ role: "superadmin" })
+        .select("company_name phone address warehouse_id")
+        .lean();
+    if (superAdmin?.company_name) {
+        return {
+            name: superAdmin.company_name,
+            phone: superAdmin.phone || "",
+            address: superAdmin.address || "",
+        };
+    }
+    // Fallback: لو السوبر أدمن مفيش عنده company_name، جيب من الـ Warehouse بتاعه
+    if (superAdmin?.warehouse_id) {
+        const warehouse = await Warehouse_1.WarehouseModel.findById(superAdmin.warehouse_id)
+            .select("name phone address")
+            .lean();
+        if (warehouse) {
+            return {
+                name: warehouse.name,
+                phone: warehouse.phone || "",
+                address: warehouse.address || "",
+            };
+        }
+    }
+    // Fallback أخير: لو مفيش superadmin أصلاً، جرب اليوزر الحالي
     const user = await User_1.UserModel.findById(userId)
         .select("company_name phone address warehouse_id")
         .lean();
@@ -38,7 +63,6 @@ const getStoreInfo = async (userId) => {
             address: user.address || "",
         };
     }
-    // Fallback: لو مفيش company_name، جيب من الـ Warehouse
     if (user?.warehouse_id) {
         const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id)
             .select("name phone address")
