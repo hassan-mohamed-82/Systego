@@ -181,20 +181,20 @@ export const removeProductFromWarehouse = async (req: Request, res: Response) =>
   const deleteQuery: any = { productId, warehouseId };
   if (productPriceId) {
     deleteQuery.productPriceId = productPriceId;
-  } else {
-    deleteQuery.productPriceId = null;
   }
 
   const stock = await Product_WarehouseModel.findOneAndDelete(deleteQuery);
   if (!stock) {
-    const variationText = productPriceId ? " (this variation)" : "";
-    throw new NotFound(`Product${variationText} not found in this warehouse`);
+    // إذا لم يكن موجوداً، نعتبره محذوفاً بنجاح
+    return SuccessResponse(res, {
+      message: "Product is already not in this warehouse",
+    });
   }
 
   await WarehouseModel.findByIdAndUpdate(warehouseId, {
     $inc: {
       number_of_products: -1,
-      stock_Quantity: -stock.quantity,
+      stock_Quantity: -(stock.quantity || 0),
     },
   });
 
