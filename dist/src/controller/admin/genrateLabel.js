@@ -129,35 +129,34 @@ const generateLabelsController = async (req, res) => {
         brandSize: 8,
     };
     const finalConfig = { ...defaultLabelConfig, ...labelConfig };
-    // ✅ جلب اسم البراند من السوبر أدمن (صاحب البزنس)
+    // ✅ جلب اسم البراند من اليوزر الحالي أو المخزن الخاص به
     let businessName = "";
-    // 1. جيب اسم البراند من الـ superadmin
-    const superAdmin = await User_1.UserModel.findOne({ role: "superadmin" })
-        .select("company_name warehouse_id")
-        .lean();
-    if (superAdmin?.company_name) {
-        businessName = superAdmin.company_name;
-    }
-    else if (superAdmin?.warehouse_id) {
-        const warehouse = await Warehouse_1.WarehouseModel.findById(superAdmin.warehouse_id).select("name").lean();
-        if (warehouse?.name) {
-            businessName = warehouse.name;
+    const jwtUser = req.user;
+    if (jwtUser?.id || jwtUser?._id) {
+        const userId = jwtUser.id || jwtUser._id;
+        const user = await User_1.UserModel.findById(userId).select("company_name warehouse_id role").lean();
+        if (user?.company_name) {
+            businessName = user.company_name;
+        }
+        else if (user?.warehouse_id) {
+            const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id).select("name").lean();
+            if (warehouse?.name) {
+                businessName = warehouse.name;
+            }
         }
     }
-    else {
-        // Fallback: لو مفيش superadmin، جرب اليوزر الحالي
-        const jwtUser = req.user;
-        if (jwtUser?.id || jwtUser?._id) {
-            const userId = jwtUser.id || jwtUser._id;
-            const user = await User_1.UserModel.findById(userId).select("company_name warehouse_id").lean();
-            if (user?.company_name) {
-                businessName = user.company_name;
-            }
-            else if (user?.warehouse_id) {
-                const warehouse = await Warehouse_1.WarehouseModel.findById(user.warehouse_id).select("name").lean();
-                if (warehouse?.name) {
-                    businessName = warehouse.name;
-                }
+    // Fallback: لو مفيش اسم شركة لليوزر ولا مخزن، جيب من السوبر أدمن
+    if (!businessName) {
+        const superAdmin = await User_1.UserModel.findOne({ role: "superadmin" })
+            .select("company_name warehouse_id")
+            .lean();
+        if (superAdmin?.company_name) {
+            businessName = superAdmin.company_name;
+        }
+        else if (superAdmin?.warehouse_id) {
+            const warehouse = await Warehouse_1.WarehouseModel.findById(superAdmin.warehouse_id).select("name").lean();
+            if (warehouse?.name) {
+                businessName = warehouse.name;
             }
         }
     }
