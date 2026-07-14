@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import path from "path";
 // __dirname in your compiled file is dist/src/
 // We go up two directories to hit the root where the .env file lives
-const envPath = path.join(__dirname, '../../.env');
+const envPath = path.join(__dirname, "../../.env");
 dotenv.config({ path: envPath });
 
 import express from "express";
@@ -17,7 +17,7 @@ import helmet from "helmet";
 import { connectDB } from "./models/connection";
 import { startCron } from "./utils/expiry_lowstock";
 import { seedOrderTypes } from "./seed/ordertype";
-import "./utils/bookingcheck"
+import "./utils/bookingcheck";
 
 // dotenv.config();
 const app = express();

@@ -7,6 +7,7 @@ import { BadRequest } from '../../Errors/BadRequest';
 import { UserModel } from '../../models/schema/admin/User';
 import { ExpenseModel } from '../../models/schema/admin/POS/expenses';
 import mongoose from 'mongoose';
+import { CashierModel } from '../../models/schema/admin/cashier';
 
 
 export const getAllCashierShifts = async (req: Request, res: Response) => {
@@ -236,8 +237,8 @@ export const closeCashierShift = async (req: Request, res: Response) => {
   shift.net_cash_in_drawer = netCashInDrawer; // حفظ صافي الدرج النهائي
 
   await shift.save();
-
-  // إرجاع الرد بنجاح
+  await CashierModel.findByIdAndUpdate(shift.cashier_id, { cashier_active: false });
+  // إرجاع الرد بنجاح 
   return SuccessResponse(res, {
     message: "Cashier shift closed successfully",
     shift,

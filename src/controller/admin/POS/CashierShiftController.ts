@@ -279,6 +279,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
     report,
   });
 };
+
 export const endshiftcashier = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   if (!jwtUser) throw new UnauthorizedError("Unauthorized");

@@ -91,12 +91,13 @@ export const updateCashier = async (req: Request, res: Response) => {
     bankAccounts,
     addBankAccount,
     removeBankAccount,
+    cashier_active,
     printer_type,
     printer_IP,
     printer_port,
     Printer_name
   } = req.body;
-
+  
   const updateQuery: any = {};
   const setFields: any = {};
 
@@ -105,6 +106,7 @@ export const updateCashier = async (req: Request, res: Response) => {
   if (ar_name !== undefined) setFields.ar_name = ar_name;
   if (warehouse_id !== undefined) setFields.warehouse_id = warehouse_id;
   if (status !== undefined) setFields.status = status;
+  if (cashier_active !== undefined) setFields.cashier_active = cashier_active;
   
   // حقول الطابعة
   if (printer_type !== undefined) setFields.printer_type = printer_type;
@@ -137,7 +139,8 @@ export const updateCashier = async (req: Request, res: Response) => {
   if (Object.keys(updateQuery).length === 0) {
     throw new BadRequest("No valid fields to update");
   }
-
+  console.log(updateQuery);
+  
   const cashier = await CashierModel.findByIdAndUpdate(id, updateQuery, {
     new: true,
     runValidators: true, // هينفذ الـ validation بتاع الموديل
