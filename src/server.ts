@@ -37,6 +37,9 @@ const uploadsPath = path.join(__dirname, "../uploads");
 app.use("/uploads", express.static(uploadsPath));
 
 // 🚀 Routes
+app.use("/test-updater",(req, res, next) => {
+  res.json("all right")
+})
 app.use("/api", ApiRoute);
 
 // ❌ Not found middleware
