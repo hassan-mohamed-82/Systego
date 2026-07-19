@@ -8,7 +8,7 @@ const gifCardSchema = new Schema(
         customer_id: { type: Schema.Types.String, ref: 'Customer' },
         expiration_date: { type: Date },
         isActive: { type: Boolean, default: true },
-        _id: { type: String, default: randomUUID },
+        _id: { type: String, default: () => randomUUID() },
     },
     { _id:false, timestamps: true }
 );

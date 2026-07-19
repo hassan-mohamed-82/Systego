@@ -24,7 +24,7 @@ const PaymentSchema = new Schema(
       default: "completed",
     },
     payment_proof: { type: String },
-    _id: { type: String, default: randomUUID },
+    _id: { type: String, default: () => randomUUID() },
   },
   { _id:false, timestamps: true }
 );

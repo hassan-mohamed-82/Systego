@@ -97,7 +97,7 @@ const SaleSchema = new Schema(
     note: { type: String, default: "" },
 
     date: { type: Date, default: Date.now },
-    _id: { type: String, default: randomUUID },
+    _id: { type: String, default: () => randomUUID() },
   },
   { _id:false, timestamps: true }
 );
@@ -121,7 +121,7 @@ const productSalesSchema = new Schema(
     isGift: { type: Boolean, default: false },
     isBundle: { type: Boolean, default: false },
     options_id: [{ type: Schema.Types.ObjectId, ref: "Option" }],
-    _id: { type: String, default: randomUUID },
+    _id: { type: String, default: () => randomUUID() },
   },
   { _id:false, timestamps: true }
 );

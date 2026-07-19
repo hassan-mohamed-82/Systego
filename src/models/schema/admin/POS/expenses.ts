@@ -9,7 +9,7 @@ const expenseSchema = new mongoose.Schema({
   admin_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false },
   note: { type: String },
   financial_accountId: { type: mongoose.Schema.Types.ObjectId, ref: "BankAccount", required: true },
-  _id: { type: String, default: randomUUID },
+  _id: { type: String, default: () => randomUUID() },
 }, { _id:false, timestamps: true });
 
 export const ExpenseModel = mongoose.model("Expense", expenseSchema);

@@ -11,7 +11,7 @@ const BookingSchema = new mongoose.Schema({
     CategoryId:{type:mongoose.Schema.Types.ObjectId,ref:"Category"},
     option_id:{type:mongoose.Schema.Types.ObjectId,ref:"ProductPriceOption"},
     status:{type:String,enum:["pending","pay","failer"],default:"pending"},
-    _id: { type: String, default: randomUUID },
+    _id: { type: String, default: () => randomUUID() },
 }, { _id:false, timestamps: true });
 
 

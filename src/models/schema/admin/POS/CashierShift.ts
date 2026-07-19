@@ -26,7 +26,7 @@ const CashierShiftSchema = new Schema(
       ref: "Cashier",
       required: true,
     },
-    _id: { type: String, default: randomUUID },
+    _id: { type: String, default: () => randomUUID() },
   },
   { _id:false, timestamps: true }
 );

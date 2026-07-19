@@ -94,7 +94,7 @@ const ReturnSchema = new Schema(
       type: Date,
       default: Date.now,
     },
-    _id: { type: String, default: randomUUID },
+    _id: { type: String, default: () => randomUUID() },
   },
   { _id: false, timestamps: true }
 );
