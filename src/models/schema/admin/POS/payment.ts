@@ -1,9 +1,10 @@
 // models/schema/admin/POS/payment.ts (أو المسار عندك)
+import { randomUUID } from "crypto";
 import mongoose, { Schema } from "mongoose";
 
 const PaymentSchema = new Schema(
   {
-    sale_id: { type: Schema.Types.ObjectId, ref: "Sale", required: true },
+    sale_id: { type: Schema.Types.String, ref: "Sale", required: true },
 
     // ✅ كل سطر دفع: حساب + مبلغ
     financials: [
@@ -23,8 +24,9 @@ const PaymentSchema = new Schema(
       default: "completed",
     },
     payment_proof: { type: String },
+    _id: { type: String, default: randomUUID },
   },
-  { timestamps: true }
+  { _id:false, timestamps: true }
 );
 
 export const PaymentModel = mongoose.model("Payment", PaymentSchema);

@@ -92,7 +92,8 @@ export const pushChanges = async (req: Request, res: Response) => {
   if (!Array.isArray(changes) || changes.length === 0) {
     return SuccessResponse(res, { applied: [], failed: [] });
   }
-
+  console.log(changes);
+  
   const applied: string[] = [];
   const failed: { id: string; reason: string }[] = [];
 
@@ -101,20 +102,17 @@ export const pushChanges = async (req: Request, res: Response) => {
       const Model = getSyncModel(change.table_name);
 
       if (change.op === "delete") {
-        await Model.findByIdAndUpdate(change.record_id, {
-          deleted: true,
+        await Model.findByIdAndDelete(change.record_id, {
           updatedAt: new Date(),
         });
       } else {
         const data = JSON.parse(change.payload as string);
-        const { id, ...rest } = data; 
+        const { id, ...rest } = data;
 
         // last-write-wins check against what's already on the server
         const existing = await Model.findById(change.record_id).lean() as any;
         if (existing && existing.updatedAt && rest.updatedAt) {
           if (new Date(existing.updatedAt) > new Date(rest.updatedAt)) {
-            // server already has a newer version — local change loses, but still ack it
-            // so local doesn't keep retrying a change that's intentionally being dropped
             applied.push(change.id);
             continue;
           }
@@ -123,14 +121,28 @@ export const pushChanges = async (req: Request, res: Response) => {
         await Model.findByIdAndUpdate(
           change.record_id,
           { $set: rest },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, new: true }
         );
       }
 
       applied.push(change.id);
     } catch (err: any) {
-      failed.push({ id: change.id, reason: err.message });
+      // 🔍 Log the full error to the server console
+      console.error(`Push failed for change ${change.id}:`, err);
+
+      // Optionally include the stack trace in the client response (remove in production)
+      failed.push({
+        id: change.id,
+        reason: process.env.NODE_ENV === 'development'
+          ? (err.stack || err.message)
+          : err.message,
+      });
     }
+  }
+
+  console.log(`Push results: ${applied.length} applied, ${failed.length} failed`);
+  if (failed.length > 0) {
+    console.error('Failed changes:', failed);
   }
 
   SuccessResponse(res, { applied, failed });

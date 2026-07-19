@@ -8,7 +8,12 @@
     "build": "tsc ",
     "start": "node dist/src/server.js",
     "generate-db": "npx drizzle-kit generate",
-    "migrate-db": "npx drizzle-kit push"
+    "migrate-db": "npx drizzle-kit push",
+    "migrate:map": "node scripts/uuid-migration/01-build-map.js",
+    "migrate:rewrite": "node scripts/uuid-migration/02-rewrite.js",
+    "migrate:verify": "node scripts/uuid-migration/03-verify.js",
+    "migrate:swap": "node scripts/uuid-migration/04-swap.js",
+    "migrate": "npm run migrate:map && npm run migrate:rewrite && npm run migrate:verify && npm run migrate:swap"
   },
   "keywords": [],
   "author": "",

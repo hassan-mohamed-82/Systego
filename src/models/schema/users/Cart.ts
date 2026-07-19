@@ -2,7 +2,7 @@ import { Schema, model } from 'mongoose';
 
 const cartSchema = new Schema({
   user: {
-    type: Schema.Types.ObjectId,
+    type: Schema.Types.String,
     ref: 'Customer',
     required: false,
     // index: { unique: true, sparse: true }

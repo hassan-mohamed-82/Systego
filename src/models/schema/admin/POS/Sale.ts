@@ -1,4 +1,5 @@
 // models/Sale.ts
+import { randomUUID } from "crypto";
 import mongoose, { Schema } from "mongoose";
 
 const SaleSchema = new Schema(
@@ -19,14 +20,14 @@ const SaleSchema = new Schema(
     },
 
     customer_id: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.String,
       ref: "Customer",
       required: false,
     },
 
     // ✅ عميل الدين
     Due_customer_id: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.String,
       ref: "Customer",
       required: false,
     },
@@ -73,7 +74,7 @@ const SaleSchema = new Schema(
     ],
     service_fee_total: { type: Number, default: 0 },
     grand_total: { type: Number, required: true },
-    gift_card_id: { type: Schema.Types.ObjectId, ref: "GiftCard" },
+    gift_card_id: { type: Schema.Types.String, ref: "GiftCard" },
     coupon_code: { type: String, default: "" },
     applied_coupon: { type: Boolean, default: false },
     cashier_id: {
@@ -82,7 +83,7 @@ const SaleSchema = new Schema(
       required: true,
     },
     shift_id: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.String,
       ref: "CashierShift",
       required: true,
     },
@@ -96,8 +97,9 @@ const SaleSchema = new Schema(
     note: { type: String, default: "" },
 
     date: { type: Date, default: Date.now },
+    _id: { type: String, default: randomUUID },
   },
-  { timestamps: true }
+  { _id:false, timestamps: true }
 );
 
 // Index للبحث السريع
@@ -106,7 +108,7 @@ SaleSchema.index({ Due: 1, remaining_amount: 1 });
 
 const productSalesSchema = new Schema(
   {
-    sale_id: { type: Schema.Types.ObjectId, ref: "Sale", required: true },
+    sale_id: { type: Schema.Types.String, ref: "Sale", required: true },
     product_id: { type: Schema.Types.ObjectId, ref: "Product" },
     bundle_id: { type: Schema.Types.ObjectId, ref: "Pandel" },
     quantity: { type: Number, required: true, min: 1 },
@@ -119,8 +121,9 @@ const productSalesSchema = new Schema(
     isGift: { type: Boolean, default: false },
     isBundle: { type: Boolean, default: false },
     options_id: [{ type: Schema.Types.ObjectId, ref: "Option" }],
+    _id: { type: String, default: randomUUID },
   },
-  { timestamps: true }
+  { _id:false, timestamps: true }
 );
 
 productSalesSchema.pre("save", function (next) {

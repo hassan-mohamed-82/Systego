@@ -1,4 +1,5 @@
 // models/schema/admin/POS/CashierShift.ts
+import { randomUUID } from "crypto";
 import mongoose, { Schema } from "mongoose";
 
 const CashierShiftSchema = new Schema(
@@ -25,8 +26,9 @@ const CashierShiftSchema = new Schema(
       ref: "Cashier",
       required: true,
     },
+    _id: { type: String, default: randomUUID },
   },
-  { timestamps: true }
+  { _id:false, timestamps: true }
 );
 
 export const CashierShift = mongoose.model("CashierShift", CashierShiftSchema);

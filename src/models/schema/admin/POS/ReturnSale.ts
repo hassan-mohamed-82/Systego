@@ -1,4 +1,5 @@
 // models/Return.ts
+import { randomUUID } from "crypto";
 import mongoose, { Schema } from "mongoose";
 
 const ReturnItemSchema = new Schema({
@@ -29,7 +30,7 @@ const ReturnSchema = new Schema(
     },
 
     sale_id: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.String,
       ref: "Sale",
       required: true,
     },
@@ -40,7 +41,7 @@ const ReturnSchema = new Schema(
     },
 
     customer_id: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.String,
       ref: "Customer",
     },
 
@@ -57,7 +58,7 @@ const ReturnSchema = new Schema(
     },
 
     shift_id: {
-      type: Schema.Types.ObjectId,
+      type: Schema.Types.String,
       ref: "CashierShift",
       required: true,
     },
@@ -93,8 +94,9 @@ const ReturnSchema = new Schema(
       type: Date,
       default: Date.now,
     },
+    _id: { type: String, default: randomUUID },
   },
-  { timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 ReturnSchema.index({ sale_id: 1 });

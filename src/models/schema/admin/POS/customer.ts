@@ -1,15 +1,29 @@
 import mongoose, { Schema } from "mongoose";
-import bcrypt from 'bcryptjs';
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 
 const CustomerSchema = new Schema(
   {
     name: { type: String, required: true },
-    email: { type: String, unique: [true, "Email must be unique"], sparse: true, trim: true, lowercase: true, },
-    phone_number: { type: String, required: true, unique: [true, "Phone number must be unique"], trim: true, minlength: [10, "Too short phone number"], maxlength: [15, "Too long phone number"], },
+    email: {
+      type: String,
+      unique: [true, "Email must be unique"],
+      sparse: true,
+      trim: true,
+      lowercase: true,
+    },
+    phone_number: {
+      type: String,
+      required: true,
+      unique: [true, "Phone number must be unique"],
+      trim: true,
+      minlength: [10, "Too short phone number"],
+      maxlength: [15, "Too long phone number"],
+    },
     address: { type: String },
-    country: { type: Schema.Types.ObjectId, ref: 'Country' },
-    city: { type: Schema.Types.ObjectId, ref: 'City' },
-    customer_group_id: { type: Schema.Types.ObjectId, ref: 'CustomerGroup' },
+    country: { type: Schema.Types.ObjectId, ref: "Country" },
+    city: { type: Schema.Types.ObjectId, ref: "City" },
+    customer_group_id: { type: Schema.Types.String, ref: "CustomerGroup" },
     total_points_earned: { type: Number, default: 0, min: 0 },
     is_Due: { type: Boolean, default: false },
     amount_Due: { type: Number, default: 0 },
@@ -46,16 +60,18 @@ const CustomerSchema = new Schema(
         ref: "Address",
       },
     ],
+    _id: { type: String, default: () => randomUUID() },
   },
-  { timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 const CustomerGroupSchema = new Schema(
   {
     name: { type: String, required: true, unique: true },
     status: { type: Boolean, default: true },
+    _id: { type: String, default: () => randomUUID() },
   },
-  { timestamps: true }
+  { _id:false, timestamps: true }
 );
 
 CustomerSchema.pre("save", async function (next) {
@@ -66,7 +82,8 @@ CustomerSchema.pre("save", async function (next) {
   next();
 });
 
-
 export const CustomerModel = mongoose.model("Customer", CustomerSchema);
-export const CustomerGroupModel = mongoose.model("CustomerGroup", CustomerGroupSchema);
-
+export const CustomerGroupModel = mongoose.model(
+  "CustomerGroup",
+  CustomerGroupSchema
+);

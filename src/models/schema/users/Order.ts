@@ -3,7 +3,7 @@ import { ORDER_TYPES } from '../../../types/constant';
 
 const orderSchema = new Schema({
   user: {
-    type: Schema.Types.ObjectId,
+    type: Schema.Types.String,
     ref: 'Customer',
     required: false,
     index: { sparse: true }
