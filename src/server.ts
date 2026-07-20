@@ -5,6 +5,10 @@ import path from "path";
 const envPath = path.join(__dirname, "../../.env");
 dotenv.config({ path: envPath });
 
+import mongoose from "mongoose";
+import { syncPlugin } from "./models/schema/admin/POS/syncPlugin";
+mongoose.plugin(syncPlugin);
+
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";

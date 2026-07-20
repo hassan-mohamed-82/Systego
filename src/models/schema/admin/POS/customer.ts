@@ -7,15 +7,15 @@ const CustomerSchema = new Schema(
     name: { type: String, required: true },
     email: {
       type: String,
-      unique: [true, "Email must be unique"],
+      unique: true,
       sparse: true,
       trim: true,
       lowercase: true,
     },
     phone_number: {
       type: String,
-      required: true,
       unique: [true, "Phone number must be unique"],
+      sparse: true,
       trim: true,
       minlength: [10, "Too short phone number"],
       maxlength: [15, "Too long phone number"],
@@ -60,9 +60,16 @@ const CustomerSchema = new Schema(
         ref: "Address",
       },
     ],
+    google_id: { type: String, unique: true, sparse: true },
+    apple_id: { type: String, unique: true, sparse: true },
+    auth_provider: {
+      type: String,
+      enum: ["local", "google", "apple"],
+      default: "local",
+    },
     _id: { type: String, default: () => randomUUID() },
   },
-  { _id: false, timestamps: true }
+  { _id: false, timestamps: true },
 );
 
 const CustomerGroupSchema = new Schema(
@@ -71,7 +78,7 @@ const CustomerGroupSchema = new Schema(
     status: { type: Boolean, default: true },
     _id: { type: String, default: () => randomUUID() },
   },
-  { _id:false, timestamps: true }
+  { _id: false, timestamps: true },
 );
 
 CustomerSchema.pre("save", async function (next) {
@@ -85,5 +92,5 @@ CustomerSchema.pre("save", async function (next) {
 export const CustomerModel = mongoose.model("Customer", CustomerSchema);
 export const CustomerGroupModel = mongoose.model(
   "CustomerGroup",
-  CustomerGroupSchema
+  CustomerGroupSchema,
 );

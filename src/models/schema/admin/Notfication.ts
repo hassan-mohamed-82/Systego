@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema(
@@ -23,8 +24,12 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    _id: {
+      type: mongoose.Schema.Types.String,
+      default: () => randomUUID(),
+    }
   },
-  { timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 export const NotificationModel = mongoose.model("Notification", notificationSchema);

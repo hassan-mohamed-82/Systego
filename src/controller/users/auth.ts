@@ -8,7 +8,9 @@ import { saveBase64Image } from '../../utils/handleImages';
 import { CustomerModel } from '../../models/schema/admin/POS/customer';
 import { sendEmail } from '../../utils/sendEmails';
 import { CartModel } from "../../models/schema/users/Cart";
-import mongoose from 'mongoose';
+import { OAuth2Client } from 'google-auth-library';
+import appleSignin from 'apple-signin-auth';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const generateOtpCode = (): string => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -182,7 +184,7 @@ export const verifyOtpAndLogin = asyncHandler(async (req: Request, res: Response
 
 // 4. Complete Profile (The bridge from POS to Online)
 export const completeProfile = asyncHandler(async (req: Request, res: Response) => {
-    const { userId, name, email, password, confirmPassword, image } = req.body;
+    const { userId, name, email, password, confirmPassword, image, phone_number } = req.body;
 
     if (password !== confirmPassword) {
       throw new BadRequest('Passwords do not match.');
@@ -194,6 +196,7 @@ export const completeProfile = asyncHandler(async (req: Request, res: Response) 
     if (name) user.name = name;
     if (email) user.email = email;
     if (password) user.password = password;
+    if (phone_number) user.phone_number = phone_number;
 
     if (image) {
         user.imagePath = await saveBase64Image(image, user._id.toString(), req, 'profile_images');
@@ -265,4 +268,99 @@ export const resendOtp = asyncHandler(async (req: Request, res: Response) => {
     requires_otp: true, 
     action_required: "STAY_ON_OTP_SCREEN" 
     }, 200);
+});
+
+// shared logic: given a verified identity, find-or-create the user, merge cart, issue token
+const finishSocialAuth = async (
+    req: Request,
+    res: Response,
+    provider: 'google' | 'apple',
+    providerId: string,
+    email: string | undefined,
+    name: string | undefined,
+    picture?: string,
+    imagePath?: string
+) => {
+    const idField = provider === 'google' ? 'google_id' : 'apple_id';
+
+    let user = await CustomerModel.findOne({
+        $or: [
+            { [idField]: providerId },
+            ...(email ? [{ email }] : [])
+        ]
+    });
+
+    if (!user) {
+        user = new CustomerModel({
+            name: name || email?.split('@')[0] || `${provider}_user`,
+            email,
+            [idField]: providerId,
+            auth_provider: provider,
+            imagePath: picture,
+            is_profile_complete: true, // social sign-in gives us enough to skip OTP/complete-profile
+        });
+        if (imagePath) user.imagePath = imagePath;
+        await user.save();
+    } else if (!user[idField]) {
+        // existing account (e.g. signed up with email/password before) — link the provider
+        user[idField] = providerId;
+        await user.save();
+    }
+
+    const sessionId = req.headers['x-session-id'] as string || req.body.sessionId;
+    await mergeCarts(user.id, sessionId);
+
+    const token = await generateJWT({ id: user.id });
+    const { password, __v, ...userResponse } = user.toObject();
+
+    return SuccessResponse(res, {
+        message: 'Login successful',
+        user: userResponse,
+        token,
+        action_required: "GO_TO_PROFILE"
+    }, 200);
+};
+
+// 8. Google Sign-In
+export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
+    const { id_token } = req.body;
+    if (!id_token) throw new BadRequest('id_token is required.');
+
+    const ticket = await googleClient.verifyIdToken({
+        idToken: id_token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload) throw new UnauthorizedError('Invalid Google token.');
+
+    await finishSocialAuth(
+        req, res, 'google',
+        payload.sub,
+        payload.email,
+        payload.name,
+        payload.picture,
+    );
+});
+
+// 9. Apple Sign-In
+export const appleAuth = asyncHandler(async (req: Request, res: Response) => {
+    const { id_token, name } = req.body; // Apple only sends `name` on first-ever sign-in, from the client
+    if (!id_token) throw new BadRequest('id_token is required.');
+
+    let payload;
+    try {
+        payload = await appleSignin.verifyIdToken(id_token, {
+            audience: process.env.APPLE_CLIENT_ID, 
+            ignoreExpiration: false,
+        });
+    } catch (err) {
+        throw new UnauthorizedError('Invalid Apple token.');
+    }
+    
+    await finishSocialAuth(
+        req, res, 'apple',
+        payload.sub,
+        payload.email,
+        name // Apple doesn't include name in the token — client must forward it on first sign-in
+    );
 });

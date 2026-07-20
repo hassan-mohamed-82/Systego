@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { SuccessResponse } from "../../../utils/response";
 import { getSyncModel } from "../../../models/schema/admin/POS/sync";
 import { BadRequest } from "../../../Errors";
+import { ChangeLogModel } from "../../../models/schema/admin/POS/ChangeLog";
 
 const PAGE_SIZE = 500;
 interface IncomingChange {
@@ -36,46 +37,6 @@ export const bootstrapTable = async (req: Request, res: Response) => {
   });
 };
 
-export const pullTable = async (req: Request, res: Response) => {
-  const { table } = req.params;
-  const { since } = req.query;
-
-  const Model = getSyncModel(table);
-
-  // Determine the "since" date safely
-  let sinceDate: Date;
-  if (since) {
-    const parsed = new Date(since as string);
-    if (isNaN(parsed.getTime())) {
-      throw new BadRequest('Invalid "since" parameter – must be an ISO date string');
-    }
-    sinceDate = parsed;
-  } else {
-    // No since → fetch everything that has a valid updatedAt (epoch start)
-    sinceDate = new Date(0);
-  }
-
-  // Query: find documents updated after the since date.
-  // If you also want to include documents missing the updatedAt field,
-  // use an $or. Otherwise, only docs with a valid updatedAt > sinceDate are returned.
-  const rows = await Model.find({
-    updatedAt: { $gt: sinceDate }
-  })
-    .sort({ updatedAt: 1 })   // ✅ sort by the same field used in query (updatedAt)
-    .lean();
-
-  const changes = rows.map((doc: any) => ({
-    op: doc.deleted ? "delete" : "upsert",
-    record_id: String(doc._id),
-    data: doc.deleted ? undefined : serializeRow(doc),
-  }));
-
-  SuccessResponse(res, {
-    changes,
-    serverTime: new Date().toISOString(),
-  });
-};
-
 function serializeRow(doc: any) {
   const { _id, __v, ...rest } = doc;
   return {
@@ -87,7 +48,7 @@ function serializeRow(doc: any) {
 }
 
 export const pushChanges = async (req: Request, res: Response) => {
-  const { changes } = req.body as { changes: IncomingChange[] };
+  const { changes, clientId } = req.body as { changes: IncomingChange[], clientId: string };
 
   if (!Array.isArray(changes) || changes.length === 0) {
     return SuccessResponse(res, { applied: [], failed: [] });
@@ -103,7 +64,7 @@ export const pushChanges = async (req: Request, res: Response) => {
 
       if (change.op === "delete") {
         await Model.findByIdAndDelete(change.record_id, {
-          updatedAt: new Date(),
+          originClientId: clientId, 
         });
       } else {
         const data = JSON.parse(change.payload as string);
@@ -121,7 +82,7 @@ export const pushChanges = async (req: Request, res: Response) => {
         await Model.findByIdAndUpdate(
           change.record_id,
           { $set: rest },
-          { upsert: true, new: true }
+          { upsert: true, new: true, originClientId: clientId }
         );
       }
 
@@ -146,4 +107,46 @@ export const pushChanges = async (req: Request, res: Response) => {
   }
 
   SuccessResponse(res, { applied, failed });
+};
+
+export const pullChangeLog = async (req: Request, res: Response) => {
+  const { since, clientId } = req.query;
+
+  if (!clientId) {                          
+    throw new BadRequest("clientId is required");
+  }
+
+  let sinceDate: Date;
+  if (since) {
+    const parsed = new Date(since as string);
+    if (isNaN(parsed.getTime())) {
+      throw new BadRequest('Invalid "since" parameter – must be an ISO date string');
+    }
+    sinceDate = parsed;
+  } else {
+    sinceDate = new Date(0);
+  }
+
+  // Query: find documents in ChangeLog created after sinceDate
+  const query: any = {
+    createdAt: { $gt: sinceDate },
+    originClientId: { $ne: clientId },
+  };
+
+  const logs = await ChangeLogModel.find(query)
+    .sort({ createdAt: 1 })
+    .lean();
+
+  // Map to the same structure expected by the client!
+  const changes = logs.map((log: any) => ({
+    table_name: log.table_name,
+    op: log.op,
+    record_id: String(log.record_id),
+    data: log.op === "delete" ? undefined : serializeRow(log.payload || {}),
+  }));
+  console.log(changes);
+  SuccessResponse(res, {
+    changes,
+    serverTime: new Date().toISOString(),
+  });
 };
