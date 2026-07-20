@@ -391,6 +391,17 @@ export const getOrderDetails = async (req: Request, res: Response) => {
     SuccessResponse(res, { order });
 };
 
+export const getOrderStatusByRef = async (req: Request, res: Response) => {
+    const order = await OrderModel.findOne({
+        reference: req.params.ref,
+        user: req.user?.id,
+    }).select("status statusDescription");
+
+    if (!order) throw new NotFound("Order not found");
+
+    SuccessResponse(res, { order });
+}
+
 // ===============================
 // 🟢 VERIFY PAYMOB PAYMENT STATUS
 // ===============================
