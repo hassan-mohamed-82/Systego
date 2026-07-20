@@ -54,7 +54,7 @@ export const getOnlineOrderById = async (req: Request, res: Response) => {
  */
 export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, statusDescription } = req.body;
 
     if (!status || !["pending", "approved", "rejected"].includes(status)) {
         throw new NotFound("Invalid status. Must be: pending, approved, or rejected");
@@ -62,7 +62,7 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
 
     const order = await OrderModel.findByIdAndUpdate(
         id,
-        { status },
+        { status, statusDescription },
         { new: true }
     )
         .populate("user", "name email phone")
