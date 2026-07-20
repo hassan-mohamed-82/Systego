@@ -1223,7 +1223,7 @@ export const getSalePendingById = async (req: Request, res: Response) => {
   const payloadForCreateSale = {
     customer_id: (sale.customer_id as any)?._id || null,
     order_pending: 0,
-    coupon_code: sale.coupon_code || "",
+    coupon_id: sale.coupon_id || null,
     applied_coupon: sale.applied_coupon || false,
     gift_card_id: (sale.gift_card_id as any)?._id || null,
     tax_id: (sale.order_tax as any)?._id || null,
@@ -1271,7 +1271,7 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       customer: sale.customer_id || null,
       warehouse: sale.warehouse_id || null,
       cashier: sale.cashier_id || null,
-      coupon_code: sale.coupon_code || "",
+      coupon_code: sale.coupon_id || "",
       applied_coupon: sale.applied_coupon || false,
       gift_card: sale.gift_card_id || null,
       tax: sale.order_tax || null,
