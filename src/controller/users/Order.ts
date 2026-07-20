@@ -22,9 +22,11 @@ import { FawryService } from "../../utils/fawryService";
 import { CouponModel } from "../../models/schema/admin/coupons";
 import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
+import { DiscountModel } from "../../models/schema/admin/Discount";
 
 // ===============================
 // 🟢 CREATE ORDER
+// ===============================
 export const createOrder = async (
   req: Request,
   res: Response,
@@ -54,10 +56,12 @@ export const createOrder = async (
     const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
 
     // 2️⃣ Get Cart and Prepared Data
+    // CHANGED: select price + discountId too, not just name/ar_name/free_shipping,
+    // so we can recompute the real, current price server-side.
     const cart = await CartModel.findOne(cartQuery)
       .populate({
         path: "cartItems.product",
-        select: "name ar_name free_shipping",
+        select: "name ar_name free_shipping price discountId",
       })
       .session(session);
 
@@ -160,8 +164,46 @@ export const createOrder = async (
       }
     }
 
+    // NEW: 3.5️⃣ Batch-fetch active discounts for products that have a discountId,
+    // then compute an effective unit price per item. This is the source of truth
+    // for pricing at order time — we no longer trust item.price from the cart.
+    const discountIds = cart.cartItems
+      .map((i: any) => i.product?.discountId)
+      .filter((id: any) => !!id);
+
+    const discounts = discountIds.length
+      ? await DiscountModel.find({
+          _id: { $in: discountIds },
+          status: true,
+          applyIn: "E-commerce",
+        }).session(session)
+      : [];
+
+    const discountMap = new Map(
+      discounts.map((d: any) => [d._id.toString(), d]),
+    );
+
+    const computeEffectivePrice = (product: any): number => {
+      const basePrice = Number(product.price || 0);
+      const discount = product.discountId
+        ? discountMap.get(product.discountId.toString())
+        : null;
+
+      if (!discount) return basePrice;
+
+      if (discount.type === "percentage") {
+        const discounted = basePrice - (basePrice * discount.amount) / 100;
+        return Math.max(discounted, 0);
+      }
+
+      // fixed amount discount
+      return Math.max(basePrice - discount.amount, 0);
+    };
+
     // 4️⃣ Warehouse discount and prepare items
     const finalItems: any[] = [];
+    let recalculatedProductsTotal = 0;
+
     for (const item of cart.cartItems) {
       const qty = item.quantity;
       const variantId = item.variant;
@@ -195,16 +237,24 @@ export const createOrder = async (
             { session },
           );
 
+      // CHANGED: use the freshly computed, discount-aware price instead of
+      // blindly trusting item.price from the cart.
+      const effectivePrice = computeEffectivePrice(item.product);
+      recalculatedProductsTotal += effectivePrice * qty;
+
       finalItems.push({
         product: item.product._id,
         variant: variantId,
         quantity: qty,
-        price: item.price,
+        price: effectivePrice,
       });
     }
 
     // 5️⃣ Final calculations from cart
-    const productsTotal = cart.totalCartPrice;
+    // CHANGED: productsTotal now comes from the recalculated, discount-aware
+    // sum rather than the stored cart.totalCartPrice, so stale or manipulated
+    // cart totals can't leak into the order/payment amount.
+    const productsTotal = recalculatedProductsTotal;
     const totalTaxAmount = cart.taxAmount || 0;
     const totalServiceFee = cart.serviceFee || 0;
     let couponDiscount = 0;

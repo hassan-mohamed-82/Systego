@@ -791,8 +791,9 @@ export const modelsforselect = async (req: Request, res: Response) => {
   const variations = await VariationModel.find().lean().populate("options");
   const warehouses = await WarehouseModel.find().lean();
   const units = await UnitModel.find().lean();
+  const discounts = await DiscountModel.find({ status: true, applyIn: "E-commerce" }).lean();
 
-  SuccessResponse(res, { categories, brands, variations, warehouses, units });
+  SuccessResponse(res, { categories, brands, variations, warehouses, units, discounts }); 
 };
 
 // ═══════════════════════════════════════════════════════════
