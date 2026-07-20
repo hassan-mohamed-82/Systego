@@ -82,7 +82,7 @@ const CustomerGroupSchema = new Schema(
 );
 
 CustomerSchema.pre("save", async function (next) {
-  this.is_profile_complete = Boolean(this.name?.trim() && this.password);
+  this.is_profile_complete = Boolean(this.name?.trim());
 
   if (!this.isModified("password") || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 10);

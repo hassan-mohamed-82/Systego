@@ -75,7 +75,7 @@ const SaleSchema = new Schema(
     service_fee_total: { type: Number, default: 0 },
     grand_total: { type: Number, required: true },
     gift_card_id: { type: Schema.Types.String, ref: "GiftCard" },
-    coupon_code: { type: String, default: "" },
+    coupon_id: { type: String, default: "" },
     applied_coupon: { type: Boolean, default: false },
     cashier_id: {
       type: Schema.Types.ObjectId,

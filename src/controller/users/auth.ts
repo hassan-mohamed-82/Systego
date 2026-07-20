@@ -76,7 +76,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // 2. Login (The Main Router for Frontend)
-export const login = asyncHandler(async (req: Request, res: Response) => {
+export const login = asyncHandler(async (req: Request, res: Response) => { 
     const identifier = req.body.identifier || req.body.email || req.body.phone;
     if (!identifier) throw new BadRequest('Please provide email, phone or name');
 
@@ -107,6 +107,11 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
             requires_otp: true,
             action_required: "GO_TO_OTP_SCREEN"
         }, 200);
+    }
+
+    // Scenario 3: Registered Online Client (Needs Password)
+    if(user.auth_provider && !user.password) {
+        throw new BadRequest('Login with Google or Apple to continue.');
     }
 
   // Scenario 3: Registered Online Client (Needs Password)

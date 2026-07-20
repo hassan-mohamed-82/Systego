@@ -377,7 +377,6 @@ export const getMyOrders = async (req: Request, res: Response) => {
 export const getOrderDetails = async (req: Request, res: Response) => {
     const order = await OrderModel.findOne({
         _id: req.params.id,
-        user: req.user?.id,
     })
         .populate("cartItems.product", "name ar_name image")
         .populate({
