@@ -17,6 +17,7 @@ import ExcelJS from "exceljs";
 import { UnitModel } from "../../models/schema/admin/units";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
+import { DiscountModel } from "../../models/schema/admin/Discount";
 
 export const createProduct = async (req: Request, res: Response) => {
   const {
@@ -25,6 +26,7 @@ export const createProduct = async (req: Request, res: Response) => {
     image,
     categoryId,
     brandId,
+    discountId,
     product_unit,
     sale_unit,
     purchase_unit,
@@ -89,6 +91,11 @@ export const createProduct = async (req: Request, res: Response) => {
     if (!existingBrand) throw new BadRequest("Brand not found");
   }
 
+  if (discountId) {
+    const existingDiscount = await DiscountModel.findById(discountId);
+    if (!existingDiscount) throw new BadRequest("Discount not found");
+  }
+
   // Check warehouse if provided
   if (warehouseId) {
     const warehouse = await WarehouseModel.findById(warehouseId);
@@ -128,6 +135,7 @@ export const createProduct = async (req: Request, res: Response) => {
     image: imageUrl,
     categoryId,
     brandId,
+    discountId,
     product_unit,
     sale_unit,
     purchase_unit,
