@@ -192,7 +192,8 @@ export const createOrder = async (
       if (!discount) return basePrice;
 
       if (discount.type === "percentage") {
-        const discounted = basePrice - (basePrice * discount.amount) / 100;
+        // amount is a decimal fraction, e.g. 0.1 === 10% off
+        const discounted = basePrice - basePrice * discount.amount;
         return Math.max(discounted, 0);
       }
 
