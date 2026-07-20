@@ -8,6 +8,7 @@ const productSchema = new mongoose.Schema(
     image: { type: String },
     categoryId: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     brandId: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
+    discountId: { type: mongoose.Schema.Types.ObjectId, ref: "Discount" },
     product_unit: { type: mongoose.Schema.Types.ObjectId, ref: "Unit" },
     sale_unit: { type: mongoose.Schema.Types.ObjectId, ref: "Unit" },
     purchase_unit: { type: mongoose.Schema.Types.ObjectId, ref: "Unit" },

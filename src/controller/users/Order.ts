@@ -394,7 +394,6 @@ export const getOrderDetails = async (req: Request, res: Response) => {
 export const getOrderStatusByRef = async (req: Request, res: Response) => {
     const order = await OrderModel.findOne({
         reference: req.params.ref,
-        user: req.user?.id,
     });
 
     if (!order) throw new NotFound("Order not found");

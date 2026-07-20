@@ -7,9 +7,8 @@ const DiscountSchema = new Schema(
     amount: { type: Number, required: true, min: 0 },
     type: { type: String, enum: ["percentage", "fixed"], required: true },
     status: { type: Boolean, default: true },
+    applyIn: { type: String, enum: ["POS", "E-commerce"], default: "E-commerce" },
     },
-
-
     { timestamps: true }
 );
 
