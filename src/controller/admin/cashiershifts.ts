@@ -181,11 +181,6 @@ export const getCashierShiftDetails = async (req: Request, res: Response) => {
 export const closeCashierShift = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  // التحقق من صحة الـ ID
-  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    throw new BadRequest("Invalid shift id");
-  }
-
   // 1) البحث عن الشيفت
   const shift = await CashierShift.findById(id);
 

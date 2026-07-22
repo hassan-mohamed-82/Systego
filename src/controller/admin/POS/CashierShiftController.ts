@@ -1,17 +1,17 @@
-import { Request, Response } from 'express';
-import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
-import { SaleModel } from '../../../models/schema/admin/POS/Sale';
-import { SuccessResponse } from '../../../utils/response';
-import { NotFound, UnauthorizedError } from '../../../Errors';
-import { BadRequest } from '../../../Errors/BadRequest';
-import { UserModel } from '../../../models/schema/admin/User';
-import { PositionModel } from '../../../models/schema/admin/position';
+import { Request, Response } from "express";
+import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
+import { SaleModel } from "../../../models/schema/admin/POS/Sale";
+import { SuccessResponse } from "../../../utils/response";
+import { NotFound, UnauthorizedError } from "../../../Errors";
+import { BadRequest } from "../../../Errors/BadRequest";
+import { UserModel } from "../../../models/schema/admin/User";
+import { PositionModel } from "../../../models/schema/admin/position";
 import bcrypt from "bcryptjs";
-import { ExpenseModel } from '../../../models/schema/admin/POS/expenses';
-import { CashierModel } from '../../../models/schema/admin/cashier';
-import mongoose from 'mongoose';
-import { PaymentModel } from '../../../models/schema/admin/POS/payment';
-import { BankAccountModel } from '../../../models/schema/admin/Financial_Account';
+import { ExpenseModel } from "../../../models/schema/admin/POS/expenses";
+import { CashierModel } from "../../../models/schema/admin/cashier";
+import mongoose from "mongoose";
+import { PaymentModel } from "../../../models/schema/admin/POS/payment";
+import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
 
 // import { Forbidden, BadRequest, NotFound } من الـ error handlers بتاعتك
 
@@ -75,7 +75,7 @@ export const startcashierShift = async (req: Request, res: Response) => {
   // ✅ بعد ما الشيفت اتفتح فعلًا
   await CashierModel.updateOne(
     { _id: cashier_id },
-    { $set: { cashier_active: true } }
+    { $set: { cashier_active: true } },
   );
 
   SuccessResponse(res, {
@@ -115,7 +115,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
   const shiftStartTime = new Date(shift.start_time || Date.now());
 
   const filterFromDate = new Date(
-    Math.max(shiftStartTime.getTime(), todayStart.getTime())
+    Math.max(shiftStartTime.getTime(), todayStart.getTime()),
   );
 
   // ✅ 4) المبيعات
@@ -130,7 +130,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
 
   const totalSales = completedSales.reduce(
     (sum, s: any) => sum + (s.grand_total || 0),
-    0
+    0,
   );
 
   const totalOrders = completedSales.length;
@@ -181,7 +181,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
 
   const totalExpenses = Object.values(expensesByAccount).reduce(
     (sum: number, v: any) => sum + v,
-    0
+    0,
   );
 
   const netCashInDrawer = totalSales - totalExpenses;
@@ -204,9 +204,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
       .lean();
   }
 
-  const accountsMap = new Map(
-    accounts.map((a: any) => [a._id.toString(), a])
-  );
+  const accountsMap = new Map(accounts.map((a: any) => [a._id.toString(), a]));
 
   // ✅ 8) summary لكل حساب
   const accountRows = allAccountIds.map((id) => {
@@ -265,8 +263,7 @@ export const endShiftWithReport = async (req: Request, res: Response) => {
   };
 
   // ✅ 11) تجهيز بيانات الشيفت
-  const shiftData =
-    (shift as any).toObject?.() || shift;
+  const shiftData = (shift as any).toObject?.() || shift;
 
   return SuccessResponse(res, {
     message: "Shift report preview (still open)",
@@ -303,21 +300,15 @@ export const endshiftcashier = async (req: Request, res: Response) => {
   shift.end_time = new Date();
   shift.status = "closed";
   await shift.save();
-
-  // ✅ رجّع الكاشير متاح (بدون شروط تقفل التحديث)
-  if (shift.cashier_id) {
-    await CashierModel.updateOne(
-      { _id: shift.cashier_id },
-      { $set: { cashier_active: false } }
-    );
-  }
+  await CashierModel.findByIdAndUpdate(shift.cashier_id, {
+    cashier_active: false,
+  });
 
   SuccessResponse(res, {
     message: "Cashier shift ended successfully",
     shift,
   });
 };
-
 
 export const getCashierUsers = async (req: Request, res: Response) => {
   // 1️⃣ هات Position اللي اسمه Cashier
@@ -328,8 +319,9 @@ export const getCashierUsers = async (req: Request, res: Response) => {
   }
 
   // 2️⃣ هات كل Users اللي positionId بتاعهم = ID بتاع Cashier
-  const users = await UserModel.find({ positionId: cashierPosition._id })
-    .select("-password_hash");
+  const users = await UserModel.find({
+    positionId: cashierPosition._id,
+  }).select("-password_hash");
 
   // 3️⃣ رجّع الرد
   SuccessResponse(res, {
@@ -340,7 +332,6 @@ export const getCashierUsers = async (req: Request, res: Response) => {
 
 //logout for cashiershift without token invalidation
 export const logout = async (req: Request, res: Response) => {
-
   return SuccessResponse(res, {
     message: "Logged out successfully",
   });
