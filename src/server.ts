@@ -42,7 +42,7 @@ app.use("/uploads", express.static(uploadsPath));
 
 // 🚀 Routes
 app.use("/test-updater",(req, res, next) => {
-  res.json("all right")
+  res.json("all right 2")
 })
 app.use("/api", ApiRoute);
 

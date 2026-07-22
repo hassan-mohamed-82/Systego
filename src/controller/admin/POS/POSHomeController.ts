@@ -539,7 +539,7 @@ export const getTaxes = async (req: Request, res: Response) => {
 
 // 4. Discounts
 export const getDiscounts = async (req: Request, res: Response) => {
-    const discounts = await DiscountModel.find().select('name status amount type');
+    const discounts = await DiscountModel.find({ status: true, applyIn: "POS" }).select('name status amount type');
     SuccessResponse(res, { message: "Discounts list", data: discounts });
 };
 

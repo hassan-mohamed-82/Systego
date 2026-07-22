@@ -23,6 +23,7 @@ import { CouponModel } from "../../models/schema/admin/coupons";
 import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { DiscountModel } from "../../models/schema/admin/Discount";
+import { saveBase64Image } from "../../utils/handleImages";
 
 // ===============================
 // 🟢 CREATE ORDER
@@ -313,6 +314,15 @@ export const createOrder = async (
           "No active automatic gateway config found for selected payment method",
         );
     }
+    let imageUrl: string | undefined;
+    if (proofImage) {
+      imageUrl = await saveBase64Image(
+        proofImage,
+        Date.now().toString(),
+        req,
+        "orders",
+      );
+    }
 
     // 7️⃣ Create Order
     const order = await OrderModel.create(
@@ -331,7 +341,7 @@ export const createOrder = async (
           coupon: appliedCouponId,
           couponDiscount: couponDiscount,
           paymentMethod: paymentMethod.toString(),
-          proofImage,
+          proofImage: imageUrl,
           status: "pending",
           paymentGateway,
           paymentStatus:

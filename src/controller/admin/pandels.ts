@@ -6,7 +6,10 @@ import { SuccessResponse } from "../../utils/response";
 import { saveBase64Image } from "../../utils/handleImages";
 import { ProductModel } from "../../models/schema/admin/products";
 import { PandelModel } from "../../models/schema/admin/pandels";
-import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import {
+  ProductPriceModel,
+  ProductPriceOptionModel,
+} from "../../models/schema/admin/product_price";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { deletePhotoFromServer } from "../../utils/deleteImage";
@@ -15,15 +18,20 @@ import mongoose from "mongoose";
 const normalizeWarehouseSelection = async (
   payload: any,
   jwtUser: any,
-  existingBundle?: any
+  existingBundle?: any,
 ) => {
   const allWarehousesRequested = payload?.all_warehouses === true;
   const hasWarehouseIdsArray =
     Array.isArray(payload?.warehouse_ids) && payload.warehouse_ids.length > 0;
   const hasSingleWarehouseId = !!payload?.warehouse_id;
 
-  if (allWarehousesRequested && (hasSingleWarehouseId || hasWarehouseIdsArray)) {
-    throw new BadRequest("Do not send warehouse_id or warehouse_ids when all_warehouses is true");
+  if (
+    allWarehousesRequested &&
+    (hasSingleWarehouseId || hasWarehouseIdsArray)
+  ) {
+    throw new BadRequest(
+      "Do not send warehouse_id or warehouse_ids when all_warehouses is true",
+    );
   }
 
   if (hasSingleWarehouseId && hasWarehouseIdsArray) {
@@ -34,7 +42,9 @@ const normalizeWarehouseSelection = async (
   let warehouseIds: string[] = [];
 
   if (allWarehousesRequested) {
-    const allWarehousesDocs = await WarehouseModel.find({}).select("_id").lean();
+    const allWarehousesDocs = await WarehouseModel.find({})
+      .select("_id")
+      .lean();
     if (!allWarehousesDocs.length) {
       throw new BadRequest("No warehouses found in system");
     }
@@ -54,7 +64,9 @@ const normalizeWarehouseSelection = async (
       : [];
 
     if (storedAll) {
-      const allWarehousesDocs = await WarehouseModel.find({}).select("_id").lean();
+      const allWarehousesDocs = await WarehouseModel.find({})
+        .select("_id")
+        .lean();
       if (!allWarehousesDocs.length) {
         throw new BadRequest("No warehouses found in system");
       }
@@ -71,7 +83,9 @@ const normalizeWarehouseSelection = async (
   warehouseIds = Array.from(new Set(warehouseIds));
 
   if (!allWarehouses && warehouseIds.length === 0) {
-    throw new BadRequest("Please select one or more warehouses, or set all_warehouses = true");
+    throw new BadRequest(
+      "Please select one or more warehouses, or set all_warehouses = true",
+    );
   }
 
   for (const id of warehouseIds) {
@@ -80,7 +94,9 @@ const normalizeWarehouseSelection = async (
     }
   }
 
-  const existingWarehouses = await WarehouseModel.find({ _id: { $in: warehouseIds } })
+  const existingWarehouses = await WarehouseModel.find({
+    _id: { $in: warehouseIds },
+  })
     .select("_id")
     .lean();
 
@@ -96,7 +112,7 @@ const normalizeWarehouseSelection = async (
 
 const validateProductsInWarehouses = async (
   products: any[],
-  warehouseIds: string[]
+  warehouseIds: string[],
 ) => {
   const validatedProducts = [];
 
@@ -126,7 +142,7 @@ const validateProductsInWarehouses = async (
 
       if (!productPrice) {
         throw new BadRequest(
-          `ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`
+          `ProductPrice ${p.productPriceId} not found or doesn't belong to product ${p.productId}`,
         );
       }
     } else {
@@ -138,16 +154,16 @@ const validateProductsInWarehouses = async (
         .lean();
 
       const existingWarehouseIds = new Set(
-        warehousesStock.map((ws: any) => ws.warehouseId.toString())
+        warehousesStock.map((ws: any) => ws.warehouseId.toString()),
       );
 
       const missingWarehouseIds = warehouseIds.filter(
-        (wid) => !existingWarehouseIds.has(wid)
+        (wid) => !existingWarehouseIds.has(wid),
       );
 
       if (missingWarehouseIds.length > 0) {
         throw new BadRequest(
-          `Product ${product.name || p.productId} is not assigned to all selected warehouses. Missing in warehouses: ${missingWarehouseIds.join(", ")}`
+          `Product ${product.name || p.productId} is not assigned to all selected warehouses. Missing in warehouses: ${missingWarehouseIds.join(", ")}`,
         );
       }
     }
@@ -226,7 +242,7 @@ export const getPandelById = async (req: Request, res: Response) => {
             ...v,
             options: options.map((o: any) => o.option_id),
           };
-        })
+        }),
       );
 
       return {
@@ -234,7 +250,7 @@ export const getPandelById = async (req: Request, res: Response) => {
         availableVariations: variationsWithOptions,
         hasVariations: variationsWithOptions.length > 0,
       };
-    })
+    }),
   );
 
   return SuccessResponse(res, {
@@ -250,7 +266,15 @@ export const getPandelById = async (req: Request, res: Response) => {
 // ➕ CREATE PANDEL (Admin)
 // ═══════════════════════════════════════════════════════════
 export const createPandel = async (req: Request, res: Response) => {
-  const { name, products, images, startdate, enddate, status = true, price } = req.body;
+  const {
+    name,
+    products,
+    images,
+    startdate,
+    enddate,
+    status = true,
+    price,
+  } = req.body;
   const jwtUser = req.user as any;
 
   // Validation
@@ -264,9 +288,12 @@ export const createPandel = async (req: Request, res: Response) => {
 
   const { allWarehouses, warehouseIds } = await normalizeWarehouseSelection(
     req.body,
-    jwtUser
+    jwtUser,
   );
-  const validatedProducts = await validateProductsInWarehouses(products, warehouseIds);
+  const validatedProducts = await validateProductsInWarehouses(
+    products,
+    warehouseIds,
+  );
 
   // Check duplicate name
   const existingPandel = await PandelModel.findOne({ name });
@@ -278,16 +305,23 @@ export const createPandel = async (req: Request, res: Response) => {
   let imageUrls: string[] = [];
   if (images && Array.isArray(images) && images.length > 0) {
     for (const [index, base64Image] of images.entries()) {
-      if (base64Image && base64Image.startsWith("data:image")) {
+      if (base64Image) {
+        let fullDataUrl = base64Image;
+        if (!base64Image.startsWith("data:image")) {
+          if (base64Image.startsWith("/9j/")) {
+            fullDataUrl = "data:image/jpeg;base64," + base64Image;
+          } else {
+            fullDataUrl = "data:image/jpeg;base64," + base64Image;
+          }
+        }
+
         const imageUrl = await saveBase64Image(
-          base64Image,
+          fullDataUrl,
           `${Date.now()}_${index}`,
           req,
-          "pandels"
+          "pandels",
         );
         imageUrls.push(imageUrl);
-      } else if (base64Image) {
-        imageUrls.push(base64Image);
       }
     }
   }
@@ -343,7 +377,7 @@ export const updatePandel = async (req: Request, res: Response) => {
   const { allWarehouses, warehouseIds } = await normalizeWarehouseSelection(
     req.body,
     jwtUser,
-    pandel
+    pandel,
   );
 
   const updateData: any = {};
@@ -364,11 +398,13 @@ export const updatePandel = async (req: Request, res: Response) => {
   if (req.body.products) {
     const validatedProducts = await validateProductsInWarehouses(
       req.body.products,
-      warehouseIds
+      warehouseIds,
     );
     updateData.products = validatedProducts;
   } else if (hasWarehouseSelectionInBody) {
-    const existingProducts = Array.isArray(pandel.products) ? pandel.products : [];
+    const existingProducts = Array.isArray(pandel.products)
+      ? pandel.products
+      : [];
     await validateProductsInWarehouses(existingProducts as any[], warehouseIds);
   }
 
@@ -386,7 +422,7 @@ export const updatePandel = async (req: Request, res: Response) => {
           base64Image,
           `${Date.now()}_${index}`,
           req,
-          "pandels"
+          "pandels",
         );
         imageUrls.push(imageUrl);
       } else if (base64Image) {
@@ -397,12 +433,16 @@ export const updatePandel = async (req: Request, res: Response) => {
   }
 
   // Update other fields
-  if (req.body.startdate !== undefined) updateData.startdate = new Date(req.body.startdate);
-  if (req.body.enddate !== undefined) updateData.enddate = new Date(req.body.enddate);
+  if (req.body.startdate !== undefined)
+    updateData.startdate = new Date(req.body.startdate);
+  if (req.body.enddate !== undefined)
+    updateData.enddate = new Date(req.body.enddate);
   if (req.body.status !== undefined) updateData.status = req.body.status;
   if (req.body.price !== undefined) updateData.price = req.body.price;
 
-  const updatedPandel = await PandelModel.findByIdAndUpdate(id, updateData, { new: true })
+  const updatedPandel = await PandelModel.findByIdAndUpdate(id, updateData, {
+    new: true,
+  })
     .populate({
       path: "products.productId",
       select: "name ar_name price image",
