@@ -1,25 +1,31 @@
-import { SaleModel, ProductSalesModel } from '../../../models/schema/admin/POS/Sale';
-import { Request, Response } from 'express';
+import {
+  SaleModel,
+  ProductSalesModel,
+} from "../../../models/schema/admin/POS/Sale";
+import { Request, Response } from "express";
 import { WarehouseModel } from "../../../models/schema/admin/Warehouse";
-import { NotFound, UnauthorizedError } from '../../../Errors';
-import { CustomerModel } from '../../../models/schema/admin/POS/customer';
-import { SuccessResponse } from '../../../utils/response';
-import { CouponModel } from '../../../models/schema/admin/coupons';
-import { TaxesModel } from '../../../models/schema/admin/Taxes';
-import { DiscountModel } from '../../../models/schema/admin/Discount';
-import { ProductPriceModel, ProductPriceOptionModel } from '../../../models/schema/admin/product_price';
-import { PaymentModel } from '../../../models/schema/admin/POS/payment';
-import { BadRequest } from '../../../Errors/BadRequest';
-import { GiftCardModel } from '../../../models/schema/admin/POS/giftCard';
-import { BankAccountModel } from '../../../models/schema/admin/Financial_Account';
-import { PandelModel } from '../../../models/schema/admin/pandels';
-import { CashierShift } from '../../../models/schema/admin/POS/CashierShift';
-import mongoose from 'mongoose';
-import { ProductModel } from '../../../models/schema/admin/products';
-import { UserModel } from '../../../models/schema/admin/User';
+import { NotFound, UnauthorizedError } from "../../../Errors";
+import { CustomerModel } from "../../../models/schema/admin/POS/customer";
+import { SuccessResponse } from "../../../utils/response";
+import { CouponModel } from "../../../models/schema/admin/coupons";
+import { TaxesModel } from "../../../models/schema/admin/Taxes";
+import { DiscountModel } from "../../../models/schema/admin/Discount";
+import {
+  ProductPriceModel,
+  ProductPriceOptionModel,
+} from "../../../models/schema/admin/product_price";
+import { PaymentModel } from "../../../models/schema/admin/POS/payment";
+import { BadRequest } from "../../../Errors/BadRequest";
+import { GiftCardModel } from "../../../models/schema/admin/POS/giftCard";
+import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
+import { PandelModel } from "../../../models/schema/admin/pandels";
+import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
+import mongoose from "mongoose";
+import { ProductModel } from "../../../models/schema/admin/products";
+import { UserModel } from "../../../models/schema/admin/User";
 import bcrypt from "bcryptjs";
-import { Product_WarehouseModel } from '../../../models/schema/admin/Product_Warehouse';
-import { ServiceFeeModel } from '../../../models/schema/admin/ServiceFee';
+import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
+import { ServiceFeeModel } from "../../../models/schema/admin/ServiceFee";
 import { CashierModel } from "../../../models/schema/admin/cashier";
 
 // ✅ Dynamic store info - بيجيب اسم البراند من السوبر أدمن (صاحب البزنس)
@@ -82,6 +88,17 @@ const getStoreInfo = async (userId: string) => {
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
+// ═══════════════════════════════════════════════════════════════════════
+// createSale — FIXED VERSION (real Mongoose)
+// Same fixes as the ORM version, PLUS: this version uses real transactions
+// and atomic conditional stock decrements, since real Mongoose supports
+// both. That closes the TOCTOU race that the ORM version could only flag
+// as a future-plan TODO.
+// Fixes are marked "// ✅ FIX #N". Confirmed schema conventions noted where
+// relevant.
+// ═══════════════════════════════════════════════════════════════════════
+
+const toCents = (n: number) => Math.round(Number(n) * 100);
 
 export const createSale = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
@@ -102,13 +119,16 @@ export const createSale = async (req: Request, res: Response) => {
   }).sort({ start_time: -1 });
 
   if (!openShift) {
-    throw new BadRequest("You must open a cashier shift before creating a sale");
+    throw new BadRequest(
+      "You must open a cashier shift before creating a sale",
+    );
   }
 
   const {
     customer_id,
     order_pending = 0,
     gift_card_id,
+    gift_card_amount = 0, // ✅ FIX #3: explicit amount to apply from the gift card
     service_fee_ids = [],
     order_tax,
     order_discount,
@@ -116,11 +136,10 @@ export const createSale = async (req: Request, res: Response) => {
     bundles,
     shipping = 0,
     tax_rate = 0,
-    discount = 0,
+    discount = 0, // backward-compat fallback only, order_discount doc takes priority (FIX #2)
     note,
     financials,
     coupon_code,
-    applied_coupon,
     Due = 0,
   } = req.body;
 
@@ -140,15 +159,31 @@ export const createSale = async (req: Request, res: Response) => {
   const isPending = normalizedOrderPending === 1;
   const isDue = Number(Due) === 1;
 
+  // ✅ FIX #12: order_pending and Due can't both be true
+  if (isPending && isDue) {
+    throw new BadRequest(
+      "A sale cannot be both pending (order_pending=1) and due (Due=1) at the same time",
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════
   // ✅ PROCESS PRODUCTS & APPLY WHOLESALE PRICE
+  // ✅ FIX #4: same ratio formula in both branches (see note below)
+  // ✅ FIX #5: quantity is Number()-converted once and used consistently
   // ═══════════════════════════════════════════════════════════
   const processedProducts: any[] = [];
   let productsTotal = 0;
 
   if (products && products.length > 0) {
     for (const p of products as any[]) {
-      const { product_id, product_price_id, quantity, discount = 0, discount_type = "fixed" } = p;
+      const {
+        product_id,
+        product_price_id,
+        quantity,
+        discount: lineDiscount = 0,
+        discount_type: lineDiscountType = "fixed",
+      } = p;
+      const qty = Number(quantity); // ✅ FIX #5
 
       let finalPrice = 0;
       let originalPrice = 0;
@@ -169,9 +204,15 @@ export const createSale = async (req: Request, res: Response) => {
             const minQty = product.start_quantaty || 0;
             const wholesalePrice = product.whole_price;
 
-            if (wholesalePrice && wholesalePrice > 0 && minQty > 0 && quantity >= minQty) {
+            if (
+              wholesalePrice &&
+              wholesalePrice > 0 &&
+              minQty > 0 &&
+              qty >= minQty
+            ) {
               const discountRatio = wholesalePrice / (product.price || 1);
-              finalPrice = Math.round(originalPrice * discountRatio * 100) / 100;
+              finalPrice =
+                Math.round(originalPrice * discountRatio * 100) / 100;
               isWholesale = true;
             }
           }
@@ -192,9 +233,12 @@ export const createSale = async (req: Request, res: Response) => {
           wholesalePrice &&
           wholesalePrice > 0 &&
           minQtyForWholesale > 0 &&
-          quantity >= minQtyForWholesale
+          qty >= minQtyForWholesale
         ) {
-          finalPrice = wholesalePrice;
+          // ✅ FIX #4: same ratio formula as the variation branch (collapses
+          // to finalPrice = wholesalePrice here since originalPrice === product.price)
+          const discountRatio = wholesalePrice / (product.price || 1);
+          finalPrice = Math.round(originalPrice * discountRatio * 100) / 100;
           isWholesale = true;
         }
       }
@@ -204,28 +248,27 @@ export const createSale = async (req: Request, res: Response) => {
         originalPrice = finalPrice;
       }
 
-      // Apply product-specific discount
       let appliedDiscount = 0;
-      if (Number(discount) > 0) {
-        if (discount_type === "percentage") {
-          appliedDiscount = finalPrice * (Number(discount) / 100);
+      if (Number(lineDiscount) > 0) {
+        if (lineDiscountType === "percentage") {
+          appliedDiscount = finalPrice * (Number(lineDiscount) / 100);
         } else {
-          appliedDiscount = Number(discount);
+          appliedDiscount = Number(lineDiscount);
         }
         finalPrice = Math.max(0, finalPrice - appliedDiscount);
       }
 
-      const finalSubtotal = finalPrice * quantity;
+      const finalSubtotal = finalPrice * qty;
 
       processedProducts.push({
         product_id: p.product_id,
         product_price_id: p.product_price_id,
-        quantity: p.quantity,
+        quantity: qty,
         price: finalPrice,
         subtotal: finalSubtotal,
         original_price: originalPrice,
-        discount: Number(discount),
-        discount_type: discount_type,
+        discount: Number(lineDiscount),
+        discount_type: lineDiscountType,
         is_wholesale: isWholesale,
         options_id: p.options_id,
         isGift: p.isGift,
@@ -238,14 +281,23 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // ✅ PROCESS BUNDLES (الجديد)
+  // ✅ PROCESS BUNDLES
+  // ✅ FIX #5: quantity Number()-converted and used consistently
   // ═══════════════════════════════════════════════════════════
   const processedBundles: any[] = [];
   let bundlesTotal = 0;
 
   if (bundles && bundles.length > 0) {
     for (const b of bundles as any[]) {
-      const { bundle_id, quantity, selected_variations, isGift, discount = 0, discount_type = "fixed" } = b;
+      const {
+        bundle_id,
+        quantity,
+        selected_variations,
+        isGift,
+        discount: lineDiscount = 0,
+        discount_type: lineDiscountType = "fixed",
+      } = b;
+      const qty = Number(quantity); // ✅ FIX #5
 
       if (!mongoose.Types.ObjectId.isValid(bundle_id)) {
         throw new BadRequest("Invalid bundle id");
@@ -265,11 +317,10 @@ export const createSale = async (req: Request, res: Response) => {
 
       if (!bundleIsAvailableInWarehouse) {
         throw new BadRequest(
-          `Bundle "${(bundleDoc as any).name}" is not assigned to warehouse ${warehouseId}`
+          `Bundle "${(bundleDoc as any).name}" is not assigned to warehouse ${warehouseId}`,
         );
       }
 
-      // ✅ معالجة كل منتج في الـ Bundle
       const bundleProductsProcessed: any[] = [];
 
       for (const bundleProduct of (bundleDoc as any).products || []) {
@@ -277,19 +328,18 @@ export const createSale = async (req: Request, res: Response) => {
         let productPriceId = bundleProduct.productPriceId;
         const productQty = bundleProduct.quantity || 1;
 
-        // ✅ لو الـ Variation مش محدد من الأدمن، شوف لو الكاشير اختار
         if (!productPriceId && selected_variations) {
           const selectedVar = selected_variations.find(
-            (sv: any) => sv.productId?.toString() === productId?.toString()
+            (sv: any) => sv.productId?.toString() === productId?.toString(),
           );
           if (selectedVar?.productPriceId) {
             productPriceId = selectedVar.productPriceId;
           }
         }
 
-        // ✅ تحقق من الـ Stock
+        const requiredQty = qty * productQty; // ✅ FIX #5
+
         if (productPriceId) {
-          // منتج مع Variation - التحقق من المخزن بدل الكمية العامة
           const priceDoc = await ProductPriceModel.findById(productPriceId);
           if (!priceDoc) {
             throw new NotFound(`Product variation ${productPriceId} not found`);
@@ -302,36 +352,43 @@ export const createSale = async (req: Request, res: Response) => {
           });
 
           if (!variationWarehouseStock) {
-            const product = await ProductModel.findById(productId).select("name").lean();
+            const product = await ProductModel.findById(productId)
+              .select("name")
+              .lean();
             throw new BadRequest(
-              `Bundle "${bundleDoc.name}" - variation for "${(product as any)?.name || productId}" is not assigned to this warehouse`
+              `Bundle "${bundleDoc.name}" - variation for "${(product as any)?.name || productId}" is not assigned to this warehouse`,
             );
           }
 
-          if ((variationWarehouseStock.quantity ?? 0) < quantity * productQty) {
-            const product = await ProductModel.findById(productId).select("name").lean();
+          if ((variationWarehouseStock.quantity ?? 0) < requiredQty) {
+            const product = await ProductModel.findById(productId)
+              .select("name")
+              .lean();
             throw new BadRequest(
-              `Not enough stock for "${(product as any)?.name || "product"}" variation in bundle "${bundleDoc.name}". Available: ${variationWarehouseStock.quantity}, Required: ${quantity * productQty}`
+              `Not enough stock for "${(product as any)?.name || "product"}" variation in bundle "${bundleDoc.name}". Available: ${variationWarehouseStock.quantity}, Required: ${requiredQty}`,
             );
           }
         } else {
-          // منتج بدون Variation
           const warehouseStock = await Product_WarehouseModel.findOne({
             productId: productId,
             warehouseId: warehouseId,
           });
 
           if (!warehouseStock) {
-            const product = await ProductModel.findById(productId).select("name").lean();
+            const product = await ProductModel.findById(productId)
+              .select("name")
+              .lean();
             throw new BadRequest(
-              `Bundle "${bundleDoc.name}" is not available in this warehouse because product "${(product as any)?.name || productId}" is not assigned to warehouse stock`
+              `Bundle "${bundleDoc.name}" is not available in this warehouse because product "${(product as any)?.name || productId}" is not assigned to warehouse stock`,
             );
           }
 
-          if ((warehouseStock.quantity ?? 0) < quantity * productQty) {
-            const product = await ProductModel.findById(productId).select("name").lean();
+          if ((warehouseStock.quantity ?? 0) < requiredQty) {
+            const product = await ProductModel.findById(productId)
+              .select("name")
+              .lean();
             throw new BadRequest(
-              `Not enough stock for "${(product as any)?.name || "product"}" in bundle "${bundleDoc.name}". Available: ${warehouseStock.quantity}, Required: ${quantity * productQty}`
+              `Not enough stock for "${(product as any)?.name || "product"}" in bundle "${bundleDoc.name}". Available: ${warehouseStock.quantity}, Required: ${requiredQty}`,
             );
           }
         }
@@ -345,26 +402,26 @@ export const createSale = async (req: Request, res: Response) => {
 
       let finalBundlePrice = bundleDoc.price;
       let appliedDiscount = 0;
-      
-      if (Number(discount) > 0) {
-        if (discount_type === "percentage") {
-          appliedDiscount = finalBundlePrice * (Number(discount) / 100);
+
+      if (Number(lineDiscount) > 0) {
+        if (lineDiscountType === "percentage") {
+          appliedDiscount = finalBundlePrice * (Number(lineDiscount) / 100);
         } else {
-          appliedDiscount = Number(discount);
+          appliedDiscount = Number(lineDiscount);
         }
         finalBundlePrice = Math.max(0, finalBundlePrice - appliedDiscount);
       }
 
-      const bundleSubtotal = finalBundlePrice * quantity;
+      const bundleSubtotal = finalBundlePrice * qty; // ✅ FIX #5
 
       processedBundles.push({
         bundle_id,
-        quantity,
+        quantity: qty, // ✅ FIX #5
         price: finalBundlePrice,
         subtotal: bundleSubtotal,
         original_price: bundleDoc.price,
-        discount: Number(discount),
-        discount_type: discount_type,
+        discount: Number(lineDiscount),
+        discount_type: lineDiscountType,
         isGift: !!isGift,
         products: bundleProductsProcessed,
       });
@@ -375,62 +432,7 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ CALCULATE FINAL GRAND TOTAL
-  // ═══════════════════════════════════════════════════════════
   const subtotal = productsTotal + bundlesTotal;
-  const normalizedServiceFeeIds = Array.isArray(service_fee_ids)
-    ? service_fee_ids
-        .filter((id: unknown) => !!id)
-        .map((id: unknown) => String(id))
-    : [];
-
-  const uniqueServiceFeeIds = Array.from(new Set(normalizedServiceFeeIds));
-
-  uniqueServiceFeeIds.forEach((id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new BadRequest(`Invalid service fee id: ${id}`);
-    }
-  });
-
-  const serviceFeeDocs = uniqueServiceFeeIds.length
-    ? await ServiceFeeModel.find({
-        _id: { $in: uniqueServiceFeeIds },
-        status: true,
-        module: "pos",
-        $or: [{ warehouseId }, { warehouseId: null }],
-      }).lean()
-    : [];
-
-  if (serviceFeeDocs.length !== uniqueServiceFeeIds.length) {
-    throw new BadRequest("One or more selected service fees are invalid for this warehouse or module");
-  }
-
-  const appliedServiceFees = serviceFeeDocs.map((fee: any) => {
-    const calculatedAmount = fee.type === "percentage"
-      ? roundCurrency((subtotal * Number(fee.amount || 0)) / 100)
-      : roundCurrency(Number(fee.amount || 0));
-
-    return {
-      service_fee_id: fee._id,
-      title: fee.title,
-      type: fee.type,
-      rate: Number(fee.amount || 0),
-      amount: calculatedAmount,
-      module: fee.module,
-      warehouseId: fee.warehouseId || null,
-    };
-  });
-
-  const serviceFeeTotal = roundCurrency(
-    appliedServiceFees.reduce((sum, fee) => sum + fee.amount, 0)
-  );
-  const taxAmountCalc = (subtotal * Number(tax_rate)) / 100;
-  const finalGrandTotal = subtotal + serviceFeeTotal + taxAmountCalc + Number(shipping) - Number(discount);
-
-  if (finalGrandTotal <= 0) {
-    throw new BadRequest("Grand total must be greater than 0");
-  }
 
   // ═══════════════════════════════════════════════════════════
   // Customer Validation
@@ -451,62 +453,9 @@ export const createSale = async (req: Request, res: Response) => {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // Financials Validation
-  // ═══════════════════════════════════════════════════════════
-  type FinancialLine = { account_id: string; amount: number };
-  let paymentLines: FinancialLine[] = [];
-  let totalPaidFromLines = 0;
-
-  if (!isPending && !isDue) {
-    const finArr = financials as any[];
-
-    if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
-      throw new BadRequest(
-        "Financials are required for completed sale (order_pending = 0)"
-      );
-    }
-
-    paymentLines = finArr.map((f: any) => {
-      const accId = f.account_id || f.id;
-      const amt = Number(f.amount);
-
-      if (!accId || !mongoose.Types.ObjectId.isValid(accId)) {
-        throw new BadRequest("Invalid account_id in financials");
-      }
-      if (!amt || amt <= 0) {
-        throw new BadRequest("Each payment line must have amount > 0");
-      }
-
-      return { account_id: accId, amount: amt };
-    });
-
-    totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
-
-    const tolerance = 0.01;
-    if (Math.abs(totalPaidFromLines - finalGrandTotal) > tolerance) {
-      throw new BadRequest(
-        `Sum of payments (${totalPaidFromLines.toFixed(2)}) must equal grand_total (${finalGrandTotal.toFixed(2)})`
-      );
-    }
-
-    for (const line of paymentLines) {
-      const bankAccount = await BankAccountModel.findOne({
-        _id: line.account_id,
-        warehouseId: warehouseId,
-        status: true,
-        in_POS: true,
-      });
-
-      if (!bankAccount) {
-        throw new BadRequest(
-          "One of the financial accounts is not valid or not allowed in POS"
-        );
-      }
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // Coupon, Tax, Discount, Gift Card Validations
+  // Coupon / Tax / Discount / Gift Card doc validation
+  // ✅ FIX #1 & #2: these are now actually converted into monetary amounts
+  // and fed into finalGrandTotal below, instead of validated-then-discarded
   // ═══════════════════════════════════════════════════════════
   let coupon: any = null;
   if (coupon_code) {
@@ -515,6 +464,15 @@ export const createSale = async (req: Request, res: Response) => {
     if (coupon.available <= 0) throw new BadRequest("Coupon is out of stock");
     if (coupon.expired_date && coupon.expired_date < new Date()) {
       throw new BadRequest("Coupon is expired");
+    }
+    // ✅ FIX #1 (schema-confirmed): enforce minimum_amount_for_use
+    if (
+      coupon.minimum_amount_for_use &&
+      subtotal < coupon.minimum_amount_for_use
+    ) {
+      throw new BadRequest(
+        `Coupon requires a minimum order amount of ${coupon.minimum_amount_for_use} (current subtotal: ${subtotal.toFixed(2)})`,
+      );
     }
   }
 
@@ -551,8 +509,193 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
+  // ✅ FIX #3: gift_card_amount must be backed by a valid gift card and
+  // can't exceed its balance — instead of deducting the whole payment total.
+  const requestedGiftCardAmount = Number(gift_card_amount) || 0;
+  if (requestedGiftCardAmount > 0) {
+    if (!giftCard) {
+      throw new BadRequest(
+        "gift_card_amount was provided without a valid gift_card_id",
+      );
+    }
+    if (requestedGiftCardAmount > giftCard.amount) {
+      throw new BadRequest(
+        `Gift card balance (${giftCard.amount}) is less than the requested amount (${requestedGiftCardAmount})`,
+      );
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════
-  // ✅ STOCK VALIDATION FOR PRODUCTS
+  // ✅ CALCULATE FINAL GRAND TOTAL
+  // ═══════════════════════════════════════════════════════════
+  const normalizedServiceFeeIds = Array.isArray(service_fee_ids)
+    ? service_fee_ids
+        .filter((id: unknown) => !!id)
+        .map((id: unknown) => String(id))
+    : [];
+
+  const uniqueServiceFeeIds = Array.from(new Set(normalizedServiceFeeIds));
+
+  uniqueServiceFeeIds.forEach((id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new BadRequest(`Invalid service fee id: ${id}`);
+    }
+  });
+
+  const serviceFeeDocs = uniqueServiceFeeIds.length
+    ? await ServiceFeeModel.find({
+        _id: { $in: uniqueServiceFeeIds },
+        status: true,
+        module: "pos",
+        $or: [{ warehouseId }, { warehouseId: null }],
+      }).lean()
+    : [];
+
+  if (serviceFeeDocs.length !== uniqueServiceFeeIds.length) {
+    throw new BadRequest(
+      "One or more selected service fees are invalid for this warehouse or module",
+    );
+  }
+
+  const appliedServiceFees = serviceFeeDocs.map((fee: any) => {
+    const calculatedAmount =
+      fee.type === "percentage"
+        ? roundCurrency((subtotal * Number(fee.amount || 0)) / 100)
+        : roundCurrency(Number(fee.amount || 0));
+
+    return {
+      service_fee_id: fee._id,
+      title: fee.title,
+      type: fee.type,
+      rate: Number(fee.amount || 0),
+      amount: calculatedAmount,
+      module: fee.module,
+      warehouseId: fee.warehouseId || null,
+    };
+  });
+
+  const serviceFeeTotal = roundCurrency(
+    appliedServiceFees.reduce((sum, fee) => sum + fee.amount, 0),
+  );
+
+  // ✅ FIX #2 (schema-confirmed): DiscountModel percentage `amount` is a
+  // FRACTION (0.1 = 10%) — subtotal * amount, NOT subtotal * amount / 100.
+  let discountAmount = 0;
+  if (discountDoc) {
+    discountAmount =
+      discountDoc.type === "percentage"
+        ? roundCurrency(subtotal * Number(discountDoc.amount || 0))
+        : roundCurrency(Number(discountDoc.amount || 0));
+  } else if (Number(discount) > 0) {
+    discountAmount = roundCurrency(Number(discount)); // legacy fallback, flat amount
+  }
+
+  // ✅ FIX #1 (schema-confirmed): CouponModel type is "percentage" | "flat",
+  // and its percentage `amount` is a WHOLE NUMBER (10 = 10%) — different
+  // convention from Discount/Tax.
+  let couponAmount = 0;
+  if (coupon) {
+    couponAmount =
+      coupon.type === "percentage"
+        ? roundCurrency((subtotal * Number(coupon.amount || 0)) / 100)
+        : roundCurrency(Number(coupon.amount || 0)); // "flat"
+  }
+
+  // ✅ FIX #2 (schema-confirmed): TaxesModel follows the SAME fraction
+  // convention as Discount (0.1 = 10%) — subtotal * amount, no / 100.
+  // Raw tax_rate fallback stays whole-number based.
+  let taxAmountCalc = 0;
+  if (tax) {
+    taxAmountCalc =
+      tax.type === "percentage"
+        ? roundCurrency(subtotal * Number(tax.amount || 0))
+        : roundCurrency(Number(tax.amount || 0));
+  } else {
+    taxAmountCalc = roundCurrency((subtotal * Number(tax_rate)) / 100);
+  }
+
+  const rawGrandTotal =
+    subtotal -
+    discountAmount -
+    couponAmount -
+    requestedGiftCardAmount +
+    serviceFeeTotal +
+    taxAmountCalc +
+    Number(shipping);
+
+  // ✅ FIX #10: clamp negative totals instead of letting them flow downstream
+  const finalGrandTotal = roundCurrency(Math.max(0, rawGrandTotal));
+  const finalGrandTotalCents = toCents(finalGrandTotal);
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ Financials Validation
+  // ✅ FIX (main bug): exact integer-cents comparison — no tolerance
+  // window that a small/zero grand_total could sneak through. Financials
+  // are only required (and only allowed) when the total is actually > 0.
+  // ═══════════════════════════════════════════════════════════
+  type FinancialLine = { account_id: string; amount: number };
+  let paymentLines: FinancialLine[] = [];
+  let totalPaidFromLines = 0;
+
+  if (!isPending && !isDue) {
+    if (finalGrandTotalCents > 0) {
+      const finArr = financials as any[];
+
+      if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
+        throw new BadRequest(
+          "Financials are required for completed sale (order_pending = 0)",
+        );
+      }
+
+      paymentLines = finArr.map((f: any) => {
+        const accId = f.account_id || f.id;
+        const amt = Number(f.amount);
+
+        if (!accId || !mongoose.Types.ObjectId.isValid(accId)) {
+          throw new BadRequest("Invalid account_id in financials");
+        }
+        if (!amt || amt <= 0) {
+          throw new BadRequest("Each payment line must have amount > 0");
+        }
+
+        return { account_id: accId, amount: amt };
+      });
+
+      totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
+
+      if (toCents(totalPaidFromLines) !== finalGrandTotalCents) {
+        throw new BadRequest(
+          `Sum of payments (${totalPaidFromLines.toFixed(2)}) must equal grand_total (${finalGrandTotal.toFixed(2)})`,
+        );
+      }
+
+      for (const line of paymentLines) {
+        const bankAccount = await BankAccountModel.findOne({
+          _id: line.account_id,
+          warehouseId: warehouseId,
+          status: true,
+          in_POS: true,
+        });
+
+        if (!bankAccount) {
+          throw new BadRequest(
+            "One of the financial accounts is not valid or not allowed in POS",
+          );
+        }
+      }
+    } else if (Array.isArray(financials) && financials.length > 0) {
+      throw new BadRequest(
+        "Grand total is 0 — no financials should be submitted for a fully-covered sale",
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ STOCK PRE-CHECK (informational only)
+  // This gives a fast, descriptive error before we open a transaction.
+  // It does NOT guarantee correctness under concurrency by itself — that's
+  // what the atomic conditional decrements inside the transaction below
+  // are for. Think of this as a friendly early exit, not the safety net.
   // ═══════════════════════════════════════════════════════════
   for (const p of processedProducts) {
     const { product_price_id, product_id, quantity } = p;
@@ -566,7 +709,6 @@ export const createSale = async (req: Request, res: Response) => {
         throw new NotFound("Product price (variation) not found");
       }
 
-      // ✅ التحقق من المخزن (warehouse-specific) بدل الكمية العامة
       const variationWarehouseStock = await Product_WarehouseModel.findOne({
         productId: product_id,
         productPriceId: product_price_id,
@@ -574,14 +716,12 @@ export const createSale = async (req: Request, res: Response) => {
       });
 
       if (!variationWarehouseStock) {
-        throw new BadRequest(
-          `Product variation is not assigned to warehouse`
-        );
+        throw new BadRequest(`Product variation is not assigned to warehouse`);
       }
 
       if ((variationWarehouseStock.quantity ?? 0) < quantity) {
         throw new BadRequest(
-          `Not enough stock for variation in warehouse, available: ${variationWarehouseStock.quantity ?? 0}, required: ${quantity}`
+          `Not enough stock for variation in warehouse, available: ${variationWarehouseStock.quantity ?? 0}, required: ${quantity}`,
         );
       }
     } else {
@@ -596,20 +736,24 @@ export const createSale = async (req: Request, res: Response) => {
 
       if (!warehouseStock) {
         throw new BadRequest(
-          `Product ${product_id} is not assigned to warehouse ${warehouseId}`
+          `Product ${product_id} is not assigned to warehouse ${warehouseId}`,
         );
       }
 
       if ((warehouseStock.quantity ?? 0) < quantity) {
         throw new BadRequest(
-          `Not enough stock in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`
+          `Not enough stock in warehouse, available: ${warehouseStock.quantity ?? 0}, required: ${quantity}`,
         );
       }
     }
   }
 
   // ═══════════════════════════════════════════════════════════
-  // CREATE SALE
+  // ✅ FIX #8/#9/#10/#11: everything that mutates data now runs inside a
+  // real Mongoose transaction. Stock decrements use findOneAndUpdate with
+  // a `quantity: { $gte: required }` filter — atomic check-and-decrement
+  // in one operation, so two concurrent sales can no longer both pass a
+  // separate check and then both decrement past zero.
   // ═══════════════════════════════════════════════════════════
   const accountIdsForSale =
     !isPending && !isDue && paymentLines.length > 0
@@ -619,187 +763,277 @@ export const createSale = async (req: Request, res: Response) => {
   const paidAmountForDb = !isPending && !isDue ? totalPaidFromLines : 0;
   const remainingAmount = isDue ? finalGrandTotal : 0;
 
-  const sale = await SaleModel.create({
-    date: new Date(),
-    customer_id: customer ? customer._id : undefined,
-    Due_customer_id: isDue && customer ? customer._id : undefined,
-    Due: isDue ? 1 : 0,
-    warehouse_id: warehouseId,
-    account_id: accountIdsForSale,
-    order_pending: normalizedOrderPending,
-    coupon_code: coupon ? coupon.coupon_code : "",
-    applied_coupon: coupon ? true : false,
-    gift_card_id: giftCard ? giftCard._id : undefined,
-    order_tax: tax ? tax._id : undefined,
-    order_discount: discountDoc ? discountDoc._id : undefined,
-    service_fees: appliedServiceFees,
-    service_fee_total: serviceFeeTotal,
-    shipping,
-    tax_rate,
-    tax_amount: taxAmountCalc,
-    discount,
-    total: subtotal,
-    grand_total: finalGrandTotal,
-    paid_amount: paidAmountForDb,
-    remaining_amount: remainingAmount,
-    note,
-    cashier_id: cashierId,
-    shift_id: openShift._id,
-  });
+  const session = await mongoose.startSession();
+  let sale: any;
 
-  // ═══════════════════════════════════════════════════════════
-  // CREATE PRODUCT SALES
-  // ═══════════════════════════════════════════════════════════
-  for (const p of processedProducts) {
-    await ProductSalesModel.create({
-      sale_id: sale._id,
-      product_id: p.product_id,
-      bundle_id: undefined,
-      product_price_id: p.product_price_id,
-      quantity: p.quantity,
-      price: p.price,
-      subtotal: p.subtotal,
-      original_price: p.original_price,
-      discount: p.discount,
-      discount_type: p.discount_type,
-      is_wholesale: p.is_wholesale,
-      options_id: p.options_id,
-      isGift: !!p.isGift,
-      isBundle: false,
-    });
-  }
+  try {
+    await session.withTransaction(async () => {
+      const created = await SaleModel.create(
+        [
+          {
+            date: new Date(),
+            customer_id: customer ? customer._id : undefined,
+            Due_customer_id: isDue && customer ? customer._id : undefined,
+            Due: isDue ? 1 : 0,
+            warehouse_id: warehouseId,
+            account_id: accountIdsForSale,
+            order_pending: normalizedOrderPending,
+            coupon_code: coupon ? coupon.coupon_code : "",
+            applied_coupon: coupon ? true : false,
+            coupon_amount: couponAmount, // ✅ FIX #1
+            gift_card_id: giftCard ? giftCard._id : undefined,
+            gift_card_amount: requestedGiftCardAmount, // ✅ FIX #3
+            order_tax: tax ? tax._id : undefined,
+            order_discount: discountDoc ? discountDoc._id : undefined,
+            discount_amount: discountAmount, // ✅ FIX #2
+            service_fees: appliedServiceFees,
+            service_fee_total: serviceFeeTotal,
+            shipping,
+            tax_rate,
+            tax_amount: taxAmountCalc,
+            discount: discountAmount,
+            total: subtotal,
+            grand_total: finalGrandTotal,
+            paid_amount: paidAmountForDb,
+            remaining_amount: remainingAmount,
+            note,
+            cashier_id: cashierId,
+            shift_id: openShift._id,
+          },
+        ],
+        { session },
+      );
+      sale = created[0];
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ CREATE BUNDLE SALES (الجديد)
-  // ═══════════════════════════════════════════════════════════
-  for (const b of processedBundles) {
-    await ProductSalesModel.create({
-      sale_id: sale._id,
-      product_id: undefined,
-      bundle_id: b.bundle_id,
-      product_price_id: undefined,
-      quantity: b.quantity,
-      price: b.price,
-      subtotal: b.subtotal,
-      original_price: b.original_price,
-      discount: b.discount,
-      discount_type: b.discount_type,
-      options_id: [],
-      isGift: !!b.isGift,
-      isBundle: true,
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // ✅ STOCK DEDUCTION & PAYMENTS
-  // ═══════════════════════════════════════════════════════════
-  if (!isPending) {
-    // Payment Processing
-    if (!isDue && paymentLines.length > 0) {
-      await PaymentModel.create({
-        sale_id: sale._id,
-        financials: paymentLines.map((p) => ({
-          account_id: p.account_id,
-          amount: p.amount,
-        })),
-      });
-
-      for (const line of paymentLines) {
-        await BankAccountModel.findByIdAndUpdate(line.account_id, {
-          $inc: { balance: line.amount },
-        });
-      }
-    }
-
-    // ✅ خصم كميات المنتجات العادية
-    for (const p of processedProducts) {
-      if (p.product_price_id) {
-        // ✅ خصم من مخزن المنتج (Variation-specific, Warehouse-specific)
-        await Product_WarehouseModel.findOneAndUpdate(
-          { productId: p.product_id, productPriceId: p.product_price_id, warehouseId: warehouseId },
-          { $inc: { quantity: -p.quantity } }
+      for (const p of processedProducts) {
+        await ProductSalesModel.create(
+          [
+            {
+              sale_id: sale._id,
+              product_id: p.product_id,
+              bundle_id: undefined,
+              product_price_id: p.product_price_id,
+              quantity: p.quantity,
+              price: p.price,
+              subtotal: p.subtotal,
+              original_price: p.original_price,
+              discount: p.discount,
+              discount_type: p.discount_type,
+              is_wholesale: p.is_wholesale,
+              options_id: p.options_id,
+              isGift: !!p.isGift,
+              isBundle: false,
+            },
+          ],
+          { session },
         );
-
-        // ✅ خصم من الكمية العامة للـ Variation
-        await ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
-          $inc: { quantity: -p.quantity },
-        });
-
-        // ✅ خصم من إجمالي المخزن
-        await WarehouseModel.findByIdAndUpdate(warehouseId, {
-          $inc: { stock_Quantity: -p.quantity },
-        });
-      } else if (p.product_id) {
-        await Product_WarehouseModel.findOneAndUpdate(
-          { productId: p.product_id, warehouseId: warehouseId },
-          { $inc: { quantity: -p.quantity } }
-        );
-
-        await WarehouseModel.findByIdAndUpdate(warehouseId, {
-          $inc: { stock_Quantity: -p.quantity },
-        });
-
-        await ProductModel.findByIdAndUpdate(p.product_id, {
-          $inc: { quantity: -p.quantity },
-        });
       }
-    }
 
-    // ✅ خصم كميات الـ Bundles (الجديد)
-    for (const b of processedBundles) {
-      for (const bp of b.products) {
-        const deductQty = b.quantity * bp.quantity;
+      for (const b of processedBundles) {
+        await ProductSalesModel.create(
+          [
+            {
+              sale_id: sale._id,
+              product_id: undefined,
+              bundle_id: b.bundle_id,
+              product_price_id: undefined,
+              quantity: b.quantity,
+              price: b.price,
+              subtotal: b.subtotal,
+              original_price: b.original_price,
+              discount: b.discount,
+              discount_type: b.discount_type,
+              options_id: [],
+              isGift: !!b.isGift,
+              isBundle: true,
+            },
+          ],
+          { session },
+        );
+      }
 
-        if (bp.productPriceId) {
-          // منتج مع Variation - خصم من المخزن + الـ Variation
-          await Product_WarehouseModel.findOneAndUpdate(
-            { productId: bp.productId, productPriceId: bp.productPriceId, warehouseId: warehouseId },
-            { $inc: { quantity: -deductQty } }
+      if (!isPending) {
+        if (!isDue && paymentLines.length > 0) {
+          await PaymentModel.create(
+            [
+              {
+                sale_id: sale._id,
+                financials: paymentLines.map((p) => ({
+                  account_id: p.account_id,
+                  amount: p.amount,
+                })),
+              },
+            ],
+            { session },
           );
 
-          await ProductPriceModel.findByIdAndUpdate(bp.productPriceId, {
-            $inc: { quantity: -deductQty },
-          });
+          for (const line of paymentLines) {
+            await BankAccountModel.findByIdAndUpdate(
+              line.account_id,
+              { $inc: { balance: line.amount } },
+              { session },
+            );
+          }
+        }
 
-          await WarehouseModel.findByIdAndUpdate(warehouseId, {
-            $inc: { stock_Quantity: -deductQty },
-          });
-        } else {
-          // منتج بدون Variation
-          await Product_WarehouseModel.findOneAndUpdate(
-            { productId: bp.productId, warehouseId: warehouseId },
-            { $inc: { quantity: -deductQty } }
+        // ✅ Atomic, race-safe stock decrement for products
+        for (const p of processedProducts) {
+          if (p.product_price_id) {
+            const updated = await Product_WarehouseModel.findOneAndUpdate(
+              {
+                productId: p.product_id,
+                productPriceId: p.product_price_id,
+                warehouseId,
+                quantity: { $gte: p.quantity },
+              },
+              { $inc: { quantity: -p.quantity } },
+              { session, new: true },
+            );
+            if (!updated) {
+              throw new BadRequest(
+                `Not enough stock for variation of product ${p.product_id} (concurrent sale likely took the remaining stock)`,
+              );
+            }
+
+            await ProductPriceModel.findByIdAndUpdate(
+              p.product_price_id,
+              { $inc: { quantity: -p.quantity } },
+              { session },
+            );
+
+            await WarehouseModel.findByIdAndUpdate(
+              warehouseId,
+              { $inc: { stock_Quantity: -p.quantity } },
+              { session },
+            );
+          } else if (p.product_id) {
+            const updated = await Product_WarehouseModel.findOneAndUpdate(
+              {
+                productId: p.product_id,
+                warehouseId,
+                quantity: { $gte: p.quantity },
+              },
+              { $inc: { quantity: -p.quantity } },
+              { session, new: true },
+            );
+            if (!updated) {
+              throw new BadRequest(
+                `Not enough stock for product ${p.product_id} (concurrent sale likely took the remaining stock)`,
+              );
+            }
+
+            await WarehouseModel.findByIdAndUpdate(
+              warehouseId,
+              { $inc: { stock_Quantity: -p.quantity } },
+              { session },
+            );
+
+            await ProductModel.findByIdAndUpdate(
+              p.product_id,
+              { $inc: { quantity: -p.quantity } },
+              { session },
+            );
+          }
+        }
+
+        // ✅ Atomic, race-safe stock decrement for bundle contents
+        for (const b of processedBundles) {
+          for (const bp of b.products) {
+            const deductQty = b.quantity * bp.quantity;
+
+            if (bp.productPriceId) {
+              const updated = await Product_WarehouseModel.findOneAndUpdate(
+                {
+                  productId: bp.productId,
+                  productPriceId: bp.productPriceId,
+                  warehouseId,
+                  quantity: { $gte: deductQty },
+                },
+                { $inc: { quantity: -deductQty } },
+                { session, new: true },
+              );
+              if (!updated) {
+                throw new BadRequest(
+                  `Not enough stock for a variation inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
+                );
+              }
+
+              await ProductPriceModel.findByIdAndUpdate(
+                bp.productPriceId,
+                { $inc: { quantity: -deductQty } },
+                { session },
+              );
+
+              await WarehouseModel.findByIdAndUpdate(
+                warehouseId,
+                { $inc: { stock_Quantity: -deductQty } },
+                { session },
+              );
+            } else {
+              const updated = await Product_WarehouseModel.findOneAndUpdate(
+                {
+                  productId: bp.productId,
+                  warehouseId,
+                  quantity: { $gte: deductQty },
+                },
+                { $inc: { quantity: -deductQty } },
+                { session, new: true },
+              );
+              if (!updated) {
+                throw new BadRequest(
+                  `Not enough stock for a product inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
+                );
+              }
+
+              await WarehouseModel.findByIdAndUpdate(
+                warehouseId,
+                { $inc: { stock_Quantity: -deductQty } },
+                { session },
+              );
+
+              await ProductModel.findByIdAndUpdate(
+                bp.productId,
+                { $inc: { quantity: -deductQty } },
+                { session },
+              );
+            }
+          }
+        }
+
+        // ✅ Atomic coupon decrement, also guarded against a race
+        // draining `available` below zero between two concurrent sales.
+        if (!isDue && coupon) {
+          const couponUpdated = await CouponModel.findOneAndUpdate(
+            { _id: coupon._id, available: { $gte: 1 } },
+            { $inc: { available: -1 } },
+            { session, new: true },
           );
+          if (!couponUpdated) {
+            throw new BadRequest(
+              "Coupon just ran out of stock — please retry without it",
+            );
+          }
+        }
 
-          await WarehouseModel.findByIdAndUpdate(warehouseId, {
-            $inc: { stock_Quantity: -deductQty },
-          });
-
-          await ProductModel.findByIdAndUpdate(bp.productId, {
-            $inc: { quantity: -deductQty },
-          });
+        // ✅ FIX #3: deduct exactly the requested gift card amount, atomically
+        if (!isDue && giftCard && requestedGiftCardAmount > 0) {
+          const giftCardUpdated = await GiftCardModel.findOneAndUpdate(
+            { _id: giftCard._id, amount: { $gte: requestedGiftCardAmount } },
+            { $inc: { amount: -requestedGiftCardAmount } },
+            { session, new: true },
+          );
+          if (!giftCardUpdated) {
+            throw new BadRequest(
+              "Gift card balance changed concurrently — please retry",
+            );
+          }
         }
       }
-    }
-
-    // Coupon Update
-    if (!isDue && coupon) {
-      await CouponModel.findByIdAndUpdate(coupon._id, {
-        $inc: { available: -1 },
-      });
-    }
-
-    // Gift Card Update
-    if (!isDue && giftCard && totalPaidFromLines > 0) {
-      await GiftCardModel.findByIdAndUpdate(giftCard._id, {
-        $inc: { amount: -totalPaidFromLines },
-      });
-    }
+    });
+  } finally {
+    session.endSession();
   }
-
-  // ═══════════════════════════════════════════════════════════
-  // FETCH FULL SALE DATA
-  // ═══════════════════════════════════════════════════════════
+  
   const fullSale = await SaleModel.findById(sale._id)
     .populate("customer_id", "name email phone_number")
     .populate("Due_customer_id", "name email phone_number")
@@ -813,7 +1047,10 @@ export const createSale = async (req: Request, res: Response) => {
     .lean();
 
   const fullItems = await ProductSalesModel.find({ sale_id: sale._id })
-    .populate("product_id", "name ar_name image price whole_price start_quantaty")
+    .populate(
+      "product_id",
+      "name ar_name image price whole_price start_quantaty",
+    )
     .populate("product_price_id", "price code quantity")
     .populate("bundle_id", "name price")
     .populate("options_id", "name ar_name price")
@@ -827,9 +1064,6 @@ export const createSale = async (req: Request, res: Response) => {
     return item;
   });
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ الجديد: جلب بيانات الكاشير (إعدادات الطابعة) بناءً على الماكينة المرتبطة بالشيفت
-  // ═══════════════════════════════════════════════════════════
   const currentMachineId = openShift.cashier_id;
   const cashierMachine = await CashierModel.findById(currentMachineId);
 
@@ -843,24 +1077,14 @@ export const createSale = async (req: Request, res: Response) => {
     };
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // إرجاع الاستجابة النهائية
-  // ═══════════════════════════════════════════════════════════
-  // ✅ جيب بيانات المحل بشكل ديناميكي من اليوزر اللي عامل login
   const storeInfo = await getStoreInfo(cashierId);
 
   return SuccessResponse(res, {
     message: isDue
       ? `Due sale created. Amount owed: ${remainingAmount}`
       : "Sale created successfully",
-    
-    // ✅ بيانات المحل ديناميكية حسب اليوزر اللي عامل login
     store: storeInfo,
-    
-    // ✅ الجديد: إعدادات الطابعة
     printer_settings: printerSettings,
-
-    // الباقي زي ما هو بالظبط
     sale: fullSale,
     items: formattedItems,
     service_fees: appliedServiceFees,
@@ -872,14 +1096,16 @@ export const createSale = async (req: Request, res: Response) => {
       service_fee_total: serviceFeeTotal,
       tax_amount: taxAmountCalc,
       shipping: Number(shipping),
-      discount: Number(discount),
       grand_total: finalGrandTotal,
     },
   });
 };
+
 export const getAllSales = async (req: Request, res: Response) => {
   const sales = await SaleModel.find({ order_pending: 0 }) // ✅ المكتملة بس
-    .select("reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt")
+    .select(
+      "reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt",
+    )
     .populate("customer_id", "name")
     .populate("Due_customer_id", "name")
     .populate("warehouse_id", "name")
@@ -889,8 +1115,6 @@ export const getAllSales = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { sales });
 };
-
-
 
 export const getSales = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -936,7 +1160,8 @@ export const getSales = async (req: Request, res: Response) => {
           product_price_id: item.product_price_id
             ? { ...item.product_price_id, price: null }
             : null,
-          options_id: item.options_id?.map((opt: any) => ({ ...opt, price: null })) || [],
+          options_id:
+            item.options_id?.map((opt: any) => ({ ...opt, price: null })) || [],
         };
       }
 
@@ -956,7 +1181,6 @@ export const getSales = async (req: Request, res: Response) => {
 
   SuccessResponse(res, { sale, items: processedItems });
 };
-
 
 export const getsalePending = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
@@ -1034,9 +1258,7 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
   const userId = jwtUser.id;
 
   // 1) هات اليوزر (مع الباسورد عشان نقدر نشيك الحقيقي)
-  const user = await UserModel.findById(userId).select(
-    "+password_hash +role"
-  );
+  const user = await UserModel.findById(userId).select("+password_hash +role");
   if (!user) throw new NotFound("User not found");
 
   const fakePassword = process.env.SHIFT_REPORT_PASSWORD;
@@ -1133,8 +1355,6 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
   });
 };
 
-
-
 export const getSalePendingById = async (req: Request, res: Response) => {
   const { sale_id } = req.params;
 
@@ -1144,7 +1364,7 @@ export const getSalePendingById = async (req: Request, res: Response) => {
 
   const sale = await SaleModel.findOne({
     _id: sale_id,
-    order_pending: { $in: [1, "1", true] }
+    order_pending: { $in: [1, "1", true] },
   })
     .populate("customer_id", "name email phone_number address")
     .populate("warehouse_id", "name ar_name")
@@ -1164,32 +1384,32 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       select: "name ar_name image price code quantity categoryId brandId",
       populate: [
         { path: "categoryId", select: "name ar_name" },
-        { path: "brandId", select: "name ar_name" }
-      ]
+        { path: "brandId", select: "name ar_name" },
+      ],
     })
     .populate({
       path: "product_price_id",
       select: "price code quantity options",
       populate: {
         path: "productId",
-        select: "name ar_name image"
-      }
+        select: "name ar_name image",
+      },
     })
     .populate({
       path: "bundle_id",
       select: "name ar_name price productsId",
       populate: {
         path: "productsId",
-        select: "name ar_name price"
-      }
+        select: "name ar_name price",
+      },
     })
     .populate({
       path: "options_id",
       select: "name ar_name price variationId",
       populate: {
         path: "variationId",
-        select: "name ar_name"
-      }
+        select: "name ar_name",
+      },
     })
     .lean();
 
@@ -1237,7 +1457,7 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     total: sale.total || sale.grand_total,
     grand_total: sale.grand_total,
     note: sale.note || "",
-    products: products.map(p => ({
+    products: products.map((p) => ({
       product_id: p.product?._id,
       product_price_id: p.product_price?._id,
       quantity: p.quantity,
@@ -1246,7 +1466,7 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       isGift: p.isGift,
       options_id: p.options?.map((opt: any) => opt._id) || [],
     })),
-    bundles: bundles.map(b => ({
+    bundles: bundles.map((b) => ({
       bundle_id: b.bundle?._id,
       quantity: b.quantity,
       price: b.price,
@@ -1286,12 +1506,14 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       total_products: products.length,
       total_bundles: bundles.length,
       total_items: products.length + bundles.length,
-      total_quantity: [...products, ...bundles].reduce((sum, item) => sum + item.quantity, 0),
+      total_quantity: [...products, ...bundles].reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      ),
     },
     payloadForCreateSale,
   });
 };
-
 
 export const getDueSales = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
@@ -1309,7 +1531,7 @@ export const getDueSales = async (req: Request, res: Response) => {
 
   const totalDue = dueSales.reduce(
     (sum, sale) => sum + (sale.remaining_amount || 0),
-    0
+    0,
   );
 
   return SuccessResponse(res, {
@@ -1365,12 +1587,12 @@ export const payDue = async (req: Request, res: Response) => {
 
   const totalDue = dueSales.reduce(
     (sum, sale) => sum + (sale.remaining_amount || 0),
-    0
+    0,
   );
 
   if (paymentAmount > totalDue) {
     throw new BadRequest(
-      `Payment amount (${paymentAmount}) exceeds total due (${totalDue})`
+      `Payment amount (${paymentAmount}) exceeds total due (${totalDue})`,
     );
   }
 
@@ -1397,7 +1619,7 @@ export const payDue = async (req: Request, res: Response) => {
 
   if (Number(totalFinancials.toFixed(2)) !== Number(paymentAmount.toFixed(2))) {
     throw new BadRequest(
-      `Sum of financials (${totalFinancials}) must equal amount (${paymentAmount})`
+      `Sum of financials (${totalFinancials}) must equal amount (${paymentAmount})`,
     );
   }
 
@@ -1485,7 +1707,7 @@ export const payDue = async (req: Request, res: Response) => {
 
   const newTotalDue = remainingDues.reduce(
     (sum, sale) => sum + (sale.remaining_amount || 0),
-    0
+    0,
   );
 
   return SuccessResponse(res, {
@@ -1507,16 +1729,18 @@ export const payDue = async (req: Request, res: Response) => {
   });
 };
 
-
-
 export const applyCoupon = async (req: Request, res: Response) => {
   const { coupon_code, grand_total } = req.body;
   if (!coupon_code) throw new BadRequest("Please provide all required fields");
   const coupon = await CouponModel.findOne({ coupon_code });
   if (!coupon) throw new NotFound("Coupon not found");
   if (coupon.available <= 0) throw new BadRequest("Coupon is not available");
-  if (coupon.expired_date < new Date()) throw new BadRequest("Coupon is expired");
-  if (coupon.minimum_amount_for_use > 0 && coupon.minimum_amount_for_use > grand_total)
+  if (coupon.expired_date < new Date())
+    throw new BadRequest("Coupon is expired");
+  if (
+    coupon.minimum_amount_for_use > 0 &&
+    coupon.minimum_amount_for_use > grand_total
+  )
     throw new BadRequest("Coupon is not applicable for this sale");
   return SuccessResponse(res, {
     message: "Coupon applied successfully",
