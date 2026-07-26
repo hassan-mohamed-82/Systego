@@ -439,9 +439,6 @@ export const createSale = async (req: Request, res: Response) => {
   // ═══════════════════════════════════════════════════════════
   let customer: any = null;
   if (customer_id) {
-    if (!mongoose.Types.ObjectId.isValid(customer_id)) {
-      throw new BadRequest("Invalid customer id");
-    }
     customer = await CustomerModel.findById(customer_id);
     if (!customer) {
       throw new NotFound("Customer not found");
@@ -1119,10 +1116,6 @@ export const getAllSales = async (req: Request, res: Response) => {
 export const getSales = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new BadRequest("Invalid sale id");
-  }
-
   const sale = await SaleModel.findById(id)
     .populate("customer_id", "name email phone_number")
     .populate("Due_customer_id", "name email phone_number")
@@ -1357,10 +1350,6 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
 
 export const getSalePendingById = async (req: Request, res: Response) => {
   const { sale_id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(sale_id)) {
-    throw new BadRequest("Invalid sale id");
-  }
 
   const sale = await SaleModel.findOne({
     _id: sale_id,
