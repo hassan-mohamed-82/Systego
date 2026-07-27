@@ -60,7 +60,7 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { status, statusDescription } = req.body;
 
-  if (!status || !["pending","confirmed","processing","out_for_delivery","delivered","returned","failed_to_deliver","canceled","scheduled","refund"].includes(status)) {
+  if (!status || !["pending","rejected","confirmed","processing","out_for_delivery","delivered","returned","failed_to_deliver","canceled","scheduled","refund"].includes(status)) {
     throw new NotFound(
       "Invalid status."
     );
@@ -70,7 +70,7 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
   if (!existingOrder) throw new NotFound("Order not found");
 
   const isNewlyRejected =
-    status === "canceled" && existingOrder.status !== "canceled";
+    status === "rejected" && existingOrder.status !== "rejected";
 
   const order = await OrderModel.findByIdAndUpdate(
     id,
