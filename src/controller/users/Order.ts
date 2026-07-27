@@ -489,7 +489,7 @@ export const createOrder = async (
           );
         }
 
-        order[0].status = "rejected";
+        order[0].status = "canceled";
         order[0].paymentStatus = "failed";
 
         if (paymentGateway === "paymob") {
@@ -642,7 +642,7 @@ export const verifyPaymobPaymentStatus = async (
 
     // If payment was successful and order status is still pending, update it
     if (status.success && order.status === "pending") {
-      order.status = "approved";
+      order.status = "processing";
       order.paymentStatus = "paid";
       order.paymobTransactionId = String(status.transactionId);
       order.paymobCallbackPayload = status;
@@ -653,7 +653,7 @@ export const verifyPaymobPaymentStatus = async (
       (!status.success || status.isVoided) &&
       order.status === "pending"
     ) {
-      order.status = "rejected";
+      order.status = "canceled";
       order.paymentStatus = "failed";
       order.paymobCallbackPayload = status;
       await order.save();
