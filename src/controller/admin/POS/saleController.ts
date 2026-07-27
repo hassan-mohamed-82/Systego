@@ -745,13 +745,6 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ FIX #8/#9/#10/#11: everything that mutates data now runs inside a
-  // real Mongoose transaction. Stock decrements use findOneAndUpdate with
-  // a `quantity: { $gte: required }` filter — atomic check-and-decrement
-  // in one operation, so two concurrent sales can no longer both pass a
-  // separate check and then both decrement past zero.
-  // ═══════════════════════════════════════════════════════════
   const accountIdsForSale =
     !isPending && !isDue && paymentLines.length > 0
       ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
@@ -759,276 +752,229 @@ export const createSale = async (req: Request, res: Response) => {
 
   const paidAmountForDb = !isPending && !isDue ? totalPaidFromLines : 0;
   const remainingAmount = isDue ? finalGrandTotal : 0;
-
-  const session = await mongoose.startSession();
   let sale: any;
 
-  try {
-    await session.withTransaction(async () => {
-      const created = await SaleModel.create(
-        [
-          {
-            date: new Date(),
-            customer_id: customer ? customer._id : undefined,
-            Due_customer_id: isDue && customer ? customer._id : undefined,
-            Due: isDue ? 1 : 0,
-            warehouse_id: warehouseId,
-            account_id: accountIdsForSale,
-            order_pending: normalizedOrderPending,
-            coupon_code: coupon ? coupon.coupon_code : "",
-            applied_coupon: coupon ? true : false,
-            coupon_amount: couponAmount, // ✅ FIX #1
-            gift_card_id: giftCard ? giftCard._id : undefined,
-            gift_card_amount: requestedGiftCardAmount, // ✅ FIX #3
-            order_tax: tax ? tax._id : undefined,
-            order_discount: discountDoc ? discountDoc._id : undefined,
-            discount_amount: discountAmount, // ✅ FIX #2
-            service_fees: appliedServiceFees,
-            service_fee_total: serviceFeeTotal,
-            shipping,
-            tax_rate,
-            tax_amount: taxAmountCalc,
-            discount: discountAmount,
-            total: subtotal,
-            grand_total: finalGrandTotal,
-            paid_amount: paidAmountForDb,
-            remaining_amount: remainingAmount,
-            note,
-            cashier_id: cashierId,
-            shift_id: openShift._id,
-          },
-        ],
-        { session },
-      );
-      sale = created[0];
+  sale = await SaleModel.create({
+    date: new Date(),
+    customer_id: customer ? customer._id : undefined,
+    Due_customer_id: isDue && customer ? customer._id : undefined,
+    Due: isDue ? 1 : 0,
+    warehouse_id: warehouseId,
+    account_id: accountIdsForSale,
+    order_pending: normalizedOrderPending,
+    coupon_code: coupon ? coupon.coupon_code : "",
+    applied_coupon: coupon ? true : false,
+    coupon_amount: couponAmount,
+    gift_card_id: giftCard ? giftCard._id : undefined,
+    gift_card_amount: requestedGiftCardAmount,
+    order_tax: tax ? tax._id : undefined,
+    order_discount: discountDoc ? discountDoc._id : undefined,
+    discount_amount: discountAmount,
+    service_fees: appliedServiceFees,
+    service_fee_total: serviceFeeTotal,
+    shipping,
+    tax_rate,
+    tax_amount: taxAmountCalc,
+    discount: discountAmount,
+    total: subtotal,
+    grand_total: finalGrandTotal,
+    paid_amount: paidAmountForDb,
+    remaining_amount: remainingAmount,
+    note,
+    cashier_id: cashierId,
+    shift_id: openShift._id,
+  });
 
-      for (const p of processedProducts) {
-        await ProductSalesModel.create(
-          [
-            {
-              sale_id: sale._id,
-              product_id: p.product_id,
-              bundle_id: undefined,
-              product_price_id: p.product_price_id,
-              quantity: p.quantity,
-              price: p.price,
-              subtotal: p.subtotal,
-              original_price: p.original_price,
-              discount: p.discount,
-              discount_type: p.discount_type,
-              is_wholesale: p.is_wholesale,
-              options_id: p.options_id,
-              isGift: !!p.isGift,
-              isBundle: false,
-            },
-          ],
-          { session },
-        );
-      }
-
-      for (const b of processedBundles) {
-        await ProductSalesModel.create(
-          [
-            {
-              sale_id: sale._id,
-              product_id: undefined,
-              bundle_id: b.bundle_id,
-              product_price_id: undefined,
-              quantity: b.quantity,
-              price: b.price,
-              subtotal: b.subtotal,
-              original_price: b.original_price,
-              discount: b.discount,
-              discount_type: b.discount_type,
-              options_id: [],
-              isGift: !!b.isGift,
-              isBundle: true,
-            },
-          ],
-          { session },
-        );
-      }
-
-      if (!isPending) {
-        if (!isDue && paymentLines.length > 0) {
-          await PaymentModel.create(
-            [
-              {
-                sale_id: sale._id,
-                financials: paymentLines.map((p) => ({
-                  account_id: p.account_id,
-                  amount: p.amount,
-                })),
-              },
-            ],
-            { session },
-          );
-
-          for (const line of paymentLines) {
-            await BankAccountModel.findByIdAndUpdate(
-              line.account_id,
-              { $inc: { balance: line.amount } },
-              { session },
-            );
-          }
-        }
-
-        // ✅ Atomic, race-safe stock decrement for products
-        for (const p of processedProducts) {
-          if (p.product_price_id) {
-            const updated = await Product_WarehouseModel.findOneAndUpdate(
-              {
-                productId: p.product_id,
-                productPriceId: p.product_price_id,
-                warehouseId,
-                quantity: { $gte: p.quantity },
-              },
-              { $inc: { quantity: -p.quantity } },
-              { session, new: true },
-            );
-            if (!updated) {
-              throw new BadRequest(
-                `Not enough stock for variation of product ${p.product_id} (concurrent sale likely took the remaining stock)`,
-              );
-            }
-
-            await ProductPriceModel.findByIdAndUpdate(
-              p.product_price_id,
-              { $inc: { quantity: -p.quantity } },
-              { session },
-            );
-
-            await WarehouseModel.findByIdAndUpdate(
-              warehouseId,
-              { $inc: { stock_Quantity: -p.quantity } },
-              { session },
-            );
-          } else if (p.product_id) {
-            const updated = await Product_WarehouseModel.findOneAndUpdate(
-              {
-                productId: p.product_id,
-                warehouseId,
-                quantity: { $gte: p.quantity },
-              },
-              { $inc: { quantity: -p.quantity } },
-              { session, new: true },
-            );
-            if (!updated) {
-              throw new BadRequest(
-                `Not enough stock for product ${p.product_id} (concurrent sale likely took the remaining stock)`,
-              );
-            }
-
-            await WarehouseModel.findByIdAndUpdate(
-              warehouseId,
-              { $inc: { stock_Quantity: -p.quantity } },
-              { session },
-            );
-
-            await ProductModel.findByIdAndUpdate(
-              p.product_id,
-              { $inc: { quantity: -p.quantity } },
-              { session },
-            );
-          }
-        }
-
-        // ✅ Atomic, race-safe stock decrement for bundle contents
-        for (const b of processedBundles) {
-          for (const bp of b.products) {
-            const deductQty = b.quantity * bp.quantity;
-
-            if (bp.productPriceId) {
-              const updated = await Product_WarehouseModel.findOneAndUpdate(
-                {
-                  productId: bp.productId,
-                  productPriceId: bp.productPriceId,
-                  warehouseId,
-                  quantity: { $gte: deductQty },
-                },
-                { $inc: { quantity: -deductQty } },
-                { session, new: true },
-              );
-              if (!updated) {
-                throw new BadRequest(
-                  `Not enough stock for a variation inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
-                );
-              }
-
-              await ProductPriceModel.findByIdAndUpdate(
-                bp.productPriceId,
-                { $inc: { quantity: -deductQty } },
-                { session },
-              );
-
-              await WarehouseModel.findByIdAndUpdate(
-                warehouseId,
-                { $inc: { stock_Quantity: -deductQty } },
-                { session },
-              );
-            } else {
-              const updated = await Product_WarehouseModel.findOneAndUpdate(
-                {
-                  productId: bp.productId,
-                  warehouseId,
-                  quantity: { $gte: deductQty },
-                },
-                { $inc: { quantity: -deductQty } },
-                { session, new: true },
-              );
-              if (!updated) {
-                throw new BadRequest(
-                  `Not enough stock for a product inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
-                );
-              }
-
-              await WarehouseModel.findByIdAndUpdate(
-                warehouseId,
-                { $inc: { stock_Quantity: -deductQty } },
-                { session },
-              );
-
-              await ProductModel.findByIdAndUpdate(
-                bp.productId,
-                { $inc: { quantity: -deductQty } },
-                { session },
-              );
-            }
-          }
-        }
-
-        // ✅ Atomic coupon decrement, also guarded against a race
-        // draining `available` below zero between two concurrent sales.
-        if (!isDue && coupon) {
-          const couponUpdated = await CouponModel.findOneAndUpdate(
-            { _id: coupon._id, available: { $gte: 1 } },
-            { $inc: { available: -1 } },
-            { session, new: true },
-          );
-          if (!couponUpdated) {
-            throw new BadRequest(
-              "Coupon just ran out of stock — please retry without it",
-            );
-          }
-        }
-
-        // ✅ FIX #3: deduct exactly the requested gift card amount, atomically
-        if (!isDue && giftCard && requestedGiftCardAmount > 0) {
-          const giftCardUpdated = await GiftCardModel.findOneAndUpdate(
-            { _id: giftCard._id, amount: { $gte: requestedGiftCardAmount } },
-            { $inc: { amount: -requestedGiftCardAmount } },
-            { session, new: true },
-          );
-          if (!giftCardUpdated) {
-            throw new BadRequest(
-              "Gift card balance changed concurrently — please retry",
-            );
-          }
-        }
-      }
+  for (const p of processedProducts) {
+    await ProductSalesModel.create({
+      sale_id: sale._id,
+      product_id: p.product_id,
+      bundle_id: undefined,
+      product_price_id: p.product_price_id,
+      quantity: p.quantity,
+      price: p.price,
+      subtotal: p.subtotal,
+      original_price: p.original_price,
+      discount: p.discount,
+      discount_type: p.discount_type,
+      is_wholesale: p.is_wholesale,
+      options_id: p.options_id,
+      isGift: !!p.isGift,
+      isBundle: false,
     });
-  } finally {
-    session.endSession();
+  }
+
+  for (const b of processedBundles) {
+    await ProductSalesModel.create({
+      sale_id: sale._id,
+      product_id: undefined,
+      bundle_id: b.bundle_id,
+      product_price_id: undefined,
+      quantity: b.quantity,
+      price: b.price,
+      subtotal: b.subtotal,
+      original_price: b.original_price,
+      discount: b.discount,
+      discount_type: b.discount_type,
+      options_id: [],
+      isGift: !!b.isGift,
+      isBundle: true,
+    });
+  }
+
+  if (!isPending) {
+    if (!isDue && paymentLines.length > 0) {
+      await PaymentModel.create({
+        sale_id: sale._id,
+        financials: paymentLines.map((p) => ({
+          account_id: p.account_id,
+          amount: p.amount,
+        })),
+      });
+
+      for (const line of paymentLines) {
+        await BankAccountModel.findByIdAndUpdate(line.account_id, {
+          $inc: { balance: line.amount },
+        });
+      }
+    }
+
+    // Atomic, race-safe stock decrement for products (no session needed —
+    // the $gte guard on a single findOneAndUpdate is still atomic on its own)
+    for (const p of processedProducts) {
+      if (p.product_price_id) {
+        const updated = await Product_WarehouseModel.findOneAndUpdate(
+          {
+            productId: p.product_id,
+            productPriceId: p.product_price_id,
+            warehouseId,
+            quantity: { $gte: p.quantity },
+          },
+          { $inc: { quantity: -p.quantity } },
+          { new: true },
+        );
+        if (!updated) {
+          throw new BadRequest(
+            `Not enough stock for variation of product ${p.product_id} (concurrent sale likely took the remaining stock)`,
+          );
+        }
+
+        await ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
+          $inc: { quantity: -p.quantity },
+        });
+
+        await WarehouseModel.findByIdAndUpdate(warehouseId, {
+          $inc: { stock_Quantity: -p.quantity },
+        });
+      } else if (p.product_id) {
+        const updated = await Product_WarehouseModel.findOneAndUpdate(
+          {
+            productId: p.product_id,
+            warehouseId,
+            quantity: { $gte: p.quantity },
+          },
+          { $inc: { quantity: -p.quantity } },
+          { new: true },
+        );
+        if (!updated) {
+          throw new BadRequest(
+            `Not enough stock for product ${p.product_id} (concurrent sale likely took the remaining stock)`,
+          );
+        }
+
+        await WarehouseModel.findByIdAndUpdate(warehouseId, {
+          $inc: { stock_Quantity: -p.quantity },
+        });
+
+        await ProductModel.findByIdAndUpdate(p.product_id, {
+          $inc: { quantity: -p.quantity },
+        });
+      }
+    }
+
+    // Atomic, race-safe stock decrement for bundle contents
+    for (const b of processedBundles) {
+      for (const bp of b.products) {
+        const deductQty = b.quantity * bp.quantity;
+
+        if (bp.productPriceId) {
+          const updated = await Product_WarehouseModel.findOneAndUpdate(
+            {
+              productId: bp.productId,
+              productPriceId: bp.productPriceId,
+              warehouseId,
+              quantity: { $gte: deductQty },
+            },
+            { $inc: { quantity: -deductQty } },
+            { new: true },
+          );
+          if (!updated) {
+            throw new BadRequest(
+              `Not enough stock for a variation inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
+            );
+          }
+
+          await ProductPriceModel.findByIdAndUpdate(bp.productPriceId, {
+            $inc: { quantity: -deductQty },
+          });
+
+          await WarehouseModel.findByIdAndUpdate(warehouseId, {
+            $inc: { stock_Quantity: -deductQty },
+          });
+        } else {
+          const updated = await Product_WarehouseModel.findOneAndUpdate(
+            {
+              productId: bp.productId,
+              warehouseId,
+              quantity: { $gte: deductQty },
+            },
+            { $inc: { quantity: -deductQty } },
+            { new: true },
+          );
+          if (!updated) {
+            throw new BadRequest(
+              `Not enough stock for a product inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
+            );
+          }
+
+          await WarehouseModel.findByIdAndUpdate(warehouseId, {
+            $inc: { stock_Quantity: -deductQty },
+          });
+
+          await ProductModel.findByIdAndUpdate(bp.productId, {
+            $inc: { quantity: -deductQty },
+          });
+        }
+      }
+    }
+
+    // Atomic coupon decrement
+    if (!isDue && coupon) {
+      const couponUpdated = await CouponModel.findOneAndUpdate(
+        { _id: coupon._id, available: { $gte: 1 } },
+        { $inc: { available: -1 } },
+        { new: true },
+      );
+      if (!couponUpdated) {
+        throw new BadRequest(
+          "Coupon just ran out of stock — please retry without it",
+        );
+      }
+    }
+
+    // Atomic gift card decrement
+    if (!isDue && giftCard && requestedGiftCardAmount > 0) {
+      const giftCardUpdated = await GiftCardModel.findOneAndUpdate(
+        { _id: giftCard._id, amount: { $gte: requestedGiftCardAmount } },
+        { $inc: { amount: -requestedGiftCardAmount } },
+        { new: true },
+      );
+      if (!giftCardUpdated) {
+        throw new BadRequest(
+          "Gift card balance changed concurrently — please retry",
+        );
+      }
+    }
   }
   
   const fullSale = await SaleModel.findById(sale._id)
