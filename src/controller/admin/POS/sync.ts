@@ -142,6 +142,7 @@ export const pushChanges = async (req: Request, res: Response) => {
         await Model.findByIdAndDelete(change.record_id, {
           syncMeta: { originClientId: clientId, sourceChangeId: change.id },
         });
+        applied.push(change.id);
       } else if (change.op === "insert") {
         const data = JSON.parse(change.payload as string);
         const { id, ...rest } = data;
@@ -170,6 +171,7 @@ export const pushChanges = async (req: Request, res: Response) => {
             },
           },
         );
+        applied.push(change.id);
       } else if (change.op === "update") {
         const parsed = JSON.parse(change.payload as string) as {
           fields?: Record<string, any>;
@@ -223,6 +225,7 @@ export const pushChanges = async (req: Request, res: Response) => {
         for (const { field, patch } of arrayPatches) {
           await applyArrayPatch(Model, change.record_id, field, patch);
         }
+        applied.push(change.id);
       } else if (change.op === "upsert") {
         // Legacy path — old client build, full-row payload, no field diff.
         const data = JSON.parse(change.payload as string);
@@ -261,6 +264,7 @@ export const pushChanges = async (req: Request, res: Response) => {
             },
           },
         );
+        applied.push(change.id);
       } else {
         throw new Error(`Unknown op "${change.op}"`);
       }
