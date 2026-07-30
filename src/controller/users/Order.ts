@@ -42,10 +42,6 @@ export const createOrder = async (
     warehouseId,
   } = req.body;
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  let isTransactionCommitted = false;
-
   try {
     // 1️⃣ Find Cart
     if (!userId && !sessionId) {
@@ -59,12 +55,10 @@ export const createOrder = async (
     // 2️⃣ Get Cart and Prepared Data
     // CHANGED: select price + discountId too, not just name/ar_name/free_shipping,
     // so we can recompute the real, current price server-side.
-    const cart = await CartModel.findOne(cartQuery)
-      .populate({
-        path: "cartItems.product",
-        select: "name ar_name free_shipping price discountId",
-      })
-      .session(session);
+    const cart = await CartModel.findOne(cartQuery).populate({
+      path: "cartItems.product",
+      select: "name ar_name free_shipping price discountId",
+    });
 
     if (!cart || cart.cartItems.length === 0) {
       throw new BadRequest("Cart is empty");
@@ -74,7 +68,7 @@ export const createOrder = async (
     const paymentMethodDoc = await PaymentMethodModel.findOne({
       _id: paymentMethod,
       isActive: { $ne: false },
-    }).session(session);
+    });
 
     if (!paymentMethodDoc) throw new BadRequest("Invalid payment method");
 
@@ -99,7 +93,7 @@ export const createOrder = async (
       const warehouse = await WarehouseModel.findOne({
         _id: warehouseId,
         Is_Online: true,
-      }).session(session);
+      });
       if (!warehouse)
         throw new NotFound("Warehouse not found or not available");
       resolvedWarehouseId = warehouse._id;
@@ -108,7 +102,7 @@ export const createOrder = async (
       // 1. تحديد المخزن
       const onlineWarehouse = await WarehouseModel.findOne({
         Is_Online: true,
-      }).session(session);
+      });
       if (!onlineWarehouse)
         throw new BadRequest("No online warehouse available");
       resolvedWarehouseId = onlineWarehouse._id;
@@ -119,9 +113,7 @@ export const createOrder = async (
         const addressDoc = await AddressModel.findOne({
           _id: shippingAddress,
           user: userId,
-        })
-          .populate("city zone country")
-          .session(session);
+        }).populate("city zone country");
         if (!addressDoc) throw new NotFound("Address not found");
         shippingAddressData = {
           details: addressDoc.street,
@@ -135,8 +127,8 @@ export const createOrder = async (
         );
       } else {
         const [cityDoc, zoneDoc] = await Promise.all([
-          CityModels.findById(shippingAddress.city).session(session),
-          ZoneModel.findById(shippingAddress.zone).session(session),
+          CityModels.findById(shippingAddress.city),
+          ZoneModel.findById(shippingAddress.zone),
         ]);
         shippingAddressData = {
           details: shippingAddress.street,
@@ -151,7 +143,7 @@ export const createOrder = async (
       // 3. تطبيق قواعد الشحن (Free / Flat Rate / Zone Rate)
       const shippingSettings = await ShippingSettingsModel.findOne({
         singletonKey: "default",
-      }).session(session);
+      });
       const hasFreeShippingProduct = cart.cartItems.some(
         (i: any) => i.product.free_shipping,
       );
@@ -177,7 +169,7 @@ export const createOrder = async (
           _id: { $in: discountIds },
           status: true,
           applyIn: "E-commerce",
-        }).session(session)
+        })
       : [];
 
     const discountMap = new Map(
@@ -218,26 +210,20 @@ export const createOrder = async (
           quantity: { $gte: qty },
         },
         { $inc: { quantity: -qty } },
-        { new: true, session },
+        { new: true },
       );
       if (!stockUpdate)
         throw new BadRequest(
           `Product ${(item.product as any).name} is not available in the warehouse`,
         );
 
-      await ProductModel.findByIdAndUpdate(
-        item.product._id,
-        { $inc: { quantity: -qty } },
-        { session },
-      );
+      await ProductModel.findByIdAndUpdate(item.product._id, {
+        $inc: { quantity: -qty },
+      });
       if (variantId)
         await mongoose
           .model("ProductPrice")
-          .findByIdAndUpdate(
-            variantId,
-            { $inc: { quantity: -qty } },
-            { session },
-          );
+          .findByIdAndUpdate(variantId, { $inc: { quantity: -qty } });
 
       // CHANGED: use the freshly computed, discount-aware price instead of
       // blindly trusting item.price from the cart.
@@ -263,12 +249,12 @@ export const createOrder = async (
     let appliedCouponId = null;
 
     if (cart.coupon) {
-      const coupon = await CouponModel.findById(cart.coupon).session(session);
+      const coupon = await CouponModel.findById(cart.coupon);
       if (coupon && coupon.available > 0) {
         couponDiscount = cart.couponDiscount;
         appliedCouponId = coupon._id;
         coupon.available -= 1;
-        await coupon.save({ session });
+        await coupon.save();
       }
     }
 
@@ -285,7 +271,7 @@ export const createOrder = async (
         ? await GeideaModel.findOne({
             payment_method_id: paymentMethodDoc._id,
             isActive: true,
-          }).session(session)
+          })
         : null;
 
     const paymobConfig =
@@ -293,7 +279,7 @@ export const createOrder = async (
         ? await PaymobModel.findOne({
             payment_method_id: paymentMethodDoc._id,
             isActive: true,
-          }).session(session)
+          })
         : null;
 
     const fawryConfig =
@@ -301,7 +287,7 @@ export const createOrder = async (
         ? await FawryModel.findOne({
             payment_method_id: paymentMethodDoc._id,
             isActive: true,
-          }).session(session)
+          })
         : null;
 
     let paymentGateway: "manual" | "paymob" | "geidea" | "fawry" = "manual";
@@ -325,31 +311,28 @@ export const createOrder = async (
     }
 
     // 7️⃣ Create Order
-    const order = await OrderModel.create(
-      [
-        {
-          user: userId || null,
-          orderType,
-          warehouse: resolvedWarehouseId || undefined,
-          cartItems: finalItems,
-          shippingAddress: shippingAddressData,
-          shippingPrice: shippingCost,
-          totalOrderPrice: productsTotal, // old price
-          totalPriceAfterDiscount: totalPrice, // new price after discount
-          taxAmount: totalTaxAmount,
-          serviceFee: totalServiceFee,
-          coupon: appliedCouponId,
-          couponDiscount: couponDiscount,
-          paymentMethod: paymentMethod.toString(),
-          proofImage: imageUrl,
-          status: "pending",
-          paymentGateway,
-          paymentStatus:
-            paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-        },
-      ],
-      { session },
-    );
+    const order = await OrderModel.create([
+      {
+        user: userId || null,
+        orderType,
+        warehouse: resolvedWarehouseId || undefined,
+        cartItems: finalItems,
+        shippingAddress: shippingAddressData,
+        shippingPrice: shippingCost,
+        totalOrderPrice: productsTotal, // old price
+        totalPriceAfterDiscount: totalPrice, // new price after discount
+        taxAmount: totalTaxAmount,
+        serviceFee: totalServiceFee,
+        coupon: appliedCouponId,
+        couponDiscount: couponDiscount,
+        paymentMethod: paymentMethod.toString(),
+        proofImage: imageUrl,
+        status: "pending",
+        paymentGateway,
+        paymentStatus:
+          paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+      },
+    ]);
 
     let paymentData: any = null;
     let shouldClearCart = true;
@@ -359,9 +342,7 @@ export const createOrder = async (
     // ===============================
     if (paymentGateway !== "manual") {
       try {
-        const customer = userId
-          ? await CustomerModel.findById(userId).session(session)
-          : null;
+        const customer = userId ? await CustomerModel.findById(userId) : null;
 
         if (paymentGateway === "paymob") {
           if (!paymobConfig) throw new BadRequest("Paymob not configured");
@@ -407,7 +388,7 @@ export const createOrder = async (
 
           order[0].paymobOrderId = String(paymobOrderId);
           order[0].paymobIframeUrl = iframeUrl;
-          await order[0].save({ session });
+          await order[0].save();
 
           paymentData = { paymobOrderId: String(paymobOrderId), iframeUrl };
         } else if (paymentGateway === "geidea") {
@@ -425,7 +406,7 @@ export const createOrder = async (
           });
 
           (order[0] as any).geideaSessionId = geideaPayment.geideaSessionId;
-          await order[0].save({ session });
+          await order[0].save();
 
           paymentData = {
             geideaSessionId: geideaPayment.geideaSessionId,
@@ -467,7 +448,7 @@ export const createOrder = async (
           });
 
           (order[0] as any).fawryReferenceId = fawryPayment.referenceNumber;
-          await order[0].save({ session });
+          await order[0].save();
 
           paymentData = {
             referenceNumber: fawryPayment.referenceNumber,
@@ -480,12 +461,10 @@ export const createOrder = async (
           await Product_WarehouseModel.updateOne(
             { productId: item.product, warehouseId: resolvedWarehouseId },
             { $inc: { quantity: item.quantity } },
-            { session },
           );
           await ProductModel.updateOne(
             { _id: item.product },
             { $inc: { quantity: item.quantity } },
-            { session },
           );
         }
 
@@ -511,12 +490,8 @@ export const createOrder = async (
           order[0].markModified("fawryCallbackPayload");
         }
 
-        await order[0].save({ session });
+        await order[0].save();
         shouldClearCart = false;
-
-        await session.commitTransaction();
-        isTransactionCommitted = true;
-        session.endSession();
 
         throw new BadRequest(
           gatewayError?.message || "Payment failed. Order marked as rejected",
@@ -526,12 +501,8 @@ export const createOrder = async (
 
     // 7️⃣ Clear cart
     if (shouldClearCart) {
-      await CartModel.findOneAndDelete(cartQuery).session(session);
+      await CartModel.findOneAndDelete(cartQuery);
     }
-
-    await session.commitTransaction();
-    isTransactionCommitted = true;
-    session.endSession();
 
     return SuccessResponse(
       res,
@@ -543,10 +514,6 @@ export const createOrder = async (
       201,
     );
   } catch (err) {
-    if (!isTransactionCommitted) {
-      await session.abortTransaction();
-      session.endSession();
-    }
     throw err;
   }
 };
