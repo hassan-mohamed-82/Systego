@@ -330,7 +330,7 @@ const finishSocialAuth = async (
 export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
     const { id_token } = req.body;
     if (!id_token) throw new BadRequest('id_token is required.');
-
+    
     const ticket = await googleClient.verifyIdToken({
         idToken: id_token,
         audience: process.env.GOOGLE_CLIENT_ID,
