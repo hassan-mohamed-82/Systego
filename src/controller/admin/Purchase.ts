@@ -14,13 +14,19 @@ import { CategoryModel } from "../../models/schema/admin/category";
 import { ProductModel } from "../../models/schema/admin/products";
 import { VariationModel } from "../../models/schema/admin/Variation";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
-import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import {
+  ProductPriceModel,
+  ProductPriceOptionModel,
+} from "../../models/schema/admin/product_price";
 
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { saveBase64Image } from "../../utils/handleImages";
-import { generateBarcodeImage, generateEAN13Barcode } from "../../utils/barcode"
+import {
+  generateBarcodeImage,
+  generateEAN13Barcode,
+} from "../../utils/barcode";
 import { any } from "joi";
 import { MaterialModel } from "../../models/schema/admin/Materials";
 
@@ -41,7 +47,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     purchase_materials = [],
     financials = [],
     note,
-    installments = []
+    installments = [],
   } = req.body;
 
   let purchase_due_payment = req.body.purchase_due_payment || [];
@@ -56,9 +62,18 @@ export const createPurchase = async (req: Request, res: Response) => {
   }
 
   // ========== Payment Validation ==========
-  const totalPaidNow = financials.reduce((sum: number, f: any) => sum + Number(f.payment_amount || 0), 0);
-  let totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
-  const totalInstallments = installments.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
+  const totalPaidNow = financials.reduce(
+    (sum: number, f: any) => sum + Number(f.payment_amount || 0),
+    0
+  );
+  let totalDuePayments = purchase_due_payment.reduce(
+    (sum: number, d: any) => sum + Number(d.amount || 0),
+    0
+  );
+  const totalInstallments = installments.reduce(
+    (sum: number, i: any) => sum + Number(i.amount || 0),
+    0
+  );
 
   const getDefaultDueDate = () => {
     const dueDate = new Date();
@@ -68,10 +83,14 @@ export const createPurchase = async (req: Request, res: Response) => {
 
   if (payment_status === "full") {
     if (totalPaidNow !== grand_total) {
-      throw new BadRequest(`Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`);
+      throw new BadRequest(
+        `Full payment required. Expected: ${grand_total}, Received: ${totalPaidNow}`
+      );
     }
     if (purchase_due_payment.length > 0 || installments.length > 0) {
-      throw new BadRequest("Full payment should not have due payments or installments");
+      throw new BadRequest(
+        "Full payment should not have due payments or installments"
+      );
     }
   } else if (payment_status === "later") {
     if (totalPaidNow > 0) {
@@ -80,32 +99,38 @@ export const createPurchase = async (req: Request, res: Response) => {
     if (purchase_due_payment.length === 0 && installments.length === 0) {
       purchase_due_payment.push({
         amount: grand_total,
-        date: getDefaultDueDate()
+        date: getDefaultDueDate(),
       });
       totalDuePayments = grand_total;
     }
     const totalLaterPayments = totalDuePayments + totalInstallments;
     if (totalLaterPayments !== grand_total) {
-      throw new BadRequest(`Due payments + installments must equal grand_total. Expected: ${grand_total}, Received: ${totalLaterPayments}`);
+      throw new BadRequest(
+        `Due payments + installments must equal grand_total. Expected: ${grand_total}, Received: ${totalLaterPayments}`
+      );
     }
   } else if (payment_status === "partial") {
     if (totalPaidNow <= 0) {
       throw new BadRequest("Partial payment requires immediate payment");
     }
     if (totalPaidNow >= grand_total) {
-      throw new BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
+      throw new BadRequest(
+        "Partial payment should be less than grand_total. Use 'full' status instead"
+      );
     }
 
     const remaining = grand_total - totalPaidNow;
 
     if (installments.length > 0) {
       if (totalInstallments !== remaining) {
-        throw new BadRequest(`Installments must equal remaining amount. Expected: ${remaining}, Received: ${totalInstallments}`);
+        throw new BadRequest(
+          `Installments must equal remaining amount. Expected: ${remaining}, Received: ${totalInstallments}`
+        );
       }
     } else if (purchase_due_payment.length === 0) {
       purchase_due_payment.push({
         amount: remaining,
-        date: getDefaultDueDate()
+        date: getDefaultDueDate(),
       });
       totalDuePayments = remaining;
     } else {
@@ -120,7 +145,12 @@ export const createPurchase = async (req: Request, res: Response) => {
   // ========== Save Image ==========
   let imageUrl = receipt_img;
   if (receipt_img && receipt_img.startsWith("data:")) {
-    imageUrl = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
+    imageUrl = await saveBase64Image(
+      receipt_img,
+      Date.now().toString(),
+      req,
+      "Purchases"
+    );
   }
 
   // ========== Create Purchase ==========
@@ -148,7 +178,9 @@ export const createPurchase = async (req: Request, res: Response) => {
     let product_id = p.product_id;
 
     if (product_code) {
-      const product_price = await ProductPriceModel.findOne({ code: product_code }).populate("productId");
+      const product_price = await ProductPriceModel.findOne({
+        code: product_code,
+      }).populate("productId");
       if (product_price) {
         const productDoc: any = product_price.productId;
         product_id = productDoc?._id;
@@ -162,25 +194,38 @@ export const createPurchase = async (req: Request, res: Response) => {
     if ((product as any).exp_ability) {
       const expiryDateValue = p.expiry_date || p.date_of_expiery;
       if (!expiryDateValue) {
-        throw new BadRequest(`Expiry date is required for product: ${(product as any).name}`);
+        throw new BadRequest(
+          `Expiry date is required for product: ${(product as any).name}`
+        );
       }
       const expiryDate = new Date(expiryDateValue);
       const today = new Date();
       expiryDate.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
       if (expiryDate < today) {
-        throw new BadRequest(`Expiry date cannot be in the past for product: ${(product as any).name}`);
+        throw new BadRequest(
+          `Expiry date cannot be in the past for product: ${
+            (product as any).name
+          }`
+        );
       }
     }
 
     let totalQuantity = Number(p.quantity) || 0;
-    const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
+    const hasVariations =
+      p.variations && Array.isArray(p.variations) && p.variations.length > 0;
 
     if (hasVariations) {
-      totalQuantity = p.variations.reduce((sum: number, v: any) => sum + (Number(v.quantity) || 0), 0);
+      totalQuantity = p.variations.reduce(
+        (sum: number, v: any) => sum + (Number(v.quantity) || 0),
+        0
+      );
     }
 
-    const existingPurchaseItem = await PurchaseItemModel.findOne({ warehouse_id, product_id });
+    const existingPurchaseItem = await PurchaseItemModel.findOne({
+      warehouse_id,
+      product_id,
+    });
     if (!existingPurchaseItem && warehouse) {
       (warehouse as any).number_of_products += 1;
       await warehouse.save();
@@ -200,7 +245,9 @@ export const createPurchase = async (req: Request, res: Response) => {
       unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
       tax: p.tax || 0,
       item_type: "product",
-      date_of_expiery: (product as any).exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
+      date_of_expiery: (product as any).exp_ability
+        ? p.expiry_date || p.date_of_expiery
+        : undefined,
     });
 
     if (hasVariations) {
@@ -209,7 +256,9 @@ export const createPurchase = async (req: Request, res: Response) => {
           throw new BadRequest("product_price_id is required for variations");
         }
 
-        const productPrice = await ProductPriceModel.findById(v.product_price_id);
+        const productPrice = await ProductPriceModel.findById(
+          v.product_price_id
+        );
         if (!productPrice) {
           throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
         }
@@ -308,7 +357,11 @@ export const createPurchase = async (req: Request, res: Response) => {
   }
 
   // ========== Create Due Payments (الدفع اللاحق) ==========
-  if (purchase_due_payment && Array.isArray(purchase_due_payment) && purchase_due_payment.length > 0) {
+  if (
+    purchase_due_payment &&
+    Array.isArray(purchase_due_payment) &&
+    purchase_due_payment.length > 0
+  ) {
     for (const due_payment of purchase_due_payment) {
       await PurchaseDuePaymentModel.create({
         purchase_id: purchase._id,
@@ -325,7 +378,7 @@ export const createPurchase = async (req: Request, res: Response) => {
         purchase_id: purchase._id,
         amount: inst.amount,
         date: inst.date,
-        status: "pending"
+        status: "pending",
       });
     }
   }
@@ -340,10 +393,7 @@ export const createPurchase = async (req: Request, res: Response) => {
         { path: "category_id" },
         {
           path: "options",
-          populate: [
-            { path: "product_price_id" },
-            { path: "option_id" },
-          ],
+          populate: [{ path: "product_price_id" }, { path: "option_id" }],
         },
       ],
     })
@@ -354,9 +404,11 @@ export const createPurchase = async (req: Request, res: Response) => {
     .populate("duePayments")
     .populate("installments");
 
-  SuccessResponse(res, { message: "Purchase created successfully", purchase: fullPurchase });
+  SuccessResponse(res, {
+    message: "Purchase created successfully",
+    purchase: fullPurchase,
+  });
 };
-
 
 export const getAllPurchases = async (req: Request, res: Response) => {
   const { page = 1, limit = 10, warehouse_id, supplier_id } = req.query;
@@ -378,10 +430,7 @@ export const getAllPurchases = async (req: Request, res: Response) => {
         { path: "category_id" },
         {
           path: "options",
-          populate: [
-            { path: "product_price_id" },
-            { path: "option_id" },
-          ],
+          populate: [{ path: "product_price_id" }, { path: "option_id" }],
         },
       ],
     })
@@ -391,9 +440,15 @@ export const getAllPurchases = async (req: Request, res: Response) => {
     .sort({ createdAt: -1 });
 
   // تقسيم حسب الـ payment_status
-  const fullPayments = allPurchases.filter((p: any) => p.payment_status === "full");
-  const laterPayments = allPurchases.filter((p: any) => p.payment_status === "later");
-  const partialPayments = allPurchases.filter((p: any) => p.payment_status === "partial");
+  const fullPayments = allPurchases.filter(
+    (p: any) => p.payment_status === "full"
+  );
+  const laterPayments = allPurchases.filter(
+    (p: any) => p.payment_status === "later"
+  );
+  const partialPayments = allPurchases.filter(
+    (p: any) => p.payment_status === "partial"
+  );
 
   // حساب الإحصائيات
   const stats = {
@@ -401,10 +456,22 @@ export const getAllPurchases = async (req: Request, res: Response) => {
     full_count: fullPayments.length,
     later_count: laterPayments.length,
     partial_count: partialPayments.length,
-    total_amount: allPurchases.reduce((sum: number, p: any) => sum + (p.grand_total || 0), 0),
-    full_amount: fullPayments.reduce((sum: number, p: any) => sum + (p.grand_total || 0), 0),
-    later_amount: laterPayments.reduce((sum: number, p: any) => sum + (p.grand_total || 0), 0),
-    partial_amount: partialPayments.reduce((sum: number, p: any) => sum + (p.grand_total || 0), 0),
+    total_amount: allPurchases.reduce(
+      (sum: number, p: any) => sum + (p.grand_total || 0),
+      0
+    ),
+    full_amount: fullPayments.reduce(
+      (sum: number, p: any) => sum + (p.grand_total || 0),
+      0
+    ),
+    later_amount: laterPayments.reduce(
+      (sum: number, p: any) => sum + (p.grand_total || 0),
+      0
+    ),
+    partial_amount: partialPayments.reduce(
+      (sum: number, p: any) => sum + (p.grand_total || 0),
+      0
+    ),
   };
 
   SuccessResponse(res, {
@@ -428,9 +495,14 @@ export const getPurchaseById = async (req: Request, res: Response) => {
       path: "items",
       populate: [
         { path: "product_id" },
+        { path: "product_price_id" },
         { path: "material_id" },
         { path: "category_id" },
-        { path: "options", populate: { path: "option_id" } },
+        { path: "warehouse_id" },
+        {
+          path: "options",
+          populate: [{ path: "option_id" }, { path: "product_price_id" }],
+        },
       ],
     })
     .populate("invoices")
@@ -461,7 +533,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     purchase_materials = [],
     financials = [],
     purchase_due_payment = [],
-    installments = []
+    installments = [],
   } = req.body;
 
   const existingPurchase = await PurchaseModel.findById(id);
@@ -485,43 +557,68 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
   // ========== Payment Validation ==========
   const finalGrandTotal = grand_total ?? (existingPurchase as any).grand_total;
-  const finalPaymentStatus = payment_status ?? (existingPurchase as any).payment_status;
+  const finalPaymentStatus =
+    payment_status ?? (existingPurchase as any).payment_status;
 
-  const totalPaidNow = financials.reduce((sum: number, f: any) => sum + (f.payment_amount || 0), 0);
-  const totalDuePayments = purchase_due_payment.reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
-  const totalInstallments = installments.reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
+  const totalPaidNow = financials.reduce(
+    (sum: number, f: any) => sum + (f.payment_amount || 0),
+    0
+  );
+  const totalDuePayments = purchase_due_payment.reduce(
+    (sum: number, d: any) => sum + (d.amount || 0),
+    0
+  );
+  const totalInstallments = installments.reduce(
+    (sum: number, i: any) => sum + Number(i.amount || 0),
+    0
+  );
   const totalPayments = totalPaidNow + totalDuePayments + totalInstallments;
 
   if (finalPaymentStatus === "full") {
     if (totalPaidNow !== finalGrandTotal) {
-      throw new BadRequest(`Full payment required. Expected: ${finalGrandTotal}, Received: ${totalPaidNow}`);
+      throw new BadRequest(
+        `Full payment required. Expected: ${finalGrandTotal}, Received: ${totalPaidNow}`
+      );
     }
     if (purchase_due_payment.length > 0 || installments.length > 0) {
-      throw new BadRequest("Full payment should not have due payments or installments");
+      throw new BadRequest(
+        "Full payment should not have due payments or installments"
+      );
     }
   } else if (finalPaymentStatus === "later") {
     if (totalPaidNow > 0) {
       throw new BadRequest("Later payment should not have immediate payments");
     }
     if (totalDuePayments !== finalGrandTotal) {
-      throw new BadRequest(`Due payments must equal grand_total. Expected: ${finalGrandTotal}, Received: ${totalDuePayments}`);
+      throw new BadRequest(
+        `Due payments must equal grand_total. Expected: ${finalGrandTotal}, Received: ${totalDuePayments}`
+      );
     }
   } else if (finalPaymentStatus === "partial") {
     if (totalPaidNow <= 0) {
       throw new BadRequest("Partial payment requires immediate payment");
     }
     if (totalPaidNow >= finalGrandTotal) {
-      throw new BadRequest("Partial payment should be less than grand_total. Use 'full' status instead");
+      throw new BadRequest(
+        "Partial payment should be less than grand_total. Use 'full' status instead"
+      );
     }
     if (totalPayments !== finalGrandTotal) {
-      throw new BadRequest(`Total payments must equal grand_total. Expected: ${finalGrandTotal}, Received: ${totalPayments}`);
+      throw new BadRequest(
+        `Total payments must equal grand_total. Expected: ${finalGrandTotal}, Received: ${totalPayments}`
+      );
     }
   }
 
   // ========== Save Image ==========
   let imageUrl = receipt_img;
   if (receipt_img && receipt_img.startsWith("data:")) {
-    imageUrl = await saveBase64Image(receipt_img, Date.now().toString(), req, "Purchases");
+    imageUrl = await saveBase64Image(
+      receipt_img,
+      Date.now().toString(),
+      req,
+      "Purchases"
+    );
   }
 
   // ========== Reverse Old Items ==========
@@ -551,12 +648,17 @@ export const updatePurchase = async (req: Request, res: Response) => {
       }
 
       // ✅ Reverse ProductPrice quantity if variations exist
-      const oldOptions = await PurchaseItemOptionModel.find({ purchase_item_id: itemData._id });
+      const oldOptions = await PurchaseItemOptionModel.find({
+        purchase_item_id: itemData._id,
+      });
       for (const opt of oldOptions) {
         if ((opt as any).product_price_id) {
-          await ProductPriceModel.findByIdAndUpdate((opt as any).product_price_id, {
-            $inc: { quantity: -(opt as any).quantity },
-          });
+          await ProductPriceModel.findByIdAndUpdate(
+            (opt as any).product_price_id,
+            {
+              $inc: { quantity: -(opt as any).quantity },
+            }
+          );
         }
       }
     }
@@ -569,13 +671,20 @@ export const updatePurchase = async (req: Request, res: Response) => {
       }
     }
 
-    await PurchaseItemOptionModel.deleteMany({ purchase_item_id: itemData._id });
+    await PurchaseItemOptionModel.deleteMany({
+      purchase_item_id: itemData._id,
+    });
   }
 
   // Update warehouse stock
-  const oldWarehouse = await WarehouseModel.findById((existingPurchase as any).warehouse_id);
+  const oldWarehouse = await WarehouseModel.findById(
+    (existingPurchase as any).warehouse_id
+  );
   if (oldWarehouse) {
-    const totalOldQty = oldItems.reduce((sum, item) => sum + (item as any).quantity, 0);
+    const totalOldQty = oldItems.reduce(
+      (sum, item) => sum + (item as any).quantity,
+      0
+    );
     (oldWarehouse as any).stock_Quantity -= totalOldQty;
     await oldWarehouse.save();
   }
@@ -586,7 +695,9 @@ export const updatePurchase = async (req: Request, res: Response) => {
   // Delete old invoices and restore balance
   const oldInvoices = await PurchaseInvoiceModel.find({ purchase_id: id });
   for (const inv of oldInvoices) {
-    const financial = await BankAccountModel.findById((inv as any).financial_id);
+    const financial = await BankAccountModel.findById(
+      (inv as any).financial_id
+    );
     if (financial) {
       (financial as any).balance += (inv as any).amount;
       await financial.save();
@@ -604,19 +715,25 @@ export const updatePurchase = async (req: Request, res: Response) => {
   if (date) (existingPurchase as any).date = date;
   if (warehouse_id) (existingPurchase as any).warehouse_id = warehouse_id;
   if (supplier_id) (existingPurchase as any).supplier_id = supplier_id;
-  (existingPurchase as any).receipt_img = imageUrl ?? (existingPurchase as any).receipt_img;
+  (existingPurchase as any).receipt_img =
+    imageUrl ?? (existingPurchase as any).receipt_img;
   (existingPurchase as any).payment_status = finalPaymentStatus;
-  (existingPurchase as any).exchange_rate = exchange_rate ?? (existingPurchase as any).exchange_rate;
+  (existingPurchase as any).exchange_rate =
+    exchange_rate ?? (existingPurchase as any).exchange_rate;
   (existingPurchase as any).total = total ?? (existingPurchase as any).total;
-  (existingPurchase as any).discount = discount ?? (existingPurchase as any).discount;
-  (existingPurchase as any).shipping_cost = shipping_cost ?? (existingPurchase as any).shipping_cost;
+  (existingPurchase as any).discount =
+    discount ?? (existingPurchase as any).discount;
+  (existingPurchase as any).shipping_cost =
+    shipping_cost ?? (existingPurchase as any).shipping_cost;
   (existingPurchase as any).grand_total = finalGrandTotal;
   if (tax_id !== undefined) (existingPurchase as any).tax_id = tax_id || null;
   if (note !== undefined) (existingPurchase as any).note = note;
 
   await existingPurchase.save();
 
-  let warehouse = await WarehouseModel.findById((existingPurchase as any).warehouse_id);
+  let warehouse = await WarehouseModel.findById(
+    (existingPurchase as any).warehouse_id
+  );
 
   // ========== Process New Products ==========
   for (const p of purchase_items) {
@@ -624,7 +741,9 @@ export const updatePurchase = async (req: Request, res: Response) => {
     let product_id = p.product_id;
 
     if (p.product_code) {
-      const product_price = await ProductPriceModel.findOne({ code: p.product_code }).populate("productId");
+      const product_price = await ProductPriceModel.findOne({
+        code: p.product_code,
+      }).populate("productId");
       if (product_price) {
         const productDoc: any = product_price.productId;
         product_id = productDoc?._id;
@@ -638,23 +757,33 @@ export const updatePurchase = async (req: Request, res: Response) => {
     if ((product as any).exp_ability) {
       const expiryDateValue = p.expiry_date || p.date_of_expiery;
       if (!expiryDateValue) {
-        throw new BadRequest(`Expiry date is required for product: ${(product as any).name}`);
+        throw new BadRequest(
+          `Expiry date is required for product: ${(product as any).name}`
+        );
       }
       const expiryDate = new Date(expiryDateValue);
       const today = new Date();
       expiryDate.setHours(0, 0, 0, 0);
       today.setHours(0, 0, 0, 0);
       if (expiryDate < today) {
-        throw new BadRequest(`Expiry date cannot be in the past for product: ${(product as any).name}`);
+        throw new BadRequest(
+          `Expiry date cannot be in the past for product: ${
+            (product as any).name
+          }`
+        );
       }
     }
 
     // حساب الكمية
     let totalQuantity = p.quantity ?? 0;
-    const hasVariations = p.variations && Array.isArray(p.variations) && p.variations.length > 0;
+    const hasVariations =
+      p.variations && Array.isArray(p.variations) && p.variations.length > 0;
 
     if (hasVariations) {
-      totalQuantity = p.variations.reduce((sum: number, v: any) => sum + (v.quantity ?? 0), 0);
+      totalQuantity = p.variations.reduce(
+        (sum: number, v: any) => sum + (v.quantity ?? 0),
+        0
+      );
     }
 
     const purchaseItem = await PurchaseItemModel.create({
@@ -671,7 +800,9 @@ export const updatePurchase = async (req: Request, res: Response) => {
       unit_cost_after_discount: p.unit_cost_after_discount || p.unit_cost,
       tax: p.tax || 0,
       item_type: "product",
-      date_of_expiery: (product as any).exp_ability ? (p.expiry_date || p.date_of_expiery) : undefined,
+      date_of_expiery: (product as any).exp_ability
+        ? p.expiry_date || p.date_of_expiery
+        : undefined,
     });
 
     // لو في Variations
@@ -681,7 +812,9 @@ export const updatePurchase = async (req: Request, res: Response) => {
           throw new BadRequest("product_price_id is required for variations");
         }
 
-        const productPrice = await ProductPriceModel.findById(v.product_price_id);
+        const productPrice = await ProductPriceModel.findById(
+          v.product_price_id
+        );
         if (!productPrice) {
           throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
         }
@@ -780,7 +913,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
   }
 
   // ========== Create New Due Payments ==========
-  if (purchase_due_payment && Array.isArray(purchase_due_payment) && purchase_due_payment.length > 0) {
+  if (
+    purchase_due_payment &&
+    Array.isArray(purchase_due_payment) &&
+    purchase_due_payment.length > 0
+  ) {
     for (const due_payment of purchase_due_payment) {
       await PurchaseDuePaymentModel.create({
         purchase_id: existingPurchase._id,
@@ -797,7 +934,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
         purchase_id: existingPurchase._id,
         amount: inst.amount,
         date: inst.date,
-        status: "pending"
+        status: "pending",
       });
     }
   }
@@ -811,10 +948,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
         { path: "category_id" },
         {
           path: "options",
-          populate: [
-            { path: "product_price_id" },
-            { path: "option_id" },
-          ],
+          populate: [{ path: "product_price_id" }, { path: "option_id" }],
         },
       ],
     })
@@ -825,19 +959,22 @@ export const updatePurchase = async (req: Request, res: Response) => {
     .populate("duePayments")
     .populate("installments");
 
-  SuccessResponse(res, { message: "Purchase updated successfully", purchase: fullPurchase });
+  SuccessResponse(res, {
+    message: "Purchase updated successfully",
+    purchase: fullPurchase,
+  });
 };
 
 export const getLowStockProducts = async (req: Request, res: Response) => {
   const products = await ProductModel.find({
-    $expr: { $lte: ["$quantity", "$low_stock"] }
+    $expr: { $lte: ["$quantity", "$low_stock"] },
   })
     .select("name ar_name code quantity low_stock image")
     .populate("categoryId", "name ar_name")
     .populate("brandId", "name ar_name");
 
   // تنسيق الـ response
-  const formattedProducts = products.map(product => ({
+  const formattedProducts = products.map((product) => ({
     _id: product._id,
     name: product.name,
     ar_name: product.ar_name,
@@ -845,21 +982,23 @@ export const getLowStockProducts = async (req: Request, res: Response) => {
     image: product.image,
     actual_stock: product.quantity,
     minimum_stock: product.low_stock ?? 0,
-    shortage: (product.low_stock ?? 0) - (product.quantity ?? 0),  // الفرق
+    shortage: (product.low_stock ?? 0) - (product.quantity ?? 0), // الفرق
     category: product.categoryId,
-    brand: product.brandId
+    brand: product.brandId,
   }));
 
   SuccessResponse(res, {
     message: "Low stock products retrieved successfully",
     count: formattedProducts.length,
-    products: formattedProducts
+    products: formattedProducts,
   });
 };
 
-
 // المنتجات اللي هتنتهي قريباً (خلال أسبوع)
-export const getCriticalExpiryProducts = async (req: Request, res: Response) => {
+export const getCriticalExpiryProducts = async (
+  req: Request,
+  res: Response
+) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -873,22 +1012,22 @@ export const getCriticalExpiryProducts = async (req: Request, res: Response) => 
       $exists: true,
       $ne: null,
       $gte: today,
-      $lte: nextWeek
+      $lte: nextWeek,
     },
-    quantity: { $gt: 0 }
+    quantity: { $gt: 0 },
   })
     .populate({
       path: "product_id",
-      select: "name ar_name code image"
+      select: "name ar_name code image",
     })
     .populate({
       path: "warehouse_id",
-      select: "name"
+      select: "name",
     })
     .select("product_id warehouse_id quantity date_of_expiery patch_number")
     .sort({ date_of_expiery: 1 });
 
-  const formattedProducts = criticalItems.map(item => {
+  const formattedProducts = criticalItems.map((item) => {
     const expiryDate = new Date(item.date_of_expiery!);
     const diffTime = expiryDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -900,14 +1039,14 @@ export const getCriticalExpiryProducts = async (req: Request, res: Response) => 
       quantity: item.quantity,
       patch_number: item.patch_number,
       expiry_date: item.date_of_expiery,
-      days_remaining: diffDays
+      days_remaining: diffDays,
     };
   });
 
   SuccessResponse(res, {
     message: "Critical expiry products retrieved successfully",
     count: formattedProducts.length,
-    products: formattedProducts
+    products: formattedProducts,
   });
 };
 
@@ -924,21 +1063,21 @@ export const getExpiringProducts = async (req: Request, res: Response) => {
   // جيب الـ PurchaseItems اللي عندها تاريخ انتهاء
   const expiringItems = await PurchaseItemModel.find({
     item_type: "product",
-    date_of_expiery: { $exists: true, $ne: null, $lte: futureDate }
+    date_of_expiery: { $exists: true, $ne: null, $lte: futureDate },
   })
     .populate({
       path: "product_id",
-      select: "name ar_name code image exp_ability"
+      select: "name ar_name code image exp_ability",
     })
     .populate({
       path: "warehouse_id",
-      select: "name"
+      select: "name",
     })
     .select("product_id warehouse_id quantity date_of_expiery patch_number")
     .sort({ date_of_expiery: 1 }); // الأقرب للانتهاء أولاً
 
   // تنسيق الـ response
-  const formattedProducts = expiringItems.map(item => {
+  const formattedProducts = expiringItems.map((item) => {
     const expiryDate = new Date(item.date_of_expiery!);
     const diffTime = expiryDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -964,23 +1103,24 @@ export const getExpiringProducts = async (req: Request, res: Response) => {
       patch_number: item.patch_number,
       expiry_date: item.date_of_expiery,
       days_remaining: diffDays,
-      status
+      status,
     };
   });
 
   // إحصائيات
   const stats = {
     total: formattedProducts.length,
-    expired: formattedProducts.filter(p => p.status === "expired").length,
-    expires_today: formattedProducts.filter(p => p.status === "expires_today").length,
-    critical: formattedProducts.filter(p => p.status === "critical").length,
-    warning: formattedProducts.filter(p => p.status === "warning").length
+    expired: formattedProducts.filter((p) => p.status === "expired").length,
+    expires_today: formattedProducts.filter((p) => p.status === "expires_today")
+      .length,
+    critical: formattedProducts.filter((p) => p.status === "critical").length,
+    warning: formattedProducts.filter((p) => p.status === "warning").length,
   };
 
   SuccessResponse(res, {
     message: "Expiring products retrieved successfully",
     stats,
-    products: formattedProducts
+    products: formattedProducts,
   });
 };
 
@@ -992,20 +1132,20 @@ export const getExpiredProducts = async (req: Request, res: Response) => {
   const expiredItems = await PurchaseItemModel.find({
     item_type: "product",
     date_of_expiery: { $exists: true, $ne: null, $lt: today },
-    quantity: { $gt: 0 } // اللي لسه فيها كمية
+    quantity: { $gt: 0 }, // اللي لسه فيها كمية
   })
     .populate({
       path: "product_id",
-      select: "name ar_name code image"
+      select: "name ar_name code image",
     })
     .populate({
       path: "warehouse_id",
-      select: "name"
+      select: "name",
     })
     .select("product_id warehouse_id quantity date_of_expiery patch_number")
     .sort({ date_of_expiery: 1 });
 
-  const formattedProducts = expiredItems.map(item => {
+  const formattedProducts = expiredItems.map((item) => {
     const expiryDate = new Date(item.date_of_expiery!);
     const diffTime = today.getTime() - expiryDate.getTime();
     const expiredDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -1017,14 +1157,14 @@ export const getExpiredProducts = async (req: Request, res: Response) => {
       quantity: item.quantity,
       patch_number: item.patch_number,
       expiry_date: item.date_of_expiery,
-      expired_since_days: expiredDays
+      expired_since_days: expiredDays,
     };
   });
 
   SuccessResponse(res, {
     message: "Expired products retrieved successfully",
     count: formattedProducts.length,
-    products: formattedProducts
+    products: formattedProducts,
   });
 };
 
@@ -1032,19 +1172,20 @@ export const selection = async (req: Request, res: Response): Promise<void> => {
   const { warehouseId } = req.query;
 
   // جلب البيانات الأساسية بشكل متوازي لتحسين الأداء
-  const [warehouse, supplier, tax, currency, financial, products, variations] = await Promise.all([
-    WarehouseModel.find().lean(),
-    SupplierModel.find().lean(),
-    TaxesModel.find().lean(),
-    CurrencyModel.find().lean(),
-    BankAccountModel.find({ status: "true" }).lean(),
-    ProductModel.find()
-      .populate("categoryId")
-      .populate("brandId")
-      .populate("taxesId")
-      .lean(),
-    VariationModel.find().lean(),
-  ]);
+  const [warehouse, supplier, tax, currency, financial, products, variations] =
+    await Promise.all([
+      WarehouseModel.find().lean(),
+      SupplierModel.find().lean(),
+      TaxesModel.find().lean(),
+      CurrencyModel.find().lean(),
+      BankAccountModel.find({ status: "true" }).lean(),
+      ProductModel.find()
+        .populate("categoryId")
+        .populate("brandId")
+        .populate("taxesId")
+        .lean(),
+      VariationModel.find().lean(),
+    ]);
 
   // جلب كل stocks و prices مرة واحدة بدلاً من كل منتج على حدة (تحسين الأداء)
   const productIds = products.map((p: any) => p._id);
@@ -1077,7 +1218,10 @@ export const selection = async (req: Request, res: Response): Promise<void> => {
     const stocks = allStocks.filter(
       (s: any) => s.productId.toString() === product._id.toString()
     );
-    const totalQuantity = stocks.reduce((sum: number, s: any) => sum + s.quantity, 0);
+    const totalQuantity = stocks.reduce(
+      (sum: number, s: any) => sum + s.quantity,
+      0
+    );
 
     // فلترة الـ prices الخاصة بهذا المنتج
     const productPrices = allPrices.filter(
@@ -1146,7 +1290,8 @@ export const payInstallment = async (req: Request, res: Response) => {
   const installment = await PurchaseInstallmentModel.findById(id);
   if (!installment) throw new NotFound("Installment not found");
 
-  if (installment.status === "paid") throw new BadRequest("Installment is already paid");
+  if (installment.status === "paid")
+    throw new BadRequest("Installment is already paid");
 
   const financial = await BankAccountModel.findById(financial_id);
   if (!financial) throw new NotFound("Financial account not found");
@@ -1168,5 +1313,8 @@ export const payInstallment = async (req: Request, res: Response) => {
   installment.status = "paid";
   await installment.save();
 
-  SuccessResponse(res, { message: "Installment paid successfully", installment });
+  SuccessResponse(res, {
+    message: "Installment paid successfully",
+    installment,
+  });
 };
