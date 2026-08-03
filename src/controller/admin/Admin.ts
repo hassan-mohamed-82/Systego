@@ -10,6 +10,10 @@ import { BadRequest, NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import { saveBase64Image } from "../../utils/handleImages";
 import { MODULES, ACTION_NAMES } from "../../types/constant";
+import { CashierShift } from "../../models/schema/admin/POS/CashierShift";
+import { ProductSalesModel, SaleModel } from "../../models/schema/admin/POS/Sale";
+import { ExpenseModel } from "../../models/schema/admin/POS/expenses";
+import { ReturnModel } from "../../models/schema/admin/POS/ReturnSale";
 
 // =========================
 // Create User
@@ -484,4 +488,226 @@ export const getSelectionData = async (
   } catch (error) {
     next(error);
   }
+};
+
+export const getCashiermanShiftsReport = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const { start_date, end_date } = req.query as { start_date?: string; end_date?: string };
+
+    if (!mongoose.isValidObjectId(id)) {
+        throw new BadRequest("Invalid cashierman_id");
+    }
+
+    const cashierman = await UserModel.findById(id).select(
+        "username email phone image_url role status"
+    );
+    if (!cashierman) {
+        throw new NotFound("Cashierman not found");
+    }
+
+    // ---- date range match ----
+    const match: any = {
+        cashierman_id: new mongoose.Types.ObjectId(id),
+    };
+
+    if (start_date || end_date) {
+        match.start_time = {};
+        if (start_date) {
+            const from = new Date(start_date);
+            if (isNaN(from.getTime())) throw new BadRequest("Invalid start_date");
+            match.start_time.$gte = from;
+        }
+        if (end_date) {
+            const to = new Date(end_date);
+            if (isNaN(to.getTime())) throw new BadRequest("Invalid end_date");
+            to.setHours(23, 59, 59, 999);
+            match.start_time.$lte = to;
+        }
+    }
+
+    // ---- aggregate shifts with sales / expenses totals only ----
+    const shifts = await CashierShift.aggregate([
+        { $match: match },
+
+        {
+            $lookup: {
+                from: "cashiers",
+                localField: "cashier_id",
+                foreignField: "_id",
+                as: "cashier",
+            },
+        },
+        {
+            $lookup: {
+                from: "sales",
+                localField: "_id",
+                foreignField: "shift_id",
+                as: "sales",
+            },
+        },
+        {
+            $lookup: {
+                from: "expenses",
+                localField: "_id",
+                foreignField: "shift_id",
+                as: "expenses",
+            },
+        },
+
+        {
+            $addFields: {
+                cashier_name: { $ifNull: [{ $arrayElemAt: ["$cashier.name", 0] }, null] },
+                total_sales_amount: { $sum: "$sales.paid_amount" },
+                total_expenses_amount: { $sum: "$expenses.amount" },
+                duration_ms: {
+                    $cond: [
+                        { $and: ["$start_time", "$end_time"] },
+                        { $subtract: ["$end_time", "$start_time"] },
+                        null,
+                    ],
+                },
+            },
+        },
+        {
+            $addFields: {
+                net_cash: { $subtract: ["$total_sales_amount", "$total_expenses_amount"] },
+            },
+        },
+
+        {
+            $project: {
+                _id: 1,
+                status: 1,
+                cashier_name: 1,
+                start_time: 1,
+                end_time: 1,
+                duration_ms: 1,
+                total_sales_amount: 1,
+                total_expenses_amount: 1,
+                net_cash: 1,
+            },
+        },
+
+        { $sort: { start_time: -1 } },
+    ]);
+
+    // ---- overall summary across the filtered shifts ----
+    const summary = shifts.reduce(
+        (acc, s) => {
+            acc.total_shifts += 1;
+            acc.total_sales_amount += s.total_sales_amount;
+            acc.total_expenses_amount += s.total_expenses_amount;
+            acc.total_net_cash += s.net_cash;
+            return acc;
+        },
+        {
+            total_shifts: 0,
+            total_sales_amount: 0,
+            total_expenses_amount: 0,
+            total_net_cash: 0,
+        }
+    );
+
+    SuccessResponse(res, {
+        cashierman,
+        filters: { start_date: start_date || null, end_date: end_date || null },
+        summary,
+        shifts,
+    });
+};
+
+export const getShiftDetails = async (req: Request, res: Response): Promise<void> => {
+    const { shift_id } = req.params;
+
+    const shift = await CashierShift.findById(shift_id)
+        .populate("cashierman_id", "username email phone image_url")
+        .populate("cashier_id", "name");
+
+    if (!shift) {
+        throw new NotFound("Shift not found");
+    }
+
+    // ---- sales in this shift ----
+    const sales = await SaleModel.find({ shift_id })
+        .select(
+            "reference customer_id Due Due_customer_id remaining_amount grand_total total paid_amount discount tax_amount shipping service_fee_total date order_pending"
+        )
+        .populate("customer_id", "name phone")
+        .sort({ date: -1 })
+        .lean();
+
+    const saleIds = sales.map((s) => s._id);
+
+    // ---- product lines for those sales ----
+    const productSales = await ProductSalesModel.find({ sale_id: { $in: saleIds } })
+        .select(
+            "sale_id product_id bundle_id quantity price subtotal discount discount_type isGift isBundle"
+        )
+        .populate("product_id", "name sku")
+        .populate("bundle_id", "name")
+        .lean();
+
+    const productsBySale = productSales.reduce((acc: Record<string, any[]>, line) => {
+        const key = String(line.sale_id);
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(line);
+        return acc;
+    }, {});
+
+    const salesWithItems = sales.map((s) => ({
+        ...s,
+        items: productsBySale[String(s._id)] || [],
+    }));
+
+    // ---- expenses in this shift ----
+    const expenses = await ExpenseModel.find({ shift_id })
+        .select("name amount Category_id note financial_accountId createdAt")
+        .populate("Category_id", "name")
+        .populate("financial_accountId", "name")
+        .sort({ createdAt: -1 })
+        .lean();
+
+    // ---- returns in this shift ----
+    const returns = await ReturnModel.find({ shift_id })
+        .select(
+            "reference sale_id sale_reference customer_id items total_amount refund_method note date"
+        )
+        .populate("customer_id", "name phone")
+        .sort({ date: -1 })
+        .lean();
+
+    // ---- totals ----
+    const total_sales_amount = sales.reduce((sum, s) => sum + (s.paid_amount || 0), 0);
+    const total_expenses_amount = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const total_returns_amount = returns.reduce((sum, r) => sum + (r.total_amount || 0), 0);
+    const total_products_sold = productSales.reduce((sum, p) => sum + (p.quantity || 0), 0);
+    const net_cash = total_sales_amount - total_expenses_amount - total_returns_amount;
+
+    const duration_ms =
+        shift.start_time && shift.end_time
+            ? new Date(shift.end_time).getTime() - new Date(shift.start_time).getTime()
+            : null;
+
+    SuccessResponse(res, {
+        shift: {
+            _id: shift._id,
+            status: shift.status,
+            cashierman: shift.cashierman_id,
+            cashier: shift.cashier_id,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            duration_ms,
+        },
+        summary: {
+            sales_count: sales.length,
+            total_sales_amount,
+            total_expenses_amount,
+            total_returns_amount,
+            total_products_sold,
+            net_cash,
+        },
+        sales: salesWithItems,
+        expenses,
+        returns,
+    });
 };

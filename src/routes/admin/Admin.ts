@@ -11,6 +11,8 @@ import {
   deleteUser,
 //   toggleUserStatus,
   getSelectionData,
+  getCashiermanShiftsReport,
+  getShiftDetails,
 } from "../../controller/admin/Admin";
 
 const route = Router();
@@ -25,6 +27,8 @@ route.get("/", catchAsync(getAllUsers));
 route.get("/:id", catchAsync(getUserById));
 route.put("/:id", catchAsync(updateUser));
 route.delete("/:id", catchAsync(deleteUser));
+route.get("/report/:id", catchAsync(getCashiermanShiftsReport))
+route.get("/shifts/:shift_id/details", catchAsync(getShiftDetails))
 
 // Status toggle
 // router.patch("/:id/status", catchAsync(toggleUserStatus));
