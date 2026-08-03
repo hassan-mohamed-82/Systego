@@ -11,9 +11,15 @@ const DiscountSchema = new Schema(
       enum: ["POS", "E-commerce"],
       default: "E-commerce",
     },
-    warehouseIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Warehouse" }],
+    all_warehouses: { type: Boolean, default: true },
+    warehouse_ids: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Warehouse",
+      },
+    ],
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 export const DiscountModel = mongoose.model("Discount", DiscountSchema);

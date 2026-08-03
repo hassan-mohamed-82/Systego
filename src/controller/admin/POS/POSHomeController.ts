@@ -1,14 +1,20 @@
 import { ProductModel } from "../../../models/schema/admin/products";
 import { CategoryModel } from "../../../models/schema/admin/category";
 import { BrandModel } from "../../../models/schema/admin/brand";
-import { CouponModel } from '../../../models/schema/admin/coupons';
-import { TaxesModel } from '../../../models/schema/admin/Taxes';
-import { DiscountModel } from '../../../models/schema/admin/Discount';
+import { CouponModel } from "../../../models/schema/admin/coupons";
+import { TaxesModel } from "../../../models/schema/admin/Taxes";
+import { DiscountModel } from "../../../models/schema/admin/Discount";
 import { WarehouseModel } from "../../../models/schema/admin/Warehouse";
-import { GiftCardModel } from '../../../models/schema/admin/POS/giftCard';
-import { PaymentMethodModel } from '../../../models/schema/admin/payment_methods';
-import { ProductPriceModel, ProductPriceOptionModel } from '../../../models/schema/admin/product_price';
-import { CustomerModel, CustomerGroupModel } from '../../../models/schema/admin/POS/customer';
+import { GiftCardModel } from "../../../models/schema/admin/POS/giftCard";
+import { PaymentMethodModel } from "../../../models/schema/admin/payment_methods";
+import {
+  ProductPriceModel,
+  ProductPriceOptionModel,
+} from "../../../models/schema/admin/product_price";
+import {
+  CustomerModel,
+  CustomerGroupModel,
+} from "../../../models/schema/admin/POS/customer";
 import { NotFound } from "../../../Errors";
 import { SuccessResponse } from "../../../utils/response";
 import { Request, Response } from "express";
@@ -16,7 +22,7 @@ import { BankAccountModel } from "../../../models/schema/admin/Financial_Account
 import { CurrencyModel } from "../../../models/schema/admin/Currency";
 import { get } from "axios";
 import { PandelModel } from "../../../models/schema/admin/pandels";
-import {buildProductsWithVariations  } from "../../../utils/producthelper";
+import { buildProductsWithVariations } from "../../../utils/producthelper";
 import { CountryModel } from "../../../models/schema/admin/Country";
 import { CityModels } from "../../../models/schema/admin/City";
 import { CashierModel } from "../../../models/schema/admin/cashier";
@@ -24,7 +30,7 @@ import { BadRequest } from "../../../Errors/BadRequest";
 import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
 import { ServiceFeeModel } from "../../../models/schema/admin/ServiceFee";
 import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
-// get all category 
+// get all category
 export const getAllCategorys = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   const warehouseId = jwtUser?.warehouse_id;
@@ -47,7 +53,7 @@ export const getAllCategorys = async (req: Request, res: Response) => {
 
   // ✅ categoryId هو Array of ObjectIds
   const categoryIds: string[] = [];
-  
+
   products.forEach((p: any) => {
     if (p.categoryId && p.categoryId.length > 0) {
       p.categoryId.forEach((catId: any) => {
@@ -269,42 +275,67 @@ export const getFeaturedProducts = async (req: Request, res: Response) => {
   });
 };
 
-
-
 // get all selections
 export const getAllSelections = async (req: Request, res: Response) => {
-    const warehouseId = req.user?.warehouse_id;
-    const warehouses = await WarehouseModel.find(warehouseId ? { _id: warehouseId } : {}).select('name');
-    const accounts = await BankAccountModel.find({
-      in_POS: true,
-      status: true,
-      ...(warehouseId ? { warehouseId } : {}),
-    }).select('name balance warehouseId');
-    const taxes = await TaxesModel.find().select('name status amount type'); 
-    const discounts = await DiscountModel.find().select('name status amount type');
-    const coupons = await CouponModel.find().select('coupon_code amount type minimum_amount quantity available expired_date');
-    const giftCards = await GiftCardModel.find().select('code amount');
-    const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
-    const customers = await CustomerModel.find().select('name phone_number email address');
-    const customerGroups = await CustomerGroupModel.find().select('name ');
-    const dueCustomers = await CustomerModel.find({ is_Due: true }).select('name phone_number email address amount_Due');
-    const currency=await CurrencyModel.find({isdefault: true}).select('name  ar_name,amount');
- const countries = await CountryModel.find()
-  .select("name ar_name")                    
-  .populate({
+  const warehouseId = req.user?.warehouse_id;
+  const warehouses = await WarehouseModel.find(
+    warehouseId ? { _id: warehouseId } : {}
+  ).select("name");
+  const accounts = await BankAccountModel.find({
+    in_POS: true,
+    status: true,
+    ...(warehouseId ? { warehouseId } : {}),
+  }).select("name balance warehouseId");
+  const taxes = await TaxesModel.find().select("name status amount type");
+  const discounts = await DiscountModel.find().select(
+    "name status amount type"
+  );
+  const coupons = await CouponModel.find().select(
+    "coupon_code amount type minimum_amount quantity available expired_date"
+  );
+  const giftCards = await GiftCardModel.find().select("code amount");
+  const paymentMethods = await PaymentMethodModel.find({
+    isActive: true,
+  }).select("name");
+  const customers = await CustomerModel.find().select(
+    "name phone_number email address"
+  );
+  const customerGroups = await CustomerGroupModel.find().select("name ");
+  const dueCustomers = await CustomerModel.find({ is_Due: true }).select(
+    "name phone_number email address amount_Due"
+  );
+  const currency = await CurrencyModel.find({ isdefault: true }).select(
+    "name  ar_name,amount"
+  );
+  const countries = await CountryModel.find().select("name ar_name").populate({
     path: "cities",
-    select: "name ar_name shipingCost",    // الحقول اللي ترجع من الـ City
+    select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
   });
   const sevicefees = await ServiceFeeModel.find({
     status: true,
-    module: 'pos',
-    $or: warehouseId ? [{ warehouseId }, { warehouseId: null }] : [{ warehouseId: null }],
-  }).select('title amount type module warehouseId');
+    module: "pos",
+    $or: warehouseId
+      ? [{ warehouseId }, { warehouseId: null }]
+      : [{ warehouseId: null }],
+  }).select("title amount type module warehouseId");
 
-    SuccessResponse(res, {message: "Selections list",dueCustomers,countries ,warehouses, sevicefees,currency,accounts, taxes, discounts, coupons, giftCards, paymentMethods, customers, customerGroups});
-}
-
-
+  SuccessResponse(res, {
+    message: "Selections list",
+    dueCustomers,
+    countries,
+    warehouses,
+    sevicefees,
+    currency,
+    accounts,
+    taxes,
+    discounts,
+    coupons,
+    giftCards,
+    paymentMethods,
+    customers,
+    customerGroups,
+  });
+};
 
 export const getActiveBundles = async (req: Request, res: Response) => {
   const currentDate = new Date();
@@ -441,7 +472,6 @@ export const getActiveBundles = async (req: Request, res: Response) => {
   });
 };
 
-
 export const getCashiers = async (req: Request, res: Response) => {
   const warehouseId = req.user?.warehouse_id;
 
@@ -461,7 +491,6 @@ export const getCashiers = async (req: Request, res: Response) => {
     cashiers,
   });
 };
-
 
 export const selectCashier = async (req: Request, res: Response) => {
   const warehouseId = (req.user as any)?.warehouse_id;
@@ -512,98 +541,121 @@ export const selectCashier = async (req: Request, res: Response) => {
   });
 };
 
-
 // 1. Warehouses
 export const getWarehouses = async (req: Request, res: Response) => {
-    const warehouseId = req.user?.warehouse_id;
-    const warehouses = await WarehouseModel.find(warehouseId ? { _id: warehouseId } : {}).select('name');
-    SuccessResponse(res, { message: "Warehouses list", data: warehouses });
+  const warehouseId = req.user?.warehouse_id;
+  const warehouses = await WarehouseModel.find(
+    warehouseId ? { _id: warehouseId } : {}
+  ).select("name");
+  SuccessResponse(res, { message: "Warehouses list", data: warehouses });
 };
 
 // 2. Bank Accounts
 export const getAccounts = async (req: Request, res: Response) => {
-    const warehouseId = req.user?.warehouse_id;
-    const accounts = await BankAccountModel.find({
-        in_POS: true,
-        status: true,
-        ...(warehouseId ? { warehouseId } : {}),
-    }).select('name balance warehouseId');
-    SuccessResponse(res, { message: "Accounts list", data: accounts });
+  const warehouseId = req.user?.warehouse_id;
+  const accounts = await BankAccountModel.find({
+    in_POS: true,
+    status: true,
+    ...(warehouseId ? { warehouseId } : {}),
+  }).select("name balance warehouseId");
+  SuccessResponse(res, { message: "Accounts list", data: accounts });
 };
 
 // 3. Taxes
 export const getTaxes = async (req: Request, res: Response) => {
-    const taxes = await TaxesModel.find().select('name status amount type');
-    SuccessResponse(res, { message: "Taxes list", data: taxes });
+  const taxes = await TaxesModel.find().select("name status amount type");
+  SuccessResponse(res, { message: "Taxes list", data: taxes });
 };
 
 // 4. Discounts
 export const getDiscounts = async (req: Request, res: Response) => {
-    const discounts = await DiscountModel.find({ status: true, applyIn: "POS" }).select('name status amount type');
-    SuccessResponse(res, { message: "Discounts list", data: discounts });
+  const warehouseId = req.user?.warehouse_id;
+  const discounts = await DiscountModel.find({
+    status: true,
+    applyIn: "POS",
+    $or: [{ all_warehouses: true }, { warehouse_ids: warehouseId }],
+  }).select("name status amount type");
+
+  SuccessResponse(res, { message: "Discounts list", data: discounts });
 };
 
 // 5. Coupons
 export const getCoupons = async (req: Request, res: Response) => {
-    const coupons = await CouponModel.find().select('coupon_code amount type minimum_amount quantity available expired_date');
-    SuccessResponse(res, { message: "Coupons list", data: coupons });
+  const coupons = await CouponModel.find().select(
+    "coupon_code amount type minimum_amount quantity available expired_date"
+  );
+  SuccessResponse(res, { message: "Coupons list", data: coupons });
 };
 
 // 6. Gift Cards
 export const getGiftCards = async (req: Request, res: Response) => {
-    const giftCards = await GiftCardModel.find().select('code amount');
-    SuccessResponse(res, { message: "Gift Cards list", data: giftCards });
+  const giftCards = await GiftCardModel.find().select("code amount");
+  SuccessResponse(res, { message: "Gift Cards list", data: giftCards });
 };
 
 // 7. Payment Methods
 export const getPaymentMethods = async (req: Request, res: Response) => {
-    const paymentMethods = await PaymentMethodModel.find({ isActive: true }).select('name');
-    SuccessResponse(res, { message: "Payment Methods list", data: paymentMethods });
+  const paymentMethods = await PaymentMethodModel.find({
+    isActive: true,
+  }).select("name");
+  SuccessResponse(res, {
+    message: "Payment Methods list",
+    data: paymentMethods,
+  });
 };
 
 // 8. Customers
 export const getCustomers = async (req: Request, res: Response) => {
-    const customers = await CustomerModel.find().select('name phone_number email address');
-    SuccessResponse(res, { message: "Customers list", data: customers });
+  const customers = await CustomerModel.find().select(
+    "name phone_number email address"
+  );
+  SuccessResponse(res, { message: "Customers list", data: customers });
 };
 
 // 9. Customer Groups
 export const getCustomerGroups = async (req: Request, res: Response) => {
-    const customerGroups = await CustomerGroupModel.find().select('name');
-    SuccessResponse(res, { message: "Customer Groups list", data: customerGroups });
+  const customerGroups = await CustomerGroupModel.find().select("name");
+  SuccessResponse(res, {
+    message: "Customer Groups list",
+    data: customerGroups,
+  });
 };
 
 // 10. Due Customers
 export const getDueCustomers = async (req: Request, res: Response) => {
-    const dueCustomers = await CustomerModel.find({ is_Due: true }).select('name phone_number email address amount_Due');
-    SuccessResponse(res, { message: "Due Customers list", data: dueCustomers });
+  const dueCustomers = await CustomerModel.find({ is_Due: true }).select(
+    "name phone_number email address amount_Due"
+  );
+  SuccessResponse(res, { message: "Due Customers list", data: dueCustomers });
 };
 
 // 11. Currency
 export const getCurrency = async (req: Request, res: Response) => {
-    // تم تصحيح المسافات في الـ select لتجنب أي أخطاء
-    const currency = await CurrencyModel.find({ isdefault: true }).select('name ar_name amount');
-    SuccessResponse(res, { message: "Currency list", data: currency });
+  // تم تصحيح المسافات في الـ select لتجنب أي أخطاء
+  const currency = await CurrencyModel.find({ isdefault: true }).select(
+    "name ar_name amount"
+  );
+  SuccessResponse(res, { message: "Currency list", data: currency });
 };
 
 // 12. Countries and Cities
 export const getCountries = async (req: Request, res: Response) => {
-    const countries = await CountryModel.find()
-        .select("name ar_name")
-        .populate({
-            path: "cities",
-            select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
-        });
-    SuccessResponse(res, { message: "Countries list", data: countries });
+  const countries = await CountryModel.find().select("name ar_name").populate({
+    path: "cities",
+    select: "name ar_name shipingCost", // الحقول اللي ترجع من الـ City
+  });
+  SuccessResponse(res, { message: "Countries list", data: countries });
 };
 
 // 13. Service Fees
 export const getServiceFees = async (req: Request, res: Response) => {
-    const warehouseId = req.user?.warehouse_id;
-    const serviceFees = await ServiceFeeModel.find({
-        status: true,
-        module: 'pos',
-        $or: warehouseId ? [{ warehouseId }, { warehouseId: null }] : [{ warehouseId: null }],
-    }).select('title amount type module warehouseId');
-    SuccessResponse(res, { message: "Service fees list", data: serviceFees });
+  const warehouseId = req.user?.warehouse_id;
+  const serviceFees = await ServiceFeeModel.find({
+    status: true,
+    module: "pos",
+    $or: warehouseId
+      ? [{ warehouseId }, { warehouseId: null }]
+      : [{ warehouseId: null }],
+  }).select("title amount type module warehouseId");
+  SuccessResponse(res, { message: "Service fees list", data: serviceFees });
 };

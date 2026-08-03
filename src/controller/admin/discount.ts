@@ -5,7 +5,7 @@ import { Request, Response } from "express";
 import { BadRequest } from "../../Errors/BadRequest";
 
 export const createDiscount = async (req: Request, res: Response) => {
-  const { name, amount, type, status, applyIn, warehouseIds } = req.body;
+  const { name, amount, type, status, applyIn, warehouseIds, all_warehouses } = req.body;
   const existingDiscount = await DiscountModel.findOne({ name });
   if (existingDiscount) throw new BadRequest("Discount already exists");
   const discount = await DiscountModel.create({
@@ -15,6 +15,7 @@ export const createDiscount = async (req: Request, res: Response) => {
     status,
     applyIn,
     warehouseIds,
+    all_warehouses
   });
   SuccessResponse(res, { message: "Discount created successfully", discount });
 };
