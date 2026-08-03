@@ -50,9 +50,6 @@ export const createPurchase = async (req: Request, res: Response) => {
   const existingWarehouse = await WarehouseModel.findById(warehouse_id);
   if (!existingWarehouse) throw new BadRequest("Warehouse not found");
 
-  const existingSupplier = await SupplierModel.findById(supplier_id);
-  if (!existingSupplier) throw new BadRequest("Supplier not found");
-
   if (tax_id) {
     const existingTax = await TaxesModel.findById(tax_id);
     if (!existingTax) throw new BadRequest("Tax not found");

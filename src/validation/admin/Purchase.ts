@@ -54,7 +54,6 @@ export const createInstallmentSchema = Joi.object({
 export const createPurchaseSchema = Joi.object({
   date: Joi.string().required(),
   warehouse_id: Joi.string().required(),
-  supplier_id: Joi.string().required(),
   receipt_img: Joi.string().optional(),
   // currency_id: Joi.string().optional(),
   tax_id: Joi.string().optional(),

@@ -37,7 +37,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     },
     date: { type: Date, required: true, default: Date.now },
     warehouse_id: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse" },
-    supplier_id: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
+    supplier_id: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", default:null },
     tax_id: { type: mongoose.Schema.Types.ObjectId, ref: "Taxes" },
     receipt_img: { type: String },
     payment_status: {
