@@ -249,10 +249,6 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       throw new BadRequest("sale_id is required");
     }
   
-    if (!mongoose.Types.ObjectId.isValid(sale_id)) {
-      throw new BadRequest("Invalid sale_id");
-    }
-  
     if (!items || !Array.isArray(items) || items.length === 0) {
       throw new BadRequest("At least one item is required for return");
     }
