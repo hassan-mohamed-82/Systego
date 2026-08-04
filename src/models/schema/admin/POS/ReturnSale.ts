@@ -2,15 +2,19 @@
 import { randomUUID } from "crypto";
 import mongoose, { Schema } from "mongoose";
 
-const ReturnItemSchema = new Schema({
-  product_id: { type: Schema.Types.ObjectId, ref: "Product" },
-  product_price_id: { type: Schema.Types.ObjectId, ref: "ProductPrice" },
-  bundle_id: { type: Schema.Types.ObjectId, ref: "Pandel" },
-  original_quantity: { type: Number, required: true },
-  returned_quantity: { type: Number, required: true, min: 1 },
-  price: { type: Number, required: true },
-  subtotal: { type: Number, required: true },
-});
+const ReturnItemSchema = new Schema(
+  {
+    product_id: { type: Schema.Types.ObjectId, ref: "Product" },
+    product_price_id: { type: Schema.Types.ObjectId, ref: "ProductPrice" },
+    bundle_id: { type: Schema.Types.ObjectId, ref: "Pandel" },
+    original_quantity: { type: Number, required: true },
+    returned_quantity: { type: Number, required: true, min: 1 },
+    price: { type: Number, required: true },
+    subtotal: { type: Number, required: true },
+    _id: { type: String, default: () => randomUUID() },
+  },
+  { _id: false, timestamps: true },
+);
 
 const ReturnSchema = new Schema(
   {
@@ -95,8 +99,12 @@ const ReturnSchema = new Schema(
       default: Date.now,
     },
     _id: { type: String, default: () => randomUUID() },
+    reason: {
+      type: String,
+      default: "",
+    },
   },
-  { _id: false, timestamps: true }
+  { _id: false, timestamps: true },
 );
 
 ReturnSchema.index({ sale_id: 1 });
