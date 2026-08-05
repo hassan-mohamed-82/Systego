@@ -13,7 +13,7 @@ const ReturnItemSchema = new Schema(
     subtotal: { type: Number, required: true },
     _id: { type: String, default: () => randomUUID() },
   },
-  { _id: false, timestamps: true },
+  { _id: false, timestamps: true }
 );
 
 const ReturnSchema = new Schema(
@@ -74,6 +74,20 @@ const ReturnSchema = new Schema(
       required: true,
     },
 
+    financials: [
+      {
+        account_id: {
+          type: Schema.Types.ObjectId,
+          ref: "BankAccount",
+          required: true,
+        },
+        amount: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
+
     refund_method: {
       type: String,
       enum: ["cash", "card", "store_credit", "original_method"],
@@ -104,7 +118,7 @@ const ReturnSchema = new Schema(
       default: "",
     },
   },
-  { _id: false, timestamps: true },
+  { _id: false, timestamps: true }
 );
 
 ReturnSchema.index({ sale_id: 1 });

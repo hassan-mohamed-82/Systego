@@ -130,7 +130,6 @@ export const getProductsByCategory = async (req: Request, res: Response) => {
   // هات المنتجات الموجودة في المخزن
   const warehouseProducts = await Product_WarehouseModel.find({
     warehouseId: warehouseId,
-    quantity: { $gt: 0 },
   }).select("productId quantity");
 
   const productIds = warehouseProducts.map((wp) => wp.productId);
@@ -187,7 +186,6 @@ export const getProductsByBrand = async (req: Request, res: Response) => {
   // هات المنتجات الموجودة في المخزن
   const warehouseProducts = await Product_WarehouseModel.find({
     warehouseId: warehouseId,
-    quantity: { $gt: 0 },
   }).select("productId quantity");
 
   const productIds = warehouseProducts.map((wp) => wp.productId);
@@ -238,7 +236,6 @@ export const getFeaturedProducts = async (req: Request, res: Response) => {
   // هات المنتجات الموجودة في المخزن
   const warehouseProducts = await Product_WarehouseModel.find({
     warehouseId: warehouseId,
-    quantity: { $gt: 0 },
   }).select("productId quantity");
 
   const productIds = warehouseProducts.map((wp) => wp.productId);
