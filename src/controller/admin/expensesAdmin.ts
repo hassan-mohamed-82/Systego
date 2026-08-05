@@ -130,7 +130,7 @@ export const getExpensesAdmin = async (req: Request, res: Response) => {
 
   const expenses = await ExpenseModel.find(filter)
     .populate("admin_id", "username")
-    .populate("cashier_id", "name") // POS / register name
+    .populate("cashier_id", "username") // ✅ User model → username, not name
     .populate("Category_id", "name ar_name")
     .populate("financial_accountId", "name ar_name")
     .populate({
