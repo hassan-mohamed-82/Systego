@@ -8,68 +8,74 @@ import { UserModel } from '../../models/schema/admin/User';
 import { ExpenseModel } from '../../models/schema/admin/POS/expenses';
 import mongoose from 'mongoose';
 import { CashierModel } from '../../models/schema/admin/cashier';
+import { ReturnModel } from '../../models/schema/admin/POS/ReturnSale';
 
 
 export const getAllCashierShifts = async (req: Request, res: Response) => {
-  const { status, cashierman_id, cashier_id } = req.query as any;
+    const { status, cashierman_id, cashier_id } = req.query as any;
 
-  const filter: any = {};
-  if (status) filter.status = status;
-  if (cashierman_id) filter.cashierman_id = cashierman_id;
-  if (cashier_id) filter.cashier_id = cashier_id;
+    const filter: any = {};
+    if (status) filter.status = status;
+    if (cashierman_id) filter.cashierman_id = cashierman_id;
+    if (cashier_id) filter.cashier_id = cashier_id;
 
-  const shifts = await CashierShift.find(filter)
-    .populate("cashierman_id", "username email role")
-    .populate("cashier_id", "name code")
-    .sort({ start_time: -1 })
-    .lean();
-
-  // ✅ حساب القيم لكل شيفت
-  const shiftsWithTotals = await Promise.all(
-    shifts.map(async (shift: any) => {
-      const shiftStartTime = new Date(shift.start_time || Date.now());
-
-      // مبيعات الشيفت
-      const sales = await SaleModel.find({
-        shift_id: shift._id,
-        order_pending: 0,
-        createdAt: { $gte: shiftStartTime },
-      })
-        .select("grand_total")
+    const shifts = await CashierShift.find(filter)
+        .populate("cashierman_id", "username email role")
+        .populate("cashier_id", "name code")
+        .sort({ start_time: -1 })
         .lean();
 
-      // مصروفات الشيفت
-      const expenses = await ExpenseModel.find({
-        shift_id: shift._id,
-        createdAt: { $gte: shiftStartTime },
-      })
-        .select("amount")
-        .lean();
+    // ✅ حساب القيم لكل شيفت
+    const shiftsWithTotals = await Promise.all(
+        shifts.map(async (shift: any) => {
+            const shiftStartTime = new Date(shift.start_time || Date.now());
 
-      const totalSales = sales.reduce(
-        (sum, s: any) => sum + (s.grand_total || 0),
-        0
-      );
-      const totalExpenses = expenses.reduce(
-        (sum, e: any) => sum + (e.amount || 0),
-        0
-      );
-      const netCashInDrawer = totalSales - totalExpenses;
+            // مبيعات الشيفت
+            const sales = await SaleModel.find({
+                shift_id: shift._id,
+                order_pending: 0,
+                createdAt: { $gte: shiftStartTime },
+            })
+                .select("grand_total")
+                .lean();
 
-      return {
-        ...shift,
-        total_sale_amount: totalSales,
-        total_expenses: totalExpenses,
-        net_cash_in_drawer: netCashInDrawer,
-        orders_count: sales.length,
-      };
-    })
-  );
+            // مصروفات الشيفت
+            const expenses = await ExpenseModel.find({
+                shift_id: shift._id,
+                createdAt: { $gte: shiftStartTime },
+            })
+                .select("amount")
+                .lean();
 
-  return SuccessResponse(res, {
-    message: "Cashier shifts fetched successfully",
-    shifts: shiftsWithTotals,
-  });
+            // مرتجعات الشيفت
+            const returns = await ReturnModel.find({
+                shift_id: shift._id,
+                createdAt: { $gte: shiftStartTime },
+            })
+                .select("total_amount")
+                .lean();
+
+            const totalSales = sales.reduce((sum, s: any) => sum + (s.grand_total || 0), 0);
+            const totalExpenses = expenses.reduce((sum, e: any) => sum + (e.amount || 0), 0);
+            const totalReturns = returns.reduce((sum, r: any) => sum + (r.total_amount || 0), 0);
+            const netCashInDrawer = totalSales - totalExpenses - totalReturns;
+
+            return {
+                ...shift,
+                total_sale_amount: totalSales,
+                total_expenses: totalExpenses,
+                total_returns: totalReturns,
+                net_cash_in_drawer: netCashInDrawer,
+                orders_count: sales.length,
+                returns_count: returns.length,
+            };
+        })
+    );
+
+    return SuccessResponse(res, {
+        message: "Cashier shifts fetched successfully",
+        shifts: shiftsWithTotals,
+    });
 };
 
 
