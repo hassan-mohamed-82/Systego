@@ -130,16 +130,16 @@ export const getExpensesAdmin = async (req: Request, res: Response) => {
 
   const expenses = await ExpenseModel.find(filter)
     .populate("admin_id", "username")
-    .populate("cashier_id", "username") // ✅ User model → username, not name
+    .populate("cashier_id", "username")
     .populate("Category_id", "name ar_name")
     .populate("financial_accountId", "name ar_name")
     .populate({
       path: "shift_id",
-      select: "start_time end_time status cashierman_id",
+      select: "start_time end_time status cashier_id",
       populate: {
-        path: "cashierman_id",
-        select: "username",
-        model: "User",
+        path: "cashier_id",
+        select: "name ar_name",
+        model: "Cashier",
       },
     })
     .lean();
