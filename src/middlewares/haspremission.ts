@@ -26,7 +26,8 @@ export const authorizePermissions = (module: ModuleName, action: ActionName) => 
     if (!hasAction) {
       throw new UnauthorizedError(`No permission to ${action} in ${module}`);
     }
-
+    console.log("hete");
+    
     next();
   };
 };

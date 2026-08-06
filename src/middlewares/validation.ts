@@ -25,7 +25,9 @@ export const validate = (
 ): RequestHandler => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      console.log("good");
       await schema.validateAsync(req[target], { abortEarly: false });
+      
       next();
     } catch (error) {
       if (error instanceof Joi.ValidationError) {

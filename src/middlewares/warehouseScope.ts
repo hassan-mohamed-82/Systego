@@ -83,6 +83,7 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
       body.warehouse_id = scopedWarehouseId;
     }
   }
-
+  console.log("hete");
+  
   return next();
 }

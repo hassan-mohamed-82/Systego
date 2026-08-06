@@ -33,7 +33,6 @@ route.delete("/",authorizePermissions("category","Delete"),catchAsync(deletemany
 route.post(
   "/",
   authorizePermissions("category", "Add"),
-  validate(createCategorySchema),
   catchAsync(createcategory)
 );
 

@@ -22,7 +22,6 @@ export async function authenticated(
 
     // ✅ جيب الـ permissions من الـ DB
     let permissions: UserPermission[] = [];
-
     if (
       decoded.role === "superadmin" ||
       (decoded.role === "admin" && !!decoded.warehouse_id && !decoded.role_id)
@@ -66,7 +65,7 @@ export async function authenticated(
       ...decoded,
       permissions,
     };
-
+    
     next();
   } catch (error) {
     next(error);
