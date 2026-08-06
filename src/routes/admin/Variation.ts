@@ -8,7 +8,7 @@ import { createVariationSchema, updateVariationSchema } from "../../validation/a
 import {authorizePermissions} from "../../middlewares/haspremission"
 const router = Router();
 
-router.post("/",authorizePermissions("variation","Add"),validate(createVariationSchema),catchAsync( createVariationWithOptions));
+router.post("/",authorizePermissions("variation","Add"),catchAsync( createVariationWithOptions));
 router.get("/",authorizePermissions("variation","View"), catchAsync(getAllVariations));
 router.get("/:id",authorizePermissions("variation","View"), catchAsync(getOneVariation)); 
 router.put("/:id", authorizePermissions("variation","Edit"),validate(updateVariationSchema) ,catchAsync(updateVariationWithOptions));

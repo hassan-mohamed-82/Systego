@@ -8,7 +8,7 @@ import {authorizePermissions} from "../../middlewares/haspremission"
 
 const route = Router();
 
-route.post("/" ,authorizePermissions("brand","Add"),validate(createBrandSchema), catchAsync(createBrand));
+route.post("/" ,authorizePermissions("brand","Add"), catchAsync(createBrand));
 route.get("/",authorizePermissions("brand","View"),catchAsync(getBrands));
 route.delete("/",authorizePermissions("brand","Delete"),catchAsync(deletemanybrands));
 route.get("/:id" ,authorizePermissions("brand","View"),catchAsync(getBrandById));
