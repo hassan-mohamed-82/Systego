@@ -38,8 +38,7 @@ export const createProduct = async (req: Request, res: Response) => {
     low_stock,
     cost,
     whole_price,
-    free_shipping,  
-    start_quantaty,
+    free_shipping, 
     taxesId,
     product_has_imei,
     different_price,
@@ -52,7 +51,6 @@ export const createProduct = async (req: Request, res: Response) => {
     Is_Online,
     // بيانات المخزن
     warehouseId,
-    quantity,
   } = req.body;
 
   if (!name) throw new BadRequest("Product name is required");
@@ -147,7 +145,6 @@ export const createProduct = async (req: Request, res: Response) => {
     minimum_quantity_sale,
     low_stock,
     whole_price,
-    start_quantaty,
     taxesId,
     product_has_imei,
     different_price,
@@ -165,14 +162,14 @@ export const createProduct = async (req: Request, res: Response) => {
     stock = await Product_WarehouseModel.create({
       productId: product._id,
       warehouseId,
-      quantity: quantity || 0,
+      quantity: 0,
       low_stock: low_stock || 0,
     });
 
     await WarehouseModel.findByIdAndUpdate(warehouseId, {
       $inc: {
         number_of_products: 1,
-        stock_Quantity: quantity || 0,
+        stock_Quantity: 0,
       },
     });
   }

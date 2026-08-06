@@ -6,190 +6,255 @@ import { SuccessResponse } from "../../../utils/response";
 import { CustomerModel } from "../../../models/schema/admin/POS/customer";
 import { WarehouseModel } from "../../../models/schema/admin/Warehouse";
 import { ProductModel } from "../../../models/schema/admin/products";
-import { ProductPriceModel, ProductPriceOptionModel } from "../../../models/schema/admin/product_price";
-import { ProductSalesModel, SaleModel } from "../../../models/schema/admin/POS/Sale";
+import {
+  ProductPriceModel,
+  ProductPriceOptionModel,
+} from "../../../models/schema/admin/product_price";
+import {
+  ProductSalesModel,
+  SaleModel,
+} from "../../../models/schema/admin/POS/Sale";
 import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
 
 export const getPOSBookings = async (req: Request, res: Response) => {
-    const jwtUser = req.user as any;
-    const warehouseId = jwtUser?.warehouse_id;
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
 
-    if (!warehouseId) {
-        throw new BadRequest("Warehouse is not assigned to this user");
-    }
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
 
-    const bookings = await BookingModel.find({ WarehouseId: warehouseId })
-        .populate('CustmerId', 'name phone_number')
-        .populate('ProductId', 'name ar_name image')
-        .lean();
+  const bookings = await BookingModel.find({ WarehouseId: warehouseId })
+    .populate("CustmerId", "name phone_number")
+    .populate("ProductId", "name ar_name image")
+    .lean();
 
-    const pendingBookings = bookings.filter(b => b.status === "pending");
-    const failerBookings = bookings.filter(b => b.status === "failer");
-    const payBookings = bookings.filter(b => b.status === "pay");
+  const pendingBookings = bookings.filter((b) => b.status === "pending");
+  const failerBookings = bookings.filter((b) => b.status === "failer");
+  const payBookings = bookings.filter((b) => b.status === "pay");
 
-    SuccessResponse(res, { message: "POS Bookings retrieved successfully", pendingBookings, failerBookings, payBookings });
-}
+  SuccessResponse(res, {
+    message: "POS Bookings retrieved successfully",
+    pendingBookings,
+    failerBookings,
+    payBookings,
+  });
+};
 
 export const createBooking = async (req: Request, res: Response) => {
-    const jwtUser = req.user as any;
-    const cashierId = jwtUser?.id;
-    const jwtWarehouseId = jwtUser?.warehouse_id;
+  const jwtUser = req.user as any;
+  const cashierId = jwtUser?.id;
+  const jwtWarehouseId = jwtUser?.warehouse_id;
 
-    if (!cashierId) {
-        throw new BadRequest("Unauthorized: user not found in token");
-    }
+  if (!cashierId) {
+    throw new BadRequest("Unauthorized: user not found in token");
+  }
 
-    if (!jwtWarehouseId) {
-        throw new BadRequest("Warehouse is not assigned to this user");
-    }
+  if (!jwtWarehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
 
-    // Check Open Shift
-    const openShift = await CashierShift.findOne({
-        cashierman_id: cashierId,
-        status: "open",
-    }).sort({ start_time: -1 });
+  // Check Open Shift
+  const openShift = await CashierShift.findOne({
+    cashierman_id: cashierId,
+    status: "open",
+  }).sort({ start_time: -1 });
 
-    if (!openShift) {
-        throw new BadRequest("You must open a cashier shift before creating a booking");
-    }
+  if (!openShift) {
+    throw new BadRequest(
+      "You must open a cashier shift before creating a booking"
+    );
+  }
 
-    const { number_of_days, deposit, CustmerId, ProductId, CategoryId, option_id } = req.body;
-    
-    // We enforce the warehouse constraint from the jwt user
-    const WarehouseId = jwtWarehouseId;
+  const {
+    number_of_days,
+    deposit,
+    CustmerId,
+    ProductId,
+    CategoryId,
+    option_id,
+  } = req.body;
 
-    if (!number_of_days || !deposit || !CustmerId || !ProductId || !CategoryId || !option_id) {
-        throw new BadRequest("All fields are required");
-    }
+  // We enforce the warehouse constraint from the jwt user
+  const WarehouseId = jwtWarehouseId;
 
-    const existcustmer = await CustomerModel.findById(CustmerId);
-    if (!existcustmer) throw new BadRequest("Customer not found");
+  if (
+    !number_of_days ||
+    !deposit ||
+    !CustmerId ||
+    !ProductId ||
+    !CategoryId ||
+    !option_id
+  ) {
+    throw new BadRequest("All fields are required");
+  }
 
-    const existwarehouse = await WarehouseModel.findById(WarehouseId);
-    if (!existwarehouse) throw new BadRequest("Warehouse not found");
+  if (number_of_days <= 0 || deposit < 0) {
+    throw new BadRequest("Invalid number_of_days or deposit");
+  }
 
-    const existproduct = await ProductModel.findById(ProductId);
-    if (!existproduct) throw new BadRequest("Product not found");
+  const existcustmer = await CustomerModel.findById(CustmerId);
+  if (!existcustmer) throw new BadRequest("Customer not found");
 
-    const existQty = existproduct.quantity ?? 0;
-    if (existQty < 1) throw new BadRequest("Product out of stock");
+  const existwarehouse = await WarehouseModel.findById(WarehouseId);
+  if (!existwarehouse) throw new BadRequest("Warehouse not found");
 
-    const option = await ProductPriceOptionModel.findById(option_id);
-    if (!option) throw new BadRequest("Option not found");
+  const existproduct = await ProductModel.findById(ProductId);
+  if (!existproduct) throw new BadRequest("Product not found");
 
-    const productprice = option.product_price_id;
-    if (!productprice) throw new BadRequest("Product price not found");
+  const option = await ProductPriceOptionModel.findById(option_id);
+  if (!option) throw new BadRequest("Option not found");
 
-    const existproductprice = await ProductPriceModel.findById(productprice);
-    if (!existproductprice) throw new BadRequest("Product price not found");
+  const productprice = option.product_price_id;
+  if (!productprice) throw new BadRequest("Product price not found");
 
-    if (existproductprice.quantity < 1) throw new BadRequest("Product price out of stock");
+  const existproductprice = await ProductPriceModel.findById(productprice);
+  if (!existproductprice) throw new BadRequest("Product price not found");
 
-    const booking = await BookingModel.create({
-        number_of_days,
-        deposit,
-        CustmerId,
-        WarehouseId,
-        ProductId,
-        CategoryId,
-        option_id,
-        status: "pending"
+  // ✅ atomic, race-safe decrement guarded on quantity >= 1
+  const updatedProduct = await ProductModel.findOneAndUpdate(
+    { _id: ProductId, quantity: { $gte: 1 } },
+    { $inc: { quantity: -1 } },
+    { new: true }
+  );
+  if (!updatedProduct) {
+    throw new BadRequest("Product out of stock");
+  }
+
+  const updatedProductPrice = await ProductPriceModel.findOneAndUpdate(
+    { _id: productprice, quantity: { $gte: 1 } },
+    { $inc: { quantity: -1 } },
+    { new: true }
+  );
+  if (!updatedProductPrice) {
+    // ✅ roll back the product decrement since price stock failed
+    await ProductModel.updateOne({ _id: ProductId }, { $inc: { quantity: 1 } });
+    throw new BadRequest("Product price out of stock");
+  }
+
+  let booking;
+  try {
+    booking = await BookingModel.create({
+      number_of_days,
+      deposit,
+      CustmerId,
+      WarehouseId,
+      ProductId,
+      CategoryId,
+      option_id,
+      status: "pending",
     });
+  } catch (err) {
+    // ✅ no transactions on standalone Mongo — manually roll back both decrements
+    await ProductModel.updateOne({ _id: ProductId }, { $inc: { quantity: 1 } });
+    await ProductPriceModel.updateOne(
+      { _id: productprice },
+      { $inc: { quantity: 1 } }
+    );
+    throw err;
+  }
 
-    existproduct.quantity = existQty - 1;
-    await existproduct.save();
-
-    existproductprice.quantity = existproductprice.quantity - 1;
-    await existproductprice.save();
-
-    SuccessResponse(res, { message: "Booking created successfully", booking });
-}
+  SuccessResponse(res, { message: "Booking created successfully", booking });
+};
 
 export const payRemaining = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const jwtUser = req.user as any;
-    const cashierId = jwtUser?.id;
-    const warehouseId = jwtUser?.warehouse_id;
+  const { id } = req.params;
+  const jwtUser = req.user as any;
+  const cashierId = jwtUser?.id;
+  const warehouseId = jwtUser?.warehouse_id;
 
-    if (!cashierId) {
-        throw new BadRequest("Unauthorized: user not found in token");
-    }
+  if (!cashierId) {
+    throw new BadRequest("Unauthorized: user not found in token");
+  }
 
-    if (!warehouseId) {
-        throw new BadRequest("Warehouse is not assigned to this user");
-    }
+  if (!warehouseId) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
 
-    // Check Open Shift
-    const openShift = await CashierShift.findOne({
-        cashierman_id: cashierId,
-        status: "open",
-    }).sort({ start_time: -1 });
+  // Check Open Shift
+  const openShift = await CashierShift.findOne({
+    cashierman_id: cashierId,
+    status: "open",
+  }).sort({ start_time: -1 });
 
-    if (!openShift) {
-        throw new BadRequest("You must open a cashier shift before paying for a booking");
-    }
+  if (!openShift) {
+    throw new BadRequest(
+      "You must open a cashier shift before paying for a booking"
+    );
+  }
 
-    const booking = await BookingModel.findOne({ _id: id, WarehouseId: warehouseId })
-        .populate('CustmerId')
-        .populate('WarehouseId')
-        .populate('ProductId')
-        .populate('option_id');
+  const booking = await BookingModel.findOne({
+    _id: id,
+    WarehouseId: warehouseId,
+  })
+    .populate("CustmerId")
+    .populate("WarehouseId")
+    .populate("ProductId")
+    .populate("option_id");
 
-    if (!booking) throw new NotFound("Booking not found or not assigned to your warehouse");
+  if (!booking)
+    throw new NotFound("Booking not found or not assigned to your warehouse");
 
-    if (booking.status === "pay") {
-        throw new BadRequest("Booking is already paid and converted to sale");
-    }
+  if (booking.status === "pay") {
+    throw new BadRequest("Booking is already paid and converted to sale");
+  }
 
-    const option = await ProductPriceOptionModel.findById((booking as any).option_id);
-    if (!option) throw new BadRequest("Product option not found");
+  const option = await ProductPriceOptionModel.findById(
+    (booking as any).option_id
+  );
+  if (!option) throw new BadRequest("Product option not found");
 
-    const productPrice = await ProductPriceModel.findById(option.product_price_id);
-    if (!productPrice) throw new BadRequest("Product price not found");
+  const productPrice = await ProductPriceModel.findById(
+    option.product_price_id
+  );
+  if (!productPrice) throw new BadRequest("Product price not found");
 
-    const quantity = 1;
-    const price = productPrice.price;
-    const subtotal = price * quantity;
+  const quantity = 1;
+  const price = productPrice.price;
+  const subtotal = price * quantity;
 
-    const saleReference = `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const saleReference = `SALE-${Date.now()}-${Math.random()
+    .toString(36)
+    .substr(2, 9)}`;
 
-    // Convert booking to a completed sale
-    const saleData = {
-        reference: saleReference,
-        customer_id: booking.CustmerId,
-        warehouse_id: booking.WarehouseId,
-        grand_total: subtotal,
-        total: subtotal,
-        paid_amount: subtotal,
-        remaining_amount: 0,
-        sale_status: 'completed',
-        order_pending: 0,
-        Due: 0,
-        coupon_code: "",
-        applied_coupon: false,
-        cashier_id: cashierId,
-        shift_id: openShift._id,
-        date: new Date(),
-    };
+  // Convert booking to a completed sale
+  const saleData = {
+    reference: saleReference,
+    customer_id: booking.CustmerId,
+    warehouse_id: booking.WarehouseId,
+    grand_total: subtotal,
+    total: subtotal,
+    paid_amount: subtotal,
+    remaining_amount: 0,
+    sale_status: "completed",
+    order_pending: 0,
+    Due: 0,
+    coupon_code: "",
+    applied_coupon: false,
+    cashier_id: cashierId,
+    shift_id: openShift._id,
+    date: new Date(),
+  };
 
-    const sale = await SaleModel.create(saleData);
+  const sale = await SaleModel.create(saleData);
 
-    const productSaleData = {
-        sale_id: sale._id,
-        product_id: booking.ProductId,
-        options_id: (booking as any).option_id,
-        quantity: quantity,
-        price: price,
-        subtotal: subtotal,
-        isBundle: false,
-    };
+  const productSaleData = {
+    sale_id: sale._id,
+    product_id: booking.ProductId,
+    options_id: (booking as any).option_id,
+    quantity: quantity,
+    price: price,
+    subtotal: subtotal,
+    isBundle: false,
+  };
 
-    await ProductSalesModel.create(productSaleData);
+  await ProductSalesModel.create(productSaleData);
 
-    booking.status = "pay";
-    await booking.save();
+  booking.status = "pay";
+  await booking.save();
 
-    SuccessResponse(res, {
-        message: "Booking remaining balance paid successfully and converted to sale"
-    });
-}
+  SuccessResponse(res, {
+    message:
+      "Booking remaining balance paid successfully and converted to sale",
+  });
+};

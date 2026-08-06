@@ -21,7 +21,7 @@ export const createDiscount = async (req: Request, res: Response) => {
 };
 
 export const getAllDiscounts = async (req: Request, res: Response) => {
-  const discounts = await DiscountModel.find().populate("warehouseIds", "name");
+  const discounts = await DiscountModel.find().populate("warehouse_ids", "name");
   SuccessResponse(res, {
     message: "Discounts retrieved successfully",
     discounts,
