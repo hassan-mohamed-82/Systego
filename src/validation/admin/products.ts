@@ -29,6 +29,7 @@ export const createProductSchema = Joi.object({
   discountId: objectId.optional(),
   price: Joi.number().optional(),
   description: Joi.string().optional(),
+  quantity: Joi.string().optional(),
   exp_ability: Joi.boolean().optional(),
   cost: Joi.number().optional(),
   minimum_quantity_sale: Joi.number().optional(),
