@@ -70,6 +70,7 @@ export const createPurchaseSchema = Joi.object({
   financials: Joi.array().items(createFinancialSchema).optional(),
   purchase_due_payment: Joi.array().items(createPurchaseDuePaymentSchema).optional(),
   installments: Joi.array().items(createInstallmentSchema).optional(),
+  quantity: Joi.string().optional(),
 });
 
 // ___________________ Update _________________________
