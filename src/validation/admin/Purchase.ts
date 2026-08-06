@@ -56,6 +56,7 @@ export const createPurchaseSchema = Joi.object({
   warehouse_id: Joi.string().required(),
   receipt_img: Joi.string().optional(),
   // currency_id: Joi.string().optional(),
+  supplier_id: Joi.string().optional(),
   tax_id: Joi.string().optional(),
   payment_status: Joi.string().valid("partial", "full", "later").required(),
   exchange_rate: Joi.number().required(),
