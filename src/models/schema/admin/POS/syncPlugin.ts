@@ -72,7 +72,7 @@ function isExternallyTrackedField(modelName: string, field: string): boolean {
 
 async function getWarehouseIdFromDoc(
   doc: any,
-  modelName: string,
+  modelName: string
 ): Promise<any> {
   if (!doc) return null;
 
@@ -168,7 +168,7 @@ function diffArrayField(
   oldArr: any[] = [],
   newArr: any[] = [],
   idKey: string,
-  incrementalSubFields: string[],
+  incrementalSubFields: string[]
 ) {
   const oldById = new Map((oldArr || []).map((item) => [item[idKey], item]));
   const newById = new Map((newArr || []).map((item) => [item[idKey], item]));
@@ -222,7 +222,7 @@ function diffToFields(
   modelName: string,
   oldDoc: any,
   newDoc: any,
-  changedKeys: string[],
+  changedKeys: string[]
 ) {
   const fields: Record<string, any> = {};
 
@@ -288,11 +288,20 @@ async function recordChange(p: {
 export const syncPlugin = (schema: mongoose.Schema) => {
   // ============ 1. doc.save() ============
   schema.pre("save", async function (this: any) {
+    const modelName = this.constructor?.modelName;
+    if (
+      !modelName ||
+      modelName === "ChangeLog" ||
+      !TRACKED_TABLES.includes(modelName)
+    ) {
+      return;
+    }
+
     this.$locals.wasNew = this.isNew;
     if (!this.isNew) {
       this.$locals.oldDoc = await this.constructor.findById(this._id).lean();
       this.$locals.modifiedPaths = this.modifiedPaths().filter(
-        (p: string) => !["_id", "__v", "updatedAt", "createdAt"].includes(p),
+        (p: string) => !["_id", "__v", "updatedAt", "createdAt"].includes(p)
       );
     }
   });
@@ -326,7 +335,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
       modelName,
       doc.$locals?.oldDoc,
       plain,
-      scalarKeys,
+      scalarKeys
     );
 
     if (Object.keys(fields).length === 0) return;
@@ -412,7 +421,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
       const changedKeys = Object.keys(latestDoc).filter(
         (k) =>
           !["_id", "__v", "createdAt", "updatedAt"].includes(k) &&
-          JSON.stringify(latestDoc[k]) !== JSON.stringify(oldDoc?.[k]),
+          JSON.stringify(latestDoc[k]) !== JSON.stringify(oldDoc?.[k])
       );
       if (changedKeys.length === 0) return;
 
@@ -421,7 +430,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
         modelName,
         oldDoc,
         latestDoc,
-        changedKeys,
+        changedKeys
       );
       if (Object.keys(fields).length === 0) return;
 
@@ -437,7 +446,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
     } catch (err) {
       console.error(
         `syncPlugin findOneAndUpdate hook error for ${modelName}:`,
-        err,
+        err
       );
     }
   });
@@ -465,7 +474,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
       const changedKeys = Object.keys(updatedDoc).filter(
         (k) =>
           !["_id", "__v", "createdAt", "updatedAt"].includes(k) &&
-          JSON.stringify(updatedDoc[k]) !== JSON.stringify(oldDoc?.[k]),
+          JSON.stringify(updatedDoc[k]) !== JSON.stringify(oldDoc?.[k])
       );
       if (changedKeys.length === 0) return;
 
@@ -474,7 +483,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
         modelName,
         oldDoc,
         updatedDoc,
-        changedKeys,
+        changedKeys
       );
       if (Object.keys(fields).length === 0) return;
 
@@ -518,7 +527,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
         const changedKeys = Object.keys(doc).filter(
           (k) =>
             !["_id", "__v", "createdAt", "updatedAt"].includes(k) &&
-            JSON.stringify(doc[k]) !== JSON.stringify(oldDoc?.[k]),
+            JSON.stringify(doc[k]) !== JSON.stringify(oldDoc?.[k])
         );
         if (changedKeys.length === 0) continue;
 
@@ -527,7 +536,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
           modelName,
           oldDoc,
           doc,
-          changedKeys,
+          changedKeys
         );
         if (Object.keys(fields).length === 0) continue;
 
@@ -563,10 +572,10 @@ export const syncPlugin = (schema: mongoose.Schema) => {
       } catch (err) {
         console.error(
           `syncPlugin pre-delete hook error for ${modelName}:`,
-          err,
+          err
         );
       }
-    },
+    }
   );
 
   // ============ 6. deletes: post ============
@@ -592,7 +601,7 @@ export const syncPlugin = (schema: mongoose.Schema) => {
           sourceChangeId,
         });
       }
-    },
+    }
   );
 
   // ============ 7. document-level doc.deleteOne() ============
