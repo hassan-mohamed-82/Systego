@@ -47,7 +47,7 @@ export const deleteDiscount = async (req: Request, res: Response) => {
 export const getDiscountById = async (req: Request, res: Response) => {
   const { id } = req.params;
   const discount = await DiscountModel.findById(id).populate(
-    "warehouseIds",
+    "warehouse_ids",
     "name",
   );
   if (!discount) throw new NotFound("Discount not found");

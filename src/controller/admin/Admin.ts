@@ -525,7 +525,7 @@ export const getCashiermanShiftsReport = async (req: Request, res: Response): Pr
         }
     }
 
-    // ---- aggregate shifts with sales / expenses totals only ----
+    // ---- aggregate shifts with sales / expenses / returns totals ----
     const shifts = await CashierShift.aggregate([
         { $match: match },
 
@@ -553,12 +553,22 @@ export const getCashiermanShiftsReport = async (req: Request, res: Response): Pr
                 as: "expenses",
             },
         },
+        {
+            $lookup: {
+                from: "returns",
+                localField: "_id",
+                foreignField: "shift_id",
+                as: "returns",
+            },
+        },
 
         {
             $addFields: {
                 cashier_name: { $ifNull: [{ $arrayElemAt: ["$cashier.name", 0] }, null] },
                 total_sales_amount: { $sum: "$sales.paid_amount" },
                 total_expenses_amount: { $sum: "$expenses.amount" },
+                total_returns_amount: { $sum: "$returns.total_amount" },
+                returns_count: { $size: "$returns" },
                 duration_ms: {
                     $cond: [
                         { $and: ["$start_time", "$end_time"] },
@@ -570,7 +580,12 @@ export const getCashiermanShiftsReport = async (req: Request, res: Response): Pr
         },
         {
             $addFields: {
-                net_cash: { $subtract: ["$total_sales_amount", "$total_expenses_amount"] },
+                net_cash: {
+                    $subtract: [
+                        { $subtract: ["$total_sales_amount", "$total_expenses_amount"] },
+                        "$total_returns_amount",
+                    ],
+                },
             },
         },
 
@@ -584,6 +599,8 @@ export const getCashiermanShiftsReport = async (req: Request, res: Response): Pr
                 duration_ms: 1,
                 total_sales_amount: 1,
                 total_expenses_amount: 1,
+                total_returns_amount: 1,
+                returns_count: 1,
                 net_cash: 1,
             },
         },
@@ -597,6 +614,8 @@ export const getCashiermanShiftsReport = async (req: Request, res: Response): Pr
             acc.total_shifts += 1;
             acc.total_sales_amount += s.total_sales_amount;
             acc.total_expenses_amount += s.total_expenses_amount;
+            acc.total_returns_amount += s.total_returns_amount;
+            acc.total_returns_count += s.returns_count;
             acc.total_net_cash += s.net_cash;
             return acc;
         },
@@ -604,6 +623,8 @@ export const getCashiermanShiftsReport = async (req: Request, res: Response): Pr
             total_shifts: 0,
             total_sales_amount: 0,
             total_expenses_amount: 0,
+            total_returns_amount: 0,
+            total_returns_count: 0,
             total_net_cash: 0,
         }
     );

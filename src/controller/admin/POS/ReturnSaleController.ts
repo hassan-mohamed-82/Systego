@@ -594,11 +594,22 @@ export const getAllReturns = async (req: Request, res: Response) => {
 
   const skip = (Number(page) - 1) * Number(limit);
 
-  const returns = await ReturnModel.find(query)
-    .populate("sale_id", "reference grand_total")
-    .populate("customer_id", "name phone_number")
-    .populate("cashier_id", "name")
+const returns = await ReturnModel.find(query)
+    .populate("sale_id", "reference grand_total date")
+    .populate("customer_id", "name phone_number email")
+    .populate("warehouse_id", "name")
+    .populate({
+      path: "shift_id",
+      select: "start_time status cashier_id cashierman_id",
+      populate: [
+        { path: "cashier_id", select: "name" },
+        { path: "cashierman_id", select: "username email" },
+      ],
+    })
     .populate("financials.account_id", "name ar_name type balance")
+    .populate("items.product_id", "name ar_name image")
+    .populate("items.product_price_id", "price code")
+    .populate("items.bundle_id", "name price")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(Number(limit))
