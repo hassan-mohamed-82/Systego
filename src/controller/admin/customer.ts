@@ -248,12 +248,10 @@ export const getCustomerSinglePageData = async (req: Request, res: Response) => 
         throw new NotFound("Customer not found");
     }
 
-    const customerObjectId = new mongoose.Types.ObjectId(id);
-
     const sales = await SaleModel.find({
         $or: [
-            { customer_id: customerObjectId },
-            { Due_customer_id: customerObjectId },
+            { customer_id: id },
+            { Due_customer_id: id },
         ],
     })
         .select('reference grand_total paid_amount remaining_amount date createdAt')
@@ -292,7 +290,7 @@ export const getCustomerSinglePageData = async (req: Request, res: Response) => 
         });
     });
 
-    const returnDocs = await ReturnModel.find({ customer_id: customerObjectId })
+    const returnDocs = await ReturnModel.find({ customer_id: id })
         .select('reference sale_reference date items total_amount createdAt')
         .sort({ createdAt: -1 });
 
