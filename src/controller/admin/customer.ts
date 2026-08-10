@@ -240,10 +240,6 @@ export const getCountriesWithCities = async (req: Request, res: Response) => {
 export const getCustomerSinglePageData = async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-        throw new BadRequest("Valid customer id is required");
-    }
-
     const customer = await CustomerModel.findById(id)
         .populate('country', 'name')
         .populate('city', 'name');
