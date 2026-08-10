@@ -25,9 +25,13 @@ export const validate = (
 ): RequestHandler => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      console.log("good");
-      await schema.validateAsync(req[target], { abortEarly: false });
-      
+      const value = await schema.validateAsync(req[target], {
+        abortEarly: false,
+        allowUnknown: true, // silently ignore/remove fields not in schema
+      });
+
+      req[target] = value; // replace with sanitized value
+
       next();
     } catch (error) {
       if (error instanceof Joi.ValidationError) {
