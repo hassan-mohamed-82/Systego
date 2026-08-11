@@ -588,3 +588,112 @@ export const getServiceFees = async (req: Request, res: Response) => {
   }).select("title amount type module warehouseId");
   SuccessResponse(res, { message: "Service fees list", data: serviceFees });
 };
+
+// Get product info + quantity per warehouse, broken down per variation
+export const getProductWarehouseStock = async (req: Request, res: Response) => {
+  const { productId } = req.params;
+
+  if (!productId) {
+    throw new BadRequest("productId is required");
+  }
+
+  const product = await ProductModel.findById(productId).lean();
+  if (!product) {
+    throw new BadRequest("Product not found");
+  }
+
+  const stockRows = await Product_WarehouseModel.find({ productId })
+    .populate("warehouseId", "name address")
+    .populate("productPriceId", "code price")
+    .lean();
+
+  // Pull every variant's option -> variation labels in one populate chain.
+  const productPriceIds = [
+    ...new Set(
+      stockRows
+        .filter((row: any) => row.productPriceId)
+        .map((row: any) => String(row.productPriceId._id)),
+    ),
+  ];
+
+  const priceOptions = productPriceIds.length
+    ? await ProductPriceOptionModel.find({
+        product_price_id: { $in: productPriceIds },
+      })
+        .populate({
+          path: "option_id",
+          select: "name variationId",
+          populate: { path: "variationId", select: "name" },
+        })
+        .lean()
+    : [];
+
+  // Group option labels by productPriceId: e.g. "priceId123" -> [{Color: Red}]
+  const variantLabelsMap = new Map<
+    string,
+    { variationName: string; optionName: string }[]
+  >();
+
+  for (const po of priceOptions as any[]) {
+    const ppKey = String(po.product_price_id);
+    const opt = po.option_id;
+    if (!opt || !opt.variationId) continue;
+
+    const entry = {
+      variationName: opt.variationId.name,
+      optionName: opt.name,
+    };
+
+    if (!variantLabelsMap.has(ppKey)) variantLabelsMap.set(ppKey, []);
+    variantLabelsMap.get(ppKey)!.push(entry);
+  }
+
+  // ── Group stock rows by warehouse, splitting base product vs. variants ──
+  const byWarehouse = new Map<string, any>();
+
+  for (const row of stockRows as any[]) {
+    const wh = row.warehouseId; // already populated: { _id, name, address }
+    const whKey = String(wh?._id ?? row.warehouseId);
+
+    if (!byWarehouse.has(whKey)) {
+      byWarehouse.set(whKey, {
+        warehouseId: wh?._id ?? row.warehouseId,
+        warehouseName: wh?.name ?? null,
+        warehouseAddress: wh?.address ?? null,
+        totalQuantity: 0,
+        base: null,
+        variations: [] as any[],
+      });
+    }
+
+    const entry = byWarehouse.get(whKey);
+    entry.totalQuantity += row.quantity ?? 0;
+
+    if (!row.productPriceId) {
+      entry.base = {
+        quantity: row.quantity ?? 0,
+        low_stock: row.low_stock ?? null,
+      };
+    } else {
+      const priceDoc = row.productPriceId; // already populated: { _id, code, price }
+      const ppKey = String(priceDoc._id);
+
+      entry.variations.push({
+        productPriceId: priceDoc._id,
+        code: priceDoc.code ?? null,
+        price: priceDoc.price ?? null,
+        quantity: row.quantity ?? 0,
+        low_stock: row.low_stock ?? null,
+        options: variantLabelsMap.get(ppKey) ?? [],
+      });
+    }
+  }
+
+  const warehouseStock = Array.from(byWarehouse.values());
+
+  SuccessResponse(res, {
+    message: "Product warehouse stock fetched successfully",
+    product,
+    warehouseStock,
+  });
+};

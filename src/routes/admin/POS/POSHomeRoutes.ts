@@ -14,7 +14,8 @@ getCustomerGroups,
 getDueCustomers,
 getCurrency,
 getCountries,
-getServiceFees} from '../../../controller/admin/POS/POSHomeController';
+getServiceFees,
+getProductWarehouseStock} from '../../../controller/admin/POS/POSHomeController';
 import { authorizePermissions } from '../../../middlewares/haspremission';
 
 const router = express.Router();
@@ -32,6 +33,7 @@ router.get('/cashiers',authorizePermissions("POS","View"), getCashiers);
 router.post('/cashiers/select',authorizePermissions("POS","Add"), selectCashier);
 
 router.get('/categories/:categoryId/products',authorizePermissions("POS","View"), getProductsByCategory);
+router.get("/products/:productId/warehouse-stock", getProductWarehouseStock);
 router.get('/brands/:brandId/products',authorizePermissions("POS","View"), getProductsByBrand);
 
 router.get('/selections',authorizePermissions("POS","View"), getAllSelections);
