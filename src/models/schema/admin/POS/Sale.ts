@@ -63,13 +63,21 @@ const SaleSchema = new Schema(
     order_discount: { type: Schema.Types.ObjectId, ref: "Discount" },
     service_fees: [
       {
-        service_fee_id: { type: Schema.Types.ObjectId, ref: "ServiceFee", required: false },
+        service_fee_id: {
+          type: Schema.Types.ObjectId,
+          ref: "ServiceFee",
+          required: false,
+        },
         title: { type: String, required: true },
         type: { type: String, enum: ["fixed", "percentage"], required: true },
         rate: { type: Number, required: true, min: 0 },
         amount: { type: Number, required: true, min: 0 },
         module: { type: String, enum: ["online", "pos"], required: true },
-        warehouseId: { type: Schema.Types.ObjectId, ref: "Warehouse", required: false },
+        warehouseId: {
+          type: Schema.Types.ObjectId,
+          ref: "Warehouse",
+          required: false,
+        },
       },
     ],
     service_fee_total: { type: Number, default: 0 },
@@ -98,8 +106,21 @@ const SaleSchema = new Schema(
 
     date: { type: Date, default: Date.now },
     _id: { type: String, default: () => randomUUID() },
+    return_status: {
+      type: String,
+      enum: ["none", "partial", "full"],
+      default: "none",
+    },
+    returned_amount: {
+      type: Number,
+      default: 0, // sum of returned subtotal, in currency
+    },
+    returned_quantity: {
+      type: Number,
+      default: 0, // sum of returned item quantities across all returns
+    },
   },
-  { _id:false, timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 // Index للبحث السريع
@@ -115,7 +136,11 @@ const productSalesSchema = new Schema(
     price: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
     discount: { type: Number, default: 0 },
-    discount_type: { type: String, enum: ["fixed", "percentage"], default: "fixed" },
+    discount_type: {
+      type: String,
+      enum: ["fixed", "percentage"],
+      default: "fixed",
+    },
     original_price: { type: Number, default: 0 },
     product_price_id: { type: Schema.Types.ObjectId, ref: "ProductPrice" },
     isGift: { type: Boolean, default: false },
@@ -123,7 +148,7 @@ const productSalesSchema = new Schema(
     options_id: [{ type: Schema.Types.ObjectId, ref: "Option" }],
     _id: { type: String, default: () => randomUUID() },
   },
-  { _id:false, timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 productSalesSchema.pre("save", function (next) {
@@ -137,4 +162,7 @@ productSalesSchema.pre("save", function (next) {
 });
 
 export const SaleModel = mongoose.model("Sale", SaleSchema);
-export const ProductSalesModel = mongoose.model("ProductSale", productSalesSchema);
+export const ProductSalesModel = mongoose.model(
+  "ProductSale",
+  productSalesSchema
+);

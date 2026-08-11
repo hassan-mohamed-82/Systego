@@ -8,13 +8,14 @@ import { SuccessResponse } from "../../utils/response";
 import { ProductModel } from "../../models/schema/admin/products";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
-
 export const createTransfer = async (req: Request, res: Response) => {
   const { fromWarehouseId, toWarehouseId, products, reason } = req.body;
 
-  // ✅ تحقق من البيانات الأساسية
   if (!fromWarehouseId || !toWarehouseId)
     throw new BadRequest("Both warehouses are required");
+
+  if (fromWarehouseId === toWarehouseId)
+    throw new BadRequest("Source and destination warehouse must be different");
 
   if (!Array.isArray(products) || products.length === 0)
     throw new BadRequest("At least one product is required");
@@ -25,64 +26,81 @@ export const createTransfer = async (req: Request, res: Response) => {
   if (!fromWarehouse || !toWarehouse)
     throw new NotFound("One or both warehouses not found");
 
-  // ✅ تحقق من كل منتج في التحويل (مع دعم الـ variations)
+  // ✅ Validate existence first (cheap, no mutation yet)
   for (const item of products) {
     const { productId, productPriceId, quantity } = item;
 
-    if (!productId || !quantity)
-      throw new BadRequest("Each product must have productId and quantity");
+    if (!productId || !quantity || quantity <= 0)
+      throw new BadRequest("Each product must have productId and a positive quantity");
 
-    // ✅ التحقق من وجود المنتج
     const product = await ProductModel.findById(productId);
-    if (!product) {
-      throw new NotFound(`Product ${productId} not found`);
-    }
+    if (!product) throw new NotFound(`Product ${productId} not found`);
 
-    // ✅ لو فيه productPriceId، نتحقق من وجود الـ variation
     if (productPriceId) {
       const productPrice = await ProductPriceModel.findById(productPriceId);
       if (!productPrice) {
         throw new NotFound(`Product variation ${productPriceId} not found`);
       }
-      // التأكد من أن الـ variation تابع للمنتج الصحيح
       if (productPrice.productId.toString() !== productId) {
-        throw new BadRequest(`Product variation ${productPriceId} does not belong to product ${productId}`);
+        throw new BadRequest(
+          `Product variation ${productPriceId} does not belong to product ${productId}`
+        );
       }
     }
-
-    // ✅ البحث عن المنتج/الـ variation في المخزن المصدر
-    const query: any = {
-      productId,
-      warehouseId: fromWarehouseId,
-    };
-
-    // لو فيه productPriceId نضيفه للـ query
-    if (productPriceId) {
-      query.productPriceId = productPriceId;
-    } else {
-      query.productPriceId = null; // المنتج الأساسي بدون variation
-    }
-
-    const productInWarehouse = await Product_WarehouseModel.findOne(query);
-
-    if (!productInWarehouse) {
-      const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
-      throw new NotFound(`Product ${productId}${variationText} not found in the source warehouse`);
-    }
-
-    if (productInWarehouse.quantity < quantity) {
-      const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
-      throw new BadRequest(
-        `Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${productInWarehouse.quantity}, Requested: ${quantity}`
-      );
-    }
-
-    // خصم الكمية من المخزن المصدر مؤقتًا
-    productInWarehouse.quantity -= quantity;
-    await productInWarehouse.save();
   }
 
-  // ✅ إنشاء التحويل بعد التحقق من كل المنتجات
+  // ✅ Atomic, race-safe deduction per item. If any item fails due to
+  // insufficient stock, roll back everything already deducted in this loop.
+  const deducted: { productId: string; productPriceId: string | null; quantity: number }[] = [];
+
+  try {
+    for (const item of products) {
+      const { productId, productPriceId, quantity } = item;
+
+      const result = await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId,
+          productPriceId: productPriceId || null,
+          warehouseId: fromWarehouseId,
+          quantity: { $gte: quantity },
+        },
+        { $inc: { quantity: -quantity } },
+        { new: true }
+      );
+
+      if (!result) {
+        const existing = await Product_WarehouseModel.findOne({
+          productId,
+          productPriceId: productPriceId || null,
+          warehouseId: fromWarehouseId,
+        });
+        const available = existing?.quantity ?? 0;
+        const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
+        throw new BadRequest(
+          `Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${available}, Requested: ${quantity}`
+        );
+      }
+
+      deducted.push({ productId, productPriceId: productPriceId || null, quantity });
+    }
+  } catch (err) {
+    // ✅ Roll back any deductions already applied before the failure
+    for (const d of deducted) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        { productId: d.productId, productPriceId: d.productPriceId, warehouseId: fromWarehouseId },
+        { $inc: { quantity: d.quantity } }
+      );
+    }
+    throw err;
+  }
+
+  const totalQty = products.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
+
+  // ✅ Atomic warehouse total decrement
+  await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
+    $inc: { stock_Quantity: -totalQty },
+  });
+
   const transfer = await TransferModel.create({
     fromWarehouseId,
     toWarehouseId,
@@ -91,26 +109,19 @@ export const createTransfer = async (req: Request, res: Response) => {
     status: "pending",
   });
 
-  fromWarehouse.stock_Quantity -= transfer.products.reduce((acc: number, item: any) => acc + item.quantity, 0);
-  await fromWarehouse.save();
-
   SuccessResponse(res, {
     message: "Transfer created successfully",
     transfer,
   });
 };
 
-
-
 // 🟡 المستودع يشوف كل التحويلات اللي تخصه (pending / received)
 export const getTransfersForWarehouse = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
 
-  // 🔍 تحقق من وجود المستودع
   const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) throw new NotFound("Warehouse not found");
 
-  // 🔍 جلب كل التحويلات اللي تخص المستودع (مرسل أو مستقبل)
   const transfers = await TransferModel.find({
     $or: [{ fromWarehouseId: warehouseId }, { toWarehouseId: warehouseId }],
   })
@@ -119,16 +130,16 @@ export const getTransfersForWarehouse = async (req: Request, res: Response) => {
     .populate("products.productId", "name productCode")
     .populate("products.productPriceId", "price code");
 
-  // ✳️ تقسيم التحويلات حسب الحالة
   const pending = transfers.filter((t) => t.status === "pending");
   const received = transfers.filter((t) => t.status === "received");
 
   SuccessResponse(res, {
     message: "Transfers retrieved successfully",
     pending,
-    received
+    received,
   });
 };
+
 export const getTransferById = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -150,96 +161,99 @@ export const getTransferById = async (req: Request, res: Response) => {
   });
 };
 
-
 export const updateTransferStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { warehouseId, rejected_products, approved_products, reason } = req.body;
+  const { warehouseId, rejected_products = [], approved_products = [], reason } = req.body;
 
-  // 🧩 1. التأكد من وجود التحويل
   const transfer = await TransferModel.findById(id);
   if (!transfer) throw new NotFound("Transfer not found");
 
-  // 🧩 2. التأكد من أن حالته ما زالت pending
   if (transfer.status !== "pending")
     throw new BadRequest("Only pending transfers can be updated");
 
-  // 🧩 3. التأكد من أن المستودع المستلم هو اللي بينفّذ التحديث
   if (transfer.toWarehouseId.toString() !== warehouseId)
     throw new BadRequest("Only the receiving warehouse can update this transfer");
 
-  // ✅ 4. استلام المنتجات المقبولة (مع دعم الـ variations)
-  if (approved_products && approved_products.length > 0) {
-    for (const item of approved_products) {
-      const { productId, productPriceId, quantity } = item;
+  // ✅ Reconcile: every unit originally sent must end up either approved
+  // or rejected. Anything unaccounted for is treated as rejected, so it
+  // can be returned to the source warehouse instead of silently vanishing.
+  const sentByKey = new Map<string, number>();
+  const keyOf = (productId: string, productPriceId?: string | null) =>
+    `${productId}:${productPriceId || "null"}`;
 
-      // بناء query للبحث عن المنتج/الـ variation في المخزن المستلم
-      const query: any = {
-        productId,
-        warehouseId,
-      };
-
-      // لو فيه productPriceId نضيفه للـ query
-      if (productPriceId) {
-        query.productPriceId = productPriceId;
-      } else {
-        query.productPriceId = null;
-      }
-
-      let productInWarehouse = await Product_WarehouseModel.findOne(query);
-
-      if (productInWarehouse) {
-        // لو المنتج/الـ variation موجود، نزود الكمية
-        productInWarehouse.quantity += quantity;
-        await productInWarehouse.save();
-      } else {
-        // لو مش موجود، نضيفه كجديد
-        await Product_WarehouseModel.create({
-          productId,
-          productPriceId: productPriceId || null,
-          warehouseId,
-          quantity,
-        });
-      }
-    }
-
-    // حفظ المنتجات المقبولة داخل التحويل
-    transfer.approved_products = approved_products;
+  for (const item of transfer.products as any[]) {
+    const k = keyOf(item.productId.toString(), item.productPriceId ? item.productPriceId.toString() : null);
+    sentByKey.set(k, (sentByKey.get(k) || 0) + item.quantity);
   }
 
-  // ❌ 5. حفظ المنتجات المرفوضة (إن وُجدت)
-  if (rejected_products && rejected_products.length > 0) {
+  const accountedByKey = new Map<string, number>();
+
+  // ✅ Approved items: atomic increment into destination warehouse
+  for (const item of approved_products) {
+    const { productId, productPriceId, quantity } = item;
+    if (!productId || !quantity || quantity <= 0) {
+      throw new BadRequest("Each approved product must have productId and a positive quantity");
+    }
+
+    await Product_WarehouseModel.findOneAndUpdate(
+      { productId, productPriceId: productPriceId || null, warehouseId },
+      { $inc: { quantity } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    const k = keyOf(productId, productPriceId || null);
+    accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity));
+  }
+
+  for (const item of rejected_products) {
+    const { productId, productPriceId, quantity } = item;
+    const k = keyOf(productId, productPriceId || null);
+    accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity || 0));
+  }
+
+  // ✅ Return any unaccounted-for or explicitly rejected quantity back to source
+  for (const [k, sentQty] of sentByKey.entries()) {
+    const accountedQty = accountedByKey.get(k) || 0;
+    const toReturn = sentQty - accountedQty;
+    if (toReturn > 0) {
+      const [productId, productPriceIdRaw] = k.split(":");
+      const productPriceId = productPriceIdRaw === "null" ? null : productPriceIdRaw;
+
+      await Product_WarehouseModel.findOneAndUpdate(
+        { productId, productPriceId, warehouseId: transfer.fromWarehouseId },
+        { $inc: { quantity: toReturn } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      await WarehouseModel.findByIdAndUpdate(transfer.fromWarehouseId, {
+        $inc: { stock_Quantity: toReturn },
+      });
+    }
+  }
+
+  if (approved_products.length > 0) {
+    transfer.approved_products = approved_products;
+  }
+  if (rejected_products.length > 0) {
     transfer.rejected_products = rejected_products;
     transfer.reason = reason || "";
   }
 
-  // ⚙️ 6. تحديد الحالة الجديدة للتحويل
-  if (approved_products && approved_products.length > 0) {
-    transfer.status = "received";
-  } else if (rejected_products && rejected_products.length > 0) {
-    transfer.status = "rejected";
-  }
-
+  transfer.status = approved_products.length > 0 ? "received" : "rejected";
   await transfer.save();
 
-  // 🏬 7. تحديث المخزون الكلي للمستودع بناءً على المنتجات المقبولة فقط
-  const toWarehouse = await WarehouseModel.findById(warehouseId);
-  if (toWarehouse && transfer.approved_products && transfer.approved_products.length > 0) {
-    const totalApprovedQty = transfer.approved_products.reduce(
-      (acc: number, item: any) => acc + item.quantity,
-      0
-    );
+  const totalApprovedQty = approved_products.reduce(
+    (acc: number, item: any) => acc + Number(item.quantity),
+    0
+  );
 
-    console.log("Before:", toWarehouse.stock_Quantity);
-    console.log("Approved Products:", transfer.approved_products);
-    console.log("Added:", totalApprovedQty);
-
-    toWarehouse.stock_Quantity += totalApprovedQty;
-    await toWarehouse.save();
-
-    console.log("After:", toWarehouse.stock_Quantity);
+  if (totalApprovedQty > 0) {
+    // ✅ Atomic destination warehouse total increment
+    await WarehouseModel.findByIdAndUpdate(warehouseId, {
+      $inc: { stock_Quantity: totalApprovedQty },
+    });
   }
 
-  // 🎉 8. إرسال استجابة النجاح
   return SuccessResponse(res, {
     message: "Transfer status updated successfully",
     transfer,
@@ -264,12 +278,10 @@ export const gettransferin = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Incoming transfers retrieved successfully",
     pending,
-    received
+    received,
   });
 };
 
-
-// 📦 التحويلات الخارجة (fromWarehouseId)
 export const gettransferout = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
 
@@ -287,12 +299,10 @@ export const gettransferout = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Outgoing transfers retrieved successfully",
     pending,
-    received
+    received,
   });
 };
 
-
-// 🌐 كل التحويلات (للمشرف مثلاً)
 export const getalltransfers = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find()
     .populate("fromWarehouseId", "name")

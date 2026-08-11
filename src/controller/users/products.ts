@@ -4,62 +4,72 @@ import asyncHandler from "express-async-handler";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { Product_WarehouseModel } from "../../models/schema/admin/Product_Warehouse";
+import { ProductModel } from "../../models/schema/admin/products";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound } from "../../Errors/NotFound";
 import { DiscountModel } from "../../models/schema/admin/Discount";
 
-// 💡 دالة مساعدة لبناء الـ Pipeline لمنع تكرار الكود وتحسين الأداء
-// 💡 تحديث الدالة المساعدة لدمج أسماء الـ Options والـ Variations كـ Flat Lookup سريع
 const buildProductAggregationPipeline = (
-  matchStage: object,
+  productMatchStage: object,
   wishlistIds: mongoose.Types.ObjectId[],
+  onlineWarehouseIds: mongoose.Types.ObjectId[],
 ): mongoose.PipelineStage[] => {
   return [
-    { $match: matchStage },
+    { $match: { ...productMatchStage, Is_Online: true } },
+
+    // Stock, scoped to online warehouses only, grouped per variant.
+    // Left join — products with no matching rows keep an empty array
+    // and fall through to quantity: 0 below, instead of disappearing.
     {
-      $group: {
-        _id: { productId: "$productId", productPriceId: "$productPriceId" },
-        quantity: { $sum: "$quantity" },
+      $lookup: {
+        from: "product_warehouses", // ⚠️ confirm actual collection name against Product_WarehouseModel
+        let: { pid: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$productId", "$$pid"] },
+              warehouseId: { $in: onlineWarehouseIds },
+            },
+          },
+          {
+            $group: {
+              _id: "$productPriceId",
+              quantity: { $sum: "$quantity" },
+            },
+          },
+        ],
+        as: "variantStocksRaw",
       },
     },
     {
-      $group: {
-        _id: "$_id.productId",
-        totalQuantity: { $sum: "$quantity" },
+      $addFields: {
+        totalQuantity: { $sum: "$variantStocksRaw.quantity" },
         variantStocks: {
-          $push: {
-            productPriceId: "$_id.productPriceId",
-            quantity: "$quantity",
+          $map: {
+            input: "$variantStocksRaw",
+            as: "vs",
+            in: { productPriceId: "$$vs._id", quantity: "$$vs.quantity" },
           },
         },
       },
     },
-    {
-      $lookup: {
-        from: "products",
-        localField: "_id",
-        foreignField: "_id",
-        as: "productInfo",
-      },
-    },
-    { $unwind: "$productInfo" },
-    { $match: { "productInfo.Is_Online": true } },
 
-    // 1️⃣ جلب بيانات البراند (Brand) المربوط بالمنتج
+    // 1️⃣ Brand
     {
       $lookup: {
         from: "brands",
-        localField: "productInfo.brandId",
+        localField: "brandId",
         foreignField: "_id",
         as: "brandData",
       },
     },
     { $unwind: { path: "$brandData", preserveNullAndEmptyArrays: true } },
 
+    // Category — must be online too
     {
       $lookup: {
         from: "categories",
-        localField: "productInfo.categoryId",
+        localField: "categoryId",
         foreignField: "_id",
         as: "categoryData",
       },
@@ -67,23 +77,44 @@ const buildProductAggregationPipeline = (
     { $unwind: "$categoryData" },
     { $match: { "categoryData.Is_Online": true } },
 
-    // 2️⃣ جلب بيانات الخصم (Discount) المربوط بالمنتج
+    // 2️⃣ Discount
     {
       $lookup: {
         from: "discounts",
-        localField: "productInfo.discountId",
+        localField: "discountId",
         foreignField: "_id",
         as: "discountData",
       },
     },
     { $unwind: { path: "$discountData", preserveNullAndEmptyArrays: true } },
 
-    // 3️⃣ اعتبار الخصم "فعّال" بس لو status=true وapplyIn=E-commerce
+    // 3️⃣ A discount only counts as active if status is true AND it's
+    // scoped to E-commerce — previously this just checked existence,
+    // so disabled or POS-only discounts were still applied online.
+    // ⚠️ Field names ("status", "applyIn") and the value "E-commerce"
+    // are inferred from the original comment — confirm against the
+    // actual DiscountModel schema before relying on this.
     {
       $addFields: {
         activeDiscount: {
           $cond: {
-            if: { $gt: ["$discountData", null] },
+            if: {
+              $and: [
+                { $gt: ["$discountData", null] },
+                { $eq: ["$discountData.status", true] },
+                {
+                  $or: [
+                    { $eq: ["$discountData.applyIn", "E-commerce"] },
+                    {
+                      $in: [
+                        "E-commerce",
+                        { $ifNull: ["$discountData.applyIn", []] },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
             then: "$discountData",
             else: null,
           },
@@ -127,14 +158,14 @@ const buildProductAggregationPipeline = (
     {
       $project: {
         _id: 1,
-        name: "$productInfo.name",
-        ar_name: "$productInfo.ar_name",
-        description: "$productInfo.description",
-        image: "$productInfo.image",
-        gallery_product: "$productInfo.gallery_product",
-        main_price: "$productInfo.price",
+        name: "$name",
+        ar_name: "$ar_name",
+        description: "$description",
+        image: "$image",
+        gallery_product: "$gallery_product",
+        main_price: "$price",
 
-        // 4️⃣ حساب السعر بعد الخصم للسعر الرئيسي
+        // 4️⃣ Discounted price for the main price
         final_price: {
           $cond: {
             if: { $gt: ["$activeDiscount", null] },
@@ -145,32 +176,19 @@ const buildProductAggregationPipeline = (
                   $max: [
                     {
                       $subtract: [
-                        "$productInfo.price",
-                        {
-                          $multiply: [
-                            "$productInfo.price",
-                            "$activeDiscount.amount", // no more $divide by 100
-                          ],
-                        },
+                        "$price",
+                        { $multiply: ["$price", "$activeDiscount.amount"] },
                       ],
                     },
                     0,
                   ],
                 },
                 else: {
-                  $max: [
-                    {
-                      $subtract: [
-                        "$productInfo.price",
-                        "$activeDiscount.amount",
-                      ],
-                    },
-                    0,
-                  ],
+                  $max: [{ $subtract: ["$price", "$activeDiscount.amount"] }, 0],
                 },
               },
             },
-            else: "$productInfo.price",
+            else: "$price",
           },
         },
 
@@ -187,6 +205,10 @@ const buildProductAggregationPipeline = (
           },
         },
 
+        // Defaults to 0 for products with no stock rows in any online
+        // warehouse — they're still shown, not dropped. Add
+        // `{ $match: { totalQuantity: { $gt: 0 } } }` after this stage
+        // if out-of-stock products should be hidden instead.
         quantity: "$totalQuantity",
         is_favorite: { $in: ["$_id", wishlistIds] },
         category: {
@@ -233,7 +255,7 @@ const buildProductAggregationPipeline = (
               _id: "$$price._id",
               price: "$$price.price",
 
-              // 5️⃣ حساب السعر بعد الخصم لكل SKU
+              // 5️⃣ Discounted price per SKU
               final_price: {
                 $cond: {
                   if: { $gt: ["$activeDiscount", null] },
@@ -248,7 +270,7 @@ const buildProductAggregationPipeline = (
                               {
                                 $multiply: [
                                   "$$price.price",
-                                  "$activeDiscount.amount", // no more $divide by 100
+                                  "$activeDiscount.amount",
                                 ],
                               },
                             ],
@@ -258,12 +280,7 @@ const buildProductAggregationPipeline = (
                       },
                       else: {
                         $max: [
-                          {
-                            $subtract: [
-                              "$$price.price",
-                              "$activeDiscount.amount",
-                            ],
-                          },
+                          { $subtract: ["$$price.price", "$activeDiscount.amount"] },
                           0,
                         ],
                       },
@@ -275,6 +292,8 @@ const buildProductAggregationPipeline = (
 
               code: "$$price.code",
               gallery: "$$price.gallery",
+              // Also defaults to 0 rather than being absent when a
+              // variant has no stock in any online warehouse.
               quantity: {
                 $let: {
                   vars: {
@@ -312,11 +331,12 @@ const buildProductAggregationPipeline = (
             },
           },
         },
-        created_at: "$productInfo.createdAt",
+        created_at: "$createdAt",
       },
     },
   ];
 };
+
 // 🌟 Get All Products
 export const getAllProducts = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -337,14 +357,18 @@ export const getAllProducts = asyncHandler(
       }
     }
 
-    // بناء الـ Pipeline وتمرير الـ Match الخاص بالمخازن
-    const matchStage = { warehouseId: { $in: onlineWarehouseIds } };
-    const pipeline = buildProductAggregationPipeline(matchStage, wishlistIds);
+    // No warehouse-membership match here anymore — Is_Online is applied
+    // inside buildProductAggregationPipeline, and stock is left-joined
+    // rather than required for a product to appear.
+    const pipeline = buildProductAggregationPipeline(
+      {},
+      wishlistIds,
+      onlineWarehouseIds,
+    );
 
-    // إضافة الـ Sort في نهاية الـ Pipeline بناءً على تاريخ الإنشاء
     pipeline.push({ $sort: { created_at: -1 } });
 
-    const productsWithStatus = await Product_WarehouseModel.aggregate(pipeline);
+    const productsWithStatus = await ProductModel.aggregate(pipeline);
 
     return SuccessResponse(
       res,
@@ -383,14 +407,13 @@ export const getProductById = asyncHandler(
       }
     }
 
-    // بناء الـ Pipeline وتمرير الـ Match الخاص بالمنتج والمخازن معاً لتقليل البيانات المستخرجة من أول خطوة
-    const matchStage = {
-      productId: new mongoose.Types.ObjectId(id),
-      warehouseId: { $in: onlineWarehouseIds },
-    };
+    const pipeline = buildProductAggregationPipeline(
+      { _id: new mongoose.Types.ObjectId(id) },
+      wishlistIds,
+      onlineWarehouseIds,
+    );
 
-    const pipeline = buildProductAggregationPipeline(matchStage, wishlistIds);
-    const product = await Product_WarehouseModel.aggregate(pipeline);
+    const product = await ProductModel.aggregate(pipeline);
 
     if (!product || product.length === 0) {
       throw new NotFound("Product not found");

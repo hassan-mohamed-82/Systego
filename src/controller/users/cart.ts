@@ -23,6 +23,25 @@ const getCartQuery = (req: Request) => {
     throw new BadRequest("User ID or Session ID is required");
 };
 
+const getActiveDiscount = (discount: any): any | null => {
+    if (!discount) return null;
+    if (discount.status !== true) return null;
+    const applyIn = discount.applyIn;
+    const appliesToEcommerce =
+        applyIn === "E-commerce" ||
+        (Array.isArray(applyIn) && applyIn.includes("E-commerce"));
+    if (!appliesToEcommerce) return null;
+    return discount;
+};
+
+const computeFinalPrice = (basePrice: number, discount: any): number => {
+    if (!discount) return basePrice;
+    if (discount.type === "percentage") {
+        return Math.max(basePrice - basePrice * discount.amount, 0);
+    }
+    return Math.max(basePrice - discount.amount, 0);
+};
+
 // --- دالة الحسابات المركزية ---
 const calculateCartTotals = async (cart: any, userId?: string) => {
     let totalCartPrice = 0;
@@ -33,13 +52,14 @@ const calculateCartTotals = async (cart: any, userId?: string) => {
         const product = item.product as any;
         const variant = item.variant as any;
 
-        // جلب السعر الأحدث (بعد الخصم إن وجد)
-        const currentPrice = variant ? variant.price : (product.price_after_discount || product.price || 0);
+        const discount = getActiveDiscount(product?.discountId);
+        const basePrice = variant ? variant.price : (product?.price || 0);
+        const currentPrice = computeFinalPrice(basePrice, discount);
         item.price = currentPrice;
 
-        if (product.free_shipping) hasFreeShippingProduct = true;
+        if (product?.free_shipping) hasFreeShippingProduct = true;
 
-        if (product.taxesId?.status) {
+        if (product?.taxesId?.status) {
             const tax = product.taxesId;
             const itemTotal = currentPrice * item.quantity;
             totalTaxAmount += tax.type === "percentage" ? (itemTotal * tax.amount) / 100 : tax.amount * item.quantity;
@@ -89,6 +109,24 @@ const calculateCartTotals = async (cart: any, userId?: string) => {
     return { totalCartPrice, shippingCost };
 };
 
+const getAvailableStock = async (
+    productId: mongoose.Types.ObjectId,
+    productPriceId: mongoose.Types.ObjectId | null,
+    onlineWarehouseIds: mongoose.Types.ObjectId[]
+): Promise<number> => {
+    const stock = await Product_WarehouseModel.aggregate([
+        {
+            $match: {
+                productId,
+                warehouseId: { $in: onlineWarehouseIds },
+                productPriceId,
+            },
+        },
+        { $group: { _id: null, total: { $sum: "$quantity" } } },
+    ]);
+    return stock[0]?.total || 0;
+};
+
 // 1. مزامنة السلة بالكامل (The Sync Endpoint)
 export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     const { items } = req.body;
@@ -102,30 +140,52 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     for (const item of items) {
         const { productId, productVariantId, quantity } = item;
 
-        const stockMatch: any = {
-            productId: new mongoose.Types.ObjectId(productId),
-            warehouseId: { $in: onlineWarehouseIds },
-            productPriceId: productVariantId ? new mongoose.Types.ObjectId(productVariantId) : null
-        };
+        // Product must exist AND be storefront-eligible — previously a
+        // missing product silently priced at 0 instead of failing, and
+        // there was no check that the product (or its category) is
+        // actually online, unlike the listing endpoints.
+        const product = await ProductModel.findById(productId)
+            .populate('discountId')
+            .populate('categoryId', 'Is_Online');
+        if (!product) throw new NotFound(`Product not found: ${productId}`);
+        if (!(product as any).Is_Online) {
+            throw new BadRequest(`Product is not available online: ${productId}`);
+        }
+        if (!(product as any).categoryId?.Is_Online) {
+            throw new BadRequest(`Product's category is not available online: ${productId}`);
+        }
 
-        const stock = await Product_WarehouseModel.aggregate([
-            { $match: stockMatch },
-            { $group: { _id: null, total: { $sum: "$quantity" } } }
-        ]);
+        // If a variant is given, it must exist AND actually belong to
+        // this product — previously an unrelated product's variant ID
+        // could be attached to the wrong product with no validation.
+        let variant: any = null;
+        if (productVariantId) {
+            variant = await ProductPriceModel.findById(productVariantId);
+            if (!variant) {
+                throw new NotFound(`Product variant not found: ${productVariantId}`);
+            }
+            if (variant.productId.toString() !== productId.toString()) {
+                throw new BadRequest(
+                    `Variant ${productVariantId} does not belong to product ${productId}`
+                );
+            }
+        }
 
-        const availableStock = stock[0]?.total || 0;
+        const availableStock = await getAvailableStock(
+            new mongoose.Types.ObjectId(productId),
+            productVariantId ? new mongoose.Types.ObjectId(productVariantId) : null,
+            onlineWarehouseIds
+        );
         if (quantity > availableStock) {
             throw new BadRequest(`Product ${productId} only has ${availableStock} in stock`);
         }
 
-        let currentPrice = 0;
-        if (productVariantId) {
-            const variant = await ProductPriceModel.findById(productVariantId);
-            currentPrice = variant?.price || 0;
-        } else {
-            const product = await ProductModel.findById(productId);
-            currentPrice = product?.price || 0;
-        }
+        // Same active-discount check used by the listing endpoints and
+        // calculateCartTotals — applies to variants too, not just the
+        // base product price.
+        const discount = getActiveDiscount((product as any).discountId);
+        const basePrice = variant ? variant.price : (product as any).price || 0;
+        const currentPrice = computeFinalPrice(basePrice, discount);
 
         validatedItems.push({
             product: productId,
@@ -146,8 +206,8 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     const fullCart = await CartModel.findOne(query)
         .populate({
             path: 'cartItems.product',
-            select: 'name ar_name image price price_after_discount free_shipping taxesId',
-            populate: { path: 'taxesId' }
+            select: 'name ar_name image price free_shipping taxesId discountId',
+            populate: [{ path: 'taxesId' }, { path: 'discountId' }]
         })
         .populate('cartItems.variant');
 
@@ -165,8 +225,8 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
     const cart = await CartModel.findOne(query)
         .populate({
             path: 'cartItems.product',
-            select: 'name ar_name image price price_after_discount free_shipping taxesId',
-            populate: { path: 'taxesId' }
+            select: 'name ar_name image price free_shipping taxesId discountId',
+            populate: [{ path: 'taxesId' }, { path: 'discountId' }]
         })
         .populate('cartItems.variant');
 
@@ -176,16 +236,36 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
 
     const { shippingCost } = await calculateCartTotals(cart, (query as any).user);
     await cart.save();
-    SuccessResponse(res, { cart, shippingCost });
+
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true }).select("_id");
+    const onlineWarehouseIds = onlineWarehouses.map(w => w._id);
+
+    const cartObj: any = cart.toObject();
+    const enrichedItems = await Promise.all(
+        cartObj.cartItems.map(async (item: any) => {
+            const productId = item.product?._id;
+            const productPriceId = item.variant?._id || null;
+            const availableStock = productId
+                ? await getAvailableStock(productId, productPriceId, onlineWarehouseIds)
+                : 0;
+            return {
+                ...item,
+                availableStock,
+                inStock: availableStock >= item.quantity,
+            };
+        })
+    );
+
+    const responseCart = { ...cartObj, cartItems: enrichedItems };
+    SuccessResponse(res, { cart: responseCart, shippingCost });
 });
 
-// 3. تطبيق كوبون
 export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
     const { couponCode } = req.body;
     const query = getCartQuery(req);
 
     const cart = await CartModel.findOne(query)
-        .populate({ path: 'cartItems.product', populate: { path: 'taxesId' } })
+        .populate({ path: 'cartItems.product', populate: [{ path: 'taxesId' }, { path: 'discountId' }] })
         .populate('cartItems.variant');
 
     if (!cart) throw new NotFound("Cart is empty");

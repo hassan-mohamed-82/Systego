@@ -16,6 +16,7 @@ import { BankAccountModel } from "../../../models/schema/admin/Financial_Account
 import { ProductModel } from "../../../models/schema/admin/products";
 import { PandelModel } from "../../../models/schema/admin/pandels";
 import { saveBase64Image } from "../../../utils/handleImages";
+import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
 // ═══════════════════════════════════════════════════════════
 // GET SALE FOR RETURN
 // ═══════════════════════════════════════════════════════════
@@ -255,7 +256,7 @@ export const createReturn = async (req: Request, res: Response) => {
   const {
     sale_id,
     items,
-    reason, // 👈 reason للـ Return ككل
+    reason,
     note,
     financials = [],
     refund_account_id,
@@ -283,7 +284,16 @@ export const createReturn = async (req: Request, res: Response) => {
     throw new BadRequest("This sale belongs to a different warehouse");
   }
 
+  if (sale.return_status === "full") {
+    throw new BadRequest("This sale has already been fully returned");
+  }
+
   const saleItems = await ProductSalesModel.find({ sale_id: sale._id }).lean();
+
+  const totalSaleQty = saleItems.reduce(
+    (sum: number, si: any) => sum + si.quantity,
+    0
+  );
 
   const previousReturns = await ReturnModel.find({ sale_id: sale._id }).lean();
 
@@ -312,6 +322,7 @@ export const createReturn = async (req: Request, res: Response) => {
   }> = [];
 
   let totalReturnAmount = 0;
+  let totalReturnQty = 0;
 
   for (const item of items) {
     const {
@@ -370,6 +381,7 @@ export const createReturn = async (req: Request, res: Response) => {
 
     const itemSubtotal = returnQuantity * saleItem.price;
     totalReturnAmount += itemSubtotal;
+    totalReturnQty += returnQuantity;
 
     returnItems.push({
       product_id: saleItem.product_id,
@@ -452,28 +464,6 @@ export const createReturn = async (req: Request, res: Response) => {
     ];
   }
 
-  // if (refund_account_id) {
-  //   if (!mongoose.Types.ObjectId.isValid(refund_account_id)) {
-  //     throw new BadRequest("Invalid refund_account_id");
-  //   }
-
-  //   const bankAccount = await BankAccountModel.findOne({
-  //     _id: refund_account_id,
-  //     warehouseId: warehouseId,
-  //     status: true,
-  //   });
-
-  //   if (!bankAccount) {
-  //     throw new BadRequest("Refund account is not valid");
-  //   }
-
-  //   if (bankAccount.balance < totalReturnAmount) {
-  //     throw new BadRequest(
-  //       `Insufficient balance in refund account. Available: ${bankAccount.balance}, Required: ${totalReturnAmount}`
-  //     );
-  //   }
-  // }
-
   let image_url = "";
   if (image) {
     image_url = await saveBase64Image(
@@ -499,28 +489,79 @@ export const createReturn = async (req: Request, res: Response) => {
       account_id: p.account_id,
       amount: p.amount,
     })),
-    reason: reason || "", // 👈 reason للـ Return ككل
+    reason: reason || "",
     note: note || "",
     image: image_url,
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // RESTOCK — mirrors every place createSale decrements, in reverse.
+  // Bundles restock each component product the same way createSale
+  // deducted them (quantity * bundle component qty).
+  // ═══════════════════════════════════════════════════════════
   for (const item of returnItems) {
     if (item.product_price_id) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: item.product_id,
+          productPriceId: item.product_price_id,
+          warehouseId,
+        },
+        { $inc: { quantity: item.returned_quantity } }
+      );
+
       await ProductPriceModel.findByIdAndUpdate(item.product_price_id, {
         $inc: { quantity: item.returned_quantity },
       });
+
+      await WarehouseModel.findByIdAndUpdate(warehouseId, {
+        $inc: { stock_Quantity: item.returned_quantity },
+      });
     } else if (item.product_id) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        { productId: item.product_id, warehouseId },
+        { $inc: { quantity: item.returned_quantity } }
+      );
+
+      await WarehouseModel.findByIdAndUpdate(warehouseId, {
+        $inc: { stock_Quantity: item.returned_quantity },
+      });
+
       await ProductModel.findByIdAndUpdate(item.product_id, {
         $inc: { quantity: item.returned_quantity },
       });
     } else if (item.bundle_id) {
-      const bundleDoc: any = await PandelModel.findById(
-        item.bundle_id
-      ).populate("productsId");
+      const bundleDoc: any = await PandelModel.findById(item.bundle_id).lean();
       if (bundleDoc) {
-        for (const pPrice of bundleDoc.productsId || []) {
-          await ProductPriceModel.findByIdAndUpdate(pPrice._id, {
-            $inc: { quantity: item.returned_quantity },
+        for (const bp of bundleDoc.products || []) {
+          const restockQty = item.returned_quantity * (bp.quantity || 1);
+
+          if (bp.productPriceId) {
+            await Product_WarehouseModel.findOneAndUpdate(
+              {
+                productId: bp.productId,
+                productPriceId: bp.productPriceId,
+                warehouseId,
+              },
+              { $inc: { quantity: restockQty } }
+            );
+
+            await ProductPriceModel.findByIdAndUpdate(bp.productPriceId, {
+              $inc: { quantity: restockQty },
+            });
+          } else {
+            await Product_WarehouseModel.findOneAndUpdate(
+              { productId: bp.productId, warehouseId },
+              { $inc: { quantity: restockQty } }
+            );
+
+            await ProductModel.findByIdAndUpdate(bp.productId, {
+              $inc: { quantity: restockQty },
+            });
+          }
+
+          await WarehouseModel.findByIdAndUpdate(warehouseId, {
+            $inc: { stock_Quantity: restockQty },
           });
         }
       }
@@ -533,14 +574,56 @@ export const createReturn = async (req: Request, res: Response) => {
     });
   }
 
-  // if (refund_account_id) {
-  //   await BankAccountModel.findByIdAndUpdate(refund_account_id, {
-  //     $inc: { balance: -totalReturnAmount },
-  //   });
-  // }
+  // ═══════════════════════════════════════════════════════════
+  // SALE MONEY UPDATE — Due-aware: due sales reduce remaining_amount,
+  // completed sales reduce paid_amount. grand_total/total never change.
+  // ═══════════════════════════════════════════════════════════
+  let newPaid = sale.paid_amount || 0;
+  let newRemaining = sale.remaining_amount || 0;
+
+  if (sale.Due === 1) {
+    newRemaining = Math.max(0, newRemaining - totalReturnAmount);
+  } else {
+    newPaid = Math.max(0, newPaid - totalReturnAmount);
+    newRemaining = 0;
+  }
+
+  await SaleModel.findByIdAndUpdate(sale._id, [
+    {
+      $set: {
+        returned_quantity: {
+          $add: [{ $ifNull: ["$returned_quantity", 0] }, totalReturnQty],
+        },
+        returned_amount: {
+          $add: [{ $ifNull: ["$returned_amount", 0] }, totalReturnAmount],
+        },
+        paid_amount: newPaid,
+        remaining_amount: newRemaining,
+      },
+    },
+    {
+      $set: {
+        return_status: {
+          $switch: {
+            branches: [
+              { case: { $lte: ["$returned_quantity", 0] }, then: "none" },
+              {
+                case: { $gte: ["$returned_quantity", totalSaleQty] },
+                then: "full",
+              },
+            ],
+            default: "partial",
+          },
+        },
+      },
+    },
+  ]);
 
   const fullReturn = await ReturnModel.findById(returnDoc._id)
-    .populate("sale_id", "reference grand_total date")
+    .populate(
+      "sale_id",
+      "reference grand_total date return_status returned_quantity returned_amount paid_amount remaining_amount"
+    )
     .populate("customer_id", "name email phone_number")
     .populate("warehouse_id", "name")
     .populate("cashier_id", "name email")

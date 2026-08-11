@@ -169,8 +169,6 @@ export const createPurchase = async (req: Request, res: Response) => {
     note,
   });
 
-  let warehouse = await WarehouseModel.findById(warehouse_id);
-
   // ========== Process Products ==========
   for (const p of purchase_items) {
     let product_code = p.product_code;
@@ -222,14 +220,12 @@ export const createPurchase = async (req: Request, res: Response) => {
       );
     }
 
+    // Track whether this is the warehouse's first time carrying this product
+    // (used to bump WarehouseModel.number_of_products), done atomically.
     const existingPurchaseItem = await PurchaseItemModel.findOne({
       warehouse_id,
       product_id,
     });
-    if (!existingPurchaseItem && warehouse) {
-      (warehouse as any).number_of_products += 1;
-      await warehouse.save();
-    }
 
     const purchaseItem = await PurchaseItemModel.create({
       date: p.date || date,
@@ -250,7 +246,14 @@ export const createPurchase = async (req: Request, res: Response) => {
         : undefined,
     });
 
+    if (!existingPurchaseItem) {
+      await WarehouseModel.findByIdAndUpdate(warehouse_id, {
+        $inc: { number_of_products: 1 },
+      });
+    }
+
     if (hasVariations) {
+      // ---- Variation product: split quantity per variant, per warehouse ----
       for (const v of p.variations) {
         if (!v.product_price_id) {
           throw new BadRequest("product_price_id is required for variations");
@@ -263,50 +266,63 @@ export const createPurchase = async (req: Request, res: Response) => {
           throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
         }
 
+        const vQty = Number(v.quantity) || 0;
+
+        // Variant-level total stock (across all warehouses)
         await ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
-          $inc: { quantity: Number(v.quantity) || 0 },
+          $inc: { quantity: vQty },
         });
 
         await PurchaseItemOptionModel.create({
           purchase_item_id: purchaseItem._id,
           product_price_id: v.product_price_id,
           option_id: v.option_id,
-          quantity: Number(v.quantity) || 0,
+          quantity: vQty,
         });
+
+        // ✅ Per-variant, per-warehouse stock — atomic upsert.
+        // Requires a unique compound index on
+        // { productId, productPriceId, warehouseId } in Product_Warehouse.
+        await Product_WarehouseModel.findOneAndUpdate(
+          {
+            productId: product_id,
+            productPriceId: v.product_price_id,
+            warehouseId: warehouse_id,
+          },
+          { $inc: { quantity: vQty } },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
       }
+    } else {
+      // ---- Simple product: no variant, productPriceId explicitly null ----
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: product_id,
+          productPriceId: null,
+          warehouseId: warehouse_id,
+        },
+        { $inc: { quantity: totalQuantity } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
     }
 
+    // Product-level total stock (across all warehouses/variants)
     await ProductModel.findByIdAndUpdate(product._id, {
       $inc: { quantity: totalQuantity },
       $set: { cost: p.unit_cost_after_discount || p.unit_cost },
     });
 
-    const category = await CategoryModel.findById((product as any).categoryId);
-    if (category) {
-      (category as any).product_quantity += totalQuantity;
-      await category.save();
-    }
-
-    if (warehouse) {
-      (warehouse as any).stock_Quantity += totalQuantity;
-      await warehouse.save();
-    }
-
-    let productWarehouse = await Product_WarehouseModel.findOne({
-      productId: product_id,
-      warehouseId: warehouse_id,
-    });
-
-    if (productWarehouse) {
-      (productWarehouse as any).quantity += totalQuantity;
-      await productWarehouse.save();
-    } else {
-      await Product_WarehouseModel.create({
-        productId: product_id,
-        warehouseId: warehouse_id,
-        quantity: totalQuantity,
+    // Category running total — atomic
+    if ((product as any).categoryId) {
+      await CategoryModel.findByIdAndUpdate((product as any).categoryId, {
+        $inc: { product_quantity: totalQuantity },
       });
     }
+
+    // Warehouse running total — atomic
+    await WarehouseModel.findByIdAndUpdate(warehouse_id, {
+      $inc: { stock_Quantity: totalQuantity },
+    });
   }
 
   // ========== Process Materials ==========
@@ -330,13 +346,15 @@ export const createPurchase = async (req: Request, res: Response) => {
       item_type: "material",
     });
 
-    (material as any).quantity += m.quantity ?? 0;
-    await material.save();
+    const mQty = Number(m.quantity) || 0;
 
-    if (warehouse) {
-      (warehouse as any).stock_Quantity += m.quantity ?? 0;
-      await warehouse.save();
-    }
+    await MaterialModel.findByIdAndUpdate(m.material_id, {
+      $inc: { quantity: mQty },
+    });
+
+    await WarehouseModel.findByIdAndUpdate(warehouse_id, {
+      $inc: { stock_Quantity: mQty },
+    });
   }
 
   // ========== Create Invoices (الدفع الفوري) ==========
@@ -348,11 +366,9 @@ export const createPurchase = async (req: Request, res: Response) => {
         purchase_id: purchase._id,
       });
 
-      const financial = await BankAccountModel.findById(ele.financial_id);
-      if (financial) {
-        (financial as any).balance -= Number(ele.payment_amount) || 0;
-        await financial.save();
-      }
+      await BankAccountModel.findByIdAndUpdate(ele.financial_id, {
+        $inc: { balance: -(Number(ele.payment_amount) || 0) },
+      });
     }
   }
 
@@ -621,7 +637,117 @@ export const updatePurchase = async (req: Request, res: Response) => {
     );
   }
 
-  // ========== Reverse Old Items ==========
+  // ========== Resolve + validate ALL new items BEFORE touching old data ==========
+  // No replica set => no multi-document transactions. Validating everything up
+  // front (product/material/variant existence, expiry rules) shrinks the window
+  // in which a mid-function failure leaves old stock reversed/deleted but new
+  // stock only partially re-applied. It does not fully eliminate that window —
+  // a crash between the reversal block and the re-apply block below is still
+  // possible and would need a reconciliation pass to detect.
+  const targetWarehouseId =
+    warehouse_id ?? (existingPurchase as any).warehouse_id;
+
+  const resolvedItems: Array<{
+    product: any;
+    product_id: any;
+    category_id: any;
+    totalQuantity: number;
+    hasVariations: boolean;
+    variations: Array<{ product_price_id: any; option_id: any; quantity: number }>;
+    raw: any;
+  }> = [];
+
+  for (const p of purchase_items) {
+    let category_id = p.category_id;
+    let product_id = p.product_id;
+
+    if (p.product_code) {
+      const product_price = await ProductPriceModel.findOne({
+        code: p.product_code,
+      }).populate("productId");
+      if (product_price) {
+        const productDoc: any = product_price.productId;
+        product_id = productDoc?._id;
+        category_id = productDoc?.categoryId;
+      }
+    }
+
+    const product = await ProductModel.findById(product_id);
+    if (!product) throw new NotFound(`Product not found: ${product_id}`);
+
+    // Keep the category used for the PurchaseItem record and the category
+    // actually incremented in sync — previously these could diverge.
+    if (!category_id) category_id = (product as any).categoryId;
+
+    if ((product as any).exp_ability) {
+      const expiryDateValue = p.expiry_date || p.date_of_expiery;
+      if (!expiryDateValue) {
+        throw new BadRequest(
+          `Expiry date is required for product: ${(product as any).name}`
+        );
+      }
+      const expiryDate = new Date(expiryDateValue);
+      const today = new Date();
+      expiryDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      if (expiryDate < today) {
+        throw new BadRequest(
+          `Expiry date cannot be in the past for product: ${
+            (product as any).name
+          }`
+        );
+      }
+    }
+
+    const hasVariations =
+      p.variations && Array.isArray(p.variations) && p.variations.length > 0;
+
+    let totalQuantity = p.quantity ?? 0;
+    const variations: Array<{
+      product_price_id: any;
+      option_id: any;
+      quantity: number;
+    }> = [];
+
+    if (hasVariations) {
+      totalQuantity = 0;
+      for (const v of p.variations) {
+        if (!v.product_price_id) {
+          throw new BadRequest("product_price_id is required for variations");
+        }
+        const productPrice = await ProductPriceModel.findById(
+          v.product_price_id
+        );
+        if (!productPrice) {
+          throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
+        }
+        const qty = v.quantity ?? 0;
+        totalQuantity += qty;
+        variations.push({
+          product_price_id: v.product_price_id,
+          option_id: v.option_id,
+          quantity: qty,
+        });
+      }
+    }
+
+    resolvedItems.push({
+      product,
+      product_id,
+      category_id,
+      totalQuantity,
+      hasVariations,
+      variations,
+      raw: p,
+    });
+  }
+
+  for (const m of purchase_materials) {
+    const material = await MaterialModel.findById(m.material_id);
+    if (!material) throw new NotFound(`Material not found: ${m.material_id}`);
+  }
+
+  // ========== Reverse Old Items (atomic) ==========
   const oldItems = await PurchaseItemModel.find({ purchase_id: id });
 
   for (const item of oldItems) {
@@ -632,61 +758,72 @@ export const updatePurchase = async (req: Request, res: Response) => {
         $inc: { quantity: -itemData.quantity },
       });
 
-      const category = await CategoryModel.findById(itemData.category_id);
-      if (category) {
-        (category as any).product_quantity -= itemData.quantity;
-        await category.save();
+      if (itemData.category_id) {
+        await CategoryModel.findByIdAndUpdate(itemData.category_id, {
+          $inc: { product_quantity: -itemData.quantity },
+        });
       }
 
-      const productWarehouse = await Product_WarehouseModel.findOne({
-        productId: itemData.product_id,
-        warehouseId: itemData.warehouse_id,
-      });
-      if (productWarehouse) {
-        (productWarehouse as any).quantity -= itemData.quantity;
-        await productWarehouse.save();
-      }
-
-      // ✅ Reverse ProductPrice quantity if variations exist
       const oldOptions = await PurchaseItemOptionModel.find({
         purchase_item_id: itemData._id,
       });
-      for (const opt of oldOptions) {
-        if ((opt as any).product_price_id) {
-          await ProductPriceModel.findByIdAndUpdate(
-            (opt as any).product_price_id,
-            {
-              $inc: { quantity: -(opt as any).quantity },
-            }
-          );
+
+      if (oldOptions.length > 0) {
+        // Variant item — reverse EACH variant's own Product_Warehouse row.
+        // (Previously this looked up a single row with no productPriceId
+        // filter, which could hit an arbitrary variant's row instead.)
+        for (const opt of oldOptions) {
+          const optData = opt as any;
+          if (optData.product_price_id) {
+            await ProductPriceModel.findByIdAndUpdate(
+              optData.product_price_id,
+              { $inc: { quantity: -optData.quantity } }
+            );
+            await Product_WarehouseModel.findOneAndUpdate(
+              {
+                productId: itemData.product_id,
+                productPriceId: optData.product_price_id,
+                warehouseId: itemData.warehouse_id,
+              },
+              { $inc: { quantity: -optData.quantity } }
+            );
+          }
         }
+      } else {
+        // Simple product — reverse the base (productPriceId: null) row.
+        await Product_WarehouseModel.findOneAndUpdate(
+          {
+            productId: itemData.product_id,
+            productPriceId: null,
+            warehouseId: itemData.warehouse_id,
+          },
+          { $inc: { quantity: -itemData.quantity } }
+        );
       }
+
+      await PurchaseItemOptionModel.deleteMany({
+        purchase_item_id: itemData._id,
+      });
     }
 
     if (itemData.item_type === "material" && itemData.material_id) {
-      const material = await MaterialModel.findById(itemData.material_id);
-      if (material) {
-        (material as any).quantity -= itemData.quantity;
-        await material.save();
-      }
+      await MaterialModel.findByIdAndUpdate(itemData.material_id, {
+        $inc: { quantity: -itemData.quantity },
+      });
     }
-
-    await PurchaseItemOptionModel.deleteMany({
-      purchase_item_id: itemData._id,
-    });
   }
 
-  // Update warehouse stock
-  const oldWarehouse = await WarehouseModel.findById(
-    (existingPurchase as any).warehouse_id
+  // Reverse old warehouse total — single atomic decrement instead of
+  // fetch-then-.save() on WarehouseModel.
+  const totalOldQty = oldItems.reduce(
+    (sum, item) => sum + (item as any).quantity,
+    0
   );
-  if (oldWarehouse) {
-    const totalOldQty = oldItems.reduce(
-      (sum, item) => sum + (item as any).quantity,
-      0
+  if ((existingPurchase as any).warehouse_id) {
+    await WarehouseModel.findByIdAndUpdate(
+      (existingPurchase as any).warehouse_id,
+      { $inc: { stock_Quantity: -totalOldQty } }
     );
-    (oldWarehouse as any).stock_Quantity -= totalOldQty;
-    await oldWarehouse.save();
   }
 
   // Delete old items
@@ -695,12 +832,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
   // Delete old invoices and restore balance
   const oldInvoices = await PurchaseInvoiceModel.find({ purchase_id: id });
   for (const inv of oldInvoices) {
-    const financial = await BankAccountModel.findById(
-      (inv as any).financial_id
-    );
-    if (financial) {
-      (financial as any).balance += (inv as any).amount;
-      await financial.save();
+    const invData = inv as any;
+    if (invData.financial_id) {
+      await BankAccountModel.findByIdAndUpdate(invData.financial_id, {
+        $inc: { balance: invData.amount },
+      });
     }
   }
   await PurchaseInvoiceModel.deleteMany({ purchase_id: id });
@@ -731,64 +867,21 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
   await existingPurchase.save();
 
-  let warehouse = await WarehouseModel.findById(
-    (existingPurchase as any).warehouse_id
-  );
-
-  // ========== Process New Products ==========
-  for (const p of purchase_items) {
-    let category_id = p.category_id;
-    let product_id = p.product_id;
-
-    if (p.product_code) {
-      const product_price = await ProductPriceModel.findOne({
-        code: p.product_code,
-      }).populate("productId");
-      if (product_price) {
-        const productDoc: any = product_price.productId;
-        product_id = productDoc?._id;
-        category_id = productDoc?.categoryId;
-      }
-    }
-
-    const product = await ProductModel.findById(product_id);
-    if (!product) throw new NotFound(`Product not found: ${product_id}`);
-
-    if ((product as any).exp_ability) {
-      const expiryDateValue = p.expiry_date || p.date_of_expiery;
-      if (!expiryDateValue) {
-        throw new BadRequest(
-          `Expiry date is required for product: ${(product as any).name}`
-        );
-      }
-      const expiryDate = new Date(expiryDateValue);
-      const today = new Date();
-      expiryDate.setHours(0, 0, 0, 0);
-      today.setHours(0, 0, 0, 0);
-      if (expiryDate < today) {
-        throw new BadRequest(
-          `Expiry date cannot be in the past for product: ${
-            (product as any).name
-          }`
-        );
-      }
-    }
-
-    // حساب الكمية
-    let totalQuantity = p.quantity ?? 0;
-    const hasVariations =
-      p.variations && Array.isArray(p.variations) && p.variations.length > 0;
-
-    if (hasVariations) {
-      totalQuantity = p.variations.reduce(
-        (sum: number, v: any) => sum + (v.quantity ?? 0),
-        0
-      );
-    }
+  // ========== Process New Products (atomic, already validated above) ==========
+  for (const resolved of resolvedItems) {
+    const {
+      product,
+      product_id,
+      category_id,
+      totalQuantity,
+      hasVariations,
+      variations,
+      raw: p,
+    } = resolved;
 
     const purchaseItem = await PurchaseItemModel.create({
       date: p.date || (existingPurchase as any).date,
-      warehouse_id: (existingPurchase as any).warehouse_id,
+      warehouse_id: targetWarehouseId,
       purchase_id: existingPurchase._id,
       category_id,
       product_id,
@@ -805,64 +898,55 @@ export const updatePurchase = async (req: Request, res: Response) => {
         : undefined,
     });
 
-    // لو في Variations
     if (hasVariations) {
-      for (const v of p.variations) {
-        if (!v.product_price_id) {
-          throw new BadRequest("product_price_id is required for variations");
-        }
-
-        const productPrice = await ProductPriceModel.findById(
-          v.product_price_id
-        );
-        if (!productPrice) {
-          throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
-        }
-
+      for (const v of variations) {
         await ProductPriceModel.findByIdAndUpdate(v.product_price_id, {
-          $inc: { quantity: v.quantity ?? 0 },
+          $inc: { quantity: v.quantity },
         });
 
         await PurchaseItemOptionModel.create({
           purchase_item_id: purchaseItem._id,
           product_price_id: v.product_price_id,
           option_id: v.option_id,
-          quantity: v.quantity || 0,
+          quantity: v.quantity,
         });
+
+        await Product_WarehouseModel.findOneAndUpdate(
+          {
+            productId: product_id,
+            productPriceId: v.product_price_id,
+            warehouseId: targetWarehouseId,
+          },
+          { $inc: { quantity: v.quantity } },
+          { upsert: true, new: true }
+        );
       }
+    } else {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: product_id,
+          productPriceId: null,
+          warehouseId: targetWarehouseId,
+        },
+        { $inc: { quantity: totalQuantity } },
+        { upsert: true, new: true }
+      );
     }
 
-    await ProductModel.findByIdAndUpdate(product._id, {
+    await ProductModel.findByIdAndUpdate(product_id, {
       $inc: { quantity: totalQuantity },
       $set: { cost: p.unit_cost_after_discount || p.unit_cost },
     });
 
-    const category = await CategoryModel.findById((product as any).categoryId);
-    if (category) {
-      (category as any).product_quantity += totalQuantity;
-      await category.save();
-    }
-
-    if (warehouse) {
-      (warehouse as any).stock_Quantity += totalQuantity;
-      await warehouse.save();
-    }
-
-    let productWarehouse = await Product_WarehouseModel.findOne({
-      productId: product_id,
-      warehouseId: (existingPurchase as any).warehouse_id,
-    });
-
-    if (productWarehouse) {
-      (productWarehouse as any).quantity += totalQuantity;
-      await productWarehouse.save();
-    } else {
-      await Product_WarehouseModel.create({
-        productId: product_id,
-        warehouseId: (existingPurchase as any).warehouse_id,
-        quantity: totalQuantity,
+    if (category_id) {
+      await CategoryModel.findByIdAndUpdate(category_id, {
+        $inc: { product_quantity: totalQuantity },
       });
     }
+
+    await WarehouseModel.findByIdAndUpdate(targetWarehouseId, {
+      $inc: { stock_Quantity: totalQuantity },
+    });
   }
 
   // ========== Process New Materials ==========
@@ -872,7 +956,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
     await PurchaseItemModel.create({
       date: m.date || (existingPurchase as any).date,
-      warehouse_id: (existingPurchase as any).warehouse_id,
+      warehouse_id: targetWarehouseId,
       purchase_id: existingPurchase._id,
       category_id: (material as any).category_id,
       material_id: m.material_id,
@@ -886,57 +970,45 @@ export const updatePurchase = async (req: Request, res: Response) => {
       item_type: "material",
     });
 
-    (material as any).quantity += m.quantity ?? 0;
-    await material.save();
+    await MaterialModel.findByIdAndUpdate(m.material_id, {
+      $inc: { quantity: m.quantity ?? 0 },
+    });
 
-    if (warehouse) {
-      (warehouse as any).stock_Quantity += m.quantity ?? 0;
-      await warehouse.save();
-    }
+    await WarehouseModel.findByIdAndUpdate(targetWarehouseId, {
+      $inc: { stock_Quantity: m.quantity ?? 0 },
+    });
   }
 
   // ========== Create New Invoices ==========
-  if (financials && Array.isArray(financials) && financials.length > 0) {
-    for (const ele of financials) {
-      await PurchaseInvoiceModel.create({
-        financial_id: ele.financial_id,
-        amount: ele.payment_amount,
-        purchase_id: existingPurchase._id,
-      });
+  for (const ele of financials) {
+    await PurchaseInvoiceModel.create({
+      financial_id: ele.financial_id,
+      amount: ele.payment_amount,
+      purchase_id: existingPurchase._id,
+    });
 
-      const financial = await BankAccountModel.findById(ele.financial_id);
-      if (financial) {
-        (financial as any).balance -= ele.payment_amount;
-        await financial.save();
-      }
-    }
+    await BankAccountModel.findByIdAndUpdate(ele.financial_id, {
+      $inc: { balance: -ele.payment_amount },
+    });
   }
 
   // ========== Create New Due Payments ==========
-  if (
-    purchase_due_payment &&
-    Array.isArray(purchase_due_payment) &&
-    purchase_due_payment.length > 0
-  ) {
-    for (const due_payment of purchase_due_payment) {
-      await PurchaseDuePaymentModel.create({
-        purchase_id: existingPurchase._id,
-        amount: due_payment.amount,
-        date: due_payment.date,
-      });
-    }
+  for (const due_payment of purchase_due_payment) {
+    await PurchaseDuePaymentModel.create({
+      purchase_id: existingPurchase._id,
+      amount: due_payment.amount,
+      date: due_payment.date,
+    });
   }
 
   // ========== Create New Installments ==========
-  if (installments && Array.isArray(installments) && installments.length > 0) {
-    for (const inst of installments) {
-      await PurchaseInstallmentModel.create({
-        purchase_id: existingPurchase._id,
-        amount: inst.amount,
-        date: inst.date,
-        status: "pending",
-      });
-    }
+  for (const inst of installments) {
+    await PurchaseInstallmentModel.create({
+      purchase_id: existingPurchase._id,
+      amount: inst.amount,
+      date: inst.date,
+      status: "pending",
+    });
   }
 
   const fullPurchase = await PurchaseModel.findById(existingPurchase._id)

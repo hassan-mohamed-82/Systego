@@ -7,7 +7,10 @@ import { SuccessResponse } from "../../utils/response";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { saveBase64Image } from "../../utils/handleImages";
-import {generateBarcodeImage,generateEAN13Barcode} from "../../utils/barcode"
+import {
+  generateBarcodeImage,
+  generateEAN13Barcode,
+} from "../../utils/barcode";
 import { CategoryModel } from "../../models/schema/admin/category";
 import { BrandModel } from "../../models/schema/admin/brand";
 import { VariationModel } from "../../models/schema/admin/Variation";
@@ -38,7 +41,7 @@ export const createProduct = async (req: Request, res: Response) => {
     low_stock,
     cost,
     whole_price,
-    free_shipping, 
+    free_shipping,
     taxesId,
     product_has_imei,
     different_price,
@@ -61,10 +64,14 @@ export const createProduct = async (req: Request, res: Response) => {
 
   if (!hasVariations) {
     if (price === undefined || price === null) {
-      throw new BadRequest("Product price is required when there are no variations");
+      throw new BadRequest(
+        "Product price is required when there are no variations"
+      );
     }
     if (!code) {
-      throw new BadRequest("Product code is required when there are no variations");
+      throw new BadRequest(
+        "Product code is required when there are no variations"
+      );
     }
 
     const existingProductWithCode = await ProductModel.findOne({ code });
@@ -107,21 +114,33 @@ export const createProduct = async (req: Request, res: Response) => {
 
   let imageUrl: string | undefined;
   if (image) {
-    imageUrl = await saveBase64Image(image, Date.now().toString(), req, "products");
+    imageUrl = await saveBase64Image(
+      image,
+      Date.now().toString(),
+      req,
+      "products"
+    );
   }
 
   let galleryUrls: string[] = [];
   if (gallery_product && Array.isArray(gallery_product)) {
     for (const g of gallery_product) {
       if (typeof g === "string") {
-        const imgUrl = await saveBase64Image(g, Date.now().toString(), req, "products");
+        const imgUrl = await saveBase64Image(
+          g,
+          Date.now().toString(),
+          req,
+          "products"
+        );
         galleryUrls.push(imgUrl);
       }
     }
   }
 
   if (show_quantity && !maximum_to_show) {
-    throw new BadRequest("Maximum to show is required when show_quantity is true");
+    throw new BadRequest(
+      "Maximum to show is required when show_quantity is true"
+    );
   }
 
   const basePrice = hasVariations ? 0 : Number(price);
@@ -154,13 +173,15 @@ export const createProduct = async (req: Request, res: Response) => {
     is_featured,
     free_shipping,
     Is_Online,
+    quantity: 0, // ✅ always starts at 0 — purchase is the only source of real stock
   });
 
-  // إضافة Stock لو فيه warehouseId
+  // ========== Simple product: seed Product_Warehouse at 0 ==========
   let stock = null;
   if (warehouseId && !hasVariations) {
     stock = await Product_WarehouseModel.create({
       productId: product._id,
+      productPriceId: null, // ✅ explicit, not relied on as "missing"
       warehouseId,
       quantity: 0,
       low_stock: low_stock || 0,
@@ -174,8 +195,10 @@ export const createProduct = async (req: Request, res: Response) => {
     });
   }
 
+  // ========== Variation product ==========
   if (hasVariations) {
     let minVariantPrice: number | null = null;
+    let variantIndex = 0;
 
     for (const p of prices) {
       if (p.price === undefined || p.price === null) {
@@ -186,15 +209,18 @@ export const createProduct = async (req: Request, res: Response) => {
       }
 
       const variantPrice = Number(p.price);
-      const variantQty = Number(p.quantity || 0);
       const variantCost = Number(p.cost || 0);
-      const variantStartQty = Number(p.strat_quantaty || 0);
 
       let priceGalleryUrls: string[] = [];
       if (p.gallery && Array.isArray(p.gallery)) {
         for (const g of p.gallery) {
           if (typeof g === "string") {
-            const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
+            const gUrl = await saveBase64Image(
+              g,
+              Date.now().toString(),
+              req,
+              "product_gallery"
+            );
             priceGalleryUrls.push(gUrl);
           }
         }
@@ -205,9 +231,11 @@ export const createProduct = async (req: Request, res: Response) => {
         price: variantPrice,
         code: p.code,
         gallery: priceGalleryUrls,
-        quantity: variantQty,
+        quantity: 0, // ✅ always 0 at creation — purchase is the only source of real stock
         cost: variantCost,
-        strat_quantaty: variantStartQty,
+        // strat_quantaty kept as a display/reference-only field if you still
+        // want it; it must never be summed into real stock math anywhere.
+        strat_quantaty: Number(p.strat_quantaty || 0),
       });
 
       if (minVariantPrice === null || variantPrice < minVariantPrice) {
@@ -222,10 +250,36 @@ export const createProduct = async (req: Request, res: Response) => {
           });
         }
       }
+
+      // ✅ Seed Product_Warehouse at 0 for this variant, same as simple products.
+      // Ensures the row (and thus the warehouse×variant matrix) exists even
+      // before the first purchase — instead of relying entirely on
+      // createPurchase's upsert to create it later.
+      if (warehouseId) {
+        await Product_WarehouseModel.create({
+          productId: product._id,
+          productPriceId: productPrice._id,
+          warehouseId,
+          quantity: 0,
+          low_stock: low_stock || 0,
+        });
+      }
+
+      variantIndex++;
     }
 
     product.price = minVariantPrice ?? 0;
     await product.save();
+
+    // ✅ Now increments for variation products too, not just simple ones.
+    if (warehouseId) {
+      await WarehouseModel.findByIdAndUpdate(warehouseId, {
+        $inc: {
+          number_of_products: 1,
+          stock_Quantity: 0,
+        },
+      });
+    }
   }
 
   SuccessResponse(res, {
@@ -236,42 +290,57 @@ export const createProduct = async (req: Request, res: Response) => {
 };
 
 // ==================== جلب كل المنتجات ====================
-export const getProduct = async (req: Request, res: Response): Promise<void> => {
+export const getProduct = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   const { warehouseId } = req.query;
 
   const products = await ProductModel.find()
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
+    .populate("discountId", "_id name")
     .lean();
 
   const variations = await VariationModel.find().lean();
 
   const formattedProducts = await Promise.all(
     products.map(async (product: any) => {
-      let stocks;
-      let totalQuantity = 0;
+      const stockFilter: any = { productId: product._id };
+      if (warehouseId) stockFilter.warehouseId = warehouseId;
 
-      if (warehouseId) {
-        stocks = await Product_WarehouseModel.find({
-          productId: product._id,
-          warehouseId,
-        })
-          .populate("warehouseId", "name address")
-          .lean();
-      } else {
-        stocks = await Product_WarehouseModel.find({ productId: product._id })
-          .populate("warehouseId", "name address")
-          .lean();
+      const stocks = await Product_WarehouseModel.find(stockFilter)
+        .populate("warehouseId", "name address")
+        .lean();
+
+      const totalQuantity = stocks.reduce((sum, s: any) => sum + s.quantity, 0);
+
+      // Build productPriceId -> quantity from Product_Warehouse (source of
+      // truth), already scoped to warehouseId if one was requested. This
+      // replaces trusting the denormalized ProductPriceModel.quantity field,
+      // which is global-only and not guaranteed to be in sync.
+      const variantQuantityMap: Record<string, number> = {};
+      // Simple (non-variant) products store their stock under productPriceId: null.
+      let simpleProductQuantity = 0;
+      for (const s of stocks as any[]) {
+        if (s.productPriceId) {
+          const key = s.productPriceId.toString();
+          variantQuantityMap[key] = (variantQuantityMap[key] || 0) + s.quantity;
+        } else {
+          simpleProductQuantity += s.quantity;
+        }
       }
 
-      totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
-
-      const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+      const prices = await ProductPriceModel.find({
+        productId: product._id,
+      }).lean();
 
       const formattedPrices = await Promise.all(
-        prices.map(async (price) => {
-          const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+        prices.map(async (price: any) => {
+          const options = await ProductPriceOptionModel.find({
+            product_price_id: price._id,
+          })
             .populate({
               path: "option_id",
               select: "_id name variationId",
@@ -289,18 +358,25 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
             );
 
             if (variation) {
-              if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+              if (!groupedOptions[variation.name])
+                groupedOptions[variation.name] = [];
               groupedOptions[variation.name].push(option);
             }
           }
 
-          const variationsArray = Object.keys(groupedOptions).map((varName) => ({
-            name: varName,
-            options: groupedOptions[varName],
-          }));
+          const variationsArray = Object.keys(groupedOptions).map(
+            (varName) => ({
+              name: varName,
+              options: groupedOptions[varName],
+            })
+          );
 
           return {
             ...price,
+            // Overrides the stale denormalized value with the figure
+            // actually computed from Product_Warehouse, scoped to
+            // warehouseId when one was requested.
+            quantity: variantQuantityMap[price._id.toString()] ?? 0,
             variations: variationsArray,
           };
         })
@@ -308,6 +384,9 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
 
       return {
         ...product,
+        // For simple (non-variant) products, keep ProductModel.quantity
+        // consistent with the same source-of-truth override.
+        quantity: prices.length === 0 ? simpleProductQuantity : product.quantity,
         totalQuantity,
         stocks,
         prices: formattedPrices,
@@ -319,13 +398,17 @@ export const getProduct = async (req: Request, res: Response): Promise<void> => 
 };
 
 // ==================== جلب منتج واحد ====================
-export const getOneProduct = async (req: Request, res: Response): Promise<void> => {
+export const getOneProduct = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   const { id } = req.params;
 
   const product = await ProductModel.findById(id)
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
+    .populate("discountId", "_id name")
     .lean();
 
   if (!product) throw new NotFound("Product not found");
@@ -336,13 +419,28 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
     .populate("warehouseId", "name address phone")
     .lean();
 
-  const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
+  const totalQuantity = stocks.reduce((sum, s: any) => sum + s.quantity, 0);
 
-  const prices = await ProductPriceModel.find({ productId: product._id }).lean();
+  const variantQuantityMap: Record<string, number> = {};
+  let simpleProductQuantity = 0;
+  for (const s of stocks as any[]) {
+    if (s.productPriceId) {
+      const key = s.productPriceId.toString();
+      variantQuantityMap[key] = (variantQuantityMap[key] || 0) + s.quantity;
+    } else {
+      simpleProductQuantity += s.quantity;
+    }
+  }
+
+  const prices = await ProductPriceModel.find({
+    productId: product._id,
+  }).lean();
 
   const formattedPrices = await Promise.all(
-    prices.map(async (price) => {
-      const options = await ProductPriceOptionModel.find({ product_price_id: price._id })
+    prices.map(async (price: any) => {
+      const options = await ProductPriceOptionModel.find({
+        product_price_id: price._id,
+      })
         .populate({
           path: "option_id",
           select: "_id name variationId",
@@ -360,7 +458,8 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
         );
 
         if (variation) {
-          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          if (!groupedOptions[variation.name])
+            groupedOptions[variation.name] = [];
           groupedOptions[variation.name].push({
             _id: option._id,
             name: option.name,
@@ -375,6 +474,7 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
 
       return {
         ...price,
+        quantity: variantQuantityMap[price._id.toString()] ?? 0,
         variations: variationsArray,
       };
     })
@@ -383,6 +483,7 @@ export const getOneProduct = async (req: Request, res: Response): Promise<void> 
   SuccessResponse(res, {
     product: {
       ...product,
+      quantity: prices.length === 0 ? simpleProductQuantity : product.quantity,
       totalQuantity,
       stocks,
       prices: formattedPrices,
@@ -432,24 +533,35 @@ export const updateProduct = async (req: Request, res: Response) => {
   const existingPrices = await ProductPriceModel.find({ productId: id });
   const productHasVariations = hasVariations || existingPrices.length > 0;
 
-  // تحويل النص الفارغ إلى undefined لتجنب مشاكل قاعدة البيانات
   const finalCode = code === "" ? undefined : code;
 
-  // لو البروداكت عنده variations، الكود مش مطلوب على البروداكت نفسه
   if (!productHasVariations && finalCode && finalCode !== product.code) {
-    const existingCode = await ProductModel.findOne({ code: finalCode, _id: { $ne: id } });
+    const existingCode = await ProductModel.findOne({
+      code: finalCode,
+      _id: { $ne: id },
+    });
     if (existingCode) throw new BadRequest("Product code already exists");
   }
 
   if (image) {
-    product.image = await saveBase64Image(image, Date.now().toString(), req, "products");
+    product.image = await saveBase64Image(
+      image,
+      Date.now().toString(),
+      req,
+      "products"
+    );
   }
 
   if (gallery && Array.isArray(gallery)) {
     let galleryUrls: string[] = [];
     for (const g of gallery) {
       if (typeof g === "string") {
-        const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
+        const gUrl = await saveBase64Image(
+          g,
+          Date.now().toString(),
+          req,
+          "product_gallery"
+        );
         galleryUrls.push(gUrl);
       }
     }
@@ -463,14 +575,23 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.product_unit = product_unit ?? product.product_unit;
   product.sale_unit = sale_unit ?? product.sale_unit;
   product.purchase_unit = purchase_unit ?? product.purchase_unit;
-  product.price = price ?? product.price;
+  // NOTE: product.price for variation products is a derived/display value
+  // (min variant price) — see recalculation below. For simple products,
+  // price is editable directly.
+  product.price = productHasVariations ? product.price : price ?? product.price;
   product.description = description ?? product.description;
   product.ar_description = ar_description ?? product.ar_description;
   product.exp_ability = exp_ability ?? product.exp_ability;
-  product.minimum_quantity_sale = minimum_quantity_sale ?? product.minimum_quantity_sale;
+  product.minimum_quantity_sale =
+    minimum_quantity_sale ?? product.minimum_quantity_sale;
   product.low_stock = low_stock ?? product.low_stock;
   product.whole_price = whole_price ?? product.whole_price;
   product.start_quantaty = start_quantaty ?? product.start_quantaty;
+  // NOTE: cost is intentionally NOT overwritten here for the same reason
+  // as quantity — createPurchase already keeps cost in sync from real
+  // purchase unit_cost. Manual edits here would fight that. If you want
+  // cost to remain manually editable, keep the line below; otherwise
+  // remove it and let purchases be the source of truth for cost too.
   product.cost = cost ?? product.cost;
   product.taxesId = taxesId ?? product.taxesId;
   product.product_has_imei = product_has_imei ?? product.product_has_imei;
@@ -481,7 +602,6 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.is_featured = is_featured ?? product.is_featured;
   product.Is_Online = Is_Online ?? product.Is_Online;
 
-  // لو عنده variations، الكود مش بيتحط على البروداكت نفسه
   if (productHasVariations) {
     product.code = undefined as any;
   } else {
@@ -490,50 +610,54 @@ export const updateProduct = async (req: Request, res: Response) => {
 
   await product.save();
 
+  let minVariantPrice: number | null = null;
+
   if (prices && Array.isArray(prices)) {
     for (const p of prices) {
       let productPrice;
-      
-      // معالجة الـ code الخاص بالـ variations
       const priceCode = p.code === "" ? undefined : p.code;
 
-      // ==========================================
-      // إضافة التعديل الجديد: فحص تكرار كود السعر قبل التعديل أو الإنشاء
-      // ==========================================
       if (priceCode) {
         const query: any = { code: priceCode };
-        
-        // لو بنعمل Update لسعر موجود بالفعل، نستثنيه من البحث عشان مايطلعش إيرور على نفسه
         if (p._id) {
-          // التعديل الجوهري هنا: تحويل الـ String إلى ObjectId عشان الـ $ne تشتغل بشكل سليم
-          query._id = { $ne: new mongoose.Types.ObjectId(p._id) }; 
+          query._id = { $ne: new mongoose.Types.ObjectId(p._id) };
         }
-
         const existingPriceCode = await ProductPriceModel.findOne(query);
         if (existingPriceCode) {
-          throw new BadRequest(`Product price code '${priceCode}' already exists in another variation`);
+          throw new BadRequest(
+            `Product price code '${priceCode}' already exists in another variation`
+          );
         }
       }
-      // ==========================================
 
       if (p._id) {
+        // ✅ quantity is intentionally excluded — only purchase, sale,
+        // transfer, and stock-adjustment endpoints may change it.
         productPrice = await ProductPriceModel.findByIdAndUpdate(
           p._id,
           {
             price: p.price,
             code: priceCode,
-            quantity: p.quantity || 0,
-            cost: p.cost || 0,
-            strat_quantaty: p.strat_quantaty || 0,
+            cost: p.cost ?? undefined,
           },
           { new: true }
         );
       } else {
+        // ✅ New variant added via update: quantity always starts at 0,
+        // same rule as createProduct. No Product_Warehouse row is
+        // created here because we don't have a warehouseId in this
+        // endpoint's payload — the first purchase/adjustment into a
+        // warehouse will upsert it via createPurchase's atomic upsert.
         let galleryUrls: string[] = [];
         if (p.gallery && Array.isArray(p.gallery)) {
           for (const g of p.gallery) {
             if (typeof g === "string") {
-              const gUrl = await saveBase64Image(g, Date.now().toString(), req, "product_gallery");
+              const gUrl = await saveBase64Image(
+                g,
+                Date.now().toString(),
+                req,
+                "product_gallery"
+              );
               galleryUrls.push(gUrl);
             }
           }
@@ -542,15 +666,22 @@ export const updateProduct = async (req: Request, res: Response) => {
           productId: product._id,
           price: p.price,
           code: priceCode,
-          quantity: p.quantity || 0,
+          quantity: 0,
           cost: p.cost || 0,
-          strat_quantaty: p.strat_quantaty || 0,
           gallery: galleryUrls,
         });
       }
 
+      if (productPrice) {
+        if (minVariantPrice === null || productPrice.price < minVariantPrice) {
+          minVariantPrice = productPrice.price;
+        }
+      }
+
       if (productPrice && p.options && Array.isArray(p.options)) {
-        await ProductPriceOptionModel.deleteMany({ product_price_id: productPrice._id });
+        await ProductPriceOptionModel.deleteMany({
+          product_price_id: productPrice._id,
+        });
         for (const opt of p.options) {
           await ProductPriceOptionModel.create({
             product_price_id: productPrice._id,
@@ -559,9 +690,22 @@ export const updateProduct = async (req: Request, res: Response) => {
         }
       }
     }
+
+    // ✅ Keep product.price (display/min price) in sync with variant
+    // prices after edits — mirrors the logic already used in createProduct.
+    if (productHasVariations && minVariantPrice !== null) {
+      await ProductModel.findByIdAndUpdate(id, {
+        $set: { price: minVariantPrice },
+      });
+    }
   }
 
-  SuccessResponse(res, { message: "Product updated successfully", product });
+  const finalProduct = await ProductModel.findById(id);
+
+  SuccessResponse(res, {
+    message: "Product updated successfully",
+    product: finalProduct,
+  });
 };
 // ==================== حذف منتج ====================
 export const deleteProduct = async (req: Request, res: Response) => {
@@ -585,7 +729,9 @@ export const deleteProduct = async (req: Request, res: Response) => {
   // Delete prices and options
   const prices = await ProductPriceModel.find({ productId: id });
   const priceIds = prices.map((p) => p._id);
-  await ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
+  await ProductPriceOptionModel.deleteMany({
+    product_price_id: { $in: priceIds },
+  });
   await ProductPriceModel.deleteMany({ productId: id });
 
   // Update categories
@@ -597,13 +743,15 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
   await ProductModel.findByIdAndDelete(id);
 
-  SuccessResponse(res, { message: "Product and all related data deleted successfully" });
+  SuccessResponse(res, {
+    message: "Product and all related data deleted successfully",
+  });
 };
 
 // ==================== جلب منتج بالكود ====================
 export const getProductByCode = async (req: Request, res: Response) => {
   // نستقبل المتغير (code) والذي قد يحتوي على كود، اسم، أو كلمة "all"
-  const { code } = req.body; 
+  const { code } = req.body;
 
   if (!code) throw new BadRequest("Search term (code or name) is required");
 
@@ -626,15 +774,22 @@ export const getProductByCode = async (req: Request, res: Response) => {
     const variations = await VariationModel.find().lean();
 
     // جلب المخزون لكل المنتجات
-    const productIds = products.map(p => p._id);
-    const stocks = await Product_WarehouseModel.find({ productId: { $in: productIds } })
+    const productIds = products.map((p) => p._id);
+    const stocks = await Product_WarehouseModel.find({
+      productId: { $in: productIds },
+    })
       .populate("warehouseId", "name address")
       .lean();
 
     // ربط المخزون بكل منتج
     const productsWithStock = products.map((product) => {
-      const productStocks = stocks.filter(s => String(s.productId) === String(product._id));
-      const totalQuantity = productStocks.reduce((sum, s) => sum + s.quantity, 0);
+      const productStocks = stocks.filter(
+        (s) => String(s.productId) === String(product._id)
+      );
+      const totalQuantity = productStocks.reduce(
+        (sum, s) => sum + s.quantity,
+        0
+      );
       return { ...product, totalQuantity, stocks: productStocks };
     });
 
@@ -649,7 +804,9 @@ export const getProductByCode = async (req: Request, res: Response) => {
   // ---------------------------------------------------------
   // الحالة الثانية: دور في ProductPrice (نبحث هنا تطابق دقيق بالكود)
   // ---------------------------------------------------------
-  const productPrice = await ProductPriceModel.findOne({ code: searchTerm }).lean();
+  const productPrice = await ProductPriceModel.findOne({
+    code: searchTerm,
+  }).lean();
 
   if (productPrice) {
     const product = await ProductModel.findById(productPrice.productId)
@@ -664,7 +821,9 @@ export const getProductByCode = async (req: Request, res: Response) => {
     const categories = await CategoryModel.find().lean();
     const brands = await BrandModel.find().lean();
 
-    const options = await ProductPriceOptionModel.find({ product_price_id: productPrice._id })
+    const options = await ProductPriceOptionModel.find({
+      product_price_id: productPrice._id,
+    })
       .populate("option_id")
       .lean();
 
@@ -679,7 +838,8 @@ export const getProductByCode = async (req: Request, res: Response) => {
       );
 
       if (variation) {
-        if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+        if (!groupedOptions[variation.name])
+          groupedOptions[variation.name] = [];
         groupedOptions[variation.name].push(option);
       }
     });
@@ -700,7 +860,8 @@ export const getProductByCode = async (req: Request, res: Response) => {
     const totalQuantity = stocks.reduce((sum, s) => sum + s.quantity, 0);
 
     return SuccessResponse(res, {
-      product: { // هنا ترجع Object واحد لأنه تطابق مع تسعيرة محددة
+      product: {
+        // هنا ترجع Object واحد لأنه تطابق مع تسعيرة محددة
         ...product,
         totalQuantity,
         stocks,
@@ -717,29 +878,34 @@ export const getProductByCode = async (req: Request, res: Response) => {
   const products = await ProductModel.find({
     $or: [
       { code: searchTerm }, // بحث دقيق بالكود
-      { name: { $regex: searchTerm, $options: "i" } } // بحث جزئي بالاسم (غير حساس للأحرف)
-    ]
+      { name: { $regex: searchTerm, $options: "i" } }, // بحث جزئي بالاسم (غير حساس للأحرف)
+    ],
   })
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
     .lean();
 
-  if (!products || products.length === 0) throw new NotFound("No products found for this search term");
+  if (!products || products.length === 0)
+    throw new NotFound("No products found for this search term");
 
   const categories = await CategoryModel.find().lean();
   const brands = await BrandModel.find().lean();
   const variations = await VariationModel.find().lean();
 
   // جلب المخزون لكل المنتجات التي طابقت البحث
-  const productIds = products.map(p => p._id);
-  const stocks = await Product_WarehouseModel.find({ productId: { $in: productIds } })
+  const productIds = products.map((p) => p._id);
+  const stocks = await Product_WarehouseModel.find({
+    productId: { $in: productIds },
+  })
     .populate("warehouseId", "name address")
     .lean();
 
   // تجميع المخزون لكل منتج في المصفوفة
-  const productsWithStock = products.map(product => {
-    const productStocks = stocks.filter(s => String(s.productId) === String(product._id));
+  const productsWithStock = products.map((product) => {
+    const productStocks = stocks.filter(
+      (s) => String(s.productId) === String(product._id)
+    );
     const totalQuantity = productStocks.reduce((sum, s) => sum + s.quantity, 0);
     return { ...product, totalQuantity, stocks: productStocks };
   });
@@ -752,8 +918,10 @@ export const getProductByCode = async (req: Request, res: Response) => {
   });
 };
 
-
-export const generateBarcodeImageController = async (req: Request, res: Response) => {
+export const generateBarcodeImageController = async (
+  req: Request,
+  res: Response
+) => {
   const { product_price_id } = req.params;
   if (!product_price_id) throw new BadRequest("Product price ID is required");
 
@@ -761,7 +929,8 @@ export const generateBarcodeImageController = async (req: Request, res: Response
   if (!productPrice) throw new NotFound("Product price not found");
 
   const productCode = productPrice.code;
-  if (!productCode) throw new BadRequest("Product price does not have a code yet");
+  if (!productCode)
+    throw new BadRequest("Product price does not have a code yet");
 
   const imageLink = await generateBarcodeImage(productCode, productCode);
   const fullImageUrl = `${req.protocol}://${req.get("host")}${imageLink}`;
@@ -788,9 +957,19 @@ export const modelsforselect = async (req: Request, res: Response) => {
   const variations = await VariationModel.find().lean().populate("options");
   const warehouses = await WarehouseModel.find().lean();
   const units = await UnitModel.find().lean();
-  const discounts = await DiscountModel.find({ status: true, applyIn: "E-commerce" }).lean();
+  const discounts = await DiscountModel.find({
+    status: true,
+    applyIn: "E-commerce",
+  }).lean();
 
-  SuccessResponse(res, { categories, brands, variations, warehouses, units, discounts }); 
+  SuccessResponse(res, {
+    categories,
+    brands,
+    variations,
+    warehouses,
+    units,
+    discounts,
+  });
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -823,7 +1002,7 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   // Mapping للأعمدة
   const findColumn = (names: string[]): number => {
     for (const name of names) {
-      const index = headers.findIndex(h => h === name.toLowerCase());
+      const index = headers.findIndex((h) => h === name.toLowerCase());
       if (index !== -1) return index;
     }
     return -1;
@@ -832,7 +1011,11 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   const cols = {
     name: findColumn(["name", "product name", "اسم المنتج"]),
     ar_name: findColumn(["ar_name", "arabic name", "الاسم بالعربي"]),
-    ar_description: findColumn(["ar_description", "arabic description", "الوصف بالعربي"]),
+    ar_description: findColumn([
+      "ar_description",
+      "arabic description",
+      "الوصف بالعربي",
+    ]),
     description: findColumn(["description", "الوصف"]),
     category: findColumn(["category", "categories", "القسم", "التصنيف"]),
     brand: findColumn(["brand", "الماركة"]),
@@ -842,8 +1025,16 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     quantity: findColumn(["quantity", "qty", "stock", "الكمية"]),
     low_stock: findColumn(["low_stock", "low stock", "الحد الأدنى"]),
     whole_price: findColumn(["whole_price", "wholesale price", "سعر الجملة"]),
-    start_quantaty: findColumn(["start_quantaty", "start quantity", "كمية البداية"]),
-    minimum_quantity_sale: findColumn(["minimum_quantity_sale", "min sale qty", "أقل كمية بيع"]),
+    start_quantaty: findColumn([
+      "start_quantaty",
+      "start quantity",
+      "كمية البداية",
+    ]),
+    minimum_quantity_sale: findColumn([
+      "minimum_quantity_sale",
+      "min sale qty",
+      "أقل كمية بيع",
+    ]),
     product_unit: findColumn(["product_unit", "unit", "الوحدة"]),
     sale_unit: findColumn(["sale_unit", "وحدة البيع"]),
     purchase_unit: findColumn(["purchase_unit", "وحدة الشراء"]),
@@ -852,7 +1043,11 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     product_has_imei: findColumn(["product_has_imei", "has imei", "له سيريال"]),
     different_price: findColumn(["different_price", "سعر مختلف"]),
     show_quantity: findColumn(["show_quantity", "اظهار الكمية"]),
-    maximum_to_show: findColumn(["maximum_to_show", "max to show", "أقصى كمية للعرض"]),
+    maximum_to_show: findColumn([
+      "maximum_to_show",
+      "max to show",
+      "أقصى كمية للعرض",
+    ]),
     is_featured: findColumn(["is_featured", "featured", "مميز"]),
     image: findColumn(["image", "photo", "الصورة"]),
     gallery_product: findColumn(["gallery_product", "gallery", "معرض الصور"]),
@@ -861,7 +1056,12 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   // Helper functions
   const getValue = (row: ExcelJS.Row, colIndex: number): string => {
     if (colIndex === -1) return "";
-    return row.getCell(colIndex + 1).value?.toString().trim() || "";
+    return (
+      row
+        .getCell(colIndex + 1)
+        .value?.toString()
+        .trim() || ""
+    );
   };
 
   const getNumber = (row: ExcelJS.Row, colIndex: number): number => {
@@ -871,7 +1071,11 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
 
   const getBoolean = (row: ExcelJS.Row, colIndex: number): boolean => {
     if (colIndex === -1) return false;
-    const val = row.getCell(colIndex + 1).value?.toString().toLowerCase().trim();
+    const val = row
+      .getCell(colIndex + 1)
+      .value?.toString()
+      .toLowerCase()
+      .trim();
     return val === "true" || val === "1" || val === "yes" || val === "نعم";
   };
 
@@ -881,22 +1085,55 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
     if (rowNumber === 1) return;
 
     // Fallback للأعمدة الثابتة لو مفيش headers
-    const name = cols.name !== -1 ? getValue(row, cols.name) : row.getCell(1).value?.toString().trim() || "";
-    const ar_name = cols.ar_name !== -1 ? getValue(row, cols.ar_name) : row.getCell(2).value?.toString().trim() || "";
+    const name =
+      cols.name !== -1
+        ? getValue(row, cols.name)
+        : row.getCell(1).value?.toString().trim() || "";
+    const ar_name =
+      cols.ar_name !== -1
+        ? getValue(row, cols.ar_name)
+        : row.getCell(2).value?.toString().trim() || "";
 
     if (name) {
       products.push({
         name,
         ar_name: ar_name || name,
-        ar_description: cols.ar_description !== -1 ? getValue(row, cols.ar_description) : row.getCell(3).value?.toString().trim() || "",
-        description: cols.description !== -1 ? getValue(row, cols.description) : row.getCell(4).value?.toString().trim() || "",
-        category: cols.category !== -1 ? getValue(row, cols.category) : row.getCell(5).value?.toString().trim() || "",
-        brand: cols.brand !== -1 ? getValue(row, cols.brand) : row.getCell(6).value?.toString().trim() || "",
-        code: cols.code !== -1 ? getValue(row, cols.code) : row.getCell(7).value?.toString().trim() || "",
-        price: cols.price !== -1 ? getNumber(row, cols.price) : Number(row.getCell(8).value) || 0,
-        cost: cols.cost !== -1 ? getNumber(row, cols.cost) : Number(row.getCell(9).value) || 0,
-        quantity: cols.quantity !== -1 ? getNumber(row, cols.quantity) : Number(row.getCell(10).value) || 0,
-        low_stock: cols.low_stock !== -1 ? getNumber(row, cols.low_stock) : Number(row.getCell(12).value) || 0,
+        ar_description:
+          cols.ar_description !== -1
+            ? getValue(row, cols.ar_description)
+            : row.getCell(3).value?.toString().trim() || "",
+        description:
+          cols.description !== -1
+            ? getValue(row, cols.description)
+            : row.getCell(4).value?.toString().trim() || "",
+        category:
+          cols.category !== -1
+            ? getValue(row, cols.category)
+            : row.getCell(5).value?.toString().trim() || "",
+        brand:
+          cols.brand !== -1
+            ? getValue(row, cols.brand)
+            : row.getCell(6).value?.toString().trim() || "",
+        code:
+          cols.code !== -1
+            ? getValue(row, cols.code)
+            : row.getCell(7).value?.toString().trim() || "",
+        price:
+          cols.price !== -1
+            ? getNumber(row, cols.price)
+            : Number(row.getCell(8).value) || 0,
+        cost:
+          cols.cost !== -1
+            ? getNumber(row, cols.cost)
+            : Number(row.getCell(9).value) || 0,
+        quantity:
+          cols.quantity !== -1
+            ? getNumber(row, cols.quantity)
+            : Number(row.getCell(10).value) || 0,
+        low_stock:
+          cols.low_stock !== -1
+            ? getNumber(row, cols.low_stock)
+            : Number(row.getCell(12).value) || 0,
         whole_price: getNumber(row, cols.whole_price),
         start_quantaty: getNumber(row, cols.start_quantaty),
         minimum_quantity_sale: getNumber(row, cols.minimum_quantity_sale) || 1,
@@ -907,10 +1144,16 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
         exp_ability: getBoolean(row, cols.exp_ability),
         product_has_imei: getBoolean(row, cols.product_has_imei),
         different_price: getBoolean(row, cols.different_price),
-        show_quantity: cols.show_quantity !== -1 ? getBoolean(row, cols.show_quantity) : true,
+        show_quantity:
+          cols.show_quantity !== -1
+            ? getBoolean(row, cols.show_quantity)
+            : true,
         maximum_to_show: getNumber(row, cols.maximum_to_show),
         is_featured: getBoolean(row, cols.is_featured),
-        image: cols.image !== -1 ? getValue(row, cols.image) : row.getCell(13).value?.toString().trim() || "",
+        image:
+          cols.image !== -1
+            ? getValue(row, cols.image)
+            : row.getCell(13).value?.toString().trim() || "",
         gallery_product: getValue(row, cols.gallery_product),
       });
     }
@@ -952,9 +1195,16 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   });
 
   // Check existing products
-  const existingProducts = await ProductModel.find({}, { code: 1, name: 1 }).lean();
-  const codeSet = new Set(existingProducts.map((p: any) => p.code).filter(Boolean));
-  const nameSet = new Set(existingProducts.map((p: any) => p.name.toLowerCase()));
+  const existingProducts = await ProductModel.find(
+    {},
+    { code: 1, name: 1 }
+  ).lean();
+  const codeSet = new Set(
+    existingProducts.map((p: any) => p.code).filter(Boolean)
+  );
+  const nameSet = new Set(
+    existingProducts.map((p: any) => p.name.toLowerCase())
+  );
 
   for (const prod of products) {
     try {
@@ -979,7 +1229,9 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
       // Find categories
       let categoryIds: string[] = [];
       if (prod.category) {
-        const categories = prod.category.split(",").map((c: string) => c.trim());
+        const categories = prod.category
+          .split(",")
+          .map((c: string) => c.trim());
         for (const catName of categories) {
           const catId = categoryMap[catName.toLowerCase()];
           if (catId) {
@@ -1003,9 +1255,15 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
       }
 
       // Find units (optional)
-      const productUnitId = prod.product_unit ? unitMap[prod.product_unit.toLowerCase()] : null;
-      const saleUnitId = prod.sale_unit ? unitMap[prod.sale_unit.toLowerCase()] : null;
-      const purchaseUnitId = prod.purchase_unit ? unitMap[prod.purchase_unit.toLowerCase()] : null;
+      const productUnitId = prod.product_unit
+        ? unitMap[prod.product_unit.toLowerCase()]
+        : null;
+      const saleUnitId = prod.sale_unit
+        ? unitMap[prod.sale_unit.toLowerCase()]
+        : null;
+      const purchaseUnitId = prod.purchase_unit
+        ? unitMap[prod.purchase_unit.toLowerCase()]
+        : null;
 
       // Find tax (optional)
       const taxId = prod.taxes ? taxMap[prod.taxes.toLowerCase()] : null;
@@ -1013,7 +1271,10 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
       // Parse gallery images
       let galleryImages: string[] = [];
       if (prod.gallery_product) {
-        galleryImages = prod.gallery_product.split(",").map((img: string) => img.trim()).filter(Boolean);
+        galleryImages = prod.gallery_product
+          .split(",")
+          .map((img: string) => img.trim())
+          .filter(Boolean);
       }
 
       // Create product
@@ -1077,7 +1338,6 @@ export const importProductsFromExcel = async (req: Request, res: Response) => {
   });
 };
 
-
 export const deletemanyproducts = async (req: Request, res: Response) => {
   const { ids } = req.body;
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -1089,7 +1349,9 @@ export const deletemanyproducts = async (req: Request, res: Response) => {
 
   for (const product of products) {
     // Delete stocks and update warehouses
-    const stocks = await Product_WarehouseModel.find({ productId: product._id });
+    const stocks = await Product_WarehouseModel.find({
+      productId: product._id,
+    });
     for (const stock of stocks) {
       await WarehouseModel.findByIdAndUpdate(stock.warehouseId, {
         $inc: {
@@ -1103,7 +1365,9 @@ export const deletemanyproducts = async (req: Request, res: Response) => {
     // Delete prices and options
     const prices = await ProductPriceModel.find({ productId: product._id });
     const priceIds = prices.map((p) => p._id);
-    await ProductPriceOptionModel.deleteMany({ product_price_id: { $in: priceIds } });
+    await ProductPriceOptionModel.deleteMany({
+      product_price_id: { $in: priceIds },
+    });
     await ProductPriceModel.deleteMany({ productId: product._id });
 
     // Update categories
@@ -1118,12 +1382,13 @@ export const deletemanyproducts = async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Products deleted successfully" });
 };
 
-
 export const getLowStockProducts = async (req: Request, res: Response) => {
   const { warehouseId } = req.query;
 
   // Get all products with their low_stock threshold
-  const products = await ProductModel.find({ low_stock: { $exists: true, $gt: 0 } })
+  const products = await ProductModel.find({
+    low_stock: { $exists: true, $gt: 0 },
+  })
     .select("name ar_name code low_stock image categoryId brandId")
     .populate("categoryId", "name ar_name")
     .populate("brandId", "name ar_name")
