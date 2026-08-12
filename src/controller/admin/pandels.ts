@@ -25,16 +25,10 @@ const normalizeWarehouseSelection = async (
     Array.isArray(payload?.warehouse_ids) && payload.warehouse_ids.length > 0;
   const hasSingleWarehouseId = !!payload?.warehouse_id;
 
-  if (
-    allWarehousesRequested &&
-    (hasSingleWarehouseId || hasWarehouseIdsArray)
-  ) {
-    throw new BadRequest(
-      "Do not send warehouse_id or warehouse_ids when all_warehouses is true",
-    );
-  }
+  // Removed: no longer throws when all_warehouses is true and ids are also sent.
+  // We just skip/ignore warehouse_id / warehouse_ids in that case.
 
-  if (hasSingleWarehouseId && hasWarehouseIdsArray) {
+  if (!allWarehousesRequested && hasSingleWarehouseId && hasWarehouseIdsArray) {
     throw new BadRequest("Use either warehouse_id or warehouse_ids, not both");
   }
 
@@ -88,20 +82,24 @@ const normalizeWarehouseSelection = async (
     );
   }
 
-  for (const id of warehouseIds) {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new BadRequest(`Invalid warehouse id: ${id}`);
+  // Skip existence/validity checks entirely when all_warehouses is true,
+  // since warehouseIds was derived internally from WarehouseModel.find({}).
+  if (!allWarehouses) {
+    for (const id of warehouseIds) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new BadRequest(`Invalid warehouse id: ${id}`);
+      }
     }
-  }
 
-  const existingWarehouses = await WarehouseModel.find({
-    _id: { $in: warehouseIds },
-  })
-    .select("_id")
-    .lean();
+    const existingWarehouses = await WarehouseModel.find({
+      _id: { $in: warehouseIds },
+    })
+      .select("_id")
+      .lean();
 
-  if (existingWarehouses.length !== warehouseIds.length) {
-    throw new BadRequest("One or more selected warehouses do not exist");
+    if (existingWarehouses.length !== warehouseIds.length) {
+      throw new BadRequest("One or more selected warehouses do not exist");
+    }
   }
 
   return {
