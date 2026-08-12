@@ -14,6 +14,7 @@ import { Product_WarehouseModel } from "../../models/schema/admin/Product_Wareho
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { deletePhotoFromServer } from "../../utils/deleteImage";
 import mongoose from "mongoose";
+import { log } from "console";
 
 const normalizeWarehouseSelection = async (
   payload: any,
@@ -23,14 +24,15 @@ const normalizeWarehouseSelection = async (
   const allWarehousesRequested = payload?.all_warehouses === true;
   const hasWarehouseIdsArray =
     Array.isArray(payload?.warehouse_ids) && payload.warehouse_ids.length > 0;
-  const hasSingleWarehouseId = !!payload?.warehouse_id;
 
-  // Removed: no longer throws when all_warehouses is true and ids are also sent.
-  // We just skip/ignore warehouse_id / warehouse_ids in that case.
+  // Only look at warehouse_id when warehouse_ids array wasn't sent —
+  // this avoids false conflicts when middleware injects warehouse_id
+  // regardless of what the client actually provided.
+  const hasSingleWarehouseId =
+    !hasWarehouseIdsArray && !!payload?.warehouse_id;
 
-  if (!allWarehousesRequested && hasSingleWarehouseId && hasWarehouseIdsArray) {
-    throw new BadRequest("Use either warehouse_id or warehouse_ids, not both");
-  }
+  // No more "not both" throw — warehouse_ids array always takes priority
+  // over a middleware-injected warehouse_id.
 
   let allWarehouses = false;
   let warehouseIds: string[] = [];
@@ -82,8 +84,6 @@ const normalizeWarehouseSelection = async (
     );
   }
 
-  // Skip existence/validity checks entirely when all_warehouses is true,
-  // since warehouseIds was derived internally from WarehouseModel.find({}).
   if (!allWarehouses) {
     for (const id of warehouseIds) {
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -180,7 +180,7 @@ const validateProductsInWarehouses = async (
 // 📦 GET ALL PANDELS (Admin)
 // ═══════════════════════════════════════════════════════════
 export const getPandels = async (req: Request, res: Response) => {
-  const pandels = await PandelModel.find({ status: true })
+  const pandels = await PandelModel.find()
     .populate({
       path: "products.productId",
       select: "name ar_name price image",
