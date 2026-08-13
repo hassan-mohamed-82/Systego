@@ -12,6 +12,7 @@ import paymentMethodRouter from "./paymentmethod";
 import tenantInfoRouter from "../admin/tenantInfo";
 import orderTypeRouter from "./ordertype";
 import warehouseRouter from "./Warehouse";
+import storeSettingsRoutes from "./storeSettings";
 
 const userRoute = Router();
 
@@ -31,5 +32,7 @@ userRoute.use("/cart", cartRouter);
 userRoute.use("/order", orderRouter);
 userRoute.use("/order-type", orderTypeRouter);
 userRoute.use("/warehouse", warehouseRouter);
+
+userRoute.use("/store-settings", storeSettingsRoutes);
 
 export default userRoute;
