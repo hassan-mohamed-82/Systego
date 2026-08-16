@@ -108,7 +108,9 @@ export const getStocktakeItems = async (req: Request, res: Response) => {
 
   const productPriceIds = [
     ...new Set(
-      allItems.filter((i: any) => i.productPriceId).map((i: any) => i.productPriceId.toString())
+      allItems
+        .filter((i: any) => i.productPriceId)
+        .map((i: any) => i.productPriceId.toString())
     ),
   ];
 
@@ -144,14 +146,17 @@ export const getStocktakeItems = async (req: Request, res: Response) => {
         );
 
         if (variation) {
-          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          if (!groupedOptions[variation.name])
+            groupedOptions[variation.name] = [];
           groupedOptions[variation.name].push(option);
         }
       }
 
       const labelParts: string[] = [];
       for (const varName of Object.keys(groupedOptions)) {
-        const optionNames = groupedOptions[varName].map((o: any) => o.name).join("/");
+        const optionNames = groupedOptions[varName]
+          .map((o: any) => o.name)
+          .join("/");
         labelParts.push(optionNames);
       }
 
@@ -183,12 +188,17 @@ export const getStocktakeItems = async (req: Request, res: Response) => {
       )
     : resolvedItems;
 
-  filtered.sort((a: any, b: any) => a.productNameSnapshot.localeCompare(b.productNameSnapshot));
+  filtered.sort((a: any, b: any) =>
+    a.productNameSnapshot.localeCompare(b.productNameSnapshot)
+  );
 
   const total = filtered.length;
   const pageNum = Math.max(Number(page), 1);
   const limitNum = Math.max(Number(limit), 1);
-  const paginated = filtered.slice((pageNum - 1) * limitNum, (pageNum - 1) * limitNum + limitNum);
+  const paginated = filtered.slice(
+    (pageNum - 1) * limitNum,
+    (pageNum - 1) * limitNum + limitNum
+  );
 
   SuccessResponse(res, {
     items: paginated,
@@ -274,7 +284,10 @@ export const exportStocktakeSheet = async (req: Request, res: Response) => {
 
   const showSystemQty = includeSystemQty === "true";
 
-  const stocktake = await StocktakeModel.findById(id).populate("warehouseId", "name");
+  const stocktake = await StocktakeModel.findById(id).populate(
+    "warehouseId",
+    "name"
+  );
   if (!stocktake) throw new NotFound("Stocktake not found");
 
   const items = await StocktakeItemModel.find({ stocktakeId: id })
@@ -286,7 +299,9 @@ export const exportStocktakeSheet = async (req: Request, res: Response) => {
 
   const productPriceIds = [
     ...new Set(
-      items.filter((i: any) => i.productPriceId).map((i: any) => i.productPriceId.toString())
+      items
+        .filter((i: any) => i.productPriceId)
+        .map((i: any) => i.productPriceId.toString())
     ),
   ];
 
@@ -318,7 +333,8 @@ export const exportStocktakeSheet = async (req: Request, res: Response) => {
         );
 
         if (variation) {
-          if (!groupedOptions[variation.name]) groupedOptions[variation.name] = [];
+          if (!groupedOptions[variation.name])
+            groupedOptions[variation.name] = [];
           groupedOptions[variation.name].push(option);
         }
       }
@@ -337,7 +353,7 @@ export const exportStocktakeSheet = async (req: Request, res: Response) => {
   const worksheet = workbook.addWorksheet("Stocktake");
 
   worksheet.columns = [
-    { header: "Item Id", key: "itemId", width: 28, hidden: true },
+    { header: "ID", key: "itemId", width: 26 , hidden:true},
     { header: "Product", key: "product", width: 40 },
     { header: "System Qty", key: "systemQty", width: 14 },
     { header: "Actual Qty", key: "actualQty", width: 14 },
@@ -361,12 +377,33 @@ export const exportStocktakeSheet = async (req: Request, res: Response) => {
     });
   });
 
-  worksheet.eachRow((row, rowNumber) => {
+  // lock every cell except Actual Qty (col 4)
+  worksheet.eachRow((row) => {
     row.eachCell((cell, colNumber) => {
-      cell.protection = { locked: colNumber !== 4 }; // Actual Qty is col 4
+      cell.protection = { locked: colNumber !== 4 };
     });
   });
-  worksheet.protect("", { selectLockedCells: true, selectUnlockedCells: true });
+
+  // structural protection: block column/row deletion, insertion, reordering, formatting
+  // this is what actually prevents the ID column from being tampered with
+  worksheet.protect(
+    process.env.STOCKTAKE_SHEET_PASSWORD || "systego-stocktake",
+    {
+      selectLockedCells: true,
+      selectUnlockedCells: true,
+      formatCells: false,
+      formatColumns: false,
+      formatRows: false,
+      insertRows: false,
+      insertColumns: false,
+      insertHyperlinks: false,
+      deleteRows: false,
+      deleteColumns: false,
+      sort: false,
+      autoFilter: false,
+      pivotTables: false,
+    }
+  );
 
   const filename = `stocktake-${stocktake.code}.xlsx`;
 
@@ -388,9 +425,7 @@ export const importStocktakeSheet = async (req: Request, res: Response) => {
   const stocktake = await StocktakeModel.findById(id);
   if (!stocktake) throw new NotFound("Stocktake not found");
   if (stocktake.status !== "processing") {
-    throw new BadRequest(
-      "Cannot import into a stocktake that is not processing"
-    );
+    throw new BadRequest("Cannot import into a stocktake that is not processing");
   }
 
   const workbook = new ExcelJS.Workbook();
@@ -417,59 +452,68 @@ export const importStocktakeSheet = async (req: Request, res: Response) => {
   };
 
   const cols = {
-    itemId: findColumn(["item id", "itemid"]),
+    itemId: findColumn(["id", "item id", "itemid"]),
     actualQty: findColumn(["actual qty", "actual", "actual (counted)"]),
   };
 
+  // structural error - genuinely can't proceed, block the whole import
   if (cols.itemId === -1 || cols.actualQty === -1) {
     throw new BadRequest(
-      "Sheet is missing required columns (Item Id, Actual Qty)"
+      "Sheet is missing required columns (ID, Actual Qty). Please use the exported template without modifying its structure."
     );
   }
 
-  const rows: { itemId: string; actualQty: number }[] = [];
+  const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+
+  const validRows: { itemId: string; actualQty: number }[] = [];
   const skipped: { row: number; reason: string }[] = [];
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
 
-    const itemId =
-      row
-        .getCell(cols.itemId + 1)
-        .value?.toString()
-        .trim() || "";
-    const rawQty = row.getCell(cols.actualQty + 1).value;
+    const itemId = row.getCell(cols.itemId).value?.toString().trim() || "";
+    const rawQty = row.getCell(cols.actualQty).value;
 
     if (!itemId) {
-      skipped.push({ row: rowNumber, reason: "Missing item id" });
+      // no id at all on this row - can't do anything with it, likely a stray blank row
       return;
     }
+
+    if (!objectIdRegex.test(itemId)) {
+      skipped.push({
+        row: rowNumber,
+        reason: "ID column value is invalid — the sheet structure may have been altered",
+      });
+      return;
+    }
+
+    // not counted yet - not an error, just nothing to import for this row
     if (rawQty === null || rawQty === undefined || rawQty === "") {
-      skipped.push({ row: rowNumber, reason: "Empty actual qty" });
+      skipped.push({ row: rowNumber, reason: "Not counted (Actual Qty is empty)" });
       return;
     }
 
     const actualQty = Number(rawQty);
     if (isNaN(actualQty) || actualQty < 0) {
-      skipped.push({ row: rowNumber, reason: "Invalid actual qty" });
+      // content is wrong, but don't fail the whole import - report it and move on
+      skipped.push({
+        row: rowNumber,
+        reason: `Invalid value "${rawQty}" in Actual Qty — must be a non-negative number`,
+      });
       return;
     }
 
-    rows.push({ itemId, actualQty });
+    validRows.push({ itemId, actualQty });
   });
 
-  if (rows.length === 0) {
-    throw new BadRequest("No valid rows found in the uploaded sheet");
-  }
-
   const validItemIds = new Set(
-    (
-      await StocktakeItemModel.find({ stocktakeId: id }).select("_id").lean()
-    ).map((i) => i._id.toString())
+    (await StocktakeItemModel.find({ stocktakeId: id }).select("_id").lean()).map((i) =>
+      i._id.toString()
+    )
   );
 
   const ops: any[] = [];
-  rows.forEach((row) => {
+  validRows.forEach((row) => {
     if (!validItemIds.has(row.itemId)) {
       skipped.push({
         row: 0,
@@ -490,8 +534,11 @@ export const importStocktakeSheet = async (req: Request, res: Response) => {
     : { modifiedCount: 0 };
 
   SuccessResponse(res, {
-    message: "Import completed",
-    matched: ops.length,
+    message:
+      ops.length > 0
+        ? "Import completed"
+        : "Import processed, but no rows had valid data to apply — check the details below",
+    imported: ops.length,
     modified: result.modifiedCount,
     skipped_count: skipped.length,
     skipped,
@@ -615,10 +662,22 @@ export const getStocktakeById = async (req: Request, res: Response) => {
 
   const summary = {
     total: await StocktakeItemModel.countDocuments({ stocktakeId: id }),
-    matched: await StocktakeItemModel.countDocuments({ stocktakeId: id, resolutionType: "match" }),
-    shortages: await StocktakeItemModel.countDocuments({ stocktakeId: id, resolutionType: "shortage" }),
-    surpluses: await StocktakeItemModel.countDocuments({ stocktakeId: id, resolutionType: "surplus" }),
-    skipped: await StocktakeItemModel.countDocuments({ stocktakeId: id, resolutionStatus: "skipped" }),
+    matched: await StocktakeItemModel.countDocuments({
+      stocktakeId: id,
+      resolutionType: "match",
+    }),
+    shortages: await StocktakeItemModel.countDocuments({
+      stocktakeId: id,
+      resolutionType: "shortage",
+    }),
+    surpluses: await StocktakeItemModel.countDocuments({
+      stocktakeId: id,
+      resolutionType: "surplus",
+    }),
+    skipped: await StocktakeItemModel.countDocuments({
+      stocktakeId: id,
+      resolutionStatus: "skipped",
+    }),
   };
 
   SuccessResponse(res, { stocktake, summary });
