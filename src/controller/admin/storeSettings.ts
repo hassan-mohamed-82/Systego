@@ -16,7 +16,7 @@ export const getStoreSettings = asyncHandler(
         // Create default settings if no settings exist
         if (!settings) {
             settings = await StoreSettingsModel.create({
-                title: "My Store",
+                title: "Store.",
                 logo: null,
             });
         }

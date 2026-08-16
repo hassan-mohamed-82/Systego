@@ -76,6 +76,7 @@ import AccountingLedgerRouter from "./AccountingLedger";
 import FawryRouter from "./Fawry";
 import orderTypeRouter from "./ordertype";
 import ProfileRouter from "./ProfileRoutes";
+import stockTakeRouter from "./stockTake";
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter)
@@ -156,5 +157,6 @@ route.use("/receivable", ReceivableRouter)
 route.use("/ledger", AccountingLedgerRouter)
 route.use("/fawry", FawryRouter)
 route.use("/order-type", orderTypeRouter);
+route.use("/stocktake", stockTakeRouter);
 
 export default route;
