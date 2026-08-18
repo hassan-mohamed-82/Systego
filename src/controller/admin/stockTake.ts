@@ -608,7 +608,7 @@ export const importStocktakeSheet = async (req: Request, res: Response) => {
 
 export const submitStocktake = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { treatUnfilledAsSkipped = false } = req.body;
+  const { treatUnfilledAsSkipped = false, items } = req.body;
 
   const stocktake = await StocktakeModel.findById(id);
   if (!stocktake) throw new NotFound("Stocktake not found");
@@ -616,10 +616,35 @@ export const submitStocktake = async (req: Request, res: Response) => {
     throw new BadRequest("Only a processing stocktake can be submitted");
   }
 
-  const items = await StocktakeItemModel.find({ stocktakeId: id });
-  if (items.length === 0) throw new BadRequest("Stocktake has no items");
+  // optional: apply final quantities sent along with submit, same as bulkUpdateStocktakeItems
+  if (items !== undefined) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequest("items must be a non-empty array if provided");
+    }
 
-  const unfilled = items.filter(
+    for (const row of items) {
+      if (!row.itemId) {
+        throw new BadRequest("Each item must include itemId");
+      }
+      if (typeof row.actualQty !== "number" || row.actualQty < 0) {
+        throw new BadRequest(`Invalid actualQty for item ${row.itemId}`);
+      }
+    }
+
+    const updateOps = items.map((row: any) => ({
+      updateOne: {
+        filter: { _id: row.itemId, stocktakeId: id },
+        update: { $set: { actualQty: row.actualQty } },
+      },
+    }));
+
+    await StocktakeItemModel.bulkWrite(updateOps);
+  }
+
+  const allItems = await StocktakeItemModel.find({ stocktakeId: id });
+  if (allItems.length === 0) throw new BadRequest("Stocktake has no items");
+
+  const unfilled = allItems.filter(
     (i) => i.actualQty === null || i.actualQty === undefined
   );
   if (unfilled.length > 0 && !treatUnfilledAsSkipped) {
@@ -628,7 +653,7 @@ export const submitStocktake = async (req: Request, res: Response) => {
     );
   }
 
-  const ops = items.map((item) => {
+  const ops = allItems.map((item) => {
     const counted = item.actualQty !== null && item.actualQty !== undefined;
 
     if (!counted) {
@@ -648,13 +673,8 @@ export const submitStocktake = async (req: Request, res: Response) => {
 
     const difference = item.actualQty! - item.systemQty;
     const resolutionType =
-      difference > 0
-        ? ("surplus" as const)
-        : difference < 0
-        ? ("shortage" as const)
-        : ("match" as const);
-    const resolutionStatus =
-      resolutionType === "match" ? ("resolved" as const) : ("pending" as const);
+      difference > 0 ? "surplus" as const : difference < 0 ? "shortage" as const : "match" as const;
+    const resolutionStatus = resolutionType === "match" ? "resolved" as const : "pending" as const;
 
     return {
       updateOne: {
@@ -672,19 +692,14 @@ export const submitStocktake = async (req: Request, res: Response) => {
   stocktake.completedAt = new Date();
   await stocktake.save();
 
-  const updatedItems = await StocktakeItemModel.find({
-    stocktakeId: id,
-  }).lean();
+  const updatedItems = await StocktakeItemModel.find({ stocktakeId: id }).lean();
 
   const summary = {
     total: updatedItems.length,
     matched: updatedItems.filter((i) => i.resolutionType === "match").length,
-    shortages: updatedItems.filter((i) => i.resolutionType === "shortage")
-      .length,
-    surpluses: updatedItems.filter((i) => i.resolutionType === "surplus")
-      .length,
-    skipped: updatedItems.filter((i) => i.resolutionStatus === "skipped")
-      .length,
+    shortages: updatedItems.filter((i) => i.resolutionType === "shortage").length,
+    surpluses: updatedItems.filter((i) => i.resolutionType === "surplus").length,
+    skipped: updatedItems.filter((i) => i.resolutionStatus === "skipped").length,
   };
 
   SuccessResponse(res, {
