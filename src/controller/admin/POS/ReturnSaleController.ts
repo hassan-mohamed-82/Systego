@@ -657,7 +657,7 @@ export const getAllReturns = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   const warehouseId = jwtUser?.warehouse_id;
 
-  const { page = 1, limit = 20, customer_id, from_date, to_date } = req.query;
+  const { page = 1, limit = 20, customer_id, startDate, endDate } = req.query;
 
   const query: any = { warehouse_id: warehouseId };
 
@@ -665,13 +665,13 @@ export const getAllReturns = async (req: Request, res: Response) => {
     query.customer_id = customer_id;
   }
 
-  if (from_date || to_date) {
+  if (startDate || endDate) {
     query.date = {};
-    if (from_date) {
-      query.date.$gte = new Date(from_date as string);
+    if (startDate) {
+      query.date.$gte = new Date(startDate as string);
     }
-    if (to_date) {
-      query.date.$lte = new Date(to_date as string);
+    if (endDate) {
+      query.date.$lte = new Date(endDate as string);
     }
   }
 
