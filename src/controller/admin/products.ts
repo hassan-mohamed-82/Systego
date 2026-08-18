@@ -296,7 +296,16 @@ export const getProduct = async (
 ): Promise<void> => {
   const { warehouseId } = req.query;
 
-  const products = await ProductModel.find()
+  const productFilter: any = {};
+  if (warehouseId) {
+    const productIdsInWarehouse = await Product_WarehouseModel.distinct(
+      "productId",
+      { warehouseId }
+    );
+    productFilter._id = { $in: productIdsInWarehouse };
+  }
+
+  const products = await ProductModel.find(productFilter)
     .populate("categoryId")
     .populate("brandId")
     .populate("taxesId")
@@ -316,12 +325,7 @@ export const getProduct = async (
 
       const totalQuantity = stocks.reduce((sum, s: any) => sum + s.quantity, 0);
 
-      // Build productPriceId -> quantity from Product_Warehouse (source of
-      // truth), already scoped to warehouseId if one was requested. This
-      // replaces trusting the denormalized ProductPriceModel.quantity field,
-      // which is global-only and not guaranteed to be in sync.
       const variantQuantityMap: Record<string, number> = {};
-      // Simple (non-variant) products store their stock under productPriceId: null.
       let simpleProductQuantity = 0;
       for (const s of stocks as any[]) {
         if (s.productPriceId) {
@@ -373,9 +377,6 @@ export const getProduct = async (
 
           return {
             ...price,
-            // Overrides the stale denormalized value with the figure
-            // actually computed from Product_Warehouse, scoped to
-            // warehouseId when one was requested.
             quantity: variantQuantityMap[price._id.toString()] ?? 0,
             variations: variationsArray,
           };
@@ -384,8 +385,6 @@ export const getProduct = async (
 
       return {
         ...product,
-        // For simple (non-variant) products, keep ProductModel.quantity
-        // consistent with the same source-of-truth override.
         quantity: prices.length === 0 ? simpleProductQuantity : product.quantity,
         totalQuantity,
         stocks,
