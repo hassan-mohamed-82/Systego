@@ -8,8 +8,9 @@ import { Product_WarehouseModel } from "../../models/schema/admin/Product_Wareho
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import ExcelJS from "exceljs";
 import { AnyBulkWriteOperation } from "mongoose";
-import { ProductPriceOptionModel } from "../../models/schema/admin/product_price";
+import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
 import { VariationModel } from "../../models/schema/admin/Variation";
+import { ProductModel } from "../../models/schema/admin/products";
 
 export const createStocktake = async (req: Request, res: Response) => {
   const { warehouseId, type, mode, productIds } = req.body;
@@ -51,31 +52,91 @@ export const createStocktake = async (req: Request, res: Response) => {
     createdBy: req.user?.id,
   });
 
-  const query: any = { warehouseId };
-  if (type === "partial") query.productId = { $in: productIds };
+  // start from the product catalog, not from Product_Warehouse, so products/variants
+  // with no stock record yet still show up (systemQty defaults to 0)
+  const productQuery: any = {};
+  if (type === "partial") productQuery._id = { $in: productIds };
 
-  const stockRows = await Product_WarehouseModel.find(query)
-    .populate("productId", "name code")
-    .lean();
+  const products = await ProductModel.find(productQuery).select("name code").lean();
 
-  if (stockRows.length === 0) {
+  if (products.length === 0) {
     await StocktakeModel.deleteOne({ _id: stocktake._id });
-    throw new BadRequest("No products found for this warehouse selection");
+    throw new BadRequest("No products found for this selection");
   }
 
-  const items = stockRows.map((row: any) => ({
-    stocktakeId: stocktake._id,
-    productId: row.productId?._id,
-    productPriceId: row.productPriceId || null,
-    warehouseId: row.warehouseId,
-    productNameSnapshot: row.productId?.name || "",
-    skuSnapshot: row.productId?.code || "",
-    systemQty: row.quantity,
-    actualQty: null,
-    difference: null,
-    resolutionStatus: "pending",
-    resolutionType: null,
-  }));
+  const productIdList = products.map((p: any) => p._id);
+
+  const priceVariants = await ProductPriceModel.find({
+    productId: { $in: productIdList },
+  })
+    .select("productId code")
+    .lean();
+
+  const existingStockRows = await Product_WarehouseModel.find({
+    warehouseId,
+    productId: { $in: productIdList },
+  }).lean();
+
+  // key: productId|productPriceId(or "null") -> quantity
+  const stockMap = new Map<string, number>();
+  existingStockRows.forEach((row: any) => {
+    const key = `${row.productId.toString()}|${row.productPriceId ? row.productPriceId.toString() : "null"}`;
+    stockMap.set(key, row.quantity);
+  });
+
+  const variantsByProductId = new Map<string, any[]>();
+  priceVariants.forEach((pv: any) => {
+    const key = pv.productId.toString();
+    if (!variantsByProductId.has(key)) variantsByProductId.set(key, []);
+    variantsByProductId.get(key)!.push(pv);
+  });
+
+  const items: any[] = [];
+
+  products.forEach((product: any) => {
+    const productIdStr = product._id.toString();
+    const variants = variantsByProductId.get(productIdStr) || [];
+
+    if (variants.length > 0) {
+      // product has variations - one item per variant
+      variants.forEach((variant: any) => {
+        const key = `${productIdStr}|${variant._id.toString()}`;
+        const systemQty = stockMap.get(key) ?? 0; // default 0 if never stocked in this warehouse
+
+        items.push({
+          stocktakeId: stocktake._id,
+          productId: product._id,
+          productPriceId: variant._id,
+          warehouseId,
+          productNameSnapshot: product.name || "",
+          skuSnapshot: variant.code || product.code || "",
+          systemQty,
+          actualQty: null,
+          difference: null,
+          resolutionStatus: "pending",
+          resolutionType: null,
+        });
+      });
+    } else {
+      // simple product, no variations
+      const key = `${productIdStr}|null`;
+      const systemQty = stockMap.get(key) ?? 0;
+
+      items.push({
+        stocktakeId: stocktake._id,
+        productId: product._id,
+        productPriceId: null,
+        warehouseId,
+        productNameSnapshot: product.name || "",
+        skuSnapshot: product.code || "",
+        systemQty,
+        actualQty: null,
+        difference: null,
+        resolutionStatus: "pending",
+        resolutionType: null,
+      });
+    }
+  });
 
   const CHUNK_SIZE = 500;
   for (let i = 0; i < items.length; i += CHUNK_SIZE) {
