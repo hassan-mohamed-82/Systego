@@ -577,11 +577,12 @@ export const updatePurchase = async (req: Request, res: Response) => {
     payment_status ?? (existingPurchase as any).payment_status;
 
   const totalPaidNow = financials.reduce(
-    (sum: number, f: any) => sum + (f.payment_amount || 0),
+    (sum: number, f: any) => sum + Number(f.payment_amount || 0),
     0
   );
+
   const totalDuePayments = purchase_due_payment.reduce(
-    (sum: number, d: any) => sum + (d.amount || 0),
+    (sum: number, d: any) => sum + Number(d.amount || 0),
     0
   );
   const totalInstallments = installments.reduce(
@@ -653,7 +654,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
     category_id: any;
     totalQuantity: number;
     hasVariations: boolean;
-    variations: Array<{ product_price_id: any; option_id: any; quantity: number }>;
+    variations: Array<{
+      product_price_id: any;
+      option_id: any;
+      quantity: number;
+    }>;
     raw: any;
   }> = [];
 
