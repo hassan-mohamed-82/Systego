@@ -37,7 +37,7 @@ export interface TenantInfo {
 
 // ─── Cache ─────────────────────────────────────────────────────────
 
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000; // 10 minutes
 
 let cachedData: TenantInfo | null = null;
 let cachedAt: number = 0;

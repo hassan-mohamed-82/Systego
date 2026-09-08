@@ -12,7 +12,7 @@ const TRACKED_TABLES = [
   "Coupon",
   "Currency",
   "Customer",
-  "customer_groups",
+  "CustomerGroup",
   "Discount",
   "ExpenseCategory",
   "Expense",
