@@ -342,10 +342,14 @@ export const bulkUpdateStocktakeItems = async (req: Request, res: Response) => {
 
 export const exportStocktakeSheet = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { includeSystemQty = "true", includeDifference = "false" } = req.query;
+  const {
+    includeSystemQty = "true",
+    includeDifference = "false",
+  } = req.query as any;
 
   const showSystemQty = includeSystemQty === "true";
-  const showDifference = includeDifference === "true";
+  const showDifference =
+    includeDifference === "true" ;
 
   const stocktake = await StocktakeModel.findById(id).populate("warehouseId", "name");
   if (!stocktake) throw new NotFound("Stocktake not found");
@@ -737,6 +741,20 @@ export const cancelStocktake = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "Stocktake cancelled successfully",
     stocktake,
+  });
+};
+
+export const deleteStocktake = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const stocktake = await StocktakeModel.findById(id);
+  if (!stocktake) throw new NotFound("Stocktake not found");
+
+  await StocktakeItemModel.deleteMany({ stocktakeId: id });
+  await StocktakeModel.findByIdAndDelete(id);
+
+  SuccessResponse(res, {
+    message: "Stocktake deleted successfully",
   });
 };
 

@@ -5,6 +5,7 @@ import {
   getStocktakes,
   getStocktakeById,
   cancelStocktake,
+  deleteStocktake,
   getStocktakeItems,
   updateStocktakeItem,
   bulkUpdateStocktakeItems,
@@ -12,7 +13,7 @@ import {
   importStocktakeSheet,
   submitStocktake,
   resolveStocktakeItems,
-  deleteStocktake
+  
 } from "../../controller/admin/stockTake";
 import { uploadExcelFile } from "../../utils/uploadFile";
 import { authorizePermissions } from "../../middlewares/haspremission";
@@ -23,7 +24,9 @@ route.get("/",authorizePermissions("stocktake","View"), catchAsync(getStocktakes
 route.get("/:id",authorizePermissions("stocktake","View"), catchAsync(getStocktakeById));
 route.post("/", authorizePermissions("stocktake","Add"), catchAsync(createStocktake));
 route.delete("/:id", authorizePermissions("stocktake","Delete"), catchAsync(deleteStocktake));
-route.patch("/:id/status", authorizePermissions("stocktake","Delete"), catchAsync(cancelStocktake));
+route.post("/:id/cancel", authorizePermissions("stocktake","Edit"), catchAsync(cancelStocktake));
+route.patch("/:id/cancel", authorizePermissions("stocktake","Edit"), catchAsync(cancelStocktake));
+
 route.get("/:id/items", authorizePermissions("stocktake","View"), catchAsync(getStocktakeItems));
 route.patch("/:id/items/:itemId", authorizePermissions("stocktake","Edit"), catchAsync(updateStocktakeItem));
 route.put("/:id/items", authorizePermissions("stocktake","Edit"), catchAsync(bulkUpdateStocktakeItems));
