@@ -24,7 +24,6 @@ route.get("/",authorizePermissions("stocktake","View"), catchAsync(getStocktakes
 route.get("/:id",authorizePermissions("stocktake","View"), catchAsync(getStocktakeById));
 route.post("/", authorizePermissions("stocktake","Add"), catchAsync(createStocktake));
 route.delete("/:id", authorizePermissions("stocktake","Delete"), catchAsync(deleteStocktake));
-route.post("/:id/cancel", authorizePermissions("stocktake","Edit"), catchAsync(cancelStocktake));
 route.patch("/:id/cancel", authorizePermissions("stocktake","Edit"), catchAsync(cancelStocktake));
 
 route.get("/:id/items", authorizePermissions("stocktake","View"), catchAsync(getStocktakeItems));
