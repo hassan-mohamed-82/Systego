@@ -41,6 +41,7 @@ export const createProduct = async (req: Request, res: Response) => {
     low_stock,
     cost,
     whole_price,
+    start_quantaty,
     free_shipping,
     taxesId,
     product_has_imei,
@@ -164,6 +165,7 @@ export const createProduct = async (req: Request, res: Response) => {
     minimum_quantity_sale,
     low_stock,
     whole_price,
+    start_quantaty: start_quantaty ?? (req.body as any).start_quantity ?? 0,
     taxesId,
     product_has_imei,
     different_price,
@@ -587,7 +589,8 @@ export const updateProduct = async (req: Request, res: Response) => {
     minimum_quantity_sale ?? product.minimum_quantity_sale;
   product.low_stock = low_stock ?? product.low_stock;
   product.whole_price = whole_price ?? product.whole_price;
-  product.start_quantaty = start_quantaty ?? product.start_quantaty;
+  product.start_quantaty =
+    start_quantaty ?? (req.body as any).start_quantity ?? product.start_quantaty;
   product.cost = cost ?? product.cost;
   product.taxesId = taxesId ?? product.taxesId;
   product.product_has_imei = product_has_imei ?? product.product_has_imei;

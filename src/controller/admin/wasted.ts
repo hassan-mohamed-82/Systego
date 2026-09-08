@@ -117,7 +117,13 @@ export const getAllWasted = async (req: Request, res: Response) => {
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = new Date(from);
-      if (to) filter.createdAt.$lte = new Date(to);
+      if (to) {
+        const toDate = new Date(to);
+        if (typeof to === "string" && to.length === 10) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+        filter.createdAt.$lte = toDate;
+      }
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -150,15 +156,25 @@ export const getAllWasted = async (req: Request, res: Response) => {
 
     // Transform productPriceId to { name, price }
     const transformedItems = items.map((item: any) => {
-      if (item.productPriceId && item.productPriceId.productpriceoptions) {
+      if (item.productPriceId) {
         const price = item.productPriceId.price;
-        const optionNames = item.productPriceId.productpriceoptions
-          .map((po: any) => po.option?.name)
-          .filter(Boolean);
-        const name = optionNames.join("-"); // e.g., "sm-Blue"
-        item.productPriceId = { name, price };
+        let name = "";
+        if (item.productPriceId.productpriceoptions && Array.isArray(item.productPriceId.productpriceoptions)) {
+          const optionNames = item.productPriceId.productpriceoptions
+            .map((po: any) => po.option?.name || po.option?.ar_name)
+            .filter(Boolean);
+          if (optionNames.length > 0) {
+            name = optionNames.join(" - ");
+          }
+        }
+        if (!name && item.productPriceId.name) {
+          name = item.productPriceId.name;
+        }
+        if (!name && item.productPriceId.code) {
+          name = item.productPriceId.code;
+        }
+        item.productPriceId = name ? { name, price } : null;
       } else {
-        // If no product price or no options, set to null or {}
         item.productPriceId = null;
       }
       return item;
@@ -183,13 +199,61 @@ export const getAllWasted = async (req: Request, res: Response) => {
 // ==================== Get Wasted By Id ====================
 export const getWastedById = async (req: Request, res: Response) => {
   try {
-    const wasted = await WastedModel.findById(req.params.id)
+    const pricePopulate = {
+      path: "productPriceId",
+      select: "code price name",
+      populate: {
+        path: "productpriceoptions",
+        populate: {
+          path: "option",
+          populate: {
+            path: "variation",
+            select: "name ar_name",
+          },
+        },
+      },
+    };
+
+    let wasted: any = await WastedModel.findById(req.params.id)
       .populate("productId", "name ar_name code")
-      .populate("productPriceId", "code")
+      .populate(pricePopulate)
       .populate("warehouseId", "name")
-      .populate("userId", "name");
+      .populate("userId", "name username")
+      .lean();
+
+    if (!wasted && mongoose.Types.ObjectId.isValid(req.params.id)) {
+      wasted = await WastedModel.findOne({ _id: new mongoose.Types.ObjectId(req.params.id) })
+        .populate("productId", "name ar_name code")
+        .populate(pricePopulate)
+        .populate("warehouseId", "name")
+        .populate("userId", "name username")
+        .lean();
+    }
+
+    if (!wasted) {
+      wasted = await WastedModel.findOne({ _id: req.params.id })
+        .populate("productId", "name ar_name code")
+        .populate(pricePopulate)
+        .populate("warehouseId", "name")
+        .populate("userId", "name username")
+        .lean();
+    }
 
     if (!wasted) throw new ForbiddenError("Wasted entry not found");
+
+    if (wasted.productPriceId) {
+      const price = wasted.productPriceId.price;
+      let name = "";
+      if (Array.isArray(wasted.productPriceId.productpriceoptions)) {
+        const optionNames = wasted.productPriceId.productpriceoptions
+          .map((po: any) => po.option?.name || po.option?.ar_name)
+          .filter(Boolean);
+        if (optionNames.length > 0) name = optionNames.join(" - ");
+      }
+      if (!name && wasted.productPriceId.name) name = wasted.productPriceId.name;
+      if (!name && wasted.productPriceId.code) name = wasted.productPriceId.code;
+      wasted.productPriceId = name ? { name, price } : null;
+    }
 
     SuccessResponse(res, { message: "Wasted entry found", data: wasted });
   } catch (error: any) {
@@ -201,7 +265,13 @@ export const getWastedById = async (req: Request, res: Response) => {
 // ==================== Delete Wasted (restore stock) ====================
 export const deleteWasted = async (req: Request, res: Response) => {
   try {
-    const wasted = await WastedModel.findById(req.params.id);
+    let wasted = await WastedModel.findById(req.params.id);
+    if (!wasted && mongoose.Types.ObjectId.isValid(req.params.id)) {
+      wasted = await WastedModel.findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+    }
+    if (!wasted) {
+      wasted = await WastedModel.findOne({ _id: req.params.id });
+    }
     if (!wasted) throw new ForbiddenError("Wasted entry not found");
 
     // Restore the stock back since the waste record is being voided
@@ -214,7 +284,7 @@ export const deleteWasted = async (req: Request, res: Response) => {
       { $inc: { quantity: wasted.quantity } }
     );
 
-    await WastedModel.findByIdAndDelete(req.params.id);
+    await WastedModel.deleteOne({ _id: req.params.id });
 
     SuccessResponse(res, {
       message: "Wasted entry deleted and stock restored",
@@ -236,7 +306,13 @@ export const getWastedStats = async (req: Request, res: Response) => {
     if (from || to) {
       match.createdAt = {};
       if (from) match.createdAt.$gte = new Date(from);
-      if (to) match.createdAt.$lte = new Date(to);
+      if (to) {
+        const toDate = new Date(to);
+        if (typeof to === "string" && to.length === 10) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+        match.createdAt.$lte = toDate;
+      }
     }
 
     const stats = await WastedModel.aggregate([
@@ -264,7 +340,13 @@ export const updateWastedStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { isApproved } = req.body;
 
-    const wasted = await WastedModel.findById(id);
+    let wasted = await WastedModel.findById(id);
+    if (!wasted && mongoose.Types.ObjectId.isValid(id)) {
+      wasted = await WastedModel.findOne({ _id: new mongoose.Types.ObjectId(id) });
+    }
+    if (!wasted) {
+      wasted = await WastedModel.findOne({ _id: id });
+    }
     if (!wasted) {
       throw new BadRequest("Wasted entry not found");
     }
