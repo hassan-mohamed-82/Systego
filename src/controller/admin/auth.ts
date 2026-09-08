@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import { UserModel } from "../../models/schema/admin/User";
 import { RoleModel } from "../../models/schema/admin/roles";
 import { CashierShift } from "../../models/schema/admin/POS/CashierShift";
+import { CashierModel } from "../../models/schema/admin/cashier";
+import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { generateToken } from "../../utils/auth";
 import bcrypt from "bcryptjs";
 import { ConflictError, UnauthorizedError } from "../../Errors";
@@ -88,7 +90,26 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   const openShift = await CashierShift.findOne({
     cashierman_id: user._id,
     status: "open",
-  });
+  }).sort({ start_time: -1 });
+
+  let cashierDoc: any = null;
+  let financialAccounts: any[] = [];
+
+  if (openShift) {
+    cashierDoc = await CashierModel.findById(openShift.cashier_id)
+      .select("_id name ar_name cashier_active")
+      .lean();
+
+    if (user.warehouse_id) {
+      financialAccounts = await BankAccountModel.find({
+        warehouseId: user.warehouse_id,
+        status: true,
+        in_POS: true,
+      })
+        .select("_id name image balance")
+        .lean();
+    }
+  }
 
   // ✅ Token خفيف - بدون permissions
   const token = generateToken({
@@ -115,6 +136,9 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       permissions: mappedPermissions,
     },
     hasOpenShift: !!openShift,
+    shift: openShift || null,
+    cashier: cashierDoc || null,
+    financialAccounts: financialAccounts || [],
   });
 };
 

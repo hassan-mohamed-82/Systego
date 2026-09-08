@@ -31,12 +31,20 @@ export const startcashierShift = async (req: Request, res: Response) => {
 
   if (existingShift) {
     const cashierDoc = await CashierModel.findById(existingShift.cashier_id);
+    const financialAccounts = await BankAccountModel.find({
+      warehouseId: warehouseId,
+      status: true,
+      in_POS: true,
+    })
+      .select("_id name image balance")
+      .lean();
 
     return SuccessResponse(res, {
       message: "You already have an open shift",
       isExisting: true,
       shift: existingShift,
       cashier: cashierDoc,
+      financialAccounts: financialAccounts || [],
     });
   }
 
@@ -78,10 +86,19 @@ export const startcashierShift = async (req: Request, res: Response) => {
     { $set: { cashier_active: true } },
   );
 
+  const financialAccounts = await BankAccountModel.find({
+    warehouseId: warehouseId,
+    status: true,
+    in_POS: true,
+  })
+    .select("_id name image balance")
+    .lean();
+
   SuccessResponse(res, {
     message: "Cashier shift started successfully",
     shift: cashierShift,
     cashier: cashierDoc,
+    financialAccounts: financialAccounts || [],
   });
 };
 
@@ -334,5 +351,49 @@ export const getCashierUsers = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
   return SuccessResponse(res, {
     message: "Logged out successfully",
+  });
+};
+
+export const getCurrentShift = async (req: Request, res: Response) => {
+  const cashierman_id = req.user?.id;
+  const warehouseId = (req.user as any)?.warehouse_id;
+
+  if (!cashierman_id) throw new UnauthorizedError("Unauthorized");
+
+  const openShift = await CashierShift.findOne({
+    cashierman_id,
+    status: "open",
+  }).sort({ start_time: -1 });
+
+  if (!openShift) {
+    return SuccessResponse(res, {
+      message: "No open shift found",
+      hasOpenShift: false,
+      shift: null,
+      cashier: null,
+      financialAccounts: [],
+    });
+  }
+
+  const cashierDoc = await CashierModel.findById(openShift.cashier_id)
+    .select("_id name ar_name cashier_active")
+    .lean();
+
+  const financialAccounts = warehouseId
+    ? await BankAccountModel.find({
+        warehouseId,
+        status: true,
+        in_POS: true,
+      })
+        .select("_id name image balance")
+        .lean()
+    : [];
+
+  return SuccessResponse(res, {
+    message: "Current open shift fetched",
+    hasOpenShift: true,
+    shift: openShift,
+    cashier: cashierDoc,
+    financialAccounts,
   });
 };

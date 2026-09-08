@@ -43,8 +43,13 @@ export const createCustomer = async (req: Request, res: Response) => {
     }
 
     // Validate customer group if provided
-    if (customer_group_id) {
-        const customerGroup = await CustomerGroupModel.findById(customer_group_id);
+    const validCustomerGroupId =
+        customer_group_id && customer_group_id.toString().trim() !== ""
+            ? customer_group_id
+            : null;
+
+    if (validCustomerGroupId) {
+        const customerGroup = await CustomerGroupModel.findById(validCustomerGroupId);
         if (!customerGroup) {
             throw new NotFound("Customer group not found");
         }
@@ -59,9 +64,9 @@ export const createCustomer = async (req: Request, res: Response) => {
         email,
         phone_number,
         address,
-        country,
-        city,
-        customer_group_id,
+        country: country || (req.body as any).countryId || null,
+        city: city || (req.body as any).cityId || null,
+        customer_group_id: validCustomerGroupId,
         is_Due,
         amount_Due,
     });
@@ -111,7 +116,32 @@ export const getDueCustomers = async (req: Request, res: Response) => {
 }
 
 export const updateCustomer = async (req: Request, res: Response) => {
-    const customer = await CustomerModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updateData: any = { ...req.body };
+
+    if (updateData.customer_group_id === "" || updateData.customer_group_id === undefined) {
+        updateData.customer_group_id = null;
+    } else if (updateData.customer_group_id) {
+        const customerGroup = await CustomerGroupModel.findById(updateData.customer_group_id);
+        if (!customerGroup) {
+            throw new NotFound("Customer group not found");
+        }
+        if (!customerGroup.status) {
+            throw new BadRequest("Customer group is inactive");
+        }
+    }
+
+    if (updateData.countryId && !updateData.country) {
+        updateData.country = updateData.countryId;
+    }
+    if (updateData.cityId && !updateData.city) {
+        updateData.city = updateData.cityId;
+    }
+
+    const customer = await CustomerModel.findByIdAndUpdate(req.params.id, updateData, { new: true })
+        .populate('country', 'name')
+        .populate('city', 'name')
+        .populate('customer_group_id', 'name status');
+
     if (!customer) {
         throw new NotFound("Customer not found");
     }
@@ -242,7 +272,8 @@ export const getCustomerSinglePageData = async (req: Request, res: Response) => 
 
     const customer = await CustomerModel.findById(id)
         .populate('country', 'name')
-        .populate('city', 'name');
+        .populate('city', 'name')
+        .populate('customer_group_id', 'name status');
 
     if (!customer) {
         throw new NotFound("Customer not found");
@@ -314,6 +345,8 @@ export const getCustomerSinglePageData = async (req: Request, res: Response) => 
             address: customer.address || null,
             city: (customer.city as any)?.name || null,
             country: (customer.country as any)?.name || null,
+            customer_group_id: customer.customer_group_id || null,
+            customer_group: (customer.customer_group_id as any)?.name || null,
             cards: {
                 total_orders: totalOrders,
             },

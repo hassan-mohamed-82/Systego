@@ -117,7 +117,13 @@ export const getAllWasted = async (req: Request, res: Response) => {
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = new Date(from);
-      if (to) filter.createdAt.$lte = new Date(to);
+      if (to) {
+        const toDate = new Date(to);
+        if (typeof to === "string" && to.length === 10) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+        filter.createdAt.$lte = toDate;
+      }
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -300,7 +306,13 @@ export const getWastedStats = async (req: Request, res: Response) => {
     if (from || to) {
       match.createdAt = {};
       if (from) match.createdAt.$gte = new Date(from);
-      if (to) match.createdAt.$lte = new Date(to);
+      if (to) {
+        const toDate = new Date(to);
+        if (typeof to === "string" && to.length === 10) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+        match.createdAt.$lte = toDate;
+      }
     }
 
     const stats = await WastedModel.aggregate([
