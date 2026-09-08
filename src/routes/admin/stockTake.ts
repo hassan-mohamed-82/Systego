@@ -12,6 +12,7 @@ import {
   importStocktakeSheet,
   submitStocktake,
   resolveStocktakeItems,
+  deleteStocktake
 } from "../../controller/admin/stockTake";
 import { uploadExcelFile } from "../../utils/uploadFile";
 import { authorizePermissions } from "../../middlewares/haspremission";
@@ -21,8 +22,8 @@ const route = Router();
 route.get("/",authorizePermissions("stocktake","View"), catchAsync(getStocktakes));
 route.get("/:id",authorizePermissions("stocktake","View"), catchAsync(getStocktakeById));
 route.post("/", authorizePermissions("stocktake","Add"), catchAsync(createStocktake));
-route.delete("/:id", authorizePermissions("stocktake","Delete"), catchAsync(cancelStocktake));
-
+route.delete("/:id", authorizePermissions("stocktake","Delete"), catchAsync(deleteStocktake));
+route.patch("/:id/status", authorizePermissions("stocktake","Delete"), catchAsync(cancelStocktake));
 route.get("/:id/items", authorizePermissions("stocktake","View"), catchAsync(getStocktakeItems));
 route.patch("/:id/items/:itemId", authorizePermissions("stocktake","Edit"), catchAsync(updateStocktakeItem));
 route.put("/:id/items", authorizePermissions("stocktake","Edit"), catchAsync(bulkUpdateStocktakeItems));

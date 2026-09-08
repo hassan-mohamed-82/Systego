@@ -932,3 +932,14 @@ export const resolveStocktakeItems = async (req: Request, res: Response) => {
     item: updatedItem,
   });
 };
+
+export const deleteStocktake = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const stocktake = await StocktakeModel.findById(id);
+  if (!stocktake) throw new NotFound("Stocktake not found");
+  StocktakeItemModel.deleteMany({ stocktakeId: id }).catch((err) => {
+    console.error("Failed to delete stocktake items for stocktake", id, err);
+  });
+  await stocktake.deleteOne();
+  SuccessResponse(res, { message: "Stocktake deleted successfully" });
+}
