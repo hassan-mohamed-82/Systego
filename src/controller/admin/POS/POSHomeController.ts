@@ -661,19 +661,20 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
     throw new BadRequest("Product not found");
   }
 
+  // All of this product's variants — independent of whether they have
+  // any stock rows yet. Used below to backfill variants that have zero
+  // stock (or no stock row at all) in a given warehouse.
+  const allVariations = await ProductPriceModel.find({ productId }).lean();
+
   const stockRows = await Product_WarehouseModel.find({ productId })
     .populate("warehouseId", "name address")
     .populate("productPriceId", "code price")
     .lean();
 
   // Pull every variant's option -> variation labels in one populate chain.
-  const productPriceIds = [
-    ...new Set(
-      stockRows
-        .filter((row: any) => row.productPriceId)
-        .map((row: any) => String(row.productPriceId._id)),
-    ),
-  ];
+  // Sourced from allVariations (not just stockRows) so a variant with no
+  // stock row anywhere still gets its labels.
+  const productPriceIds = allVariations.map((v: any) => String(v._id));
 
   const priceOptions = productPriceIds.length
     ? await ProductPriceOptionModel.find({
@@ -707,25 +708,38 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
     variantLabelsMap.get(ppKey)!.push(entry);
   }
 
+  // productPriceId -> {code, price} for variants, sourced from
+  // allVariations so backfilled entries (no stock row) still have it.
+  const priceInfoByVariant = new Map(
+    allVariations.map((v: any) => [
+      String(v._id),
+      { code: v.code ?? null, price: v.price ?? null },
+    ])
+  );
+
   // ── Group stock rows by warehouse, splitting base product vs. variants ──
   const byWarehouse = new Map<string, any>();
 
-  for (const row of stockRows as any[]) {
-    const wh = row.warehouseId; // already populated: { _id, name, address }
-    const whKey = String(wh?._id ?? row.warehouseId);
-
+  const getOrCreateWarehouseEntry = (whKey: string, wh: any) => {
     if (!byWarehouse.has(whKey)) {
       byWarehouse.set(whKey, {
-        warehouseId: wh?._id ?? row.warehouseId,
+        warehouseId: wh?._id ?? whKey,
         warehouseName: wh?.name ?? null,
         warehouseAddress: wh?.address ?? null,
         totalQuantity: 0,
         base: null,
         variations: [] as any[],
+        _variantsSeen: new Set<string>(), // internal bookkeeping, stripped below
       });
     }
+    return byWarehouse.get(whKey);
+  };
 
-    const entry = byWarehouse.get(whKey);
+  for (const row of stockRows as any[]) {
+    const wh = row.warehouseId; // already populated: { _id, name, address }
+    const whKey = String(wh?._id ?? row.warehouseId);
+    const entry = getOrCreateWarehouseEntry(whKey, wh);
+
     entry.totalQuantity += row.quantity ?? 0;
 
     if (!row.productPriceId) {
@@ -736,6 +750,7 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
     } else {
       const priceDoc = row.productPriceId; // already populated: { _id, code, price }
       const ppKey = String(priceDoc._id);
+      entry._variantsSeen.add(ppKey);
 
       entry.variations.push({
         productPriceId: priceDoc._id,
@@ -748,7 +763,31 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
     }
   }
 
-  const warehouseStock = Array.from(byWarehouse.values());
+  // Backfill: any variant with no stock row in a warehouse that we
+  // already know about (from some other row) gets a zero-quantity entry.
+  if (allVariations.length > 0) {
+    for (const entry of byWarehouse.values()) {
+      for (const v of allVariations as any[]) {
+        const ppKey = String(v._id);
+        if (entry._variantsSeen.has(ppKey)) continue;
+
+        const priceInfo = priceInfoByVariant.get(ppKey);
+        entry.variations.push({
+          productPriceId: v._id,
+          code: priceInfo?.code ?? null,
+          price: priceInfo?.price ?? null,
+          quantity: 0,
+          low_stock: null,
+          options: variantLabelsMap.get(ppKey) ?? [],
+        });
+      }
+    }
+  }
+
+  const warehouseStock = Array.from(byWarehouse.values()).map((entry) => {
+    const { _variantsSeen, ...rest } = entry;
+    return rest;
+  });
 
   SuccessResponse(res, {
     message: "Product warehouse stock fetched successfully",
