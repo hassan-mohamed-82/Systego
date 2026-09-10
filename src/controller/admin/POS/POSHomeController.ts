@@ -735,6 +735,13 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
     return byWarehouse.get(whKey);
   };
 
+  // 1. Seed with all warehouses in the system so even zero-stock warehouses are included
+  const allWarehouses = await WarehouseModel.find({}, "name address").lean();
+  for (const wh of allWarehouses as any[]) {
+    const whKey = String(wh._id);
+    getOrCreateWarehouseEntry(whKey, wh);
+  }
+
   for (const row of stockRows as any[]) {
     const wh = row.warehouseId; // already populated: { _id, name, address }
     const whKey = String(wh?._id ?? row.warehouseId);
@@ -763,8 +770,8 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
     }
   }
 
-  // Backfill: any variant with no stock row in a warehouse that we
-  // already know about (from some other row) gets a zero-quantity entry.
+  // Backfill:
+  // 1. For variant products: any variant with no stock row gets a zero-quantity entry.
   if (allVariations.length > 0) {
     for (const entry of byWarehouse.values()) {
       for (const v of allVariations as any[]) {
@@ -777,9 +784,19 @@ export const getProductWarehouseStock = async (req: Request, res: Response) => {
           code: priceInfo?.code ?? null,
           price: priceInfo?.price ?? null,
           quantity: 0,
-          low_stock: null,
+          low_stock: v.low_stock ?? product.low_stock ?? null,
           options: variantLabelsMap.get(ppKey) ?? [],
         });
+      }
+    }
+  } else {
+    // 2. For non-variant products: ensure any warehouse with no stock row gets a zero-quantity base entry
+    for (const entry of byWarehouse.values()) {
+      if (!entry.base) {
+        entry.base = {
+          quantity: 0,
+          low_stock: product.low_stock ?? null,
+        };
       }
     }
   }
