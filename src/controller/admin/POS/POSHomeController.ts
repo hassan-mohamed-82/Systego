@@ -109,23 +109,80 @@ const buildWarehouseProductList = async (
         productId: product._id,
       }).lean();
 
-      const formattedVariations = variations.map((v: any) => ({
-        ...v,
-        // Per-variant quantity, scoped to THIS warehouse only —
-        // previously this spread the stored ProductPriceModel document
-        // as-is, exposing its denormalized (global, possibly stale)
-        // quantity field with no warehouse scoping at all.
-        quantity: stockByVariant[v._id.toString()] ?? 0,
-      }));
+      const variationIds = variations.map((v: any) => v._id);
+
+      // Join rows connecting each SKU (ProductPrice) to the Option it
+      // was built from. option_id -> Option -> variationId -> Variation
+      // (e.g. Variation "المقاس" -> Option "M"). One row per
+      // (SKU, Variation) pair — a size/color combo SKU has two rows.
+      const priceOptions = variationIds.length
+        ? await ProductPriceOptionModel.find({
+            product_price_id: { $in: variationIds },
+          })
+            .populate({
+              path: "option_id",
+              select: "name variationId",
+              populate: { path: "variationId", select: "name ar_name" },
+            })
+            .lean()
+        : [];
+
+      // Per-SKU attribute list, and the set of every option value seen
+      // for each variation name across ALL of this product's SKUs
+      // (used to build variation_attributes at the product level).
+      const attrsBySku: Record<string, { name: string; value: string }[]> = {};
+      const optionValuesByVariation: Record<string, Set<string>> = {};
+
+      for (const po of priceOptions as any[]) {
+        const option = po.option_id;
+        const variation = option?.variationId;
+        if (!option || !variation) continue;
+
+        const skuKey = po.product_price_id.toString();
+        const variationName = variation.ar_name || variation.name;
+        const optionValue = option.name;
+
+        (attrsBySku[skuKey] ??= []).push({ name: variationName, value: optionValue });
+        (optionValuesByVariation[variationName] ??= new Set()).add(optionValue);
+      }
+
+      const formattedVariations = variations.map((v: any) => {
+        const attrs = attrsBySku[v._id.toString()] || [];
+        const attributes: Record<string, string> = {};
+        for (const a of attrs) attributes[a.name] = a.value;
+
+        return {
+          _id: v._id,
+          price: v.price,
+          code: v.code,
+          // Per-variant quantity, scoped to THIS warehouse only.
+          quantity: stockByVariant[v._id.toString()] ?? 0,
+          attributes,
+        };
+      });
+
+      // variation_attributes: one entry per distinct variation name
+      // used by this product, listing every option value that shows
+      // up across its SKUs — not just the options on a single SKU.
+      const variation_attributes = Object.entries(optionValuesByVariation).map(
+        ([name, values]) => ({
+          name,
+          options: Array.from(values),
+        })
+      );
+
+      // different_price: true only when two or more variations
+      // actually carry different prices; a uniform-price variant set
+      // (or a simple product) is not "different".
+      const distinctPrices = new Set(formattedVariations.map((v) => v.price));
+      const different_price = distinctPrices.size > 1;
 
       return {
-        ...product,
-        // Simple products: this warehouse's own stock row (0 if none
-        // yet). Variant products: sum of this warehouse's variant rows.
-        quantity:
-          variations.length > 0
-            ? formattedVariations.reduce((sum, v) => sum + v.quantity, 0)
-            : stockByProduct[product._id.toString()] ?? 0,
+        _id: product._id,
+        name: product.ar_name || product.name,
+        price: product.price,
+        different_price,
+        variation_attributes,
         variations: formattedVariations,
       };
     })
