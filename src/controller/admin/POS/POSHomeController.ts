@@ -155,6 +155,7 @@ const buildWarehouseProductList = async (
           _id: v._id,
           price: v.price,
           code: v.code,
+          gallery: v.gallery || [],
           // Per-variant quantity, scoped to THIS warehouse only.
           quantity: stockByVariant[v._id.toString()] ?? 0,
           attributes,
@@ -181,6 +182,7 @@ const buildWarehouseProductList = async (
         _id: product._id,
         name: product.ar_name || product.name,
         price: product.price,
+        image: product.image,
         different_price,
         variation_attributes,
         variations: formattedVariations,
