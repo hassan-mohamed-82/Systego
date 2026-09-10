@@ -41,13 +41,14 @@ export const updateMyProfile = async (req: Request, res: Response) => {
     throw new BadRequest("User ID not found in request");
   }
 
+  const username = req.body.username || req.body.user_name;
   const {
-    username,
     email,
     password,
     company_name,
     phone,
     image_base64,
+    image_url,
   } = req.body;
 
   const user = await UserModel.findById(userId);
@@ -81,6 +82,8 @@ export const updateMyProfile = async (req: Request, res: Response) => {
   // Handle image
   if (image_base64) {
     user.image_url = await saveBase64Image(image_base64, user.username, req, "users");
+  } else if (image_url !== undefined) {
+    user.image_url = image_url;
   }
 
   await user.save();
