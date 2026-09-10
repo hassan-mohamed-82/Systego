@@ -900,6 +900,7 @@ export const resolveStocktakeItems = async (req: Request, res: Response) => {
       reason: "stocktake_not_found",
       note: note || `From stocktake ${stocktake.code}`,
       userId: req.user?.id,
+      isApproved: true,
     });
 
     // same fix - shift by the delta (a negative number for shortages), don't overwrite live stock
