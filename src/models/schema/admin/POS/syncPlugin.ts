@@ -21,7 +21,7 @@ const TRACKED_TABLES = [
   "Geidea",
   "GiftCard",
   "Notification",
-  "Order",
+  "Orders",
   "Pandel",
   "Payment",
   "PaymentMethod",
