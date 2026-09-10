@@ -4,7 +4,7 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
 import { appSettingModel } from "../../models/schema/admin/storeSettings";
 import { saveBase64Image } from "../../utils/handleImages";
-import { fetchCategories, fetchTemplates, fetchTemplateBySlug } from "../../utils/superAdmin.client";
+import { fetchCategories, fetchTemplates, fetchTemplateBySlug, fetchTemplateSectionsBySlug } from "../../utils/superAdmin.client";
 
 export const browseThemesCategories = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -81,14 +81,13 @@ export const updateStoreSettings = asyncHandler(
       storeName,
       logo,
       templateSlug,
-      templateSectionsSnapshot,
       fontStyle,
       colors,
       sections,
     } = req.body;
 
     
-
+    const templateSnapshot = await fetchTemplateSectionsBySlug(templateSlug);
     let settings = await appSettingModel.findOne();
 
     if (!settings) {
@@ -107,7 +106,7 @@ export const updateStoreSettings = asyncHandler(
         templateSlug,
         storeName: storeName.trim(),
         logoUrl: logoUrl,
-        templateSectionsSnapshot: templateSectionsSnapshot || [],
+        templateSectionsSnapshot: templateSnapshot.sections || [],
         fontStyle: fontStyle || "default",
         colors: colors || {},
         sections: sections || [],
@@ -124,7 +123,7 @@ export const updateStoreSettings = asyncHandler(
         settings.logoUrl = logoUrl;
       }
       settings.templateSlug = templateSlug;
-      settings.templateSectionsSnapshot = templateSectionsSnapshot || [];
+      settings.templateSectionsSnapshot = templateSnapshot.sections || [];
       settings.fontStyle = fontStyle || "default";
       settings.colors = colors || {};
       settings.sections = sections || [];

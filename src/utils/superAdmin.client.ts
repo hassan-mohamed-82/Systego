@@ -15,3 +15,8 @@ export const fetchTemplateBySlug = async (slug:string) => {
   const { data } = await axios.get(`${SUPER_ADMIN_URL}/api/admin/themes/slug/${slug}`);
   return (data as any).data;
 };
+
+export const fetchTemplateSectionsBySlug = async (slug:string) => {
+  const { data } = await axios.get(`${SUPER_ADMIN_URL}/api/admin/themes/slug/${slug}`);
+  return (data as any).data;
+}
