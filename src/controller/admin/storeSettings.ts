@@ -4,7 +4,7 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
 import { appSettingModel } from "../../models/schema/admin/storeSettings";
 import { saveBase64Image } from "../../utils/handleImages";
-import { fetchCategories, fetchTemplates, fetchTemplateBySlug } from "../../utils/superAdmin.client";
+import { fetchCategories, fetchTemplates, fetchTemplateBySlug, fetchTemplateSectionsBySlug } from "../../utils/superAdmin.client";
 
 export const browseThemesCategories = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -83,7 +83,7 @@ export const updateStoreSettings = asyncHandler(
       logo,
       logoUrl: incomingLogoUrl,
       templateSlug,
-      templateSectionsSnapshot,
+      templateSectionsSnapshot: incomingSnapshot,
       fontStyle,
       colors,
       sections,
@@ -91,6 +91,18 @@ export const updateStoreSettings = asyncHandler(
 
     // Support both `logoUrl` (sent from frontend) and `logo`
     const logoData = incomingLogoUrl !== undefined ? incomingLogoUrl : logo;
+
+    let templateSectionsSnapshot = incomingSnapshot;
+    if (!templateSectionsSnapshot && templateSlug) {
+      try {
+        const templateSnapshot = await fetchTemplateSectionsBySlug(templateSlug);
+        templateSectionsSnapshot = Array.isArray(templateSnapshot)
+          ? templateSnapshot
+          : (templateSnapshot?.sections || []);
+      } catch (err) {
+        console.error("Failed to fetch template sections:", err);
+      }
+    }
 
     let settings = await appSettingModel.findOne();
 

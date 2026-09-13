@@ -140,4 +140,4 @@ const orderSchema = new Schema(
   },
 );
 
-export const OrderModel = model("Order", orderSchema);
+export const OrderModel = model("Orders", orderSchema);

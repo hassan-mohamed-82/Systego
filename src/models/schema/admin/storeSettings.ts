@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const appSettingSchema = new mongoose.Schema({
-  key: { type: String, default: 'main', unique: true },
+  key: { type: String, default: 'default', unique: true },
   templateSlug: { type: String, required: true },
   templateSectionsSnapshot: [{ type: String }],
 
@@ -14,6 +14,7 @@ const appSettingSchema = new mongoose.Schema({
     key: { type: String, required: true },
     enabled: { type: Boolean, default: true },
     templateSlug: { type: String, default: "default" },
+    fontStyle: { type: String, default: 'default' },
     _id: false,
   }],
 }, { timestamps: true });
