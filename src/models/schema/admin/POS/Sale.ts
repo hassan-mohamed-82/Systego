@@ -19,6 +19,11 @@ const SaleSchema = new Schema(
       },
     },
 
+    daily_order_number: {
+      type: Number,
+      default: 1,
+    },
+
     customer_id: {
       type: Schema.Types.String,
       ref: "Customer",

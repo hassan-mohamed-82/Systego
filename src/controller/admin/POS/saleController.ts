@@ -88,6 +88,56 @@ const getStoreInfo = async (userId: string) => {
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
+// ✅ Helper to get the next sequential daily order number (resets to 1 every day)
+export const getNextDailyOrderNumber = async (): Promise<{
+  dailyOrderNumber: number;
+  reference: string;
+}> => {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  // Find the last sale created today
+  const lastSale = await SaleModel.findOne({
+    createdAt: { $gte: startOfDay, $lte: endOfDay },
+  })
+    .sort({ createdAt: -1 })
+    .select("daily_order_number reference")
+    .lean();
+
+  let nextNumber = 1;
+  if (lastSale && (lastSale as any).daily_order_number) {
+    nextNumber = Number((lastSale as any).daily_order_number) + 1;
+  } else {
+    const todayCount = await SaleModel.countDocuments({
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    });
+    nextNumber = todayCount + 1;
+  }
+
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  let candidateRef = `${month}${day}${String(nextNumber).padStart(4, "0")}`;
+
+  while (await SaleModel.exists({ reference: candidateRef })) {
+    nextNumber++;
+    candidateRef = `${month}${day}${String(nextNumber).padStart(4, "0")}`;
+  }
+
+  return { dailyOrderNumber: nextNumber, reference: candidateRef };
+};
+
+export const getNextInvoiceNumber = async (req: Request, res: Response) => {
+  const { dailyOrderNumber, reference } = await getNextDailyOrderNumber();
+  return SuccessResponse(res, {
+    dailyOrderNumber,
+    reference,
+    formattedInvoiceNumber: `#${dailyOrderNumber}`,
+  });
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // createSale — FIXED VERSION (real Mongoose)
 // Same fixes as the ORM version, PLUS: this version uses real transactions
@@ -754,7 +804,11 @@ export const createSale = async (req: Request, res: Response) => {
   const remainingAmount = isDue ? finalGrandTotal : 0;
   let sale: any;
 
+  const { dailyOrderNumber, reference: saleRef } = await getNextDailyOrderNumber();
+
   sale = await SaleModel.create({
+    reference: saleRef,
+    daily_order_number: dailyOrderNumber,
     date: new Date(),
     customer_id: customer ? customer._id : undefined,
     Due_customer_id: isDue && customer ? customer._id : undefined,
