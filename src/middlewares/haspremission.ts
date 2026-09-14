@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { UnauthorizedError } from "../Errors/unauthorizedError";
 import { ModuleName, ActionName } from "../types/constant";
 
-export const authorizePermissions = (module: ModuleName, action: ActionName) => {
+export const authorizePermissions = (module: ModuleName, action: ActionName | ActionName[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
 
@@ -21,13 +21,13 @@ export const authorizePermissions = (module: ModuleName, action: ActionName) => 
       throw new UnauthorizedError(`No access to ${module} module`);
     }
 
-    const hasAction = modulePermission.actions.some((a) => a.action === action);
+    const allowedActions = Array.isArray(action) ? action : [action];
+    const hasAction = modulePermission.actions.some((a) => allowedActions.includes(a.action as ActionName));
 
     if (!hasAction) {
-      throw new UnauthorizedError(`No permission to ${action} in ${module}`);
+      throw new UnauthorizedError(`No permission to ${allowedActions.join(" or ")} in ${module}`);
     }
-    console.log("hete");
-    
+
     next();
   };
 };

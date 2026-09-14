@@ -66,6 +66,17 @@ export const updateVariationWithOptions = async (req: Request, res: Response) =>
   await variation.save();
 
   if (options && Array.isArray(options)) {
+    // 1. جمع معرّفات الخيارات المرسلة والمطلوب الإبقاء عليها
+    const keptOptionIds = options
+      .map((opt) => opt._id)
+      .filter((optId) => Boolean(optId));
+
+    // 2. حذف أي خيارات تابعة لهذه السمة تم استبعادها
+    await OptionModel.deleteMany({
+      variationId: id,
+      _id: { $nin: keptOptionIds },
+    });
+
     for (const opt of options) {
       if (opt._id) {
         // تحديث Option موجود
