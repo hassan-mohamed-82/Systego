@@ -88,21 +88,68 @@ const getStoreInfo = async (userId: string) => {
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
-// ✅ Helper to get the next sequential daily order number (resets to 1 every day)
-export const getNextDailyOrderNumber = async (): Promise<{
+// ✅ Helper to get the start and end of day in a specific timezone (resets at 12:00 AM midnight locally)
+export const getTimezoneDayBounds = (
+  tz: string = process.env.TIMEZONE || process.env.TZ || "Africa/Cairo",
+  date: Date = new Date()
+): {
+  startOfDay: Date;
+  endOfDay: Date;
+  year: string;
+  month: string;
+  day: string;
+} => {
+  try {
+    const dtf = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const dateStr = dtf.format(date);
+    const [year, month, day] = dateStr.split("-");
+
+    const utcMidnight = Date.UTC(+year, +month - 1, +day, 0, 0, 0);
+    const utcDate = new Date(new Date(utcMidnight).toLocaleString("en-US", { timeZone: "UTC" }));
+    const tzDate = new Date(new Date(utcMidnight).toLocaleString("en-US", { timeZone: tz }));
+    const offsetMs = tzDate.getTime() - utcDate.getTime();
+
+    const startOfDay = new Date(utcMidnight - offsetMs);
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    return { startOfDay, endOfDay, year, month, day };
+  } catch (error) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return { startOfDay, endOfDay, year, month, day };
+  }
+};
+
+// ✅ Helper to get the next sequential daily order number (resets to 1 every day at 12:00 AM in target timezone)
+export const getNextDailyOrderNumber = async (
+  timeZone?: string
+): Promise<{
   dailyOrderNumber: number;
   reference: string;
 }> => {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
+  const targetTimeZone =
+    timeZone || process.env.TIMEZONE || process.env.TZ || "Africa/Cairo";
+  const { startOfDay, endOfDay, month, day } =
+    getTimezoneDayBounds(targetTimeZone);
 
-  // Find the last sale created today
+  // Find the last sale created today in this timezone
   const lastSale = await SaleModel.findOne({
-    createdAt: { $gte: startOfDay, $lte: endOfDay },
+    $or: [
+      { createdAt: { $gte: startOfDay, $lte: endOfDay } },
+      { date: { $gte: startOfDay, $lte: endOfDay } },
+    ],
   })
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: -1, date: -1 })
     .select("daily_order_number reference")
     .lean();
 
@@ -111,14 +158,14 @@ export const getNextDailyOrderNumber = async (): Promise<{
     nextNumber = Number((lastSale as any).daily_order_number) + 1;
   } else {
     const todayCount = await SaleModel.countDocuments({
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      $or: [
+        { createdAt: { $gte: startOfDay, $lte: endOfDay } },
+        { date: { $gte: startOfDay, $lte: endOfDay } },
+      ],
     });
     nextNumber = todayCount + 1;
   }
 
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
   let candidateRef = `${month}${day}${String(nextNumber).padStart(4, "0")}`;
 
   while (await SaleModel.exists({ reference: candidateRef })) {
@@ -130,7 +177,11 @@ export const getNextDailyOrderNumber = async (): Promise<{
 };
 
 export const getNextInvoiceNumber = async (req: Request, res: Response) => {
-  const { dailyOrderNumber, reference } = await getNextDailyOrderNumber();
+  const clientTz =
+    (req.headers["x-timezone"] as string) ||
+    (req.query?.timeZone as string) ||
+    undefined;
+  const { dailyOrderNumber, reference } = await getNextDailyOrderNumber(clientTz);
   return SuccessResponse(res, {
     dailyOrderNumber,
     reference,
@@ -804,7 +855,11 @@ export const createSale = async (req: Request, res: Response) => {
   const remainingAmount = isDue ? finalGrandTotal : 0;
   let sale: any;
 
-  const { dailyOrderNumber, reference: saleRef } = await getNextDailyOrderNumber();
+  const clientTz =
+    (req.headers["x-timezone"] as string) ||
+    (req.body?.timeZone as string) ||
+    undefined;
+  const { dailyOrderNumber, reference: saleRef } = await getNextDailyOrderNumber(clientTz);
 
   sale = await SaleModel.create({
     reference: saleRef,
