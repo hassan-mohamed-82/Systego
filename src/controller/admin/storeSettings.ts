@@ -68,16 +68,12 @@ export const getStoreSettings = asyncHandler(
 
     const settingsData = settings.toObject ? settings.toObject() : { ...settings };
     (settingsData as any).ecommerceUsers = ecommerceUsers;
-    (settingsData as any).users = ecommerceUsers;
 
     SuccessResponse(
       res,
       {
         message: "Store settings fetched successfully",
         settings: settingsData,
-        logoUrl: settings.logoUrl || null,
-        ecommerceUsers,
-        users: ecommerceUsers,
       },
       200
     );
