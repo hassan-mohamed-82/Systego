@@ -18,6 +18,10 @@ const { name, ar_name, options } = req.body;
 
     // إنشاء الـ Options لو موجودة
     if (options && Array.isArray(options)) {
+      const names = options.map((opt: any) => opt.name?.trim().toLowerCase()).filter(Boolean);
+      const hasDup = names.some((val, idx) => names.indexOf(val) !== idx);
+      if (hasDup) throw new BadRequest("Duplicate option names are not allowed in the same variation");
+
       for (const opt of options) {
         await OptionModel.create({ variationId: variation._id, name: opt.name, status: opt.status ?? true });
       }
@@ -66,6 +70,10 @@ export const updateVariationWithOptions = async (req: Request, res: Response) =>
   await variation.save();
 
   if (options && Array.isArray(options)) {
+    const names = options.map((opt: any) => opt.name?.trim().toLowerCase()).filter(Boolean);
+    const hasDup = names.some((val, idx) => names.indexOf(val) !== idx);
+    if (hasDup) throw new BadRequest("Duplicate option names are not allowed in the same variation");
+
     // 1. جمع معرّفات الخيارات المرسلة والمطلوب الإبقاء عليها
     const keptOptionIds = options
       .map((opt) => opt._id)
