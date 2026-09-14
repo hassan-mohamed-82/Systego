@@ -3,6 +3,7 @@ import asyncHandler from "express-async-handler";
 import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
 import { appSettingModel } from "../../models/schema/admin/storeSettings";
+import { EcommerceUserModel } from "../../models/schema/admin/EcommerceUser";
 import { saveBase64Image } from "../../utils/handleImages";
 import { fetchCategories, fetchTemplates, fetchTemplateBySlug, fetchTemplateSectionsBySlug } from "../../utils/superAdmin.client";
 
@@ -63,12 +64,20 @@ export const getStoreSettings = asyncHandler(
       });
     }
 
+    const ecommerceUsers = await EcommerceUserModel.find({ status: "active" }).sort({ createdAt: -1 });
+
+    const settingsData = settings.toObject ? settings.toObject() : { ...settings };
+    (settingsData as any).ecommerceUsers = ecommerceUsers;
+    (settingsData as any).users = ecommerceUsers;
+
     SuccessResponse(
       res,
       {
         message: "Store settings fetched successfully",
-        settings,
+        settings: settingsData,
         logoUrl: settings.logoUrl || null,
+        ecommerceUsers,
+        users: ecommerceUsers,
       },
       200
     );
