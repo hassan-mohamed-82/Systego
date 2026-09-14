@@ -66,7 +66,44 @@ export const getStoreSettings = asyncHandler(
 
     const ecommerceUsers = await EcommerceUserModel.find({ status: "active" }).sort({ createdAt: -1 });
 
-    const settingsData = settings.toObject ? settings.toObject() : { ...settings };
+    const settingsData = settings.toObject
+      ? settings.toObject({ flattenMaps: true })
+      : { ...settings };
+
+    // ضمان تحويل كائن الـ colors من Mongoose Map إلى كائن JavaScript قياسي
+    if (settings.colors instanceof Map) {
+      settingsData.colors = Object.fromEntries(settings.colors);
+    } else if (settingsData.colors && typeof (settingsData.colors as any).toJSON === "function") {
+      settingsData.colors = (settingsData.colors as any).toJSON();
+    } else if (settingsData.colors && typeof settingsData.colors === "object") {
+      settingsData.colors = { ...settingsData.colors };
+    }
+
+    // في حال كانت الألوان فارغة، جلب الألوان الافتراضية للقالب أو الألوان القياسية
+    if (!settingsData.colors || Object.keys(settingsData.colors).length === 0) {
+      if (settings.templateSlug) {
+        try {
+          const template = await fetchTemplateBySlug(settings.templateSlug);
+          const tplColors = template?.defaultConfig?.colors;
+          if (tplColors) {
+            settingsData.colors = tplColors instanceof Map ? Object.fromEntries(tplColors) : tplColors;
+          }
+        } catch (err) {
+          console.error("Failed to fetch template colors:", err);
+        }
+      }
+
+      if (!settingsData.colors || Object.keys(settingsData.colors).length === 0) {
+        settingsData.colors = {
+          primary: "#405463",
+          secondary: "#8cb7c9",
+          background: "#ffffff",
+          textPrimary: "#111827",
+          textSecondary: "#6b7280",
+        };
+      }
+    }
+
     (settingsData as any).ecommerceUsers = ecommerceUsers;
 
     SuccessResponse(
