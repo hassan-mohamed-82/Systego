@@ -503,6 +503,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     image,
     categoryId,
     brandId,
+    discountId,
     product_unit,
     sale_unit,
     purchase_unit,
@@ -600,6 +601,9 @@ export const updateProduct = async (req: Request, res: Response) => {
   product.free_shipping = free_shipping ?? product.free_shipping;
   product.is_featured = is_featured ?? product.is_featured;
   product.Is_Online = Is_Online ?? product.Is_Online;
+  if (discountId !== undefined) {
+    product.discountId = discountId ? discountId : null as any;
+  }
 
   if (productHasVariations) {
     product.code = undefined as any;

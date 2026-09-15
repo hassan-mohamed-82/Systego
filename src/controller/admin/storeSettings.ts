@@ -3,7 +3,7 @@ import asyncHandler from "express-async-handler";
 import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
 import { appSettingModel } from "../../models/schema/admin/storeSettings";
-import { EcommerceUserModel } from "../../models/schema/admin/EcommerceUser";
+import { EcommerceDataModel } from "../../models/schema/admin/EcommerceData";
 import { saveBase64Image } from "../../utils/handleImages";
 import { fetchCategories, fetchTemplates, fetchTemplateBySlug, fetchTemplateSectionsBySlug } from "../../utils/superAdmin.client";
 
@@ -64,7 +64,7 @@ export const getStoreSettings = asyncHandler(
       });
     }
 
-    const ecommerceUsers = await EcommerceUserModel.find({ status: "active" }).sort({ createdAt: -1 });
+    const ecommerceData = await EcommerceDataModel.find({ status: "active" }).sort({ createdAt: -1 });
 
     const settingsData = settings.toObject
       ? settings.toObject({ flattenMaps: true })
@@ -104,7 +104,7 @@ export const getStoreSettings = asyncHandler(
       }
     }
 
-    (settingsData as any).ecommerceUsers = ecommerceUsers;
+    (settingsData as any).ecommerceData = ecommerceData;
 
     SuccessResponse(
       res,

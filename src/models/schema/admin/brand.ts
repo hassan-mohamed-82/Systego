@@ -5,6 +5,7 @@ const brandSchema = new mongoose.Schema(
         name: { type: String, required: true, unique: true },
         ar_name: { type: String },
         logo: { type: String },
+        is_featured: { type: Boolean, default: false },
     },
     { timestamps: true }
 );

@@ -23,7 +23,7 @@ export const getBrandById = async (req: Request, res: Response) => {
 };
 
 export const createBrand = async (req: Request, res: Response) => {
-  const { name, logo, ar_name } = req.body;
+  const { name, logo, ar_name, is_featured } = req.body;
   if (!name) throw new BadRequest("Brand name is required");
   const existingBrand = await BrandModel.findOne({ name });
   if (existingBrand) throw new BadRequest("Brand already exists");
@@ -33,7 +33,12 @@ export const createBrand = async (req: Request, res: Response) => {
     logoUrl = await saveBase64Image(logo, Date.now().toString(), req, "brands");
   }
 
-  const brand = await BrandModel.create({ name, ar_name, logo: logoUrl });
+  const brand = await BrandModel.create({
+    name,
+    ar_name,
+    logo: logoUrl,
+    is_featured: is_featured !== undefined ? is_featured : false,
+  });
   SuccessResponse(res, { message: "create brand successfully", brand });
 };
 
@@ -44,10 +49,11 @@ export const updateBrand = async (req: Request, res: Response) => {
   const brand = await BrandModel.findById(id);
   if (!brand) throw new NotFound("Brand not found");
 
-  const { name, ar_name, logo } = req.body;
+  const { name, ar_name, logo, is_featured } = req.body;
 
   if (name !== undefined) brand.name = name;
   if (ar_name !== undefined) brand.ar_name = ar_name;
+  if (is_featured !== undefined) (brand as any).is_featured = is_featured;
 
   if (logo) {
     brand.logo = await saveBase64Image(

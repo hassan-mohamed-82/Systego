@@ -13,6 +13,7 @@ import tenantInfoRouter from "../admin/tenantInfo";
 import orderTypeRouter from "./ordertype";
 import warehouseRouter from "./Warehouse";
 import storeSettingsRoutes from "./storeSettings";
+import ecommerceDataRouter from "../admin/ecommerceData";
 
 const userRoute = Router();
 
@@ -34,5 +35,6 @@ userRoute.use("/order-type", orderTypeRouter);
 userRoute.use("/warehouse", warehouseRouter);
 
 userRoute.use("/store-settings", storeSettingsRoutes);
+userRoute.use("/ecommerce-data", ecommerceDataRouter);
 
 export default userRoute;

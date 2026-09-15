@@ -9,7 +9,7 @@ import { SuccessResponse } from "../../utils/response";
 import { NotFound } from "../../Errors/NotFound";
 import { DiscountModel } from "../../models/schema/admin/Discount";
 
-const buildProductAggregationPipeline = (
+export const buildProductAggregationPipeline = (
   productMatchStage: object,
   wishlistIds: mongoose.Types.ObjectId[],
   onlineWarehouseIds: mongoose.Types.ObjectId[]
@@ -166,6 +166,7 @@ const buildProductAggregationPipeline = (
         image: "$image",
         gallery_product: "$gallery_product",
         main_price: "$price",
+        is_featured: { $ifNull: ["$is_featured", false] },
 
         // 4️⃣ Discounted price for the main price
         final_price: {
@@ -369,11 +370,13 @@ export const getAllProducts = asyncHandler(
       }
     }
 
-    // No warehouse-membership match here anymore — Is_Online is applied
-    // inside buildProductAggregationPipeline, and stock is left-joined
-    // rather than required for a product to appear.
+    const matchStage: any = {};
+    if (req.query.is_featured === "true" || (req.query.is_featured as any) === true) {
+      matchStage.is_featured = true;
+    }
+
     const pipeline = buildProductAggregationPipeline(
-      {},
+      matchStage,
       wishlistIds,
       onlineWarehouseIds
     );

@@ -9,6 +9,7 @@ const categorySchema = new Schema(
     parentId: { type: Schema.Types.ObjectId, ref: "Category" },
     product_quantity: { type: Number, default: 0 },
     Is_Online: { type: Boolean, default: true },
+    is_featured: { type: Boolean, default: false },
     order: {type: Number, default: 999},
   },
   { timestamps: true }

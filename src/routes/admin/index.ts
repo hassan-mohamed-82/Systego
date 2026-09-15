@@ -80,7 +80,7 @@ import stockTakeRouter from "./stockTake";
 import wastedRouter from "./wasted";
 import POSWastedRouter from "./POS/wastedRoutes";
 import storeSettingsRoutes from "./storeSettings";
-import ecommerceUserRouter from "./ecommerceUser";
+import ecommerceDataRouter from "./ecommerceData";
 import GatewayRouter from "../../utils/dbGateway";
 import POSOnlineOrdersRouter from "./POS/onlineOrders";
 export const route = Router();
@@ -167,7 +167,7 @@ route.use("/stocktake", stockTakeRouter);
 route.use("/wasted", wastedRouter);
 route.use("/pos-wasted", POSWastedRouter);
 route.use("/store-settings", storeSettingsRoutes);
-route.use("/ecommerce-user", ecommerceUserRouter);
+route.use("/ecommerce-data", ecommerceDataRouter);
 route.use("/db", GatewayRouter);
 route.use("/pos-online-orders", POSOnlineOrdersRouter);
 

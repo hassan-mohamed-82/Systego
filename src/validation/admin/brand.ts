@@ -4,10 +4,12 @@ export const createBrandSchema = Joi.object({
     name: Joi.string().required(),
     ar_name: Joi.string().required(),
     logo: Joi.string().optional(),
+    is_featured: Joi.boolean().optional(),
 });
 
 export const updateBrandSchema = Joi.object({
     name: Joi.string().optional(),
     ar_name: Joi.string().optional(),
     logo: Joi.string().optional(),
+    is_featured: Joi.boolean().optional(),
 });

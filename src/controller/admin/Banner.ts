@@ -24,7 +24,7 @@ export const getBannerModules = asyncHandler(async (req: Request, res: Response)
 });
 // 2. Create Banner (With Duplicate Prevention)
 export const createBanner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name, title, description, images, isActive } = req.body;
+    const { name, title, description, images, link, isActive } = req.body;
 
     // Validation: name must be a non-empty array
     if (!name || !Array.isArray(name) || name.length === 0) {
@@ -67,6 +67,7 @@ export const createBanner = asyncHandler(async (req: Request, res: Response): Pr
         title,
         description,
         images: imageUrls,
+        link: link || "",
         isActive: isActive !== undefined ? isActive : true,
     });
 
@@ -94,7 +95,7 @@ export const getBannerById = asyncHandler(async (req: Request, res: Response): P
 // 5. Update Banner (With Duplicate Prevention)
 export const updateBanner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, title, description, images, isActive } = req.body;
+    const { name, title, description, images, link, isActive } = req.body;
 
     if (!id) throw new BadRequest("Banner ID is required.");
 
@@ -125,6 +126,7 @@ export const updateBanner = asyncHandler(async (req: Request, res: Response): Pr
 
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
+    if (link !== undefined) updateData.link = link;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     // Process Images on Update
