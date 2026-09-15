@@ -72,7 +72,23 @@ export const createOrder = async (
 
     if (!paymentMethodDoc) throw new BadRequest("Invalid payment method");
 
-    if (paymentMethodDoc.type === "manual" && !proofImage) {
+    const name = (paymentMethodDoc.name || "").trim().toLowerCase();
+    const arName = (paymentMethodDoc.ar_name || "").trim();
+
+    const isCash =
+      name === "cash" ||
+      arName === "كاش" ||
+      name.includes("cash") ||
+      arName.includes("كاش");
+
+    // All manual payment methods require proof image except Cash (or if requiresProof is explicitly set to true)
+    const requiresProof =
+      (paymentMethodDoc as any).requiresProof === true ||
+      (paymentMethodDoc.type === "manual" && !isCash);
+
+    const hasProof = typeof proofImage === "string" && proofImage.trim().length > 0;
+
+    if (requiresProof && !hasProof) {
       throw new BadRequest("Proof image required for manual payment");
     }
 
