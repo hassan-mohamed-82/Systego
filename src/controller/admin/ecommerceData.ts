@@ -30,6 +30,14 @@ const processImageField = async (
   return img;
 };
 
+// Helper function to normalize links to string array
+const normalizeLinks = (links: any): string[] => {
+  if (!Array.isArray(links)) return [];
+  return links
+    .map((l: any) => (typeof l === "string" ? l.trim() : (l?.title ? String(l.title).trim() : "")))
+    .filter((l) => Boolean(l));
+};
+
 // 1. Get all ecommerce data
 export const getEcommerceData = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
@@ -96,16 +104,13 @@ export const createEcommerceData = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const {
       name,
+      phone,
+      email,
+      address,
+      status,
+      social_links,
       header,
       footer,
-      email,
-      phone,
-      role,
-      bio,
-      address,
-      image,
-      social_links,
-      status,
     } = req.body;
 
     const processedHeader = header ? { ...header } : {};
@@ -127,32 +132,32 @@ export const createEcommerceData = asyncHandler(
       );
     }
 
-    let processedImage: string | null = null;
-    if (image) {
-      processedImage = (await processImageField(image, "ecom_img", req)) || null;
-    }
-
-    // Sync legacy/footer fields if provided
-    if (!processedFooter.phone && phone) processedFooter.phone = phone;
-    if (!processedFooter.email && email) processedFooter.email = email;
-    if (!processedFooter.address && address) processedFooter.address = address;
-    if (!processedFooter.bio && bio) processedFooter.bio = bio;
-    if (!processedFooter.social_links && social_links) {
-      processedFooter.social_links = social_links;
-    }
-
     const newRecord = await EcommerceDataModel.create({
-      name: name && name.trim() ? name.trim() : "Ecommerce Store",
-      header: processedHeader,
-      footer: processedFooter,
-      email: email ? email.trim() : processedFooter.email,
-      phone: phone ? phone.trim() : processedFooter.phone,
-      role: role ? role.trim() : "Store Manager",
-      bio: bio ? bio.trim() : processedFooter.bio || "",
-      address: address ? address.trim() : processedFooter.address || "",
-      image: processedImage,
-      social_links: social_links || processedFooter.social_links || {},
+      name: name && name.trim() ? name.trim() : "Main Store",
+      phone: phone ? phone.trim() : "",
+      email: email ? email.trim() : "",
+      address: address ? address.trim() : "",
       status: status === "inactive" ? "inactive" : "active",
+      social_links: {
+        facebook: social_links?.facebook || "",
+        instagram: social_links?.instagram || "",
+        whatsapp: social_links?.whatsapp || "",
+        twitter: social_links?.twitter || "",
+        tiktok: social_links?.tiktok || "",
+        youtube: social_links?.youtube || "",
+        linkedin: social_links?.linkedin || "",
+      },
+      header: {
+        logo: processedHeader.logo || "",
+        title: processedHeader.title || "",
+        announcement: processedHeader.announcement || "",
+        links: normalizeLinks(processedHeader.links),
+      },
+      footer: {
+        logo: processedFooter.logo || "",
+        bio: processedFooter.bio || "",
+        copyright: processedFooter.copyright || "",
+      },
     });
 
     SuccessResponse(
@@ -182,69 +187,72 @@ export const updateEcommerceData = asyncHandler(
 
     const {
       name,
+      phone,
+      email,
+      address,
+      status,
+      social_links,
       header,
       footer,
-      email,
-      phone,
-      role,
-      bio,
-      address,
-      image,
-      social_links,
-      status,
     } = req.body;
 
     if (name !== undefined) record.name = name.trim();
+    if (phone !== undefined) record.phone = phone.trim();
+    if (email !== undefined) record.email = email.trim();
+    if (address !== undefined) record.address = address.trim();
     if (status !== undefined) record.status = status;
+
+    if (social_links !== undefined) {
+      record.social_links = {
+        facebook: social_links?.facebook ?? record.social_links?.facebook ?? "",
+        instagram: social_links?.instagram ?? record.social_links?.instagram ?? "",
+        whatsapp: social_links?.whatsapp ?? record.social_links?.whatsapp ?? "",
+        twitter: social_links?.twitter ?? record.social_links?.twitter ?? "",
+        tiktok: social_links?.tiktok ?? record.social_links?.tiktok ?? "",
+        youtube: social_links?.youtube ?? record.social_links?.youtube ?? "",
+        linkedin: social_links?.linkedin ?? record.social_links?.linkedin ?? "",
+      };
+    }
 
     // Header update
     if (header) {
-      const updatedHeader = { ...(record.header ? (record.header as any).toObject?.() || record.header : {}), ...header };
-      if (header.logo) {
-        updatedHeader.logo = await processImageField(
-          header.logo,
+      let headerLogo = header.logo !== undefined ? header.logo : record.header?.logo;
+      if (headerLogo && headerLogo !== record.header?.logo) {
+        headerLogo = await processImageField(
+          headerLogo,
           "header_logo",
           req
         );
       }
-      record.header = updatedHeader;
+
+      let headerLinks = record.header?.links || [];
+      if (header.links !== undefined) {
+        headerLinks = normalizeLinks(header.links);
+      }
+
+      record.header = {
+        logo: headerLogo || "",
+        title: header.title !== undefined ? header.title : (record.header?.title || ""),
+        announcement: header.announcement !== undefined ? header.announcement : (record.header?.announcement || ""),
+        links: headerLinks,
+      };
     }
 
     // Footer update
     if (footer) {
-      const updatedFooter = { ...(record.footer ? (record.footer as any).toObject?.() || record.footer : {}), ...footer };
-      if (footer.logo) {
-        updatedFooter.logo = await processImageField(
-          footer.logo,
+      let footerLogo = footer.logo !== undefined ? footer.logo : record.footer?.logo;
+      if (footerLogo && footerLogo !== record.footer?.logo) {
+        footerLogo = await processImageField(
+          footerLogo,
           "footer_logo",
           req
         );
       }
-      record.footer = updatedFooter;
-    }
-
-    // Legacy fields update
-    if (email !== undefined) record.email = email.trim();
-    if (phone !== undefined) record.phone = phone.trim();
-    if (role !== undefined) record.role = role.trim();
-    if (bio !== undefined) record.bio = bio.trim();
-    if (address !== undefined) record.address = address.trim();
-
-    if (image) {
-      record.image = (await processImageField(image, "ecom_img", req)) || record.image;
-    }
-
-    if (social_links !== undefined) {
-      record.social_links = {
-        ...record.social_links,
-        ...social_links,
+      record.footer = {
+        logo: footerLogo || "",
+        bio: footer.bio !== undefined ? footer.bio : (record.footer?.bio || ""),
+        copyright: footer.copyright !== undefined ? footer.copyright : (record.footer?.copyright || ""),
       };
-      if (record.footer) {
-        record.footer.social_links = {
-          ...record.footer.social_links,
-          ...social_links,
-        };
-      }
     }
 
     await record.save();
