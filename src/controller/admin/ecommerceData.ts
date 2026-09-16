@@ -30,12 +30,13 @@ const processImageField = async (
   return img;
 };
 
-// Helper function to normalize links to string array
+// Helper function to normalize links to string array (max 5)
 const normalizeLinks = (links: any): string[] => {
   if (!Array.isArray(links)) return [];
   return links
     .map((l: any) => (typeof l === "string" ? l.trim() : (l?.title ? String(l.title).trim() : "")))
-    .filter((l) => Boolean(l));
+    .filter((l) => Boolean(l))
+    .slice(0, 5);
 };
 
 // 1. Get all ecommerce data

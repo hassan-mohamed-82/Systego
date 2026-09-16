@@ -4,7 +4,7 @@ const headerSchema = Joi.object({
   logo: Joi.string().optional().allow("", null),
   title: Joi.string().optional().allow("", null),
   announcement: Joi.string().optional().allow("", null),
-  links: Joi.array().items(Joi.string().trim().allow("", null)).optional(),
+  links: Joi.array().items(Joi.string().trim().allow("", null)).max(5).optional(),
 });
 
 const footerSchema = Joi.object({
