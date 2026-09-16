@@ -70,6 +70,17 @@ export const getStoreSettings = asyncHandler(
       ? settings.toObject({ flattenMaps: true })
       : { ...settings };
 
+    // Keep only logoUrl - strip any legacy logo or logo_url
+    delete (settingsData as any).logo;
+    delete (settingsData as any).logo_url;
+
+    if ((settings as any).logo !== undefined || (settings as any).logo_url !== undefined) {
+      await appSettingModel.updateOne(
+        { _id: settings._id },
+        { $unset: { logo: 1, logo_url: 1 } }
+      ).catch(() => {});
+    }
+
     // ضمان تحويل كائن الـ colors من Mongoose Map إلى كائن JavaScript قياسي
     if (settings.colors instanceof Map) {
       settingsData.colors = Object.fromEntries(settings.colors);
@@ -122,8 +133,7 @@ export const updateStoreSettings = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const {
       storeName,
-      logo,
-      logoUrl: incomingLogoUrl,
+      logoUrl,
       templateSlug,
       templateSectionsSnapshot: incomingSnapshot,
       fontStyle,
@@ -131,8 +141,7 @@ export const updateStoreSettings = asyncHandler(
       sections,
     } = req.body;
 
-    // Support both `logoUrl` (sent from frontend) and `logo`
-    const logoData = incomingLogoUrl !== undefined ? incomingLogoUrl : logo;
+    const logoData = logoUrl;
 
     let templateSectionsSnapshot = incomingSnapshot;
     if (!templateSectionsSnapshot && templateSlug) {
@@ -213,15 +222,28 @@ export const updateStoreSettings = asyncHandler(
       if (colors) settings.colors = colors;
       if (sections) settings.sections = sections;
 
+      // Clean up legacy logo fields from DB
+      (settings as any).logo = undefined;
+      (settings as any).logo_url = undefined;
+      await appSettingModel.updateOne(
+        { _id: settings._id },
+        { $unset: { logo: 1, logo_url: 1 } }
+      ).catch(() => {});
+
       await settings.save();
     }
+
+    const settingsData = settings.toObject
+      ? settings.toObject({ flattenMaps: true })
+      : { ...settings };
+    delete (settingsData as any).logo;
+    delete (settingsData as any).logo_url;
 
     SuccessResponse(
       res,
       {
         message: "Store settings updated successfully",
-        settings,
-        logoUrl: settings.logoUrl || null,
+        settings: settingsData,
       },
       200
     );
