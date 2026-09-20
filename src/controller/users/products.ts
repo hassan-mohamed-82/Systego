@@ -8,6 +8,8 @@ import { ProductModel } from "../../models/schema/admin/products";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound } from "../../Errors/NotFound";
 import { DiscountModel } from "../../models/schema/admin/Discount";
+import { ProductSalesModel } from "../../models/schema/admin/POS/Sale";
+import { OrderModel } from "../../models/schema/users/Order";
 
 export const buildProductAggregationPipeline = (
   productMatchStage: object,
@@ -439,6 +441,268 @@ export const getProductById = asyncHandler(
       {
         message: "Product retrieved successfully",
         data: product[0],
+      },
+      200
+    );
+  }
+);
+
+// 🌟 Get Best Selling Products (Aggregating POS Sales and Online Orders)
+export const getBestSellingProducts = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const {
+      limit = "10",
+      page = "1",
+      category_id,
+      warehouse_id,
+      start_date,
+      end_date,
+      sort_by = "quantity", // "quantity" or "revenue"
+    } = req.query as {
+      limit?: string;
+      page?: string;
+      category_id?: string;
+      warehouse_id?: string;
+      start_date?: string;
+      end_date?: string;
+      sort_by?: string;
+    };
+
+    // 1️⃣ Date filter for sales & orders
+    const dateFilter: any = {};
+    if (start_date && end_date) {
+      dateFilter.$gte = new Date(start_date);
+      dateFilter.$lte = new Date(new Date(end_date).setHours(23, 59, 59, 999));
+    } else if (start_date) {
+      dateFilter.$gte = new Date(start_date);
+    } else if (end_date) {
+      dateFilter.$lte = new Date(new Date(end_date).setHours(23, 59, 59, 999));
+    }
+
+    const hasDateFilter = Object.keys(dateFilter).length > 0;
+
+    // 2️⃣ POS Sales Pipeline (Completed sales only, excluding full returns)
+    const saleMatch: any = {
+      "sale.order_pending": 0,
+      "sale.return_status": { $ne: "full" },
+    };
+    if (hasDateFilter) {
+      saleMatch["sale.createdAt"] = dateFilter;
+    }
+    if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
+      saleMatch["sale.warehouse_id"] = new mongoose.Types.ObjectId(warehouse_id);
+    }
+
+    const posPipeline: mongoose.PipelineStage[] = [
+      { $match: { product_id: { $ne: null } } },
+      {
+        $lookup: {
+          from: "sales",
+          localField: "sale_id",
+          foreignField: "_id",
+          as: "sale",
+        },
+      },
+      { $unwind: "$sale" },
+      { $match: saleMatch },
+      {
+        $group: {
+          _id: "$product_id",
+          posQuantity: { $sum: "$quantity" },
+          posRevenue: { $sum: "$subtotal" },
+          posOrdersCount: { $sum: 1 },
+        },
+      },
+    ];
+
+    // 3️⃣ Online Orders Pipeline (Excluding rejected/canceled/returned/refunded)
+    const orderMatch: any = {
+      status: {
+        $nin: ["rejected", "canceled", "refund", "returned", "failed_to_deliver"],
+      },
+    };
+    if (hasDateFilter) {
+      orderMatch.createdAt = dateFilter;
+    }
+    if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
+      orderMatch.warehouse = new mongoose.Types.ObjectId(warehouse_id);
+    }
+
+    const onlinePipeline: mongoose.PipelineStage[] = [
+      { $match: orderMatch },
+      { $unwind: "$cartItems" },
+      { $match: { "cartItems.product": { $ne: null } } },
+      {
+        $group: {
+          _id: "$cartItems.product",
+          onlineQuantity: { $sum: "$cartItems.quantity" },
+          onlineRevenue: {
+            $sum: {
+              $multiply: [
+                "$cartItems.quantity",
+                { $ifNull: ["$cartItems.price", 0] },
+              ],
+            },
+          },
+          onlineOrdersCount: { $sum: 1 },
+        },
+      },
+    ];
+
+    // Run parallel queries
+    const [posStats, onlineStats] = await Promise.all([
+      ProductSalesModel.aggregate(posPipeline),
+      OrderModel.aggregate(onlinePipeline),
+    ]);
+
+    // 4️⃣ Combine sales statistics into a Map
+    interface ProductSalesMetric {
+      totalSoldQuantity: number;
+      posQuantity: number;
+      onlineQuantity: number;
+      totalRevenue: number;
+      posRevenue: number;
+      onlineRevenue: number;
+      ordersCount: number;
+    }
+
+    const salesMap = new Map<string, ProductSalesMetric>();
+
+    for (const item of posStats) {
+      if (!item._id) continue;
+      const idStr = item._id.toString();
+      salesMap.set(idStr, {
+        totalSoldQuantity: item.posQuantity || 0,
+        posQuantity: item.posQuantity || 0,
+        onlineQuantity: 0,
+        totalRevenue: Number((item.posRevenue || 0).toFixed(2)),
+        posRevenue: Number((item.posRevenue || 0).toFixed(2)),
+        onlineRevenue: 0,
+        ordersCount: item.posOrdersCount || 0,
+      });
+    }
+
+    for (const item of onlineStats) {
+      if (!item._id) continue;
+      const idStr = item._id.toString();
+      const existing = salesMap.get(idStr);
+      if (existing) {
+        existing.totalSoldQuantity += item.onlineQuantity || 0;
+        existing.onlineQuantity += item.onlineQuantity || 0;
+        existing.totalRevenue = Number(
+          (existing.totalRevenue + (item.onlineRevenue || 0)).toFixed(2)
+        );
+        existing.onlineRevenue = Number((item.onlineRevenue || 0).toFixed(2));
+        existing.ordersCount += item.onlineOrdersCount || 0;
+      } else {
+        salesMap.set(idStr, {
+          totalSoldQuantity: item.onlineQuantity || 0,
+          posQuantity: 0,
+          onlineQuantity: item.onlineQuantity || 0,
+          totalRevenue: Number((item.onlineRevenue || 0).toFixed(2)),
+          posRevenue: 0,
+          onlineRevenue: Number((item.onlineRevenue || 0).toFixed(2)),
+          ordersCount: item.onlineOrdersCount || 0,
+        });
+      }
+    }
+
+    // 5️⃣ Get online warehouses & user wishlist for storefront formatting
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true })
+      .select("_id")
+      .lean();
+    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+
+    let wishlistIds: mongoose.Types.ObjectId[] = [];
+    if (req.user?.id) {
+      const user = await CustomerModel.findById(req.user.id)
+        .select("wishlist")
+        .lean();
+      if (user?.wishlist) {
+        wishlistIds = user.wishlist.map(
+          (id) => new mongoose.Types.ObjectId(id.toString())
+        );
+      }
+    }
+
+    // 6️⃣ Build base match stage for online products
+    const productMatchStage: any = {};
+    if (category_id && mongoose.Types.ObjectId.isValid(category_id)) {
+      productMatchStage.categoryId = new mongoose.Types.ObjectId(category_id);
+    }
+
+    const soldProductIds = Array.from(salesMap.keys()).map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+
+    if (soldProductIds.length > 0) {
+      productMatchStage._id = { $in: soldProductIds };
+    } else {
+      productMatchStage._id = { $in: [] };
+    }
+
+    const pipeline = buildProductAggregationPipeline(
+      productMatchStage,
+      wishlistIds,
+      onlineWarehouseIds
+    );
+
+    const products = await ProductModel.aggregate(pipeline);
+
+    // 7️⃣ Attach sales metrics to each product
+    const productsWithSales = products.map((product: any) => {
+      const stats = salesMap.get(product._id.toString()) || {
+        totalSoldQuantity: 0,
+        posQuantity: 0,
+        onlineQuantity: 0,
+        totalRevenue: 0,
+        posRevenue: 0,
+        onlineRevenue: 0,
+        ordersCount: 0,
+      };
+
+      return {
+        ...product,
+        sales_stats: {
+          total_sold_quantity: stats.totalSoldQuantity,
+          pos_sold_quantity: stats.posQuantity,
+          online_sold_quantity: stats.onlineQuantity,
+          total_revenue: stats.totalRevenue,
+          pos_revenue: stats.posRevenue,
+          online_revenue: stats.onlineRevenue,
+          orders_count: stats.ordersCount,
+        },
+      };
+    });
+
+    // Sort by highest sales
+    const isSortByRevenue = sort_by === "revenue";
+    productsWithSales.sort((a: any, b: any) => {
+      if (isSortByRevenue) {
+        return b.sales_stats.total_revenue - a.sales_stats.total_revenue;
+      }
+      return (
+        b.sales_stats.total_sold_quantity - a.sales_stats.total_sold_quantity
+      );
+    });
+
+    // 8️⃣ Pagination
+    const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginatedProducts = productsWithSales.slice(
+      startIndex,
+      startIndex + limitNum
+    );
+
+    return SuccessResponse(
+      res,
+      {
+        message: "Best selling products retrieved successfully",
+        total: productsWithSales.length,
+        page: pageNum,
+        limit: limitNum,
+        data: paginatedProducts,
       },
       200
     );
