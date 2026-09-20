@@ -27,7 +27,6 @@ userRoute.use("/banner", bannerRouter);
 userRoute.use("/auth", authRouter);
 userRoute.use("/category", categoryRouter);
 userRoute.use("/product", productRouter);
-userRoute.use("/products", productRouter);
 userRoute.use("/brand", brandRouter);
 userRoute.use("/wishlist", wishlistRouter);
 
