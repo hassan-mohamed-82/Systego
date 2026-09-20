@@ -15,7 +15,11 @@ import warehouseRouter from "./Warehouse";
 import storeSettingsRoutes from "./storeSettings";
 import ecommerceDataRouter from "../admin/ecommerceData";
 
+import bundleRouter from "./bundle";
+
 const userRoute = Router();
+
+userRoute.use("/offer", bundleRouter);
 
 userRoute.use("/tenant-info", tenantInfoRouter)
 userRoute.use("/banner", bannerRouter);
@@ -23,6 +27,7 @@ userRoute.use("/banner", bannerRouter);
 userRoute.use("/auth", authRouter);
 userRoute.use("/category", categoryRouter);
 userRoute.use("/product", productRouter);
+userRoute.use("/products", productRouter);
 userRoute.use("/brand", brandRouter);
 userRoute.use("/wishlist", wishlistRouter);
 

@@ -60,6 +60,8 @@
 | `/api/store/product/:id` | `GET` | None | جلب تفاصيل منتج محدد مع متغيراته وأسعاره. |
 | `/api/store/brand` | `GET` | None | عرض العلامات التجارية المتاحة. |
 | `/api/store/banner` | `GET` | None | عرض البانرات الإعلانية الرئيسية بالمتجر. |
+| `/api/store/offer` <br> `/api/store/bundle` | `GET` | None | جلب جميع العروض وباقات التوفير (Bundles) النشطة المتاحة للمتجر مع حساب الخصم والتوفير والمنتجات والمتغيرات. |
+| `/api/store/offer/:id` <br> `/api/store/bundle/:id` | `GET` | None | جلب تفاصيل عرض أو باقة معينة بالمعرف. |
 | `/api/store/tenant-info` | `GET` | None | جلب بيانت وتفاصيل صاحب البزنس والشعار. |
 | `/api/store/store-settings` | `GET` | None | جلب إعدادات وتصميم المتجر الإلكتروني. |
 
