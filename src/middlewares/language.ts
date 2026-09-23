@@ -3,6 +3,15 @@ import mongoose from "mongoose";
 
 export type SupportedLanguage = "ar" | "en";
 
+// 💡 تمديد أنواع Express حتى لا يظهر خطأ مع req.lang
+declare global {
+  namespace Express {
+    interface Request {
+      lang?: SupportedLanguage;
+    }
+  }
+}
+
 /**
  * Checks if a value is a plain object or Mongoose document
  * (avoids Date, RegExp, Buffer, ObjectId, etc.)
@@ -60,7 +69,6 @@ export function localizePayload(data: any, lang: SupportedLanguage): any {
   const keys = Object.keys(result);
 
   if (lang === "ar") {
-    // In Arabic mode: set base fields (name, description, etc.) to Arabic and remove redundant ar_* / *_ar keys
     for (const key of keys) {
       if (key.startsWith("ar_") && key.length > 3) {
         const baseKey = key.slice(3);
@@ -68,23 +76,22 @@ export function localizePayload(data: any, lang: SupportedLanguage): any {
         if (arVal !== undefined && arVal !== null && arVal !== "") {
           result[baseKey] = arVal;
         }
-        delete result[key]; // 🗑️ احذف الحقل العربي المكرر (يبقى الاسم بالعربي فقط داخل name)
+        delete result[key];
       } else if (key.endsWith("_ar") && key.length > 3) {
         const baseKey = key.slice(0, -3);
         const arVal = result[key];
         if (arVal !== undefined && arVal !== null && arVal !== "") {
           result[baseKey] = arVal;
         }
-        delete result[key]; // 🗑️ احذف الحقل العربي المكرر
+        delete result[key];
       } else if (
         (key.startsWith("en_") && key.length > 3) ||
         (key.endsWith("_en") && key.length > 3)
       ) {
-        delete result[key]; // احذف أي حقول en_*
+        delete result[key];
       }
     }
   } else if (lang === "en") {
-    // In English mode: keep English base fields, apply en_* if available, and remove all ar_* / *_ar fields
     for (const key of keys) {
       if (key.startsWith("en_") && key.length > 3) {
         const baseKey = key.slice(3);
@@ -104,7 +111,7 @@ export function localizePayload(data: any, lang: SupportedLanguage): any {
         (key.startsWith("ar_") && key.length > 3) ||
         (key.endsWith("_ar") && key.length > 3)
       ) {
-        delete result[key]; // 🗑️ احذف كل الحقول العربي تماماً في وضع الإنجليزي
+        delete result[key];
       }
     }
   }
@@ -113,7 +120,7 @@ export function localizePayload(data: any, lang: SupportedLanguage): any {
 }
 
 /**
- * Detect language from query parameter, custom headers, or Accept-Language.
+ * Detect language strictly from explicitly passed parameters or custom headers.
  */
 export function detectLanguage(req: Request): SupportedLanguage | null {
   const queryLang = (
@@ -124,8 +131,7 @@ export function detectLanguage(req: Request): SupportedLanguage | null {
 
   const headerLang = (
     req.headers["x-lang"] ||
-    req.headers["x-language"] ||
-    req.headers["accept-language"]
+    req.headers["x-language"]
   ) as string | undefined;
 
   const candidate = (queryLang || headerLang || "").toLowerCase().trim();
@@ -138,7 +144,6 @@ export function detectLanguage(req: Request): SupportedLanguage | null {
 
 /**
  * Global Language Localization Middleware
- * Automatically intercepts responses and transforms model fields based on requested language (?lang=ar | ?lang=en)
  */
 export const languageMiddleware = (
   req: Request,
@@ -147,16 +152,13 @@ export const languageMiddleware = (
 ) => {
   const lang = detectLanguage(req);
 
-  if (lang) {
-    req.lang = lang;
-  }
-
-  // If no language query or header was specified, pass through untouched
+  // إذا لم يطلب العميل لغة صريحة، يتم إرجاع الاستجابة كاملة كما هي
   if (!lang) {
     return next();
   }
 
-  // Intercept res.json to localize the response data
+  req.lang = lang;
+
   const originalJson = res.json.bind(res);
 
   res.json = (body: any): Response => {
