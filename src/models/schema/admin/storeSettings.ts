@@ -17,6 +17,10 @@ const appSettingSchema = new mongoose.Schema({
     fontStyle: { type: String, default: 'default' },
     _id: false,
   }],
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  toJSON: { flattenMaps: true },
+  toObject: { flattenMaps: true }
+});
 
 export const appSettingModel = mongoose.model('AppSetting', appSettingSchema);

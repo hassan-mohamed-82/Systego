@@ -60,6 +60,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthenticatedUser;
+      lang?: "ar" | "en";
     }
   }
 }

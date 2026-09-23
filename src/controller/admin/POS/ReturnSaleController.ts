@@ -27,13 +27,20 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
     throw new BadRequest("Sale reference is required");
   }
 
+  const cleanRef = reference.toString().replace(/^#/, "").trim();
+
   let sale;
-  if (mongoose.Types.ObjectId.isValid(reference)) {
-    sale = await SaleModel.findById(reference);
+  if (mongoose.Types.ObjectId.isValid(cleanRef)) {
+    sale = await SaleModel.findById(cleanRef);
   }
 
   if (!sale) {
-    sale = await SaleModel.findOne({ reference: reference });
+    sale = await SaleModel.findOne({ reference: cleanRef });
+  }
+
+  if (!sale && !isNaN(Number(cleanRef))) {
+    const dailyNum = Number(cleanRef);
+    sale = await SaleModel.findOne({ daily_order_number: dailyNum }).sort({ createdAt: -1 });
   }
 
   if (!sale) {

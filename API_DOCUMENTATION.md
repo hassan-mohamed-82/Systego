@@ -56,9 +56,12 @@
 | :--- | :--- | :--- | :--- |
 | `/api/store/category` | `GET` | None | عرض قائمة الأقسام والتصنيفات المتاحة بالمتجر. |
 | `/api/store/product` | `GET` | None | عرض المنتجات مع البحث والفلترة حسب القسم أو العلامة التجاريه (`?search=&category_id=&page=`). |
+| `/api/store/product/best-sellers` <br> `/api/users/products/best-sellers` | `GET` | Optional | جلب المنتجات الأكثر مبيعاً مجمعة من نقاط البيع (POS) والأوردرات الأونلاين مرتبة تنازلياً حسب الأكثر مبيعاً (`?limit=10&page=1&sort_by=quantity|revenue&start_date=&end_date=&warehouse_id=&category_id=`). |
 | `/api/store/product/:id` | `GET` | None | جلب تفاصيل منتج محدد مع متغيراته وأسعاره. |
 | `/api/store/brand` | `GET` | None | عرض العلامات التجارية المتاحة. |
 | `/api/store/banner` | `GET` | None | عرض البانرات الإعلانية الرئيسية بالمتجر. |
+| `/api/store/offer` <br> `/api/store/bundle` | `GET` | None | جلب جميع العروض وباقات التوفير (Bundles) النشطة المتاحة للمتجر مع حساب الخصم والتوفير والمنتجات والمتغيرات. |
+| `/api/store/offer/:id` <br> `/api/store/bundle/:id` | `GET` | None | جلب تفاصيل عرض أو باقة معينة بالمعرف. |
 | `/api/store/tenant-info` | `GET` | None | جلب بيانت وتفاصيل صاحب البزنس والشعار. |
 | `/api/store/store-settings` | `GET` | None | جلب إعدادات وتصميم المتجر الإلكتروني. |
 

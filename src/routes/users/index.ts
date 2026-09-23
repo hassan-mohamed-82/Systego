@@ -13,8 +13,13 @@ import tenantInfoRouter from "../admin/tenantInfo";
 import orderTypeRouter from "./ordertype";
 import warehouseRouter from "./Warehouse";
 import storeSettingsRoutes from "./storeSettings";
+import ecommerceDataRouter from "../admin/ecommerceData";
+
+import bundleRouter from "./bundle";
 
 const userRoute = Router();
+
+userRoute.use("/offer", bundleRouter);
 
 userRoute.use("/tenant-info", tenantInfoRouter)
 userRoute.use("/banner", bannerRouter);
@@ -34,5 +39,6 @@ userRoute.use("/order-type", orderTypeRouter);
 userRoute.use("/warehouse", warehouseRouter);
 
 userRoute.use("/store-settings", storeSettingsRoutes);
+userRoute.use("/ecommerce-data", ecommerceDataRouter);
 
 export default userRoute;

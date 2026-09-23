@@ -8,6 +8,7 @@ export const createCategorySchema = Joi.object({
   order: Joi.number().optional().allow(null).allow("").empty(""),
   parentId: Joi.string().optional().allow("", null),
   Is_Online: Joi.boolean().optional(),
+  is_featured: Joi.boolean().optional(),
 });
 
 export const updateCategorySchema = Joi.object({
@@ -18,4 +19,5 @@ export const updateCategorySchema = Joi.object({
   order: Joi.number().optional().allow(null),
   parentId: Joi.string().optional().allow("", null),
   Is_Online: Joi.boolean().optional(),
+  is_featured: Joi.boolean().optional(),
 });

@@ -36,9 +36,15 @@ app.use(cookieParser());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
-// ✅ استخدم المسار الصحيح للـ uploads حتى بعد build
+// ✅ استخدم المسار الصحيح للـ uploads حتى بعد build مع كاش للمتصفح لمدة شهر
 const uploadsPath = path.join(__dirname, "../uploads");
-app.use("/uploads", express.static(uploadsPath));
+app.use(
+  "/uploads",
+  express.static(uploadsPath, {
+    maxAge: "30d",
+    etag: true,
+  })
+);
 
 // 🚀 Routes
 app.use("/test-updater",(req, res, next) => {

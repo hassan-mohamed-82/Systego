@@ -14,7 +14,7 @@ import { deletePhotoFromServer } from "../../utils/deleteImage";
 
 
 export const createcategory = async (req: Request, res: Response) => {
-  const { name, ar_name, image, parentId, banner, Is_Online, order } = req.body;
+  const { name, ar_name, image, parentId, banner, Is_Online, is_featured, order } = req.body;
   
   if (!name) throw new BadRequest("Category name is required");
   
@@ -36,7 +36,8 @@ export const createcategory = async (req: Request, res: Response) => {
     image: imageUrl,
     banner: bannerUrl,
     parentId: parentId && parentId !== "" ? parentId : undefined,  // 👈 لو فاضي يبقى undefined
-    Is_Online: Is_Online || true,
+    Is_Online: Is_Online !== undefined ? Is_Online : true,
+    is_featured: is_featured !== undefined ? is_featured : false,
     order
   });
   
@@ -113,11 +114,12 @@ export const updateCategory = async (req: Request, res: Response) => {
   const category = await CategoryModel.findById(id);
   if (!category) throw new NotFound("Category not found");
 
-  const { name, ar_name, parentId, image, banner, Is_Online, order } = req.body;
+  const { name, ar_name, parentId, image, banner, Is_Online, is_featured, order } = req.body;
 
   if (name !== undefined) category.name = name;
   if (ar_name !== undefined) category.ar_name = ar_name;
   if (Is_Online !== undefined) category.Is_Online = Is_Online;
+  if (is_featured !== undefined) (category as any).is_featured = is_featured;
   if (order !== undefined) category.order = order;
   
   if (parentId !== undefined) {

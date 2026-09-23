@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { catchAsync } from '../../utils/catchAsync';
-import { getAllBundles } from '../../controller/users/bundle';
-const route = Router()
+import { getAllBundles, getBundleById } from '../../controller/users/bundle';
 
-route.get("/",catchAsync(getAllBundles))
+const route = Router();
 
-export default route
+route.get("/", catchAsync(getAllBundles));
+route.get("/:id", catchAsync(getBundleById));
+
+export default route;

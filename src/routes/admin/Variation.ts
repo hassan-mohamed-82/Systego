@@ -13,7 +13,7 @@ router.get("/",authorizePermissions("variation","View"), catchAsync(getAllVariat
 router.get("/:id",authorizePermissions("variation","View"), catchAsync(getOneVariation)); 
 router.put("/:id", authorizePermissions("variation","Edit"),validate(updateVariationSchema) ,catchAsync(updateVariationWithOptions));
 router.delete("/:id",authorizePermissions("variation","Delete"), catchAsync(deleteVariationWithOptions));
-router.delete("/option/:id",authorizePermissions("variation","Delete"), catchAsync(deleteOption));
+router.delete("/option/:id", authorizePermissions("variation", ["Delete", "Edit"]), catchAsync(deleteOption));
 
 
 export default router;

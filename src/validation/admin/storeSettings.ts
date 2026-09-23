@@ -14,7 +14,7 @@ export const appSettingValidationSchema = Joi.object({
 
   storeName: Joi.string().required().description("Name of the store"),
 
-  logo: Joi.string().optional().description("URL of the store logo"),
+  logoUrl: Joi.string().allow(null, "").optional().description("Store logo URL or base64"),
 
   fontStyle: Joi.string()
     .default("default")

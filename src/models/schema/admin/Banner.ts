@@ -7,6 +7,7 @@ const BannerSchema = new Schema(
     title: { type: String, required: false },
     description: { type: String, required: false },
     images: [{ type: String, required: true }],
+    link: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

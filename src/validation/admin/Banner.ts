@@ -8,6 +8,7 @@ export const createBannerSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().optional(),
   images: Joi.array().items(Joi.string()).min(1).required(),
+  link: Joi.string().optional().allow("", null),
   isActive: Joi.boolean().optional(),
 });
 
@@ -16,5 +17,6 @@ export const updateBannerSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().optional(),
   images: Joi.array().items(Joi.string()).optional(),
+  link: Joi.string().optional().allow("", null),
   isActive: Joi.boolean().optional(),
 });
