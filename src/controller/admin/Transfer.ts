@@ -9,6 +9,15 @@ import { ProductModel } from "../../models/schema/admin/products";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
 // =========================================================
+// Types
+// =========================================================
+interface NormalizedProduct {
+  productId: string;
+  productPriceId: string | null;
+  quantity: number;
+}
+
+// =========================================================
 // Helpers
 // =========================================================
 const extractId = (val: any): string | null => {
@@ -50,21 +59,32 @@ export const createTransfer = async (req: Request, res: Response) => {
   if (!fromWarehouse || !toWarehouse)
     throw new NotFound("One or both warehouses not found");
 
-  // Normalize products (استخراج IDs لو جايين كـ objects)
-  const normalizedProducts = products.map((item: any) => ({
-    productId: extractId(item.productId),
-    productPriceId: extractId(item.productPriceId),
-    quantity: Number(item.quantity),
-  }));
+  // =========================================================
+  // Normalize products (استخراج IDs + التأكد من productId)
+  // =========================================================
+  const normalizedProducts: NormalizedProduct[] = products.map(
+    (item: any): NormalizedProduct => {
+      const productId = extractId(item.productId);
+      const productPriceId = extractId(item.productPriceId);
+
+      if (!productId) {
+        throw new BadRequest("Product ID is required for each item");
+      }
+
+      return {
+        productId,
+        productPriceId,
+        quantity: Number(item.quantity),
+      };
+    },
+  );
 
   // Validate
   for (const item of normalizedProducts) {
     const { productId, productPriceId, quantity } = item;
 
-    if (!productId || !quantity || quantity <= 0)
-      throw new BadRequest(
-        "Each product must have productId and a positive quantity",
-      );
+    if (!quantity || quantity <= 0)
+      throw new BadRequest("Each product must have a positive quantity");
 
     const product = await ProductModel.findById(productId);
     if (!product) throw new NotFound(`Product ${productId} not found`);
@@ -82,12 +102,10 @@ export const createTransfer = async (req: Request, res: Response) => {
     }
   }
 
+  // =========================================================
   // Deduct from source
-  const deducted: {
-    productId: string;
-    productPriceId: string | null;
-    quantity: number;
-  }[] = [];
+  // =========================================================
+  const deducted: NormalizedProduct[] = [];
 
   try {
     for (const item of normalizedProducts) {
@@ -167,7 +185,7 @@ export const createTransfer = async (req: Request, res: Response) => {
     const transfer = await TransferModel.create({
       fromWarehouseId,
       toWarehouseId,
-      products: normalizedProducts, // ✅ نستخدم normalized
+      products: normalizedProducts,
       reason,
       status: "pending",
     });
@@ -286,11 +304,7 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   const accountedByKey = new Map<string, number>();
 
   // ✅ Approved → add to destination
-  const addedToDestination: {
-    productId: string;
-    productPriceId: string | null;
-    quantity: number;
-  }[] = [];
+  const addedToDestination: NormalizedProduct[] = [];
 
   try {
     for (const item of approved_products) {
@@ -364,11 +378,7 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   }
 
   // ✅ Return unaccounted / rejected to source
-  const returnedToSource: {
-    productId: string;
-    productPriceId: string | null;
-    quantity: number;
-  }[] = [];
+  const returnedToSource: NormalizedProduct[] = [];
   let totalReturnedQty = 0;
 
   try {
@@ -445,7 +455,28 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
       });
     }
   } catch (err) {
-    // rollback ...
+    for (const a of addedToDestination) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: a.productId,
+          productPriceId: a.productPriceId,
+          warehouseId,
+        },
+        { $inc: { quantity: -a.quantity } },
+      );
+    }
+
+    for (const r of returnedToSource) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: r.productId,
+          productPriceId: r.productPriceId,
+          warehouseId: transfer.fromWarehouseId,
+        },
+        { $inc: { quantity: -r.quantity } },
+      );
+    }
+
     throw err;
   }
 
