@@ -60,6 +60,10 @@ const ReturnPurchaseSchema = new Schema({
         type: Date,
         default: Date.now
     },
+    reason: {
+        type: String,
+        default: ""
+    },
 }, {
     timestamps: true
 });

@@ -7,7 +7,7 @@ import { PurchaseModel } from '../../models/schema/admin/Purchase';
 import { PurchaseItemModel } from '../../models/schema/admin/purchase_item';
 import { ReturnPurchaseModel } from '../../models/schema/admin/ReturnPurchase';
 import { ProductModel } from '../../models/schema/admin/products';
-import { ProductPriceModel } from '../../models/schema/admin/product_price';
+import { ProductPriceModel, ProductPriceOptionModel } from '../../models/schema/admin/product_price';
 import { WarehouseModel } from '../../models/schema/admin/Warehouse';
 import { Product_WarehouseModel } from '../../models/schema/admin/Product_Warehouse';
 import { BankAccountModel } from '../../models/schema/admin/Financial_Account';
@@ -61,19 +61,57 @@ export const getPurchaseForReturn = async (req: Request, res: Response) => {
         })
         .populate({
             path: "options",
-            populate: [
-                {
-                    path: "product_price_id",
-                    select: "price code quantity",
-                    populate: {
-                        path: "productId",
-                        select: "name ar_name image"
-                    }
-                },
-                { path: "option_id", select: "name ar_name" }
-            ]
+            populate: {
+                path: "product_price_id",
+                select: "price code quantity",
+                populate: {
+                    path: "productId",
+                    select: "name ar_name image"
+                }
+            }
         })
         .lean({ virtuals: true });
+
+    // Collect every product_price_id referenced across all items' options
+    const priceIds = new Set<string>();
+    for (const item of purchaseItems as any[]) {
+        for (const opt of item.options || []) {
+            if (opt.product_price_id?._id) {
+                priceIds.add(opt.product_price_id._id.toString());
+            }
+        }
+    }
+
+    // Resolve variation attributes (e.g. Color: Red, Size: Small) for those SKUs
+    const priceOptionLinks = await ProductPriceOptionModel.find({
+        product_price_id: { $in: Array.from(priceIds) }
+    })
+        .populate({
+            path: "option_id",
+            select: "name ar_name variationId",
+            populate: { path: "variationId", select: "name ar_name" }
+        })
+        .lean();
+
+    const attributesByPriceId: Record<string, any[]> = {};
+    for (const link of priceOptionLinks as any[]) {
+        const priceId = link.product_price_id.toString();
+        const option = link.option_id;
+        if (!option) continue;
+
+        if (!attributesByPriceId[priceId]) attributesByPriceId[priceId] = [];
+        attributesByPriceId[priceId].push({
+            variation_id: option.variationId?._id,
+            variation_name: option.variationId?.name,
+            variation_ar_name: option.variationId?.ar_name,
+            option_id: option._id,
+            option_name: option.name,
+            option_ar_name: option.ar_name,
+        });
+    }
+
+    const buildAttributesLabel = (attrs: any[]) =>
+        attrs.map((a) => a.option_name).filter(Boolean).join(" ");
 
     const previousReturns = await ReturnPurchaseModel.find({ purchase_id: purchase._id })
         .populate("refund_account_id", "name ar_name")
@@ -105,12 +143,25 @@ export const getPurchaseForReturn = async (req: Request, res: Response) => {
 
         let productInfo = item.product_id || null;
 
+        const optionsWithVariations = (item.options || []).map((opt: any) => {
+            const priceId = opt.product_price_id?._id?.toString();
+            const attributes = priceId ? (attributesByPriceId[priceId] || []) : [];
+
+            return {
+                ...opt,
+                variation_attributes: attributes,
+                display_name: productInfo
+                    ? [productInfo.name, buildAttributesLabel(attributes)].filter(Boolean).join(" ")
+                    : buildAttributesLabel(attributes),
+            };
+        });
+
         return {
             _id: item._id,
             purchase_id: item.purchase_id,
             product: productInfo,
             product_price: item.product_price_id || null,
-            options: item.options || [],
+            options: optionsWithVariations,
             quantity: item.quantity,
             price: item.unit_cost,
             subtotal: item.subtotal,
@@ -319,6 +370,7 @@ export const createReturn = async (req: Request, res: Response) => {
         total_amount: totalReturnAmount,
         refund_account_id: refund_account_id,
         note: note || "",
+        reason,
         image: image_url,
     });
 
