@@ -8,9 +8,27 @@ import { SuccessResponse } from "../../utils/response";
 import { ProductModel } from "../../models/schema/admin/products";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
+// =========================================================
+// Helper: مفتاح موحّد للـ product + variation
+// =========================================================
+const keyOf = (productId: string, productPriceId?: string | null) =>
+  `${productId}:${productPriceId || "null"}`;
+
+const parseKey = (k: string) => {
+  const [productId, productPriceIdRaw] = k.split(":");
+  return {
+    productId,
+    productPriceId: productPriceIdRaw === "null" ? null : productPriceIdRaw,
+  };
+};
+
+// =========================================================
+// CREATE TRANSFER
+// =========================================================
 export const createTransfer = async (req: Request, res: Response) => {
   const { fromWarehouseId, toWarehouseId, products, reason } = req.body;
 
+  // ---------- Validation ----------
   if (!fromWarehouseId || !toWarehouseId)
     throw new BadRequest("Both warehouses are required");
 
@@ -26,12 +44,14 @@ export const createTransfer = async (req: Request, res: Response) => {
   if (!fromWarehouse || !toWarehouse)
     throw new NotFound("One or both warehouses not found");
 
-  // ✅ Validate existence first (cheap, no mutation yet)
+  // ---------- Validate existence (no mutation yet) ----------
   for (const item of products) {
     const { productId, productPriceId, quantity } = item;
 
     if (!productId || !quantity || quantity <= 0)
-      throw new BadRequest("Each product must have productId and a positive quantity");
+      throw new BadRequest(
+        "Each product must have productId and a positive quantity",
+      );
 
     const product = await ProductModel.findById(productId);
     if (!product) throw new NotFound(`Product ${productId} not found`);
@@ -43,15 +63,18 @@ export const createTransfer = async (req: Request, res: Response) => {
       }
       if (productPrice.productId.toString() !== productId) {
         throw new BadRequest(
-          `Product variation ${productPriceId} does not belong to product ${productId}`
+          `Product variation ${productPriceId} does not belong to product ${productId}`,
         );
       }
     }
   }
 
-  // ✅ Atomic, race-safe deduction per item. If any item fails due to
-  // insufficient stock, roll back everything already deducted in this loop.
-  const deducted: { productId: string; productPriceId: string | null; quantity: number }[] = [];
+  // ---------- Deduct from source (race-safe, with rollback) ----------
+  const deducted: {
+    productId: string;
+    productPriceId: string | null;
+    quantity: number;
+  }[] = [];
 
   try {
     for (const item of products) {
@@ -65,7 +88,7 @@ export const createTransfer = async (req: Request, res: Response) => {
           quantity: { $gte: quantity },
         },
         { $inc: { quantity: -quantity } },
-        { new: true }
+        { new: true },
       );
 
       if (!result) {
@@ -75,47 +98,98 @@ export const createTransfer = async (req: Request, res: Response) => {
           warehouseId: fromWarehouseId,
         });
         const available = existing?.quantity ?? 0;
-        const variationText = productPriceId ? ` (variation: ${productPriceId})` : "";
+        const variationText = productPriceId
+          ? ` (variation: ${productPriceId})`
+          : "";
         throw new BadRequest(
-          `Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${available}, Requested: ${quantity}`
+          `Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${available}, Requested: ${quantity}`,
         );
       }
 
-      deducted.push({ productId, productPriceId: productPriceId || null, quantity });
+      deducted.push({
+        productId,
+        productPriceId: productPriceId || null,
+        quantity,
+      });
     }
   } catch (err) {
-    // ✅ Roll back any deductions already applied before the failure
+    // Rollback product-level deductions
     for (const d of deducted) {
       await Product_WarehouseModel.findOneAndUpdate(
-        { productId: d.productId, productPriceId: d.productPriceId, warehouseId: fromWarehouseId },
-        { $inc: { quantity: d.quantity } }
+        {
+          productId: d.productId,
+          productPriceId: d.productPriceId,
+          warehouseId: fromWarehouseId,
+        },
+        { $inc: { quantity: d.quantity } },
       );
     }
     throw err;
   }
 
-  const totalQty = products.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
+  const totalQty = products.reduce(
+    (acc: number, item: any) => acc + Number(item.quantity),
+    0,
+  );
 
-  // ✅ Atomic warehouse total decrement
-  await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
-    $inc: { stock_Quantity: -totalQty },
-  });
+  // ---------- Decrement source warehouse total (with rollback on failure) ----------
+  try {
+    await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
+      $inc: { stock_Quantity: -totalQty },
+    });
+  } catch (err) {
+    // Rollback product-level deductions if total decrement fails
+    for (const d of deducted) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: d.productId,
+          productPriceId: d.productPriceId,
+          warehouseId: fromWarehouseId,
+        },
+        { $inc: { quantity: d.quantity } },
+      );
+    }
+    throw err;
+  }
 
-  const transfer = await TransferModel.create({
-    fromWarehouseId,
-    toWarehouseId,
-    products,
-    reason,
-    status: "pending",
-  });
+  // ---------- Create transfer (pending) ----------
+  try {
+    const transfer = await TransferModel.create({
+      fromWarehouseId,
+      toWarehouseId,
+      products,
+      reason,
+      status: "pending",
+    });
 
-  SuccessResponse(res, {
-    message: "Transfer created successfully",
-    transfer,
-  });
+    SuccessResponse(res, {
+      message: "Transfer created successfully",
+      transfer,
+    });
+  } catch (err) {
+    // Rollback everything if transfer creation fails
+    for (const d of deducted) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: d.productId,
+          productPriceId: d.productPriceId,
+          warehouseId: fromWarehouseId,
+        },
+        { $inc: { quantity: d.quantity } },
+      );
+    }
+
+    await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
+      $inc: { stock_Quantity: totalQty },
+    });
+
+    throw err;
+  }
 };
 
-// 🟡 المستودع يشوف كل التحويلات اللي تخصه (pending / received)
+// =========================================================
+// GET TRANSFERS FOR WAREHOUSE (in + out)
+// =========================================================
 export const getTransfersForWarehouse = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
 
@@ -140,6 +214,9 @@ export const getTransfersForWarehouse = async (req: Request, res: Response) => {
   });
 };
 
+// =========================================================
+// GET TRANSFER BY ID
+// =========================================================
 export const getTransferById = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -161,9 +238,17 @@ export const getTransferById = async (req: Request, res: Response) => {
   });
 };
 
+// =========================================================
+// UPDATE TRANSFER STATUS (Accept / Reject)
+// =========================================================
 export const updateTransferStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { warehouseId, rejected_products = [], approved_products = [], reason } = req.body;
+  const {
+    warehouseId,
+    rejected_products = [],
+    approved_products = [],
+    reason,
+  } = req.body;
 
   const transfer = await TransferModel.findById(id);
   if (!transfer) throw new NotFound("Transfer not found");
@@ -172,87 +257,236 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     throw new BadRequest("Only pending transfers can be updated");
 
   if (transfer.toWarehouseId.toString() !== warehouseId)
-    throw new BadRequest("Only the receiving warehouse can update this transfer");
+    throw new BadRequest(
+      "Only the receiving warehouse can update this transfer",
+    );
 
-  // ✅ Reconcile: every unit originally sent must end up either approved
-  // or rejected. Anything unaccounted for is treated as rejected, so it
-  // can be returned to the source warehouse instead of silently vanishing.
+  // =========================================================
+  // Reconcile: كل وحدة اتبعتت لازم تنتهي approved أو rejected
+  // =========================================================
   const sentByKey = new Map<string, number>();
-  const keyOf = (productId: string, productPriceId?: string | null) =>
-    `${productId}:${productPriceId || "null"}`;
-
   for (const item of transfer.products as any[]) {
-    const k = keyOf(item.productId.toString(), item.productPriceId ? item.productPriceId.toString() : null);
+    const k = keyOf(
+      item.productId.toString(),
+      item.productPriceId ? item.productPriceId.toString() : null,
+    );
     sentByKey.set(k, (sentByKey.get(k) || 0) + item.quantity);
   }
 
   const accountedByKey = new Map<string, number>();
 
-  // ✅ Approved items: atomic increment into destination warehouse
-  for (const item of approved_products) {
-    const { productId, productPriceId, quantity } = item;
-    if (!productId || !quantity || quantity <= 0) {
-      throw new BadRequest("Each approved product must have productId and a positive quantity");
+  // =========================================================
+  // Approved items → add to destination
+  // =========================================================
+  const addedToDestination: {
+    productId: string;
+    productPriceId: string | null;
+    quantity: number;
+  }[] = [];
+
+  try {
+    for (const item of approved_products) {
+      const { productId, productPriceId, quantity } = item;
+
+      if (!productId || !quantity || quantity <= 0) {
+        throw new BadRequest(
+          "Each approved product must have productId and a positive quantity",
+        );
+      }
+
+      // Validate product exists
+      const product = await ProductModel.findById(productId);
+      if (!product) throw new NotFound(`Product ${productId} not found`);
+
+      if (productPriceId) {
+        const productPrice = await ProductPriceModel.findById(productPriceId);
+        if (!productPrice) {
+          throw new NotFound(`Product variation ${productPriceId} not found`);
+        }
+        if (productPrice.productId.toString() !== productId) {
+          throw new BadRequest(
+            `Product variation ${productPriceId} does not belong to product ${productId}`,
+          );
+        }
+      }
+
+      await Product_WarehouseModel.findOneAndUpdate(
+        { productId, productPriceId: productPriceId || null, warehouseId },
+        {
+          $inc: { quantity },
+          $setOnInsert: {
+            productId,
+            productPriceId: productPriceId || null,
+            warehouseId,
+          },
+        },
+        { upsert: true, new: true },
+      );
+
+      addedToDestination.push({
+        productId,
+        productPriceId: productPriceId || null,
+        quantity: Number(quantity),
+      });
+
+      const k = keyOf(productId, productPriceId || null);
+      accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity));
     }
-
-    await Product_WarehouseModel.findOneAndUpdate(
-      { productId, productPriceId: productPriceId || null, warehouseId },
-      { $inc: { quantity } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    const k = keyOf(productId, productPriceId || null);
-    accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity));
+  } catch (err) {
+    // Rollback destination additions
+    for (const a of addedToDestination) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: a.productId,
+          productPriceId: a.productPriceId,
+          warehouseId,
+        },
+        { $inc: { quantity: -a.quantity } },
+      );
+    }
+    throw err;
   }
 
+  // =========================================================
+  // Rejected items (explicit)
+  // =========================================================
   for (const item of rejected_products) {
     const { productId, productPriceId, quantity } = item;
     const k = keyOf(productId, productPriceId || null);
     accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity || 0));
   }
 
-  // ✅ Return any unaccounted-for or explicitly rejected quantity back to source
-  for (const [k, sentQty] of sentByKey.entries()) {
-    const accountedQty = accountedByKey.get(k) || 0;
-    const toReturn = sentQty - accountedQty;
-    if (toReturn > 0) {
-      const [productId, productPriceIdRaw] = k.split(":");
-      const productPriceId = productPriceIdRaw === "null" ? null : productPriceIdRaw;
+  // =========================================================
+  // Return unaccounted / rejected quantity back to source
+  // =========================================================
+  const returnedToSource: {
+    productId: string;
+    productPriceId: string | null;
+    quantity: number;
+  }[] = [];
 
-      await Product_WarehouseModel.findOneAndUpdate(
-        { productId, productPriceId, warehouseId: transfer.fromWarehouseId },
-        { $inc: { quantity: toReturn } },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+  let totalReturnedQty = 0;
 
-      await WarehouseModel.findByIdAndUpdate(transfer.fromWarehouseId, {
-        $inc: { stock_Quantity: toReturn },
-      });
+  try {
+    for (const [k, sentQty] of sentByKey.entries()) {
+      const accountedQty = accountedByKey.get(k) || 0;
+      const toReturn = sentQty - accountedQty;
+
+      if (toReturn > 0) {
+        const { productId, productPriceId } = parseKey(k);
+
+        await Product_WarehouseModel.findOneAndUpdate(
+          { productId, productPriceId, warehouseId: transfer.fromWarehouseId },
+          {
+            $inc: { quantity: toReturn },
+            $setOnInsert: {
+              productId,
+              productPriceId,
+              warehouseId: transfer.fromWarehouseId,
+            },
+          },
+          { upsert: true, new: true },
+        );
+
+        returnedToSource.push({
+          productId,
+          productPriceId,
+          quantity: toReturn,
+        });
+        totalReturnedQty += toReturn;
+      }
     }
+  } catch (err) {
+    // Rollback destination additions AND source returns
+    for (const a of addedToDestination) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: a.productId,
+          productPriceId: a.productPriceId,
+          warehouseId,
+        },
+        { $inc: { quantity: -a.quantity } },
+      );
+    }
+
+    for (const r of returnedToSource) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: r.productId,
+          productPriceId: r.productPriceId,
+          warehouseId: transfer.fromWarehouseId,
+        },
+        { $inc: { quantity: -r.quantity } },
+      );
+    }
+
+    throw err;
   }
 
+  // =========================================================
+  // Warehouse totals update
+  // =========================================================
+  const totalApprovedQty = approved_products.reduce(
+    (acc: number, item: any) => acc + Number(item.quantity),
+    0,
+  );
+
+  try {
+    if (totalApprovedQty > 0) {
+      await WarehouseModel.findByIdAndUpdate(warehouseId, {
+        $inc: { stock_Quantity: totalApprovedQty },
+      });
+    }
+
+    if (totalReturnedQty > 0) {
+      await WarehouseModel.findByIdAndUpdate(transfer.fromWarehouseId, {
+        $inc: { stock_Quantity: totalReturnedQty },
+      });
+    }
+  } catch (err) {
+    // Rollback everything
+    for (const a of addedToDestination) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: a.productId,
+          productPriceId: a.productPriceId,
+          warehouseId,
+        },
+        { $inc: { quantity: -a.quantity } },
+      );
+    }
+
+    for (const r of returnedToSource) {
+      await Product_WarehouseModel.findOneAndUpdate(
+        {
+          productId: r.productId,
+          productPriceId: r.productPriceId,
+          warehouseId: transfer.fromWarehouseId,
+        },
+        { $inc: { quantity: -r.quantity } },
+      );
+    }
+
+    throw err;
+  }
+
+  // =========================================================
+  // Update transfer document
+  // =========================================================
   if (approved_products.length > 0) {
     transfer.approved_products = approved_products;
   }
+
   if (rejected_products.length > 0) {
     transfer.rejected_products = rejected_products;
-    transfer.reason = reason || "";
+  }
+
+  if (reason) {
+    transfer.reason = reason;
   }
 
   transfer.status = approved_products.length > 0 ? "received" : "rejected";
   await transfer.save();
-
-  const totalApprovedQty = approved_products.reduce(
-    (acc: number, item: any) => acc + Number(item.quantity),
-    0
-  );
-
-  if (totalApprovedQty > 0) {
-    // ✅ Atomic destination warehouse total increment
-    await WarehouseModel.findByIdAndUpdate(warehouseId, {
-      $inc: { stock_Quantity: totalApprovedQty },
-    });
-  }
 
   return SuccessResponse(res, {
     message: "Transfer status updated successfully",
@@ -260,6 +494,9 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   });
 };
 
+// =========================================================
+// GET INCOMING TRANSFERS
+// =========================================================
 export const gettransferin = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
 
@@ -282,6 +519,9 @@ export const gettransferin = async (req: Request, res: Response) => {
   });
 };
 
+// =========================================================
+// GET OUTGOING TRANSFERS
+// =========================================================
 export const gettransferout = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
 
@@ -296,6 +536,7 @@ export const gettransferout = async (req: Request, res: Response) => {
 
   const pending = transfers.filter((t) => t.status === "pending");
   const received = transfers.filter((t) => t.status === "received");
+
   SuccessResponse(res, {
     message: "Outgoing transfers retrieved successfully",
     pending,
@@ -303,6 +544,9 @@ export const gettransferout = async (req: Request, res: Response) => {
   });
 };
 
+// =========================================================
+// GET ALL TRANSFERS
+// =========================================================
 export const getalltransfers = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find()
     .populate("fromWarehouseId", "name")
