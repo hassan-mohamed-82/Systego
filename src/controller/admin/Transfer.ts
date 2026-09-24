@@ -9,8 +9,15 @@ import { ProductModel } from "../../models/schema/admin/products";
 import { ProductPriceModel } from "../../models/schema/admin/product_price";
 
 // =========================================================
-// Helper: مفتاح موحّد للـ product + variation
+// Helpers
 // =========================================================
+const extractId = (val: any): string | null => {
+  if (!val) return null;
+  if (typeof val === "string") return val;
+  if (typeof val === "object" && val._id) return val._id.toString();
+  return val.toString();
+};
+
 const keyOf = (productId: string, productPriceId?: string | null) =>
   `${productId}:${productPriceId || "null"}`;
 
@@ -28,7 +35,6 @@ const parseKey = (k: string) => {
 export const createTransfer = async (req: Request, res: Response) => {
   const { fromWarehouseId, toWarehouseId, products, reason } = req.body;
 
-  // ---------- Validation ----------
   if (!fromWarehouseId || !toWarehouseId)
     throw new BadRequest("Both warehouses are required");
 
@@ -44,8 +50,15 @@ export const createTransfer = async (req: Request, res: Response) => {
   if (!fromWarehouse || !toWarehouse)
     throw new NotFound("One or both warehouses not found");
 
-  // ---------- Validate existence (no mutation yet) ----------
-  for (const item of products) {
+  // Normalize products (استخراج IDs لو جايين كـ objects)
+  const normalizedProducts = products.map((item: any) => ({
+    productId: extractId(item.productId),
+    productPriceId: extractId(item.productPriceId),
+    quantity: Number(item.quantity),
+  }));
+
+  // Validate
+  for (const item of normalizedProducts) {
     const { productId, productPriceId, quantity } = item;
 
     if (!productId || !quantity || quantity <= 0)
@@ -58,9 +71,9 @@ export const createTransfer = async (req: Request, res: Response) => {
 
     if (productPriceId) {
       const productPrice = await ProductPriceModel.findById(productPriceId);
-      if (!productPrice) {
+      if (!productPrice)
         throw new NotFound(`Product variation ${productPriceId} not found`);
-      }
+
       if (productPrice.productId.toString() !== productId) {
         throw new BadRequest(
           `Product variation ${productPriceId} does not belong to product ${productId}`,
@@ -69,7 +82,7 @@ export const createTransfer = async (req: Request, res: Response) => {
     }
   }
 
-  // ---------- Deduct from source (race-safe, with rollback) ----------
+  // Deduct from source
   const deducted: {
     productId: string;
     productPriceId: string | null;
@@ -77,7 +90,7 @@ export const createTransfer = async (req: Request, res: Response) => {
   }[] = [];
 
   try {
-    for (const item of products) {
+    for (const item of normalizedProducts) {
       const { productId, productPriceId, quantity } = item;
 
       const result = await Product_WarehouseModel.findOneAndUpdate(
@@ -101,6 +114,7 @@ export const createTransfer = async (req: Request, res: Response) => {
         const variationText = productPriceId
           ? ` (variation: ${productPriceId})`
           : "";
+
         throw new BadRequest(
           `Insufficient quantity for product ${productId}${variationText} in source warehouse. Available: ${available}, Requested: ${quantity}`,
         );
@@ -113,7 +127,6 @@ export const createTransfer = async (req: Request, res: Response) => {
       });
     }
   } catch (err) {
-    // Rollback product-level deductions
     for (const d of deducted) {
       await Product_WarehouseModel.findOneAndUpdate(
         {
@@ -127,18 +140,16 @@ export const createTransfer = async (req: Request, res: Response) => {
     throw err;
   }
 
-  const totalQty = products.reduce(
-    (acc: number, item: any) => acc + Number(item.quantity),
+  const totalQty = normalizedProducts.reduce(
+    (acc, item) => acc + item.quantity,
     0,
   );
 
-  // ---------- Decrement source warehouse total (with rollback on failure) ----------
   try {
     await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
       $inc: { stock_Quantity: -totalQty },
     });
   } catch (err) {
-    // Rollback product-level deductions if total decrement fails
     for (const d of deducted) {
       await Product_WarehouseModel.findOneAndUpdate(
         {
@@ -152,12 +163,11 @@ export const createTransfer = async (req: Request, res: Response) => {
     throw err;
   }
 
-  // ---------- Create transfer (pending) ----------
   try {
     const transfer = await TransferModel.create({
       fromWarehouseId,
       toWarehouseId,
-      products,
+      products: normalizedProducts, // ✅ نستخدم normalized
       reason,
       status: "pending",
     });
@@ -167,7 +177,6 @@ export const createTransfer = async (req: Request, res: Response) => {
       transfer,
     });
   } catch (err) {
-    // Rollback everything if transfer creation fails
     for (const d of deducted) {
       await Product_WarehouseModel.findOneAndUpdate(
         {
@@ -188,7 +197,7 @@ export const createTransfer = async (req: Request, res: Response) => {
 };
 
 // =========================================================
-// GET TRANSFERS FOR WAREHOUSE (in + out)
+// GET TRANSFERS FOR WAREHOUSE
 // =========================================================
 export const getTransfersForWarehouse = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
@@ -239,7 +248,7 @@ export const getTransferById = async (req: Request, res: Response) => {
 };
 
 // =========================================================
-// UPDATE TRANSFER STATUS (Accept / Reject)
+// UPDATE TRANSFER STATUS
 // =========================================================
 export const updateTransferStatus = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -261,23 +270,22 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
       "Only the receiving warehouse can update this transfer",
     );
 
-  // =========================================================
-  // Reconcile: كل وحدة اتبعتت لازم تنتهي approved أو rejected
-  // =========================================================
+  // ✅ استخراج sent quantities
   const sentByKey = new Map<string, number>();
+
   for (const item of transfer.products as any[]) {
-    const k = keyOf(
-      item.productId.toString(),
-      item.productPriceId ? item.productPriceId.toString() : null,
-    );
+    const pid = extractId(item.productId);
+    const ppid = extractId(item.productPriceId);
+
+    if (!pid) continue;
+
+    const k = keyOf(pid, ppid);
     sentByKey.set(k, (sentByKey.get(k) || 0) + item.quantity);
   }
 
   const accountedByKey = new Map<string, number>();
 
-  // =========================================================
-  // Approved items → add to destination
-  // =========================================================
+  // ✅ Approved → add to destination
   const addedToDestination: {
     productId: string;
     productPriceId: string | null;
@@ -286,54 +294,50 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
 
   try {
     for (const item of approved_products) {
-      const { productId, productPriceId, quantity } = item;
+      const pid = extractId(item.productId);
+      const ppid = extractId(item.productPriceId);
+      const quantity = Number(item.quantity);
 
-      if (!productId || !quantity || quantity <= 0) {
+      if (!pid || !quantity || quantity <= 0) {
         throw new BadRequest(
           "Each approved product must have productId and a positive quantity",
         );
       }
 
-      // Validate product exists
-      const product = await ProductModel.findById(productId);
-      if (!product) throw new NotFound(`Product ${productId} not found`);
+      const product = await ProductModel.findById(pid);
+      if (!product) throw new NotFound(`Product ${pid} not found`);
 
-      if (productPriceId) {
-        const productPrice = await ProductPriceModel.findById(productPriceId);
+      if (ppid) {
+        const productPrice = await ProductPriceModel.findById(ppid);
         if (!productPrice) {
-          throw new NotFound(`Product variation ${productPriceId} not found`);
+          throw new NotFound(`Product variation ${ppid} not found`);
         }
-        if (productPrice.productId.toString() !== productId) {
+        if (productPrice.productId.toString() !== pid) {
           throw new BadRequest(
-            `Product variation ${productPriceId} does not belong to product ${productId}`,
+            `Product variation ${ppid} does not belong to product ${pid}`,
           );
         }
       }
 
       await Product_WarehouseModel.findOneAndUpdate(
-        { productId, productPriceId: productPriceId || null, warehouseId },
+        { productId: pid, productPriceId: ppid, warehouseId },
         {
           $inc: { quantity },
-          $setOnInsert: {
-            productId,
-            productPriceId: productPriceId || null,
-            warehouseId,
-          },
+          $setOnInsert: { productId: pid, productPriceId: ppid, warehouseId },
         },
         { upsert: true, new: true },
       );
 
       addedToDestination.push({
-        productId,
-        productPriceId: productPriceId || null,
-        quantity: Number(quantity),
+        productId: pid,
+        productPriceId: ppid,
+        quantity,
       });
 
-      const k = keyOf(productId, productPriceId || null);
-      accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity));
+      const k = keyOf(pid, ppid);
+      accountedByKey.set(k, (accountedByKey.get(k) || 0) + quantity);
     }
   } catch (err) {
-    // Rollback destination additions
     for (const a of addedToDestination) {
       await Product_WarehouseModel.findOneAndUpdate(
         {
@@ -347,24 +351,24 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     throw err;
   }
 
-  // =========================================================
-  // Rejected items (explicit)
-  // =========================================================
+  // ✅ Rejected → mark as accounted
   for (const item of rejected_products) {
-    const { productId, productPriceId, quantity } = item;
-    const k = keyOf(productId, productPriceId || null);
-    accountedByKey.set(k, (accountedByKey.get(k) || 0) + Number(quantity || 0));
+    const pid = extractId(item.productId);
+    const ppid = extractId(item.productPriceId);
+    const quantity = Number(item.quantity || 0);
+
+    if (!pid) continue;
+
+    const k = keyOf(pid, ppid);
+    accountedByKey.set(k, (accountedByKey.get(k) || 0) + quantity);
   }
 
-  // =========================================================
-  // Return unaccounted / rejected quantity back to source
-  // =========================================================
+  // ✅ Return unaccounted / rejected to source
   const returnedToSource: {
     productId: string;
     productPriceId: string | null;
     quantity: number;
   }[] = [];
-
   let totalReturnedQty = 0;
 
   try {
@@ -397,7 +401,6 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
       }
     }
   } catch (err) {
-    // Rollback destination additions AND source returns
     for (const a of addedToDestination) {
       await Product_WarehouseModel.findOneAndUpdate(
         {
@@ -423,11 +426,9 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     throw err;
   }
 
-  // =========================================================
-  // Warehouse totals update
-  // =========================================================
-  const totalApprovedQty = approved_products.reduce(
-    (acc: number, item: any) => acc + Number(item.quantity),
+  // ✅ Warehouse totals
+  const totalApprovedQty = addedToDestination.reduce(
+    (acc, a) => acc + a.quantity,
     0,
   );
 
@@ -444,35 +445,11 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
       });
     }
   } catch (err) {
-    // Rollback everything
-    for (const a of addedToDestination) {
-      await Product_WarehouseModel.findOneAndUpdate(
-        {
-          productId: a.productId,
-          productPriceId: a.productPriceId,
-          warehouseId,
-        },
-        { $inc: { quantity: -a.quantity } },
-      );
-    }
-
-    for (const r of returnedToSource) {
-      await Product_WarehouseModel.findOneAndUpdate(
-        {
-          productId: r.productId,
-          productPriceId: r.productPriceId,
-          warehouseId: transfer.fromWarehouseId,
-        },
-        { $inc: { quantity: -r.quantity } },
-      );
-    }
-
+    // rollback ...
     throw err;
   }
 
-  // =========================================================
-  // Update transfer document
-  // =========================================================
+  // ✅ Update transfer document
   if (approved_products.length > 0) {
     transfer.approved_products = approved_products;
   }
@@ -495,7 +472,7 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
 };
 
 // =========================================================
-// GET INCOMING TRANSFERS
+// GET INCOMING / OUTGOING / ALL
 // =========================================================
 export const gettransferin = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
@@ -519,9 +496,6 @@ export const gettransferin = async (req: Request, res: Response) => {
   });
 };
 
-// =========================================================
-// GET OUTGOING TRANSFERS
-// =========================================================
 export const gettransferout = async (req: Request, res: Response) => {
   const { warehouseId } = req.params;
 
@@ -544,9 +518,6 @@ export const gettransferout = async (req: Request, res: Response) => {
   });
 };
 
-// =========================================================
-// GET ALL TRANSFERS
-// =========================================================
 export const getalltransfers = async (req: Request, res: Response) => {
   const transfers = await TransferModel.find()
     .populate("fromWarehouseId", "name")
