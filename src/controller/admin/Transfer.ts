@@ -452,11 +452,11 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
   // Update transfer document
   // =========================================================
   if (normalizedApproved.length > 0) {
-    transfer.approved_products = normalizedApproved;
+    transfer.approved_products = normalizedApproved as any;
   }
 
   if (rejected_products.length > 0) {
-    transfer.rejected_products = rejected_products;
+    transfer.rejected_products = rejected_products as any;
   }
 
   if (reason) {
