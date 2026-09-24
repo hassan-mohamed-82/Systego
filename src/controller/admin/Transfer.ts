@@ -60,7 +60,7 @@ export const createTransfer = async (req: Request, res: Response) => {
     throw new NotFound("One or both warehouses not found");
 
   // =========================================================
-  // Normalize products (استخراج IDs + التأكد من productId)
+  // Normalize products
   // =========================================================
   const normalizedProducts: NormalizedProduct[] = products.map(
     (item: any): NormalizedProduct => {
@@ -111,6 +111,21 @@ export const createTransfer = async (req: Request, res: Response) => {
     for (const item of normalizedProducts) {
       const { productId, productPriceId, quantity } = item;
 
+      // 🔍 DEBUG: قبل الخصم
+      const existingDoc = await Product_WarehouseModel.findOne({
+        productId,
+        productPriceId: productPriceId || null,
+        warehouseId: fromWarehouseId,
+      });
+
+      console.log("=== CREATE: DOC FOUND (before deduct) ===", {
+        productId,
+        productPriceId,
+        warehouseId: fromWarehouseId,
+        found: !!existingDoc,
+        currentQuantity: existingDoc?.quantity,
+      });
+
       const result = await Product_WarehouseModel.findOneAndUpdate(
         {
           productId,
@@ -122,13 +137,16 @@ export const createTransfer = async (req: Request, res: Response) => {
         { new: true },
       );
 
+      console.log("=== CREATE: AFTER DEDUCT ===", {
+        productId,
+        productPriceId,
+        requestedQty: quantity,
+        newQuantity: result?.quantity,
+        success: !!result,
+      });
+
       if (!result) {
-        const existing = await Product_WarehouseModel.findOne({
-          productId,
-          productPriceId: productPriceId || null,
-          warehouseId: fromWarehouseId,
-        });
-        const available = existing?.quantity ?? 0;
+        const available = existingDoc?.quantity ?? 0;
         const variationText = productPriceId
           ? ` (variation: ${productPriceId})`
           : "";
@@ -163,9 +181,17 @@ export const createTransfer = async (req: Request, res: Response) => {
     0,
   );
 
+  // =========================================================
+  // Decrement warehouse total
+  // =========================================================
   try {
     await WarehouseModel.findByIdAndUpdate(fromWarehouseId, {
       $inc: { stock_Quantity: -totalQty },
+    });
+
+    console.log("=== CREATE: WAREHOUSE TOTAL DECREMENTED ===", {
+      fromWarehouseId,
+      decrementedBy: totalQty,
     });
   } catch (err) {
     for (const d of deducted) {
@@ -181,6 +207,9 @@ export const createTransfer = async (req: Request, res: Response) => {
     throw err;
   }
 
+  // =========================================================
+  // Create transfer
+  // =========================================================
   try {
     const transfer = await TransferModel.create({
       fromWarehouseId,
@@ -288,7 +317,16 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
       "Only the receiving warehouse can update this transfer",
     );
 
-  // ✅ استخراج sent quantities
+  console.log("=== UPDATE: START ===", {
+    transferId: id,
+    warehouseId,
+    approvedCount: approved_products.length,
+    rejectedCount: rejected_products.length,
+  });
+
+  // =========================================================
+  // استخراج sent quantities
+  // =========================================================
   const sentByKey = new Map<string, number>();
 
   for (const item of transfer.products as any[]) {
@@ -299,11 +337,24 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
 
     const k = keyOf(pid, ppid);
     sentByKey.set(k, (sentByKey.get(k) || 0) + item.quantity);
+
+    console.log("=== UPDATE: SENT ITEM ===", {
+      rawProductId: item.productId,
+      rawProductPriceId: item.productPriceId,
+      extractedPid: pid,
+      extractedPpid: ppid,
+      key: k,
+      quantity: item.quantity,
+    });
   }
+
+  console.log("=== UPDATE: SENT KEYS ===", Array.from(sentByKey.entries()));
 
   const accountedByKey = new Map<string, number>();
 
-  // ✅ Approved → add to destination
+  // =========================================================
+  // Approved → add to destination
+  // =========================================================
   const addedToDestination: NormalizedProduct[] = [];
 
   try {
@@ -350,6 +401,13 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
 
       const k = keyOf(pid, ppid);
       accountedByKey.set(k, (accountedByKey.get(k) || 0) + quantity);
+
+      console.log("=== UPDATE: APPROVED ITEM ===", {
+        pid,
+        ppid,
+        quantity,
+        key: k,
+      });
     }
   } catch (err) {
     for (const a of addedToDestination) {
@@ -365,7 +423,9 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     throw err;
   }
 
-  // ✅ Rejected → mark as accounted
+  // =========================================================
+  // Rejected → mark as accounted
+  // =========================================================
   for (const item of rejected_products) {
     const pid = extractId(item.productId);
     const ppid = extractId(item.productPriceId);
@@ -375,9 +435,25 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
 
     const k = keyOf(pid, ppid);
     accountedByKey.set(k, (accountedByKey.get(k) || 0) + quantity);
+
+    console.log("=== UPDATE: REJECTED ITEM ===", {
+      rawProductId: item.productId,
+      rawProductPriceId: item.productPriceId,
+      extractedPid: pid,
+      extractedPpid: ppid,
+      key: k,
+      quantity,
+    });
   }
 
-  // ✅ Return unaccounted / rejected to source
+  console.log(
+    "=== UPDATE: ACCOUNTED KEYS ===",
+    Array.from(accountedByKey.entries()),
+  );
+
+  // =========================================================
+  // Return unaccounted / rejected to source
+  // =========================================================
   const returnedToSource: NormalizedProduct[] = [];
   let totalReturnedQty = 0;
 
@@ -385,6 +461,13 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     for (const [k, sentQty] of sentByKey.entries()) {
       const accountedQty = accountedByKey.get(k) || 0;
       const toReturn = sentQty - accountedQty;
+
+      console.log("=== UPDATE: RECONCILE KEY ===", {
+        key: k,
+        sentQty,
+        accountedQty,
+        toReturn,
+      });
 
       if (toReturn > 0) {
         const { productId, productPriceId } = parseKey(k);
@@ -436,7 +519,11 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     throw err;
   }
 
-  // ✅ Warehouse totals
+  console.log("=== UPDATE: RETURNED TO SOURCE ===", returnedToSource);
+
+  // =========================================================
+  // Warehouse totals
+  // =========================================================
   const totalApprovedQty = addedToDestination.reduce(
     (acc, a) => acc + a.quantity,
     0,
@@ -454,6 +541,11 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
         $inc: { stock_Quantity: totalReturnedQty },
       });
     }
+
+    console.log("=== UPDATE: WAREHOUSE TOTALS UPDATED ===", {
+      destinationAdded: totalApprovedQty,
+      sourceReturned: totalReturnedQty,
+    });
   } catch (err) {
     for (const a of addedToDestination) {
       await Product_WarehouseModel.findOneAndUpdate(
@@ -480,7 +572,9 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
     throw err;
   }
 
-  // ✅ Update transfer document
+  // =========================================================
+  // Update transfer document
+  // =========================================================
   if (approved_products.length > 0) {
     transfer.approved_products = approved_products;
   }
