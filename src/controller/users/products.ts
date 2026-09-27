@@ -169,6 +169,7 @@ export const buildProductAggregationPipeline = (
         gallery_product: "$gallery_product",
         main_price: "$price",
         is_featured: { $ifNull: ["$is_featured", false] },
+        show_quantity: { $ifNull: ["$show_quantity", false] },
 
         // 4️⃣ Discounted price for the main price
         final_price: {

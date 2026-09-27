@@ -43,7 +43,11 @@ const computeFinalPrice = (basePrice: number, discount: any): number => {
 };
 
 // --- دالة الحسابات المركزية ---
-const calculateCartTotals = async (cart: any, userId?: string) => {
+const calculateCartTotals = async (
+  cart: any,
+  userId?: string,
+  warehouseId?: mongoose.Types.ObjectId[]
+) => {
   let totalCartPrice = 0;
   let totalTaxAmount = 0;
   let hasFreeShippingProduct = false;
@@ -73,6 +77,10 @@ const calculateCartTotals = async (cart: any, userId?: string) => {
   const activeFees = await ServiceFeeModel.find({
     module: "online",
     status: true,
+    $or: [
+      { warehouseId: { $exists: false } },
+      { warehouseId: { $in: warehouseId } },
+    ],
   });
   let totalServiceFee = 0;
   activeFees.forEach((fee) => {
@@ -91,13 +99,13 @@ const calculateCartTotals = async (cart: any, userId?: string) => {
       shippingCost = Number(shippingSettings.flatRate || 0);
     } else if (userId) {
       const address = await AddressModel.findOne({ user: userId }).populate(
-        "city zone",
+        "city zone"
       );
       shippingCost = address
         ? Number(
             (address.zone as any)?.shipingCost ||
               (address.city as any)?.shipingCost ||
-              0,
+              0
           )
         : 0;
     }
@@ -138,7 +146,7 @@ const calculateCartTotals = async (cart: any, userId?: string) => {
 const getAvailableStock = async (
   productId: mongoose.Types.ObjectId,
   productPriceId: mongoose.Types.ObjectId | null,
-  onlineWarehouseIds: mongoose.Types.ObjectId[],
+  onlineWarehouseIds: mongoose.Types.ObjectId[]
 ): Promise<number> => {
   const stock = await Product_WarehouseModel.aggregate([
     {
@@ -186,7 +194,7 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 
     if (!isCategoryOnline) {
       throw new BadRequest(
-        `Product's category is not available online: ${productId}`,
+        `Product's category is not available online: ${productId}`
       );
     }
 
@@ -201,7 +209,7 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
       }
       if (variant.productId.toString() !== productId.toString()) {
         throw new BadRequest(
-          `Variant ${productVariantId} does not belong to product ${productId}`,
+          `Variant ${productVariantId} does not belong to product ${productId}`
         );
       }
     }
@@ -209,11 +217,11 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     const availableStock = await getAvailableStock(
       new mongoose.Types.ObjectId(productId),
       productVariantId ? new mongoose.Types.ObjectId(productVariantId) : null,
-      onlineWarehouseIds,
+      onlineWarehouseIds
     );
     if (quantity > availableStock) {
       throw new BadRequest(
-        `Product ${productId} only has ${availableStock} in stock`,
+        `Product ${productId} only has ${availableStock} in stock`
       );
     }
 
@@ -236,7 +244,7 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
   await CartModel.findOneAndUpdate(
     query,
     { cartItems: validatedItems },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
   // جلب السلة كاملة مع الحسابات (حل مشكلة fullCart is possibly null)
@@ -249,17 +257,17 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     .populate("cartItems.variant");
 
   if (!fullCart) throw new NotFound("Cart processing failed");
-
   const { shippingCost } = await calculateCartTotals(
     fullCart,
     (query as any).user,
+    onlineWarehouseIds
   );
   await fullCart.save();
 
   SuccessResponse(
     res,
     { message: "Cart synced successfully", cart: fullCart, shippingCost },
-    200,
+    200
   );
 });
 
@@ -282,13 +290,14 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  const { shippingCost } = await calculateCartTotals(cart, (query as any).user);
-  await cart.save();
-
+  
   const onlineWarehouses = await WarehouseModel.find({
     Is_Online: true,
   }).select("_id");
   const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+
+  const { shippingCost } = await calculateCartTotals(cart, (query as any).user, onlineWarehouseIds);
+  await cart.save();
 
   const cartObj: any = cart.toObject();
   const enrichedItems = await Promise.all(
@@ -303,7 +312,7 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
         availableStock,
         inStock: availableStock >= item.quantity,
       };
-    }),
+    })
   );
 
   const responseCart = { ...cartObj, cartItems: enrichedItems };
@@ -344,7 +353,7 @@ export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
 
   const { totalCartPrice } = await calculateCartTotals(
     cart,
-    (query as any).user,
+    (query as any).user
   );
   if (totalCartPrice < (coupon.minimum_amount_for_use || 0)) {
     throw new BadRequest(`Minimum order is ${coupon.minimum_amount_for_use}`);

@@ -69,9 +69,6 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
   const existingOrder = await OrderModel.findById(id);
   if (!existingOrder) throw new NotFound("Order not found");
 
-  const isNewlyRejected =
-    status === "rejected" && existingOrder.status !== "rejected";
-
   const order = await OrderModel.findByIdAndUpdate(
     id,
     { status, statusDescription },
@@ -82,31 +79,8 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
 
   if (!order) throw new NotFound("Order not found");
 
-  if (isNewlyRejected) {
-    await restoreStockForOrder(order);
-  }
-
   SuccessResponse(res, {
     message: `Order status updated to ${status}`,
     order,
   });
 };
-
-async function restoreStockForOrder(order: any) {
-  if (!order.warehouse || !order.cartItems?.length) return;
-
-  const bulkOps = order.cartItems.map((item: any) => ({
-    updateOne: {
-      filter: {
-        productId: item.product,
-        productPriceId: item.variant || null,
-        warehouseId: order.warehouse,
-      },
-      update: { $inc: { quantity: item.quantity } },
-    },
-  }));
-
-  if (bulkOps.length > 0) {
-    await Product_WarehouseModel.bulkWrite(bulkOps);
-  }
-}
