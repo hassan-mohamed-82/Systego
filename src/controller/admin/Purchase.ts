@@ -568,18 +568,18 @@ export const createPurchase = async (req: Request, res: Response) => {
     note,
     installments = [],
   } = req.body;
- 
+
   let purchase_due_payment = req.body.purchase_due_payment || [];
- 
+
   // ========== Validations ==========
   const existingWarehouse = await WarehouseModel.findById(warehouse_id);
   if (!existingWarehouse) throw new BadRequest("Warehouse not found");
- 
+
   if (tax_id) {
     const existingTax = await TaxesModel.findById(tax_id);
     if (!existingTax) throw new BadRequest("Tax not found");
   }
- 
+
   // ========== Payment Validation ==========
   const totalPaidNow = financials.reduce(
     (sum: number, f: any) => sum + Number(f.payment_amount || 0),
@@ -593,13 +593,13 @@ export const createPurchase = async (req: Request, res: Response) => {
     (sum: number, i: any) => sum + Number(i.amount || 0),
     0
   );
- 
+
   const getDefaultDueDate = () => {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);
     return dueDate;
   };
- 
+
   if (payment_status === "full") {
     if (totalPaidNow !== grand_total) {
       throw new BadRequest(
@@ -637,9 +637,9 @@ export const createPurchase = async (req: Request, res: Response) => {
         "Partial payment should be less than grand_total. Use 'full' status instead"
       );
     }
- 
+
     const remaining = grand_total - totalPaidNow;
- 
+
     if (installments.length > 0) {
       if (totalInstallments !== remaining) {
         throw new BadRequest(
@@ -660,7 +660,41 @@ export const createPurchase = async (req: Request, res: Response) => {
       }
     }
   }
- 
+
+  // ========== Financial Account Balance Validation ==========
+  // Runs BEFORE any writes — image save, purchase creation, stock/warehouse
+  // updates — so an unaffordable request never touches the database.
+  // No DB transaction here (standalone MongoDB doesn't support multi-document
+  // transactions) — this is an upfront guard, not a rollback guarantee.
+  if (financials && Array.isArray(financials) && financials.length > 0) {
+    const paymentsByAccount: Record<string, number> = {};
+
+    for (const f of financials) {
+      if (!f.financial_id) {
+        throw new BadRequest("financial_id is required for each payment");
+      }
+      const amount = Number(f.payment_amount) || 0;
+      if (amount <= 0) {
+        throw new BadRequest("payment_amount must be greater than 0");
+      }
+      paymentsByAccount[f.financial_id] =
+        (paymentsByAccount[f.financial_id] || 0) + amount;
+    }
+
+    for (const [accountId, requiredAmount] of Object.entries(paymentsByAccount)) {
+      const account = await BankAccountModel.findById(accountId);
+      if (!account) {
+        throw new NotFound(`Bank account not found: ${accountId}`);
+      }
+      if ((account as any).balance < requiredAmount) {
+        throw new BadRequest(
+          `Insufficient balance in account ${(account as any).name || accountId
+          }. Available: ${(account as any).balance}, Required: ${requiredAmount}`
+        );
+      }
+    }
+  }
+
   // ========== Save Image ==========
   let imageUrl = receipt_img;
   if (receipt_img && receipt_img.startsWith("data:")) {
@@ -671,7 +705,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       "Purchases"
     );
   }
- 
+
   // ========== Create Purchase ==========
   const purchase = await PurchaseModel.create({
     date,
@@ -687,13 +721,13 @@ export const createPurchase = async (req: Request, res: Response) => {
     tax_id,
     note,
   });
- 
+
   // ========== Process Products ==========
   for (const p of purchase_items) {
     let product_code = p.product_code;
     let category_id = p.category_id;
     let product_id = p.product_id;
- 
+
     if (product_code) {
       const product_price = await ProductPriceModel.findOne({
         code: product_code,
@@ -704,10 +738,10 @@ export const createPurchase = async (req: Request, res: Response) => {
         category_id = productDoc?.categoryId;
       }
     }
- 
+
     const product = await ProductModel.findById(product_id);
     if (!product) throw new NotFound(`Product not found: ${product_id}`);
- 
+
     if ((product as any).exp_ability) {
       const expiryDateValue = p.expiry_date || p.date_of_expiery;
       if (!expiryDateValue) {
@@ -727,25 +761,25 @@ export const createPurchase = async (req: Request, res: Response) => {
         );
       }
     }
- 
+
     let totalQuantity = Number(p.quantity) || 0;
     const hasVariations =
       p.variations && Array.isArray(p.variations) && p.variations.length > 0;
- 
+
     if (hasVariations) {
       totalQuantity = p.variations.reduce(
         (sum: number, v: any) => sum + (Number(v.quantity) || 0),
         0
       );
     }
- 
+
     // Track whether this is the warehouse's first time carrying this product
     // (used to bump WarehouseModel.number_of_products), done atomically.
     const existingPurchaseItem = await PurchaseItemModel.findOne({
       warehouse_id,
       product_id,
     });
- 
+
     const purchaseItem = await PurchaseItemModel.create({
       date: p.date || date,
       warehouse_id,
@@ -764,13 +798,13 @@ export const createPurchase = async (req: Request, res: Response) => {
         ? p.expiry_date || p.date_of_expiery
         : undefined,
     });
- 
+
     if (!existingPurchaseItem) {
       await WarehouseModel.findByIdAndUpdate(warehouse_id, {
         $inc: { number_of_products: 1 },
       });
     }
- 
+
     if (hasVariations) {
       // ---- Variation product: user enters cost PER VARIANT ----
       // Cost lives on ProductPriceModel per variant, NOT blended into the
@@ -783,26 +817,26 @@ export const createPurchase = async (req: Request, res: Response) => {
         if (v.unit_cost === undefined || v.unit_cost === null) {
           throw new BadRequest("unit_cost is required for each variation");
         }
- 
+
         const productPrice = await ProductPriceModel.findById(
           v.product_price_id
         );
         if (!productPrice) {
           throw new NotFound(`ProductPrice not found: ${v.product_price_id}`);
         }
- 
+
         const vQty = Number(v.quantity) || 0;
         const vUnitCost =
           Number(v.unit_cost_after_discount ?? v.unit_cost) || 0;
         const vCostTotal = vQty * vUnitCost;
- 
+
         // Variant-level total stock + running weighted-average cost — one
         // atomic call via the aggregation-pipeline update above.
         await ProductPriceModel.findByIdAndUpdate(
           v.product_price_id,
           buildAvgCostUpdatePipeline(vQty, vCostTotal)
         );
- 
+
         await PurchaseItemOptionModel.create({
           purchase_item_id: purchaseItem._id,
           product_price_id: v.product_price_id,
@@ -810,7 +844,7 @@ export const createPurchase = async (req: Request, res: Response) => {
           quantity: vQty,
           unit_cost: v.unit_cost,
         });
- 
+
         // ✅ Per-variant, per-warehouse stock — atomic upsert.
         // Requires a unique compound index on
         // { productId, productPriceId, warehouseId } in Product_Warehouse.
@@ -824,7 +858,7 @@ export const createPurchase = async (req: Request, res: Response) => {
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
       }
- 
+
       // Product-level total stock only — cost is NOT tracked here for
       // variation products; it lives per-variant on ProductPriceModel.
       await ProductModel.findByIdAndUpdate(product._id, {
@@ -834,7 +868,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       // ---- Simple product: no variant, cost lives on the Product itself ----
       const unitCost = Number(p.unit_cost_after_discount ?? p.unit_cost) || 0;
       const itemCostTotal = totalQuantity * unitCost;
- 
+
       await Product_WarehouseModel.findOneAndUpdate(
         {
           productId: product_id,
@@ -844,32 +878,32 @@ export const createPurchase = async (req: Request, res: Response) => {
         { $inc: { quantity: totalQuantity } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
- 
+
       // Product-level total stock + running weighted-average cost — atomic.
       await ProductModel.findByIdAndUpdate(
         product._id,
         buildAvgCostUpdatePipeline(totalQuantity, itemCostTotal)
       );
     }
- 
+
     // Category running total — atomic
     if ((product as any).categoryId) {
       await CategoryModel.findByIdAndUpdate((product as any).categoryId, {
         $inc: { product_quantity: totalQuantity },
       });
     }
- 
+
     // Warehouse running total — atomic
     await WarehouseModel.findByIdAndUpdate(warehouse_id, {
       $inc: { stock_Quantity: totalQuantity },
     });
   }
- 
+
   // ========== Process Materials ==========
   for (const m of purchase_materials) {
     const material = await MaterialModel.findById(m.material_id);
     if (!material) throw new NotFound(`Material not found: ${m.material_id}`);
- 
+
     await PurchaseItemModel.create({
       date: m.date || date,
       warehouse_id,
@@ -885,33 +919,46 @@ export const createPurchase = async (req: Request, res: Response) => {
       tax: m.tax || 0,
       item_type: "material",
     });
- 
+
     const mQty = Number(m.quantity) || 0;
- 
+
     await MaterialModel.findByIdAndUpdate(m.material_id, {
       $inc: { quantity: mQty },
     });
- 
+
     await WarehouseModel.findByIdAndUpdate(warehouse_id, {
       $inc: { stock_Quantity: mQty },
     });
   }
- 
+
   // ========== Create Invoices (الدفع الفوري) ==========
+  // The upfront check already confirmed sufficient balance; the decrement
+  // itself still uses an atomic $gte guard so balance can never go negative
+  // even without a transaction wrapping the rest of the request.
   if (financials && Array.isArray(financials) && financials.length > 0) {
     for (const ele of financials) {
+      const amount = Number(ele.payment_amount) || 0;
+
+      const updatedAccount = await BankAccountModel.findOneAndUpdate(
+        { _id: ele.financial_id, balance: { $gte: amount } },
+        { $inc: { balance: -amount } },
+        { new: true }
+      );
+
+      if (!updatedAccount) {
+        throw new BadRequest(
+          `Insufficient balance in account: ${ele.financial_id}`
+        );
+      }
+
       await PurchaseInvoiceModel.create({
         financial_id: ele.financial_id,
-        amount: Number(ele.payment_amount) || 0,
+        amount,
         purchase_id: purchase._id,
-      });
- 
-      await BankAccountModel.findByIdAndUpdate(ele.financial_id, {
-        $inc: { balance: -(Number(ele.payment_amount) || 0) },
       });
     }
   }
- 
+
   // ========== Create Due Payments (الدفع اللاحق) ==========
   if (
     purchase_due_payment &&
@@ -926,7 +973,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       });
     }
   }
- 
+
   // ========== Create Installments (التقسيط) ==========
   if (installments && Array.isArray(installments) && installments.length > 0) {
     for (const inst of installments) {
@@ -938,7 +985,7 @@ export const createPurchase = async (req: Request, res: Response) => {
       });
     }
   }
- 
+
   // ========== Get Full Purchase ==========
   // NOTE: because ProductModel/ProductPriceModel were updated with the new
   // weighted-average `cost` above, this populate automatically returns the
@@ -963,7 +1010,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     .populate("invoices")
     .populate("duePayments")
     .populate("installments");
- 
+
   SuccessResponse(res, {
     message: "Purchase created successfully",
     purchase: fullPurchase,

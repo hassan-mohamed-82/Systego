@@ -150,24 +150,23 @@ export const createOrder = async (
           details: shippingAddress.street,
           city: cityDoc?.name,
           zone: zoneDoc?.name,
+          street: shippingAddress.street,
+          apartmentNumber: shippingAddress.apartmentNumber,
+          floorNumber: shippingAddress.floorNumber,
+          buildingNumber: shippingAddress.buildingNumber,
+          uniqueIdentifier: shippingAddress.uniqueIdentifier,
         };
         initialShippingCost = Number(
           zoneDoc?.shipingCost || cityDoc?.shipingCost || 0,
         );
       }
 
-      // 3. تطبيق قواعد الشحن (Free / Flat Rate / Zone Rate)
-      const shippingSettings = await ShippingSettingsModel.findOne({
-        singletonKey: "default",
-      });
       const hasFreeShippingProduct = cart.cartItems.some(
         (i: any) => i.product.free_shipping,
       );
 
-      if (shippingSettings?.freeShippingEnabled || hasFreeShippingProduct) {
+      if (hasFreeShippingProduct) {
         shippingCost = 0;
-      } else if (shippingSettings?.shippingMethod === "flat_rate") {
-        shippingCost = Number(shippingSettings.flatRate || 0);
       } else {
         shippingCost = initialShippingCost; // نعتمد هنا على الحسبة اللي عملناها فوق من الـ Zone/City
       }
@@ -218,28 +217,17 @@ export const createOrder = async (
       const qty = item.quantity;
       const variantId = item.variant;
 
-      const stockUpdate = await Product_WarehouseModel.findOneAndUpdate(
+      const stockUpdate = await Product_WarehouseModel.findOne(
         {
           productId: item.product._id,
           warehouseId: resolvedWarehouseId,
           productPriceId: variantId || null,
-          quantity: { $gte: qty },
         },
-        { $inc: { quantity: -qty } },
-        { new: true },
       );
       if (!stockUpdate)
         throw new BadRequest(
           `Product ${(item.product as any).name} is not available in the warehouse`,
         );
-
-      await ProductModel.findByIdAndUpdate(item.product._id, {
-        $inc: { quantity: -qty },
-      });
-      if (variantId)
-        await mongoose
-          .model("ProductPrice")
-          .findByIdAndUpdate(variantId, { $inc: { quantity: -qty } });
 
       // CHANGED: use the freshly computed, discount-aware price instead of
       // blindly trusting item.price from the cart.

@@ -55,6 +55,11 @@ const orderSchema = new Schema(
       details: { type: String },
       city: { type: String },
       zone: { type: String },
+      street: { type: String },
+      apartmentNumber: { type: Number },
+      floorNumber: { type: Number },
+      buildingNumber: { type: Number },
+      uniqueIdentifier: { type: String },
     },
     shippingPrice: {
       type: Number,
@@ -127,12 +132,12 @@ const orderSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["pending","rejected","confirmed","processing","out_for_delivery","delivered","returned","failed_to_deliver","canceled","scheduled","refund"],
+      enum: ["pending","rejected","confirmed","processing","out_for_delivery","delivered","returned","failed_to_deliver","canceled","scheduled"],
       default: "pending",
     },
     statusDescription: {
       type: String,
-      default: "Your Order is Processing",
+      default: "Your Order is Placed Successfully",
     },
   },
   {
