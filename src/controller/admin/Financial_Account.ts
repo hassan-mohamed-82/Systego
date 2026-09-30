@@ -33,7 +33,7 @@ const validateWarehouses = async (warehouseIds: string | string[]) => {
 
 // ✅ Create Bank Account
 export const createBankAccount = async (req: Request, res: Response) => {
-  const { name, warehouseId, image, description, status, in_POS, balance } = req.body;
+  const { ar_name, name, warehouseId, image, description, status, in_POS, balance } = req.body;
 
   if (!name || !name.trim()) {
     throw new BadRequest("Account name is required");
@@ -59,6 +59,7 @@ export const createBankAccount = async (req: Request, res: Response) => {
   }
 
   const bankAccount = await BankAccountModel.create({
+    ar_name: ar_name?.trim() || "",
     name: name.trim(),
     warehouseId: validWarehouseIds,
     image: imageUrl,
@@ -170,7 +171,7 @@ export const getBankAccountById = async (req: Request, res: Response) => {
 // ✅ Update Bank Account
 export const updateBankAccount = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, warehouseId, image, description, status, in_POS, balance } = req.body;
+  const { ar_name, name, warehouseId, image, description, status, in_POS, balance } = req.body;
 
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
     throw new BadRequest("Valid bank account id is required");
@@ -197,6 +198,13 @@ export const updateBankAccount = async (req: Request, res: Response) => {
     }
 
     bankAccount.name = name.trim();
+  }
+
+  if(ar_name !== undefined) {
+    if (typeof ar_name !== "string" || !ar_name.trim()) {
+      throw new BadRequest("Arabic name must be a non-empty string");
+    }
+    bankAccount.ar_name = ar_name.trim();
   }
 
   // ✅ تحديث الـ warehouses
@@ -247,7 +255,7 @@ export const updateBankAccount = async (req: Request, res: Response) => {
     }
     bankAccount.balance = numBalance;
   }
-
+  
   await bankAccount.save();
 
   const updatedAccount = await BankAccountModel.findById(id)

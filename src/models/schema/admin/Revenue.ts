@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const revenueSchema = new mongoose.Schema({
     name: { type: String, required: true },
+    ar_name: { type: String, required: true },
     amount: { type: Number, required: true },
     Category_id: { type: mongoose.Schema.Types.ObjectId, ref: "ExpenseCategory", required: true },
     admin_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },

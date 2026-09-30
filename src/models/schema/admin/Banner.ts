@@ -4,6 +4,7 @@ import { BANNER_PAGES } from "../../../types/constant";
 const BannerSchema = new Schema(
   {
     name: [{ type: String, enum: BANNER_PAGES }],
+    ar_name: { type: String, required: true },
     title: { type: String, required: false },
     description: { type: String, required: false },
     images: [{ type: String, required: true }],

@@ -5,6 +5,7 @@ const validPages = [...BANNER_PAGES];
 
 export const createBannerSchema = Joi.object({
   name: Joi.array().items(Joi.string().valid(...validPages)).min(1).required(),
+  ar_name: Joi.string().required(),
   title: Joi.string().optional(),
   description: Joi.string().optional(),
   images: Joi.array().items(Joi.string()).min(1).required(),
@@ -14,6 +15,7 @@ export const createBannerSchema = Joi.object({
 
 export const updateBannerSchema = Joi.object({
   name: Joi.array().items(Joi.string().valid(...validPages)).min(1).optional(),
+  ar_name: Joi.string().optional(),
   title: Joi.string().optional(),
   description: Joi.string().optional(),
   images: Joi.array().items(Joi.string()).optional(),

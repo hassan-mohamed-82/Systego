@@ -265,6 +265,7 @@ export const getPandelById = async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════
 export const createPandel = async (req: Request, res: Response) => {
   const {
+    ar_name,
     name,
     products,
     images,
@@ -277,6 +278,7 @@ export const createPandel = async (req: Request, res: Response) => {
 
   // Validation
   if (!name) throw new BadRequest("Name is required");
+  if (!ar_name) throw new BadRequest("Arabic name is required");
   if (!products || !Array.isArray(products) || products.length === 0) {
     throw new BadRequest("At least one product is required");
   }
@@ -326,6 +328,7 @@ export const createPandel = async (req: Request, res: Response) => {
 
   // Create Pandel
   const pandel = await PandelModel.create({
+    ar_name,
     name,
     products: validatedProducts,
     all_warehouses: allWarehouses,
@@ -390,6 +393,10 @@ export const updatePandel = async (req: Request, res: Response) => {
       throw new BadRequest("Pandel name already exists");
     }
     updateData.name = req.body.name;
+  }
+
+  if (req.body.ar_name !== undefined) {
+    updateData.ar_name = req.body.ar_name;
   }
 
   // Update products

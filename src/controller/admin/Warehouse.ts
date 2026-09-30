@@ -14,7 +14,7 @@ const setOnlineStatus = async (warehouseId: string) => {
 };
 
 export const createWarehouse = async (req: Request, res: Response) => {
-    const { name, address, phone, email, Is_Online } = req.body;
+    const { ar_name, name, address, phone, email, Is_Online } = req.body;
 
     if (!name || !address || !phone) {
         throw new BadRequest("Name, address, phone are required");
@@ -27,8 +27,10 @@ export const createWarehouse = async (req: Request, res: Response) => {
     if (Is_Online === true) {
         await WarehouseModel.updateMany({}, { Is_Online: false });
     }
+    if (!ar_name) throw new BadRequest("Arabic name is required");
 
     const warehouse = await WarehouseModel.create({
+        ar_name,
         name,
         address,
         phone,
