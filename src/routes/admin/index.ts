@@ -83,6 +83,7 @@ import storeSettingsRoutes from "./storeSettings";
 import ecommerceDataRouter from "./ecommerceData";
 import GatewayRouter from "../../utils/dbGateway";
 import POSOnlineOrdersRouter from "./POS/onlineOrders";
+import DeliveryManRouter from "./DeliveryMan";
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter);
@@ -170,5 +171,6 @@ route.use("/store-settings", storeSettingsRoutes);
 route.use("/ecommerce-data", ecommerceDataRouter);
 route.use("/db", GatewayRouter);
 route.use("/pos-online-orders", POSOnlineOrdersRouter);
+route.use("/delivery-man", DeliveryManRouter);
 
 export default route;
