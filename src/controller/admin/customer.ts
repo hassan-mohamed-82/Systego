@@ -236,10 +236,10 @@ export const deletegroup = async (req: Request, res: Response) => {
 }
 
 export const creategroup = async (req: Request, res: Response) => {
-    const { name, status } = req.body;
+    const { ar_name, name, status } = req.body;
 
-    if (!name || !status) {
-        throw new BadRequest("Name and status are required");
+    if (!ar_name || !name || !status) {
+        throw new BadRequest("Arabic name, name, and status are required");
     }
 
     // Validate if there's existing group
@@ -248,8 +248,7 @@ export const creategroup = async (req: Request, res: Response) => {
         throw new BadRequest("Customer group with this name already exists");
     }
 
-
-    const group = new CustomerGroupModel({ name, status });
+    const group = new CustomerGroupModel({ ar_name, name, status });
     await group.save();
 
     SuccessResponse(res, {
