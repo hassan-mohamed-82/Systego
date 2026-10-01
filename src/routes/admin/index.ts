@@ -84,6 +84,8 @@ import ecommerceDataRouter from "./ecommerceData";
 import GatewayRouter from "../../utils/dbGateway";
 import POSOnlineOrdersRouter from "./POS/onlineOrders";
 import DeliveryManRouter from "./DeliveryMan";
+import deliveryAssignmentRouter from "./DeliveryAssignment";
+
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter);
@@ -172,5 +174,6 @@ route.use("/ecommerce-data", ecommerceDataRouter);
 route.use("/db", GatewayRouter);
 route.use("/pos-online-orders", POSOnlineOrdersRouter);
 route.use("/delivery-man", DeliveryManRouter);
+route.use("/delivery-assignment", deliveryAssignmentRouter);
 
 export default route;

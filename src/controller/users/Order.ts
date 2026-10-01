@@ -1,3 +1,4 @@
+// src/controller/users/Order.js
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { CartModel } from "../../models/schema/users/Cart";
@@ -24,6 +25,8 @@ import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
 import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { DiscountModel } from "../../models/schema/admin/Discount";
 import { saveBase64Image } from "../../utils/handleImages";
+import { autoAssignOrder } from "../../services/deliveryAssignment.service";
+import { UserModel } from "../../models/schema/admin/User";
 
 // ===============================
 // 🟢 CREATE ORDER
@@ -53,8 +56,6 @@ export const createOrder = async (
     const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
 
     // 2️⃣ Get Cart and Prepared Data
-    // CHANGED: select price + discountId too, not just name/ar_name/free_shipping,
-    // so we can recompute the real, current price server-side.
     const cart = await CartModel.findOne(cartQuery).populate({
       path: "cartItems.product",
       select: "name ar_name free_shipping price discountId",
@@ -81,12 +82,12 @@ export const createOrder = async (
       name.includes("cash") ||
       arName.includes("كاش");
 
-    // All manual payment methods require proof image except Cash (or if requiresProof is explicitly set to true)
     const requiresProof =
       (paymentMethodDoc as any).requiresProof === true ||
       (paymentMethodDoc.type === "manual" && !isCash);
 
-    const hasProof = typeof proofImage === "string" && proofImage.trim().length > 0;
+    const hasProof =
+      typeof proofImage === "string" && proofImage.trim().length > 0;
 
     if (requiresProof && !hasProof) {
       throw new BadRequest("Proof image required for manual payment");
@@ -103,7 +104,6 @@ export const createOrder = async (
       throw new BadRequest("Invalid orderType");
 
     if (orderType === "pickup") {
-      // PICKUP: require a warehouseId
       if (!warehouseId)
         throw new BadRequest("warehouseId is required for pickup orders");
       const warehouse = await WarehouseModel.findOne({
@@ -113,9 +113,8 @@ export const createOrder = async (
       if (!warehouse)
         throw new NotFound("Warehouse not found or not available");
       resolvedWarehouseId = warehouse._id;
-      shippingCost = 0; // no shipping for pickup
+      shippingCost = 0;
     } else if (orderType === "delivery") {
-      // 1. تحديد المخزن
       const onlineWarehouse = await WarehouseModel.findOne({
         Is_Online: true,
       });
@@ -123,7 +122,6 @@ export const createOrder = async (
         throw new BadRequest("No online warehouse available");
       resolvedWarehouseId = onlineWarehouse._id;
 
-      // 2. جلب العنوان وحساب التكلفة المبدئية
       let initialShippingCost = 0;
       if (typeof shippingAddress === "string") {
         const addressDoc = await AddressModel.findOne({
@@ -168,13 +166,11 @@ export const createOrder = async (
       if (hasFreeShippingProduct) {
         shippingCost = 0;
       } else {
-        shippingCost = initialShippingCost; // نعتمد هنا على الحسبة اللي عملناها فوق من الـ Zone/City
+        shippingCost = initialShippingCost;
       }
     }
 
-    // NEW: 3.5️⃣ Batch-fetch active discounts for products that have a discountId,
-    // then compute an effective unit price per item. This is the source of truth
-    // for pricing at order time — we no longer trust item.price from the cart.
+    // 3.5️⃣ Discounts
     const discountIds = cart.cartItems
       .map((i: any) => i.product?.discountId)
       .filter((id: any) => !!id);
@@ -200,16 +196,14 @@ export const createOrder = async (
       if (!discount) return basePrice;
 
       if (discount.type === "percentage") {
-        // amount is a decimal fraction, e.g. 0.1 === 10% off
         const discounted = basePrice - basePrice * discount.amount;
         return Math.max(discounted, 0);
       }
 
-      // fixed amount discount
       return Math.max(basePrice - discount.amount, 0);
     };
 
-    // 4️⃣ Warehouse discount and prepare items
+    // 4️⃣ Prepare items
     const finalItems: any[] = [];
     let recalculatedProductsTotal = 0;
 
@@ -217,20 +211,16 @@ export const createOrder = async (
       const qty = item.quantity;
       const variantId = item.variant;
 
-      const stockUpdate = await Product_WarehouseModel.findOne(
-        {
-          productId: item.product._id,
-          warehouseId: resolvedWarehouseId,
-          productPriceId: variantId || null,
-        },
-      );
+      const stockUpdate = await Product_WarehouseModel.findOne({
+        productId: item.product._id,
+        warehouseId: resolvedWarehouseId,
+        productPriceId: variantId || null,
+      });
       if (!stockUpdate)
         throw new BadRequest(
           `Product ${(item.product as any).name} is not available in the warehouse`,
         );
 
-      // CHANGED: use the freshly computed, discount-aware price instead of
-      // blindly trusting item.price from the cart.
       const effectivePrice = computeEffectivePrice(item.product);
       recalculatedProductsTotal += effectivePrice * qty;
 
@@ -242,10 +232,7 @@ export const createOrder = async (
       });
     }
 
-    // 5️⃣ Final calculations from cart
-    // CHANGED: productsTotal now comes from the recalculated, discount-aware
-    // sum rather than the stored cart.totalCartPrice, so stale or manipulated
-    // cart totals can't leak into the order/payment amount.
+    // 5️⃣ Final calculations
     const productsTotal = recalculatedProductsTotal;
     const totalTaxAmount = cart.taxAmount || 0;
     const totalServiceFee = cart.serviceFee || 0;
@@ -269,7 +256,7 @@ export const createOrder = async (
       totalTaxAmount -
       couponDiscount;
 
-    // 6️⃣ Get payment gateways configurations
+    // 6️⃣ Payment gateways
     const geideaConfig =
       paymentMethodDoc.type === "automatic"
         ? await GeideaModel.findOne({
@@ -314,6 +301,30 @@ export const createOrder = async (
       );
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 6.5) Get activeMethod from ShippingSettings
+    // ═══════════════════════════════════════════════════════════
+    let activeMethod = "self";
+    try {
+      const superadminUser = await UserModel.findOne({ role: "superadmin" })
+        .select("_id")
+        .lean();
+
+      if (superadminUser) {
+        const shippingSettings = await ShippingSettingsModel.findOne({
+          superadminId: (superadminUser as any)._id,
+        })
+          .select("activeMethod")
+          .lean();
+
+        if (shippingSettings?.activeMethod) {
+          activeMethod = shippingSettings.activeMethod;
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ Could not fetch activeMethod, defaulting to self:", err);
+    }
+
     // 7️⃣ Create Order
     const order = await OrderModel.create([
       {
@@ -323,8 +334,8 @@ export const createOrder = async (
         cartItems: finalItems,
         shippingAddress: shippingAddressData,
         shippingPrice: shippingCost,
-        totalOrderPrice: productsTotal, // old price
-        totalPriceAfterDiscount: totalPrice, // new price after discount
+        totalOrderPrice: productsTotal,
+        totalPriceAfterDiscount: totalPrice,
         taxAmount: totalTaxAmount,
         serviceFee: totalServiceFee,
         coupon: appliedCouponId,
@@ -335,6 +346,9 @@ export const createOrder = async (
         paymentGateway,
         paymentStatus:
           paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+        // ✅ ناخد activeMethod من الإعدادات (مش من العميل)
+        shippingMethod: orderType === "delivery" ? activeMethod : null,
+        shipmentType: orderType === "delivery" ? activeMethod : null,
       },
     ]);
 
@@ -460,7 +474,6 @@ export const createOrder = async (
           };
         }
       } catch (gatewayError: any) {
-        // إرجاع الكميات للمخزن في حالة فشل البوابة
         for (const item of finalItems) {
           await Product_WarehouseModel.updateOne(
             { productId: item.product, warehouseId: resolvedWarehouseId },
@@ -506,6 +519,28 @@ export const createOrder = async (
     // 7️⃣ Clear cart
     if (shouldClearCart) {
       await CartModel.findOneAndDelete(cartQuery);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 8️⃣ Auto-assign لو shipmentType = "self"
+    // ═══════════════════════════════════════════════════════════
+    if (order[0].shipmentType === "self") {
+      try {
+        const superadminUser = await UserModel.findOne({ role: "superadmin" })
+          .select("_id")
+          .lean();
+
+        if (superadminUser) {
+          await autoAssignOrder(
+            order[0]._id.toString(),
+            (superadminUser as any)._id.toString(),
+          );
+        }
+      } catch (assignError: any) {
+        console.warn(
+          `⚠️ Auto-assign skipped for order ${order[0]._id}: ${assignError.message}`,
+        );
+      }
     }
 
     return SuccessResponse(
@@ -602,7 +637,6 @@ export const verifyPaymobPaymentStatus = async (
       throw new BadRequest("Paymob configuration not found");
     }
 
-    // Get auth token and fetch transactions
     const authToken = await PaymobService.getAuthToken(paymobConfig.api_key);
     const transactions = await PaymobService.getOrderTransactions(
       authToken,
@@ -611,16 +645,13 @@ export const verifyPaymobPaymentStatus = async (
 
     const status = PaymobService.getLatestTransactionStatus(transactions);
 
-    // If payment was successful and order status is still pending, update it
     if (status.success && order.status === "pending") {
       order.status = "processing";
       order.paymentStatus = "paid";
       order.paymobTransactionId = String(status.transactionId);
       order.paymobCallbackPayload = status;
       await order.save();
-    }
-    // If payment failed or voided and order status is still pending, mark as rejected
-    else if (
+    } else if (
       (!status.success || status.isVoided) &&
       order.status === "pending"
     ) {

@@ -95,8 +95,8 @@ const calculateCartTotals = async (
   });
   let shippingCost = 0;
   if (!(shippingSettings?.freeShippingEnabled || hasFreeShippingProduct)) {
-    if (shippingSettings?.shippingMethod === "flat_rate") {
-      shippingCost = Number(shippingSettings.flatRate || 0);
+    if ((shippingSettings as any)?.self?.method === "flat_rate") {
+      shippingCost = Number((shippingSettings as any)?.self?.flatRate || 0);
     } else if (userId) {
       const address = await AddressModel.findOne({ user: userId }).populate(
         "city zone"

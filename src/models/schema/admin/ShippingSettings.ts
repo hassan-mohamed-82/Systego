@@ -1,21 +1,112 @@
-import { Schema, model } from "mongoose";
+// src/models/schema/admin/ShippingSettings.ts
+import mongoose, { Schema, model } from "mongoose";
 
-const shippingSettingsSchema = new Schema(
+// ═══════════════════════════════════════════════════════════
+// Bosta Address Schema
+// ═══════════════════════════════════════════════════════════
+const bostaAddressSchema = new Schema(
   {
-    singletonKey: { type: String, default: "default", unique: true },
-    shippingMethod: {
+    firstName: { type: String, default: "" },
+    lastName: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    email: { type: String, default: "" },
+    city: { type: String, default: "" }, // اسم المدينة
+    cityId: { type: String, default: "" }, // ✅ جديد — Bosta city ID
+    zoneId: { type: String, default: "" },
+    districtId: { type: String, default: "" },
+    firstLine: { type: String, default: "" },
+    secondLine: { type: String, default: "" },
+    buildingNumber: { type: String, default: "" },
+    floor: { type: String, default: "" },
+    apartment: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+// ═══════════════════════════════════════════════════════════
+// Bosta Config
+// ═══════════════════════════════════════════════════════════
+const bostaConfigSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    apiKey: { type: String, default: "", trim: true },
+    baseUrl: { type: String, default: "https://app.bosta.co/api/v2" },
+    environment: {
       type: String,
-      enum: ["zone", "flat_rate", "carrier"],
+      enum: ["staging", "production"],
+      default: "production",
+    },
+
+    pickup: { type: bostaAddressSchema, default: () => ({}) },
+
+    defaults: {
+      packageType: { type: String, default: "Parcel" },
+      size: { type: String, default: "MEDIUM" },
+      weight: { type: Number, default: 1, min: 0.1 },
+      itemsCount: { type: Number, default: 1, min: 1 },
+      description: { type: String, default: "Order" },
+    },
+
+    codEnabled: { type: Boolean, default: true },
+    webhookUrl: { type: String, default: "" },
+    webhookSecret: { type: String, default: "" },
+
+    lastTestedAt: { type: Date, default: null },
+    lastTestStatus: {
+      type: String,
+      enum: ["success", "failed", "untested"],
+      default: "untested",
+    },
+  },
+  { _id: false },
+);
+
+// ═══════════════════════════════════════════════════════════
+// Self Shipping Config
+// ═══════════════════════════════════════════════════════════
+const selfConfigSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: true },
+    method: {
+      type: String,
+      enum: ["zone", "flat_rate"],
       default: "zone",
     },
     flatRate: { type: Number, default: 0, min: 0 },
-    carrierRate: { type: Number, default: 0, min: 0 },
-    carrierId: { type: Schema.Types.ObjectId, ref: "Courier", default: null },
-    freeShippingEnabled: { type: Boolean, default: false },
   },
-  {
-    timestamps: true,
-  }
+  { _id: false },
 );
 
-export const ShippingSettingsModel = model("ShippingSettings", shippingSettingsSchema);
+// ═══════════════════════════════════════════════════════════
+// Main Schema
+// ═══════════════════════════════════════════════════════════
+const shippingSettingsSchema = new Schema(
+  {
+    superadminId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true,
+      index: true,
+    },
+
+    activeMethod: {
+      type: String,
+      enum: ["self", "bosta"],
+      default: "self",
+    },
+
+    self: { type: selfConfigSchema, default: () => ({}) },
+    bosta: { type: bostaConfigSchema, default: () => ({}) },
+
+    freeShippingEnabled: { type: Boolean, default: false },
+
+    singletonKey: { type: String, default: undefined, index: true },
+  },
+  { timestamps: true },
+);
+
+export const ShippingSettingsModel = model(
+  "ShippingSettings",
+  shippingSettingsSchema,
+);

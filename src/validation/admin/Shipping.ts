@@ -1,27 +1,163 @@
+// src/validation/admin/Shipping.ts
 import Joi from "joi";
 
 const objectId = Joi.string().hex().length(24);
 
+// ═══════════════════════════════════════════════════════════
+// UPDATE SHIPPING SETTINGS
+// ═══════════════════════════════════════════════════════════
 export const updateShippingSettingsSchema = Joi.object({
-  shippingMethod: Joi.string().valid("zone", "flat_rate", "carrier").required(),
-  flatRate: Joi.when("shippingMethod", {
-    is: "flat_rate",
-    then: Joi.number().min(0).required(),
-    otherwise: Joi.forbidden(),
-  }),
-  carrierRate: Joi.when("shippingMethod", {
-    is: "carrier",
-    then: Joi.number().min(0).required(),
-    otherwise: Joi.forbidden(),
-  }),
-  carrierId: Joi.when("shippingMethod", {
-    is: "carrier",
-    then: objectId.allow(null).optional(),
-    otherwise: Joi.forbidden(),
-  }),
-  freeShippingEnabled: Joi.boolean().optional(),
-});
+  activeMethod: Joi.string().valid("self", "bosta"),
 
+  self: Joi.object({
+    enabled: Joi.boolean(),
+    method: Joi.string().valid("zone", "flat_rate"),
+    flatRate: Joi.number().min(0),
+  }),
+
+  bosta: Joi.object({
+    enabled: Joi.boolean(),
+    apiKey: Joi.string().allow(""),
+    baseUrl: Joi.string().uri(),
+    environment: Joi.string().valid("staging", "production"),
+
+    pickup: Joi.object({
+      firstName: Joi.string().allow(""),
+      lastName: Joi.string().allow(""),
+      phone: Joi.string().allow(""),
+      email: Joi.string().email().allow(""),
+      city: Joi.string().allow(""),
+      cityId: Joi.string().allow(""),
+      zoneId: Joi.string().allow(""),
+      districtId: Joi.string().allow(""),
+      firstLine: Joi.string().allow(""),
+      secondLine: Joi.string().allow(""),
+      buildingNumber: Joi.alternatives()
+        .try(Joi.string(), Joi.number())
+        .allow(""),
+      floor: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+      apartment: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+    }),
+
+    defaults: Joi.object({
+      packageType: Joi.string(),
+      size: Joi.string(),
+      weight: Joi.number().min(0.1),
+      itemsCount: Joi.number().min(1),
+      description: Joi.string(),
+    }),
+
+    codEnabled: Joi.boolean(),
+    webhookUrl: Joi.string().uri().allow(""),
+    webhookSecret: Joi.string().allow(""),
+  }),
+
+  freeShippingEnabled: Joi.boolean(),
+}).min(1);
+
+// ═══════════════════════════════════════════════════════════
+// UPDATE FREE SHIPPING PRODUCTS
+// ═══════════════════════════════════════════════════════════
 export const updateFreeShippingProductsSchema = Joi.object({
   productIds: Joi.array().items(objectId).required(),
+});
+
+// ═══════════════════════════════════════════════════════════
+// CREATE BOSTA DELIVERY (Send)
+// ═══════════════════════════════════════════════════════════
+export const createBostaDeliverySchema = Joi.object({
+  order_id: Joi.string().required(),
+
+  receiver: Joi.object({
+    firstName: Joi.string().allow(""),
+    lastName: Joi.string().allow(""),
+    phone: Joi.string().required(),
+    email: Joi.string().email().allow(""),
+  }).optional(),
+
+  dropOffAddress: Joi.object({
+    city: Joi.string().required(),
+    zoneId: Joi.string().required(),
+    districtId: Joi.string().required(),
+    firstLine: Joi.string().required(),
+    secondLine: Joi.string().allow(""),
+    buildingNumber: Joi.alternatives()
+      .try(Joi.string(), Joi.number())
+      .allow(""),
+    floor: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+    apartment: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+  }).required(),
+
+  cod: Joi.number().min(0).optional(),
+  weight: Joi.number().min(0.1).optional(),
+  notes: Joi.string().allow("").optional(),
+  allowToOpenPackage: Joi.boolean().optional(),
+});
+
+// ═══════════════════════════════════════════════════════════
+// BULK CREATE BOSTA DELIVERIES
+// ═══════════════════════════════════════════════════════════
+export const bulkCreateBostaDeliveriesSchema = Joi.object({
+  orders: Joi.array()
+    .items(
+      Joi.object({
+        order_id: Joi.string().required(),
+
+        receiver: Joi.object({
+          firstName: Joi.string().allow(""),
+          lastName: Joi.string().allow(""),
+          phone: Joi.string().required(),
+          email: Joi.string().email().allow(""),
+        }).optional(),
+
+        dropOffAddress: Joi.object({
+          city: Joi.string().required(),
+          zoneId: Joi.string().required(),
+          districtId: Joi.string().required(),
+          firstLine: Joi.string().required(),
+          secondLine: Joi.string().allow(""),
+          buildingNumber: Joi.alternatives()
+            .try(Joi.string(), Joi.number())
+            .allow(""),
+          floor: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+          apartment: Joi.alternatives()
+            .try(Joi.string(), Joi.number())
+            .allow(""),
+        }).required(),
+
+        cod: Joi.number().min(0).optional(),
+        weight: Joi.number().min(0.1).optional(),
+        notes: Joi.string().allow("").optional(),
+      }),
+    )
+    .min(1)
+    .max(50)
+    .required(),
+});
+
+// ═══════════════════════════════════════════════════════════
+// CREATE BOSTA RETURN DELIVERY
+// ═══════════════════════════════════════════════════════════
+export const createBostaReturnSchema = Joi.object({
+  order_id: Joi.string().required(),
+
+  // ✅ نوع الشحنة (اختياري — default 30)
+  type: Joi.number().valid(10, 20, 30, 40, 50).optional(),
+
+  dropOffAddress: Joi.object({
+    city: Joi.string().allow(""),
+    zoneId: Joi.string().allow(""),
+    districtId: Joi.string().allow(""),
+    firstLine: Joi.string().allow(""),
+    secondLine: Joi.string().allow(""),
+    buildingNumber: Joi.alternatives()
+      .try(Joi.string(), Joi.number())
+      .allow(""),
+    floor: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+    apartment: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
+  }).optional(),
+
+  weight: Joi.number().min(0.1).optional(),
+  notes: Joi.string().allow("").optional(),
+  allowToOpenPackage: Joi.boolean().optional(),
 });
