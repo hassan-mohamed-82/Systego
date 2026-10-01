@@ -5,11 +5,15 @@ import { SuccessResponse } from '../../../utils/response';
 import { NotFound } from '../../../Errors';
 // Create Customer Group
 export const createCustomerGroup = async (req: Request, res: Response) => {
-        const { name, status = true } = req.body;
+        const { ar_name, name, status = true } = req.body;
 
         // Validate required fields
         if (!name) {
             throw new BadRequest("Group name is required");
+        }
+
+        if (!ar_name) {
+            throw new BadRequest("Arabic group name is required");
         }
 
         // Check if group name already exists
@@ -20,6 +24,7 @@ export const createCustomerGroup = async (req: Request, res: Response) => {
 
         // Create new customer group
         const newCustomerGroup = new CustomerGroupModel({
+            ar_name,
             name,
             status
         });

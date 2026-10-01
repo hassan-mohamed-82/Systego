@@ -21,6 +21,7 @@ const pandelProductSchema = new mongoose.Schema({
 const pandelSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true  },
     startdate: { type: Date, required: true },
     enddate: { type: Date, required: true },
     status: { type: Boolean, default: true },

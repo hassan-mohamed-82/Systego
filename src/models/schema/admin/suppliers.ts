@@ -7,6 +7,7 @@ const SupplierSchema = new Schema({
   phone_number: { type: String, maxlength: 20, unique: true , required: true},
   address: { type: String },
   company_name: { type: String, maxlength: 150 },
+  ar_company_name: { type: String, maxlength: 150 },
   cityId:{ type: mongoose.Schema.Types.ObjectId, ref: "City" },
   countryId:{ type: mongoose.Schema.Types.ObjectId, ref: "Country" },
   contact_person: { type: String, maxlength: 100 },

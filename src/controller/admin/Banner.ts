@@ -24,12 +24,14 @@ export const getBannerModules = asyncHandler(async (req: Request, res: Response)
 });
 // 2. Create Banner (With Duplicate Prevention)
 export const createBanner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name, title, description, images, link, isActive } = req.body;
+    const { ar_name, name, title, description, images, link, isActive } = req.body;
 
     // Validation: name must be a non-empty array
     if (!name || !Array.isArray(name) || name.length === 0) {
         throw new BadRequest("name must be a non-empty array of page names.");
     }
+
+    if (!ar_name) throw new BadRequest("Arabic name is required");
 
     // --- CHECK FOR DUPLICATES ---
     const existingBanner = await BannerModel.findOne({
@@ -64,6 +66,7 @@ export const createBanner = asyncHandler(async (req: Request, res: Response): Pr
 
     const banner = await BannerModel.create({
         name,
+        ar_name,
         title,
         description,
         images: imageUrls,
@@ -95,7 +98,7 @@ export const getBannerById = asyncHandler(async (req: Request, res: Response): P
 // 5. Update Banner (With Duplicate Prevention)
 export const updateBanner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const { name, title, description, images, link, isActive } = req.body;
+    const { ar_name, name, title, description, images, link, isActive } = req.body;
 
     if (!id) throw new BadRequest("Banner ID is required.");
 
@@ -124,6 +127,7 @@ export const updateBanner = asyncHandler(async (req: Request, res: Response): Pr
         updateData.name = name;
     }
 
+    if (ar_name !== undefined) updateData.ar_name = ar_name;
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (link !== undefined) updateData.link = link;

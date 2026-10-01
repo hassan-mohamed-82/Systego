@@ -11,8 +11,8 @@ import { NotFound } from "../../Errors/NotFound";
 export const createRevenue = async (req: Request, res: Response) => {
     const userId = req.user?.id;
     if (!userId) throw new UnauthorizedError("Unauthorized");
-    const { name, amount, Category_id, note, financial_accountId } = req.body;
-    if (!name || amount == null || !Category_id || !financial_accountId) {
+    const { ar_name, name, amount, Category_id, note, financial_accountId } = req.body;
+    if ( !ar_name || !name || amount == null || !Category_id || !financial_accountId) {
         throw new BadRequest("Please provide all required fields");
     }
     if (amount <= 0) {
@@ -37,6 +37,7 @@ export const createRevenue = async (req: Request, res: Response) => {
     }
 
     const revenue = await RevenueModel.create({
+        ar_name,
         name,
         amount,
         Category_id,

@@ -75,6 +75,7 @@ const CustomerSchema = new Schema(
 const CustomerGroupSchema = new Schema(
   {
     name: { type: String, required: true, unique: true },
+    ar_name: { type: String, required: true, unique: true },
     status: { type: Boolean, default: true },
     _id: { type: String, default: () => randomUUID() },
   },
