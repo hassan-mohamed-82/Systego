@@ -1,5 +1,5 @@
 import { Router } from "express";
-import authRouter from "./auth"
+import authRouter from "./auth";
 import categoryRouter from "./Categoey";
 import productRouter from "./products";
 import brandRouter from "./brand";
@@ -14,6 +14,7 @@ import orderTypeRouter from "./ordertype";
 import warehouseRouter from "./Warehouse";
 import storeSettingsRoutes from "./storeSettings";
 import ecommerceDataRouter from "../admin/ecommerceData";
+import userShippingRoutes from "./shipping";
 
 import bundleRouter from "./bundle";
 
@@ -21,7 +22,7 @@ const userRoute = Router();
 
 userRoute.use("/offer", bundleRouter);
 
-userRoute.use("/tenant-info", tenantInfoRouter)
+userRoute.use("/tenant-info", tenantInfoRouter);
 userRoute.use("/banner", bannerRouter);
 
 userRoute.use("/auth", authRouter);
@@ -40,5 +41,6 @@ userRoute.use("/warehouse", warehouseRouter);
 
 userRoute.use("/store-settings", storeSettingsRoutes);
 userRoute.use("/ecommerce-data", ecommerceDataRouter);
+userRoute.use("/shipping", userShippingRoutes);
 
 export default userRoute;

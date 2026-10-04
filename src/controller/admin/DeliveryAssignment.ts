@@ -105,10 +105,14 @@ export const updateStatus = async (req: Request, res: Response) => {
 // GET AVAILABLE DELIVERY MEN
 // ═══════════════════════════════════════════════════════════
 export const getAvailableDeliveryMen = async (req: Request, res: Response) => {
+  // ✅ $ifNull عشان المندوبين القدام
   const deliveryMen = await DeliveryManModel.find({
     status: "active",
     $expr: {
-      $lt: [{ $size: "$currentOrders" }, "$maxConcurrentOrders"],
+      $lt: [
+        { $size: { $ifNull: ["$currentOrders", []] } },
+        { $ifNull: ["$maxConcurrentOrders", 10] },
+      ],
     },
   })
     .select("-password")

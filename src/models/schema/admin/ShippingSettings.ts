@@ -11,7 +11,7 @@ const bostaAddressSchema = new Schema(
     phone: { type: String, default: "" },
     email: { type: String, default: "" },
     city: { type: String, default: "" }, // اسم المدينة
-    cityId: { type: String, default: "" }, // ✅ جديد — Bosta city ID
+    cityId: { type: String, default: "" }, // Bosta city ID
     zoneId: { type: String, default: "" },
     districtId: { type: String, default: "" },
     firstLine: { type: String, default: "" },
@@ -19,6 +19,19 @@ const bostaAddressSchema = new Schema(
     buildingNumber: { type: String, default: "" },
     floor: { type: String, default: "" },
     apartment: { type: String, default: "" },
+
+    // 🆕 Business Location — لو حساب Bosta فيه فروع محددة
+    businessLocationId: { type: String, default: "" },
+
+    // 🆕 بيانات التواصل الافتراضية للـ pickup
+    pickupContactName: { type: String, default: "" },
+    pickupContactPhone: { type: String, default: "" },
+
+    // 🆕 الوقت الافتراضي للـ pickup
+    defaultPickupTimeSlot: {
+      from: { type: String, default: "10:00" },
+      to: { type: String, default: "14:00" },
+    },
   },
   { _id: false },
 );
@@ -50,6 +63,10 @@ const bostaConfigSchema = new Schema(
     codEnabled: { type: Boolean, default: true },
     webhookUrl: { type: String, default: "" },
     webhookSecret: { type: String, default: "" },
+
+    // 🆕 إعدادات الـ pickup التلقائي
+    autoCreatePickup: { type: Boolean, default: true },
+    pickupLeadDays: { type: Number, default: 0, min: 0 }, // كام يوم بعد النهاردة
 
     lastTestedAt: { type: Date, default: null },
     lastTestStatus: {

@@ -153,21 +153,97 @@ export const getBostaDistricts = async (req: Request, res: Response) => {
 };
 
 // ═══════════════════════════════════════════════════════════
-// GET BOSTA PRICING
+// 💰 BOSTA PRICING — 1) Shipment Calculator (by city)
 // ═══════════════════════════════════════════════════════════
-export const getBostaPricing = async (req: Request, res: Response) => {
+export const getBostaShipmentPricing = async (req: Request, res: Response) => {
   const superadminId = await getSuperadminId(req);
   const settings = await ensureSettings(superadminId);
   const creds = getBostaCreds(settings);
-  const { city, district, cod, weight } = req.query as any;
-  if (!city) throw new BadRequest("city is required");
-  const pricing = await bostaService.getPricing(creds, {
-    city,
-    district,
-    cod: cod ? Number(cod) : undefined,
-    weight: weight ? Number(weight) : undefined,
+
+  const { pickupCity, dropOffCity, size, type, cod } = req.query as any;
+
+  if (!pickupCity) {
+    throw new BadRequest("pickupCity is required");
+  }
+  if (!dropOffCity) {
+    throw new BadRequest("dropOffCity is required");
+  }
+
+  const pricing = await bostaService.getShipmentPricing(creds, {
+    pickupCity,
+    dropOffCity,
+    size,
+    type,
+    cod: cod !== undefined ? Number(cod) : undefined,
   });
-  SuccessResponse(res, { pricing });
+
+  SuccessResponse(res, {
+    message: "Shipment pricing calculated successfully",
+    pricing,
+  });
+};
+
+// ═══════════════════════════════════════════════════════════
+// 💰 BOSTA PRICING — 2) Sector Calculator (by sector IDs)
+// ═══════════════════════════════════════════════════════════
+export const getBostaSectorPricing = async (req: Request, res: Response) => {
+  const superadminId = await getSuperadminId(req);
+  const settings = await ensureSettings(superadminId);
+  const creds = getBostaCreds(settings);
+
+  const {
+    pickupSectorId,
+    dropoffSectorId,
+    tierIdSelector = "c__CT4DU9I",
+    type,
+    vatIncluded,
+  } = req.query as any;
+
+  if (!pickupSectorId) {
+    throw new BadRequest("pickupSectorId is required");
+  }
+
+  const pricing = await bostaService.getSectorPricing(creds, {
+    pickupSectorId: Number(pickupSectorId),
+    dropoffSectorId:
+      dropoffSectorId !== undefined ? Number(dropoffSectorId) : undefined,
+    tierIdSelector,
+    type,
+    vatIncluded: vatIncluded !== undefined ? vatIncluded === "true" : undefined,
+  });
+
+  SuccessResponse(res, {
+    message: "Sector pricing calculated successfully",
+    pricing,
+  });
+};
+
+// ═══════════════════════════════════════════════════════════
+// 💰 BOSTA PRICING — 3) Insurance Fee Estimate
+// ═══════════════════════════════════════════════════════════
+export const getBostaInsuranceEstimate = async (
+  req: Request,
+  res: Response,
+) => {
+  const superadminId = await getSuperadminId(req);
+  const settings = await ensureSettings(superadminId);
+  const creds = getBostaCreds(settings);
+
+  const { goodsValue } = req.query as any;
+
+  if (!goodsValue || Number(goodsValue) <= 0) {
+    throw new BadRequest("goodsValue must be a positive number");
+  }
+
+  const estimate = await bostaService.getInsuranceFeeEstimate(
+    creds,
+    Number(goodsValue),
+  );
+
+  SuccessResponse(res, {
+    message: "Insurance fee estimate calculated successfully",
+    estimate,
+  });
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -325,7 +401,7 @@ export const createBostaDeliveryFromOrder = async (
     relatedId: order._id.toString(),
     type: 10,
 
-    deliveryId: bostaResponse?._id || bostaResponse?.deliveryId || null,
+    deliveryId: bostaResponse?.deliveryId || null,
     trackingNumber:
       bostaResponse?.trackingNumber || bostaResponse?.tracking?.number || null,
     awb: bostaResponse?.awb || null,
@@ -373,7 +449,7 @@ export const createBostaDeliveryFromOrder = async (
 };
 
 // ═══════════════════════════════════════════════════════════
-// 🚚 BULK CREATE BOSTA DELIVERIES (FIXED)
+// 🚚 BULK CREATE BOSTA DELIVERIES
 // ═══════════════════════════════════════════════════════════
 export const bulkCreateBostaDeliveries = async (
   req: Request,
@@ -420,9 +496,6 @@ export const bulkCreateBostaDeliveries = async (
     apartment: String(pickup.apartment || ""),
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // Pre-validation
-  // ═══════════════════════════════════════════════════════════
   const validOrders: Array<{
     orderId: string;
     order: any;
@@ -565,9 +638,6 @@ export const bulkCreateBostaDeliveries = async (
     });
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🚀 Bulk request
-  // ═══════════════════════════════════════════════════════════
   const payloads = validOrders.map((v) => v.payload);
 
   let bostaIds: string[] = [];
@@ -588,9 +658,6 @@ export const bulkCreateBostaDeliveries = async (
     bulkFailed = true;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🔄 Fallback — واحد واحد
-  // ═══════════════════════════════════════════════════════════
   if (bulkFailed) {
     for (const v of validOrders) {
       try {
@@ -612,9 +679,6 @@ export const bulkCreateBostaDeliveries = async (
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 💾 نخزّن الشحنات (بدون ما نعتمد على getDelivery)
-  // ═══════════════════════════════════════════════════════════
   const created: any[] = [];
 
   for (let i = 0; i < validOrders.length; i++) {
@@ -629,7 +693,6 @@ export const bulkCreateBostaDeliveries = async (
       continue;
     }
 
-    // ✅ 1) نخزّن الشحنة الأساسية أولاً
     let shipment;
     try {
       shipment = await BostaShipmentModel.create({
@@ -673,7 +736,6 @@ export const bulkCreateBostaDeliveries = async (
       continue;
     }
 
-    // ✅ 2) نحاول نجيب التفاصيل (بس لو فشلت، مش مشكلة)
     let refreshed = false;
     try {
       const bostaData = await bostaService.getDelivery(creds, deliveryId);
@@ -726,6 +788,111 @@ export const bulkCreateBostaDeliveries = async (
     usedBulkEndpoint: !bulkFailed,
     created,
     errors,
+  });
+};
+
+// ═══════════════════════════════════════════════════════════
+// 🚚 CREATE BOSTA PICKUP — طلب مندوب يستلم من الفرع
+// ═══════════════════════════════════════════════════════════
+export const createBostaPickup = async (req: Request, res: Response) => {
+  const superadminId = await getSuperadminId(req);
+  const settings = await ensureSettings(superadminId);
+  const creds = getBostaCreds(settings);
+
+  if (!settings.bosta?.enabled) {
+    throw new BadRequest("Bosta is not enabled in shipping settings");
+  }
+
+  const { shipmentId, scheduledDate, scheduledTimeSlot, contactPerson, notes } =
+    req.body;
+
+  if (!shipmentId) throw new BadRequest("shipmentId is required");
+  if (!scheduledDate)
+    throw new BadRequest("scheduledDate is required (YYYY-MM-DD)");
+
+  const shipment = await BostaShipmentModel.findOne({
+    _id: shipmentId,
+    superadminId,
+  });
+  if (!shipment) throw new BadRequest("Shipment not found");
+  if (!shipment.deliveryId) {
+    throw new BadRequest("Shipment has no Bosta deliveryId");
+  }
+
+  const pickup = settings.bosta?.pickup;
+  const finalContact = contactPerson || {
+    firstName: pickup?.firstName || "Store",
+    lastName: pickup?.lastName || "",
+    phone: pickup?.phone || "",
+    email: pickup?.email || "",
+  };
+
+  if (!finalContact.phone) {
+    throw new BadRequest(
+      "Contact phone is required. Set it in Bosta pickup settings or send it.",
+    );
+  }
+
+  const payload: any = {
+    scheduledDate,
+    contactPerson: finalContact,
+    numberOfPackages: 1,
+  };
+
+  if (scheduledTimeSlot?.from && scheduledTimeSlot?.to) {
+    payload.scheduledTimeSlot = scheduledTimeSlot;
+  }
+  if (pickup?.businessLocationId) {
+    payload.businessLocationId = pickup.businessLocationId;
+  }
+  if (notes) payload.notes = notes;
+
+  const bostaResponse = await bostaService.createPickup(creds, payload);
+
+  (shipment as any).pickup = {
+    pickupId: bostaResponse?._id || bostaResponse?.pickupId || null,
+    scheduledDate,
+    scheduledTimeSlot: payload.scheduledTimeSlot || null,
+    status: bostaResponse?.state?.value || "scheduled",
+    createdAt: new Date(),
+    rawResponse: bostaResponse,
+  };
+  shipment.lastSyncAt = new Date();
+  await shipment.save();
+
+  SuccessResponse(res, {
+    message: "✅ Pickup scheduled successfully",
+    pickup: (shipment as any).pickup,
+    shipment: {
+      _id: shipment._id,
+      deliveryId: shipment.deliveryId,
+      trackingNumber: shipment.trackingNumber,
+      status: shipment.status,
+    },
+  });
+};
+
+// ═══════════════════════════════════════════════════════════
+// 📅 GET PICKUP TIME SLOTS
+// ═══════════════════════════════════════════════════════════
+export const getBostaPickupTimeSlots = async (req: Request, res: Response) => {
+  const superadminId = await getSuperadminId(req);
+  const settings = await ensureSettings(superadminId);
+  const creds = getBostaCreds(settings);
+
+  const { date, businessLocationId } = req.query as any;
+
+  if (!date) throw new BadRequest("date is required (YYYY-MM-DD)");
+
+  const slots = await bostaService.getPickupTimeSlots(creds, {
+    date,
+    businessLocationId:
+      businessLocationId || settings.bosta?.pickup?.businessLocationId,
+  });
+
+  SuccessResponse(res, {
+    message: "Pickup time slots fetched successfully",
+    slots,
   });
 };
 
@@ -1208,7 +1375,6 @@ export const refreshBostaTracking = async (req: Request, res: Response) => {
   let bostaData: any = null;
   let endpointUsed = "";
 
-  // ✅ جرّب tracking الأول
   if (shipment.trackingNumber) {
     try {
       bostaData = await bostaService.getDeliveryByTrackingNumber(
@@ -1221,7 +1387,6 @@ export const refreshBostaTracking = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ لو فشل (أو مفيش tracking)، جرّب deliveryId
   if (!bostaData && shipment.deliveryId) {
     bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
     endpointUsed = `/deliveries/${shipment.deliveryId}`;
@@ -1243,7 +1408,6 @@ export const refreshBostaTracking = async (req: Request, res: Response) => {
   shipment.lastTrackAt = new Date();
   shipment.rawResponse = bostaData;
 
-  // ✅ حدّث trackingNumber لو مش موجود
   if (!shipment.trackingNumber) {
     shipment.trackingNumber =
       bostaData?.trackingNumber || bostaData?.tracking?.number || null;
@@ -1376,11 +1540,48 @@ export const cancelBostaShipment = async (req: Request, res: Response) => {
     superadminId,
   });
   if (!shipment) throw new BadRequest("Shipment not found");
-  if (!shipment.deliveryId) {
-    throw new BadRequest("Shipment has no Bosta deliveryId");
+
+  if (!shipment.trackingNumber && !shipment.deliveryId) {
+    throw new BadRequest("Shipment has no tracking number or deliveryId");
   }
 
-  await bostaService.cancelDelivery(creds, shipment.deliveryId);
+  let cancelled = false;
+  let lastError: any = null;
+
+  // ✅ جرّب بالـ trackingNumber الأول (المسار الصح)
+  if (shipment.trackingNumber) {
+    try {
+      await bostaService.cancelDeliveryByTracking(
+        creds,
+        shipment.trackingNumber,
+      );
+      cancelled = true;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(
+        `⚠️ Terminate by trackingNumber (${shipment.trackingNumber}) failed: ${err.message}`,
+      );
+    }
+  }
+
+  // ✅ لو فشل، جرّب بالـ deliveryId
+  if (!cancelled && shipment.deliveryId) {
+    try {
+      await bostaService.cancelDelivery(creds, shipment.deliveryId);
+      cancelled = true;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(
+        `⚠️ Cancel by deliveryId (${shipment.deliveryId}) failed: ${err.message}`,
+      );
+    }
+  }
+
+  if (!cancelled) {
+    throw new BadRequest(
+      lastError?.message || "Failed to cancel shipment in Bosta",
+    );
+  }
 
   shipment.status = "Cancelled";
   shipment.lastSyncAt = new Date();

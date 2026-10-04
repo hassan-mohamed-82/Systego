@@ -23,7 +23,7 @@ export const autoAssignOrder = async (
     return { assigned: false, reason: "Order is not a delivery order" };
   }
 
-  // ✅ 3) نشيك على shippingMethod الأوردر أولاً — لو الكاستومر اختار bosta من الموقع منسيبوش
+  // ✅ 3) نشيك على shippingMethod الأوردر أولاً
   if ((order as any).shippingMethod === "bosta") {
     return {
       assigned: false,
@@ -53,11 +53,14 @@ export const autoAssignOrder = async (
     return { assigned: false, reason: "No online warehouse found" };
   }
 
-  // ✅ 6) نجيب مندوب متاح (active + أقل عدد أوردرات + أقل من الحد الأقصى)
+  // ✅ 7) نجيب مندوب متاح — مع $ifNull لحماية المندوبين القدام
   const availableDeliveryMen = await DeliveryManModel.find({
     status: "active",
     $expr: {
-      $lt: [{ $size: "$currentOrders" }, "$maxConcurrentOrders"],
+      $lt: [
+        { $size: { $ifNull: ["$currentOrders", []] } },
+        { $ifNull: ["$maxConcurrentOrders", 10] },
+      ],
     },
   })
     .sort({ "currentOrders.length": 1, completedOrders: -1 })
@@ -69,7 +72,7 @@ export const autoAssignOrder = async (
 
   const deliveryMan = availableDeliveryMen[0];
 
-  // ✅ 7) نحدّث الأوردر
+  // ✅ 8) نحدّث الأوردر
   order.shipmentType = "self";
   order.selfShipment = {
     deliveryManId: deliveryMan._id,
@@ -86,14 +89,14 @@ export const autoAssignOrder = async (
     deliveryNotes: "",
   } as any;
 
-  // ✅ 8) نحدّث الـ warehouse كـ default
+  // ✅ 9) نحدّث الـ warehouse كـ default
   if (!order.warehouse) {
     order.warehouse = onlineWarehouse._id;
   }
 
   await order.save();
 
-  // ✅ 9) نضيف الأوردر لـ مندوب
+  // ✅ 10) نضيف الأوردر لـ مندوب
   await DeliveryManModel.findByIdAndUpdate(deliveryMan._id, {
     $addToSet: { currentOrders: order._id },
   });
@@ -238,22 +241,25 @@ export const updateDeliveryStatus = async (
 
   const deliveryManId = order.selfShipment.deliveryManId;
   const now = new Date();
+  const prevOrderStatus = order.status;
 
   // ✅ نحدّث الـ selfShipment
   order.selfShipment.status = newStatus;
   order.selfShipment.deliveryNotes = notes || order.selfShipment.deliveryNotes;
 
+  // ✅ نحدّد الـ order.status الجديد
+  let newOrderStatus = order.status;
+
   if (newStatus === "picked_up") {
     order.selfShipment.pickedUpAt = now;
-    order.status = "processing";
+    newOrderStatus = "processing";
   } else if (newStatus === "out_for_delivery") {
     order.selfShipment.outForDeliveryAt = now;
-    order.status = "out_for_delivery";
+    newOrderStatus = "out_for_delivery";
   } else if (newStatus === "delivered") {
     order.selfShipment.deliveredAt = now;
-    order.status = "delivered";
+    newOrderStatus = "delivered";
 
-    // ✅ نشيل من المندوب + نزود الإحصائيات
     await DeliveryManModel.findByIdAndUpdate(deliveryManId, {
       $pull: { currentOrders: order._id },
       $inc: { completedOrders: 1 },
@@ -261,16 +267,34 @@ export const updateDeliveryStatus = async (
   } else if (newStatus === "failed") {
     order.selfShipment.failedAt = now;
     order.selfShipment.failureReason = failureReason || "";
-    order.status = "failed_to_deliver";
+    newOrderStatus = "failed_to_deliver";
 
-    // ✅ نشيل من المندوب + نزود الإحصائيات
     await DeliveryManModel.findByIdAndUpdate(deliveryManId, {
       $pull: { currentOrders: order._id },
       $inc: { failedOrders: 1 },
     });
   }
 
+  // ✅ نحدّث order.status + statusHistory
+  if (newOrderStatus !== prevOrderStatus) {
+    order.status = newOrderStatus;
+
+    order.statusHistory = order.statusHistory || [];
+    order.statusHistory.push({
+      status: newOrderStatus,
+      description:
+        notes || failureReason || `Delivery status updated to ${newStatus}`,
+      source: "delivery_man",
+      updatedBy: deliveryManId as any,
+      updatedAt: now,
+    } as any);
+  }
+
   await order.save();
 
-  return { updated: true, status: newStatus };
+  return {
+    updated: true,
+    status: newStatus,
+    orderStatus: newOrderStatus,
+  };
 };

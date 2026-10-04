@@ -61,6 +61,28 @@ const bostaShipmentSchema = new Schema(
     notes: { type: String, default: "" },
 
     // ═══════════════════════════════════════════════════════════
+    // 🆕 Pickup Info — طلب استلام من الفرع
+    // ═══════════════════════════════════════════════════════════
+    pickup: {
+      pickupId: { type: String, default: null, index: true },
+      scheduledDate: { type: String, default: null },
+      scheduledTimeSlot: {
+        from: { type: String, default: null },
+        to: { type: String, default: null },
+      },
+      status: { type: String, default: null },
+      contactPerson: {
+        firstName: { type: String, default: "" },
+        lastName: { type: String, default: "" },
+        phone: { type: String, default: "" },
+        email: { type: String, default: "" },
+      },
+      notes: { type: String, default: "" },
+      createdAt: { type: Date, default: null },
+      rawResponse: { type: Schema.Types.Mixed, default: null },
+    },
+
+    // ═══════════════════════════════════════════════════════════
     // ✅ تاريخ التتبع — كل snapshot من Bosta بيتحفظ هنا
     // ═══════════════════════════════════════════════════════════
     trackingHistory: [

@@ -12,10 +12,11 @@ import {
   testBostaConnection,
   getBostaCities,
   getBostaDistricts,
-  getBostaPricing,
   createBostaDeliveryFromOrder,
   bulkCreateBostaDeliveries,
   createBostaReturnDelivery,
+  createBostaPickup,
+  getBostaPickupTimeSlots,
   getBostaShipmentByOrder,
   syncBostaShipment,
   cancelBostaShipment,
@@ -25,6 +26,9 @@ import {
   getBostaTrackingHistory,
   listBostaShipments,
   getBostaShipmentsStats,
+  getBostaShipmentPricing,
+  getBostaSectorPricing,
+  getBostaInsuranceEstimate,
 } from "../../controller/admin/Shipping";
 import {
   updateShippingSettingsSchema,
@@ -69,10 +73,35 @@ route.get(
   authorizePermissions("zone", "View"),
   catchAsync(getBostaDistricts),
 );
+
 route.get(
-  "/bosta/pricing",
+  "/bosta/pricing/shipment",
   authorizePermissions("zone", "View"),
-  catchAsync(getBostaPricing),
+  catchAsync(getBostaShipmentPricing),
+);
+route.get(
+  "/bosta/pricing/sector",
+  authorizePermissions("zone", "View"),
+  catchAsync(getBostaSectorPricing),
+);
+route.get(
+  "/bosta/pricing/insurance",
+  authorizePermissions("zone", "View"),
+  catchAsync(getBostaInsuranceEstimate),
+);
+
+// ═══════════════════════════════════════════════════════════
+// 🚚 Bosta Pickup
+// ═══════════════════════════════════════════════════════════
+route.post(
+  "/bosta/pickups",
+  authorizePermissions("zone", "Edit"),
+  catchAsync(createBostaPickup),
+);
+route.get(
+  "/bosta/pickups/time-slots",
+  authorizePermissions("zone", "View"),
+  catchAsync(getBostaPickupTimeSlots),
 );
 
 // ═══════════════════════════════════════════════════════════

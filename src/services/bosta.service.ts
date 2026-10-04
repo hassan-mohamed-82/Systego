@@ -1,10 +1,10 @@
 // src/services/bosta.service.ts
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
 
 // ═══════════════════════════════════════════════════════════
-// Bosta Address
+// Bosta Address (dropOff / pickup / return)
 // ═══════════════════════════════════════════════════════════
 export interface BostaAddress {
   city: string;
@@ -47,16 +47,36 @@ export interface BostaDeliveryPayload {
   webhookUrl?: string;
 }
 
+// ═══════════════════════════════════════════════════════════
+// Bosta Pickup Payload
+// ═══════════════════════════════════════════════════════════
+export interface BostaPickupPayload {
+  scheduledDate: string; // "2025-01-15"
+  scheduledTimeSlot?: {
+    from: string; // "10:00"
+    to: string; // "14:00"
+  };
+  contactPerson: {
+    firstName: string;
+    lastName?: string;
+    phone: string;
+    email?: string;
+  };
+  numberOfPackages: number;
+  businessLocationId?: string;
+  notes?: string;
+}
+
 class BostaService {
   // ═══════════════════════════════════════════════════════════
   // client جديد لكل طلب
   // ═══════════════════════════════════════════════════════════
-  private createClient({ apiKey, baseUrl }: BostaCredentials): any {
+  private createClient({ apiKey, baseUrl }: BostaCredentials): AxiosInstance {
     if (!apiKey) throw new Error("❌ Bosta API key is missing");
 
     const client = axios.create({
       baseURL: baseUrl,
-      timeout: 30000,
+      timeout: 20000,
       headers: {
         "Content-Type": "application/json",
         Authorization: apiKey,
@@ -113,7 +133,7 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // جلب المحافظات
+  // 📍 CITIES
   // ═══════════════════════════════════════════════════════════
   async getCities(creds: BostaCredentials) {
     const { data } = await this.createClient(creds).get("/cities");
@@ -121,7 +141,7 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // جلب المناطق الفرعية
+  // 📍 DISTRICTS
   // ═══════════════════════════════════════════════════════════
   async getDistricts(creds: BostaCredentials, cityId: string) {
     const { data } = await this.createClient(creds).get(
@@ -131,20 +151,82 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // حساب سعر الشحن
+  // 💰 PRICING — 1) Shipment Calculator (by city names)
   // ═══════════════════════════════════════════════════════════
-  async getPricing(
+  async getShipmentPricing(
     creds: BostaCredentials,
-    params: { city: string; district?: string; cod?: number; weight?: number },
+    params: {
+      pickupCity: string;
+      dropOffCity: string;
+      size?: "Normal" | "Light Bulky" | "Heavy Bulky";
+      type?:
+        | "SEND"
+        | "CASH_COLLECTION"
+        | "CUSTOMER_RETURN_PICKUP"
+        | "EXCHANGE"
+        | "SIGN_AND_RETURN";
+      cod?: number;
+    },
   ) {
-    const { data } = await this.createClient(creds).get("/deliveries/pricing", {
-      params,
+    const query = {
+      pickupCity: params.pickupCity,
+      dropOffCity: params.dropOffCity,
+      size: params.size || "Normal",
+      type: params.type || "SEND",
+      ...(params.cod !== undefined && { cod: params.cod }),
+    };
+
+    const { data } = await this.createClient(creds).get(
+      "/pricing/shipment/calculator",
+      { params: query },
+    );
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 💰 PRICING — 2) Calculator (by sector IDs)
+  // ═══════════════════════════════════════════════════════════
+  async getSectorPricing(
+    creds: BostaCredentials,
+    params: {
+      pickupSectorId: number;
+      dropoffSectorId?: number;
+      tierIdSelector: string;
+      type?: string;
+      vatIncluded?: boolean;
+    },
+  ) {
+    const query = {
+      pickupSectorId: params.pickupSectorId,
+      tierIdSelector: params.tierIdSelector,
+      ...(params.dropoffSectorId !== undefined && {
+        dropoffSectorId: params.dropoffSectorId,
+      }),
+      ...(params.type && { type: params.type }),
+      ...(params.vatIncluded !== undefined && {
+        vatIncluded: params.vatIncluded,
+      }),
+    };
+
+    const { data } = await this.createClient(creds).get("/pricing/calculator", {
+      params: query,
     });
     return data?.data || data;
   }
 
   // ═══════════════════════════════════════════════════════════
-  // إنشاء شحنة (Send)
+  // 💰 PRICING — 3) Insurance Fee Estimate
+  // ═══════════════════════════════════════════════════════════
+  async getInsuranceFeeEstimate(creds: BostaCredentials, goodsValue: number) {
+    const { data } = await this.createClient(creds).get(
+      "/pricing/insuranceFeeEstimate",
+      { params: { goodsValue } },
+    );
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 📦 CREATE DELIVERY
   // ═══════════════════════════════════════════════════════════
   async createDelivery(creds: BostaCredentials, payload: BostaDeliveryPayload) {
     const { data } = await this.createClient(creds).post(
@@ -155,8 +237,7 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // ✅ إنشاء شحنات جماعية (Bulk)
-  // بيرجع array من الـ delivery IDs
+  // 📦 BULK CREATE
   // ═══════════════════════════════════════════════════════════
   async createBulkDeliveries(
     creds: BostaCredentials,
@@ -170,7 +251,7 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // جلب شحنة بالـ deliveryId
+  // 🔍 GET DELIVERY BY ID
   // ═══════════════════════════════════════════════════════════
   async getDelivery(creds: BostaCredentials, deliveryId: string) {
     const { data } = await this.createClient(creds).get(
@@ -180,7 +261,7 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // جلب شحنة بالـ trackingNumber
+  // 🔍 GET DELIVERY BY TRACKING
   // ═══════════════════════════════════════════════════════════
   async getDeliveryByTrackingNumber(
     creds: BostaCredentials,
@@ -193,12 +274,57 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // إلغاء شحنة
+  // ❌ CANCEL DELIVERY
   // ═══════════════════════════════════════════════════════════
-  async cancelDelivery(creds: BostaCredentials, deliveryId: string) {
+  async cancelDeliveryByTracking(
+    creds: BostaCredentials,
+    trackingNumber: string,
+  ) {
     const { data } = await this.createClient(creds).delete(
-      `/deliveries/${deliveryId}`,
+      `/deliveries/business/${trackingNumber}/terminate`,
     );
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 🚚 CREATE PICKUP — طلب مندوب يستلم من الفرع
+  // ═══════════════════════════════════════════════════════════
+  async createPickup(creds: BostaCredentials, payload: BostaPickupPayload) {
+    const { data } = await this.createClient(creds).post("/pickups", payload);
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 📅 GET PICKUP TIME SLOTS
+  // ═══════════════════════════════════════════════════════════
+  async getPickupTimeSlots(
+    creds: BostaCredentials,
+    params: {
+      date: string;
+      businessLocationId?: string;
+    },
+  ) {
+    const { data } = await this.createClient(creds).get("/pickups/time-slots", {
+      params,
+    });
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 📋 LIST PICKUPS (اختياري — لعرض كل الاستلامات)
+  // ═══════════════════════════════════════════════════════════
+  async listPickups(
+    creds: BostaCredentials,
+    params?: {
+      page?: number;
+      limit?: number;
+      from?: string;
+      to?: string;
+    },
+  ) {
+    const { data } = await this.createClient(creds).get("/pickups", {
+      params,
+    });
     return data?.data || data;
   }
 }

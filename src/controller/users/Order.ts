@@ -55,7 +55,6 @@ export const createOrder = async (
 
     const cartQuery = userId ? { user: userId } : { sessionId: sessionId };
 
-    // 2️⃣ Get Cart and Prepared Data
     const cart = await CartModel.findOne(cartQuery).populate({
       path: "cartItems.product",
       select: "name ar_name free_shipping price discountId",
@@ -123,40 +122,125 @@ export const createOrder = async (
       resolvedWarehouseId = onlineWarehouse._id;
 
       let initialShippingCost = 0;
+
+      // ═══════════════════════════════════════════════════════════
+      // 🔀 Address from ID (string)
+      // ═══════════════════════════════════════════════════════════
       if (typeof shippingAddress === "string") {
         const addressDoc = await AddressModel.findOne({
           _id: shippingAddress,
           user: userId,
         }).populate("city zone country");
         if (!addressDoc) throw new NotFound("Address not found");
+
         shippingAddressData = {
           details: addressDoc.street,
           city: (addressDoc as any).city?.name,
           zone: (addressDoc as any).zone?.name,
+          street: addressDoc.street,
+          apartmentNumber: addressDoc.apartmentNumber,
+          floorNumber: addressDoc.floorNumber,
+          buildingNumber: addressDoc.buildingNumber,
+          uniqueIdentifier: addressDoc.uniqueIdentifier,
+
+          // 🆕 Bosta fields (لو العميل حفظهم)
+          bostaCityId: (addressDoc as any).bostaCityId || "",
+          bostaCityName: (addressDoc as any).bostaCityName || "",
+          bostaZoneId: (addressDoc as any).bostaZoneId || "",
+          bostaZoneName: (addressDoc as any).bostaZoneName || "",
+          bostaDistrictId: (addressDoc as any).bostaDistrictId || "",
+          bostaDistrictName: (addressDoc as any).bostaDistrictName || "",
         };
-        initialShippingCost = Number(
-          (addressDoc as any).zone?.shipingCost ||
-            (addressDoc as any).city?.shipingCost ||
-            0,
-        );
+
+        rawAddressForPaymob = {
+          apartmentNumber: addressDoc.apartmentNumber,
+          floorNumber: addressDoc.floorNumber,
+          buildingNumber: addressDoc.buildingNumber,
+          uniqueIdentifier: addressDoc.uniqueIdentifier,
+          street: addressDoc.street,
+        };
+
+        // Shipping cost: self من zone، bosta = 0
+        const isBosta = (addressDoc as any).bostaCityId;
+        if (isBosta) {
+          initialShippingCost = 0;
+        } else {
+          initialShippingCost = Number(
+            (addressDoc as any).zone?.shipingCost ||
+              (addressDoc as any).city?.shipingCost ||
+              0,
+          );
+        }
       } else {
-        const [cityDoc, zoneDoc] = await Promise.all([
-          CityModels.findById(shippingAddress.city),
-          ZoneModel.findById(shippingAddress.zone),
-        ]);
-        shippingAddressData = {
-          details: shippingAddress.street,
-          city: cityDoc?.name,
-          zone: zoneDoc?.name,
-          street: shippingAddress.street,
-          apartmentNumber: shippingAddress.apartmentNumber,
-          floorNumber: shippingAddress.floorNumber,
-          buildingNumber: shippingAddress.buildingNumber,
-          uniqueIdentifier: shippingAddress.uniqueIdentifier,
-        };
-        initialShippingCost = Number(
-          zoneDoc?.shipingCost || cityDoc?.shipingCost || 0,
-        );
+        // ═══════════════════════════════════════════════════════════
+        // 🔀 Address as object
+        // ═══════════════════════════════════════════════════════════
+        const isBosta =
+          shippingAddress.bostaCityId && shippingAddress.bostaDistrictId;
+
+        if (isBosta) {
+          // ── Bosta address ──
+          shippingAddressData = {
+            details: shippingAddress.street,
+            street: shippingAddress.street,
+            city: shippingAddress.bostaCityName || "",
+            zone:
+              shippingAddress.bostaZoneName ||
+              shippingAddress.bostaDistrictName ||
+              "",
+            apartmentNumber: shippingAddress.apartmentNumber,
+            floorNumber: shippingAddress.floorNumber,
+            buildingNumber: shippingAddress.buildingNumber,
+            uniqueIdentifier: shippingAddress.uniqueIdentifier,
+
+            // Bosta fields
+            bostaCityId: shippingAddress.bostaCityId,
+            bostaCityName: shippingAddress.bostaCityName || "",
+            bostaZoneId: shippingAddress.bostaZoneId || "",
+            bostaZoneName: shippingAddress.bostaZoneName || "",
+            bostaDistrictId: shippingAddress.bostaDistrictId,
+            bostaDistrictName: shippingAddress.bostaDistrictName || "",
+          };
+
+          rawAddressForPaymob = {
+            apartmentNumber: shippingAddress.apartmentNumber,
+            floorNumber: shippingAddress.floorNumber,
+            buildingNumber: shippingAddress.buildingNumber,
+            uniqueIdentifier: shippingAddress.uniqueIdentifier,
+            street: shippingAddress.street,
+          };
+
+          initialShippingCost = 0;
+        } else {
+          // ── Self address ──
+          const [cityDoc, zoneDoc] = await Promise.all([
+            CityModels.findById(shippingAddress.city),
+            ZoneModel.findById(shippingAddress.zone),
+          ]);
+
+          shippingAddressData = {
+            details: shippingAddress.street,
+            city: cityDoc?.name,
+            zone: zoneDoc?.name,
+            street: shippingAddress.street,
+            apartmentNumber: shippingAddress.apartmentNumber,
+            floorNumber: shippingAddress.floorNumber,
+            buildingNumber: shippingAddress.buildingNumber,
+            uniqueIdentifier: shippingAddress.uniqueIdentifier,
+          };
+
+          rawAddressForPaymob = {
+            apartmentNumber: shippingAddress.apartmentNumber,
+            floorNumber: shippingAddress.floorNumber,
+            buildingNumber: shippingAddress.buildingNumber,
+            uniqueIdentifier: shippingAddress.uniqueIdentifier,
+            street: shippingAddress.street,
+          };
+
+          initialShippingCost = Number(
+            zoneDoc?.shipingCost || cityDoc?.shipingCost || 0,
+          );
+        }
       }
 
       const hasFreeShippingProduct = cart.cartItems.some(
@@ -346,11 +430,22 @@ export const createOrder = async (
         paymentGateway,
         paymentStatus:
           paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-        // ✅ ناخد activeMethod من الإعدادات (مش من العميل)
         shippingMethod: orderType === "delivery" ? activeMethod : null,
         shipmentType: orderType === "delivery" ? activeMethod : null,
       },
     ]);
+
+    // ✅ statusHistory مبدئي
+    order[0].statusHistory = [
+      {
+        status: "pending",
+        description: "Order placed successfully",
+        source: "customer",
+        updatedBy: null,
+        updatedAt: new Date(),
+      },
+    ] as any;
+    await order[0].save();
 
     let paymentData: any = null;
     let shouldClearCart = true;
@@ -650,6 +745,16 @@ export const verifyPaymobPaymentStatus = async (
       order.paymentStatus = "paid";
       order.paymobTransactionId = String(status.transactionId);
       order.paymobCallbackPayload = status;
+
+      order.statusHistory = order.statusHistory || [];
+      order.statusHistory.push({
+        status: "processing",
+        description: "Payment verified via Paymob",
+        source: "system",
+        updatedBy: null,
+        updatedAt: new Date(),
+      } as any);
+
       await order.save();
     } else if (
       (!status.success || status.isVoided) &&
@@ -658,6 +763,16 @@ export const verifyPaymobPaymentStatus = async (
       order.status = "rejected";
       order.paymentStatus = "failed";
       order.paymobCallbackPayload = status;
+
+      order.statusHistory = order.statusHistory || [];
+      order.statusHistory.push({
+        status: "rejected",
+        description: "Payment failed via Paymob",
+        source: "system",
+        updatedBy: null,
+        updatedAt: new Date(),
+      } as any);
+
       await order.save();
     }
 
