@@ -355,6 +355,13 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
       throw new BadRequest("Bosta shipment record not found");
     }
 
+    // ✅ Don't allow manual status change on terminal states
+    if (shipment.status === "Cancelled") {
+      throw new BadRequest(
+        "Bosta shipment is cancelled. Cannot update status manually.",
+      );
+    }
+
     // ✅ حدّث bostaShipment.status
     shipment.status = status;
     shipment.lastSyncAt = now;

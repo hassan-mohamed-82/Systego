@@ -52,10 +52,7 @@ export interface BostaDeliveryPayload {
 // ═══════════════════════════════════════════════════════════
 export interface BostaPickupPayload {
   scheduledDate: string; // "2025-01-15"
-  scheduledTimeSlot?: {
-    from: string; // "10:00"
-    to: string; // "14:00"
-  };
+  scheduledTimeSlot?: string; // ✅ string مش object — مثلاً "10:00-14:00" أو "MORNING"
   contactPerson: {
     firstName: string;
     lastName?: string;
@@ -276,6 +273,16 @@ class BostaService {
   // ═══════════════════════════════════════════════════════════
   // ❌ CANCEL DELIVERY
   // ═══════════════════════════════════════════════════════════
+  async cancelDelivery(creds: BostaCredentials, deliveryId: string) {
+    const { data } = await this.createClient(creds).delete(
+      `/deliveries/${deliveryId}`,
+    );
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ❌ TERMINATE BY TRACKING NUMBER
+  // ═══════════════════════════════════════════════════════════
   async cancelDeliveryByTracking(
     creds: BostaCredentials,
     trackingNumber: string,
@@ -311,7 +318,7 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 📋 LIST PICKUPS (اختياري — لعرض كل الاستلامات)
+  // 📋 LIST PICKUPS
   // ═══════════════════════════════════════════════════════════
   async listPickups(
     creds: BostaCredentials,

@@ -24,6 +24,32 @@ const ensureSettings = async (superadminId: string) => {
 };
 
 // ═══════════════════════════════════════════════════════════
+// 🆕 Helper: sanitize Bosta address
+// ═══════════════════════════════════════════════════════════
+const sanitizeBostaAddress = (addr: any) => ({
+  city: String(addr?.city || "").trim(),
+  zoneId: String(addr?.zoneId || "").trim(),
+  districtId: String(addr?.districtId || "").trim(),
+  firstLine: String(addr?.firstLine || "").trim(),
+  secondLine: String(addr?.secondLine || "").trim(),
+  buildingNumber: String(addr?.buildingNumber || "").trim() || "0",
+  floor: String(addr?.floor || "").trim() || "0",
+  apartment: String(addr?.apartment || "").trim() || "0",
+});
+
+// ═══════════════════════════════════════════════════════════
+// 🆕 Helper: validate Bosta address (required fields)
+// ═══════════════════════════════════════════════════════════
+const validateBostaAddress = (
+  addr: any,
+  label: string,
+): { valid: boolean; missing: string[] } => {
+  const required = ["city", "zoneId", "districtId", "firstLine"];
+  const missing = required.filter((f) => !addr[f]);
+  return { valid: missing.length === 0, missing };
+};
+
+// ═══════════════════════════════════════════════════════════
 // GET SHIPPING SETTINGS
 // ═══════════════════════════════════════════════════════════
 export const getShippingSettings = async (req: Request, res: Response) => {
@@ -272,14 +298,6 @@ export const createBostaDeliveryFromOrder = async (
   } = req.body;
 
   if (!order_id) throw new BadRequest("order_id is required");
-  if (!dropOffAddress?.city)
-    throw new BadRequest("dropOffAddress.city is required");
-  if (!dropOffAddress?.zoneId)
-    throw new BadRequest("dropOffAddress.zoneId is required");
-  if (!dropOffAddress?.districtId)
-    throw new BadRequest("dropOffAddress.districtId is required");
-  if (!dropOffAddress?.firstLine)
-    throw new BadRequest("dropOffAddress.firstLine is required");
 
   const order = await OrderModel.findById(order_id);
   if (!order) throw new BadRequest("Order not found");
@@ -325,28 +343,35 @@ export const createBostaDeliveryFromOrder = async (
 
   const packageWeight = Number(weight) || settings.bosta?.defaults?.weight || 1;
 
-  const pickup = settings.bosta?.pickup;
-  if (
-    !pickup?.city ||
-    !pickup?.zoneId ||
-    !pickup?.districtId ||
-    !pickup?.firstLine
-  ) {
+  // ✅ Sanitize + Validate — Pickup Address
+  const pickup = settings.bosta?.pickup || {};
+  const pickupAddress = sanitizeBostaAddress(pickup);
+
+  const pickupCheck = validateBostaAddress(pickupAddress, "pickup");
+  if (!pickupCheck.valid) {
     throw new BadRequest(
-      "Bosta pickup address is not configured. Please set it in shipping settings (city, zoneId, districtId, firstLine).",
+      `Bosta pickup address is incomplete. Missing: ${pickupCheck.missing.join(
+        ", ",
+      )}. Please configure them in Shipping Settings → Bosta → Advanced Settings.`,
     );
   }
 
-  const pickupAddress = {
-    city: pickup.city,
-    zoneId: pickup.zoneId,
-    districtId: pickup.districtId,
-    firstLine: pickup.firstLine,
-    secondLine: pickup.secondLine || "",
-    buildingNumber: String(pickup.buildingNumber || ""),
-    floor: String(pickup.floor || ""),
-    apartment: String(pickup.apartment || ""),
-  };
+  // ✅ Sanitize + Validate — Drop-off Address
+  const dropOffAddressClean = sanitizeBostaAddress(dropOffAddress);
+
+  const dropOffCheck = validateBostaAddress(dropOffAddressClean, "drop-off");
+  if (!dropOffCheck.valid) {
+    throw new BadRequest(
+      `Drop-off address is incomplete. Missing: ${dropOffCheck.missing.join(
+        ", ",
+      )}. Customer must select Bosta city/district.`,
+    );
+  }
+
+  console.log("🐛 Bosta payload addresses:", {
+    pickupAddress,
+    dropOffAddress: dropOffAddressClean,
+  });
 
   const payload: any = {
     type: 10,
@@ -367,16 +392,7 @@ export const createBostaDeliveryFromOrder = async (
       phone: receiver.phone,
       email: receiver.email || "",
     },
-    dropOffAddress: {
-      city: dropOffAddress.city,
-      zoneId: dropOffAddress.zoneId,
-      districtId: dropOffAddress.districtId,
-      firstLine: dropOffAddress.firstLine,
-      secondLine: dropOffAddress.secondLine || "",
-      buildingNumber: String(dropOffAddress.buildingNumber || ""),
-      floor: String(dropOffAddress.floor || ""),
-      apartment: String(dropOffAddress.apartment || ""),
-    },
+    dropOffAddress: dropOffAddressClean,
     pickupAddress,
     returnAddress: pickupAddress,
     businessReference: order._id.toString(),
@@ -395,7 +411,6 @@ export const createBostaDeliveryFromOrder = async (
 
   const bostaResponse = await bostaService.createDelivery(creds, payload);
 
-  // ✅ استخراج الـ deliveryId + trackingNumber بشكل صحيح
   const newDeliveryId =
     bostaResponse?.deliveryId ||
     bostaResponse?._id ||
@@ -410,7 +425,6 @@ export const createBostaDeliveryFromOrder = async (
     bostaResponse?.data?.tracking?.number ||
     null;
 
-  // ⚠️ لازم يكون فيه على الأقل واحد منهم
   if (!newDeliveryId && !newTrackingNumber) {
     console.error(
       "❌ Bosta response has no deliveryId or trackingNumber:",
@@ -460,7 +474,6 @@ export const createBostaDeliveryFromOrder = async (
     rawResponse: bostaResponse,
   });
 
-  // ✅ نربط الشحنة بالأوردر
   (order as any).bostaShipment = shipment._id;
   order.status = "processing";
 
@@ -511,28 +524,17 @@ export const bulkCreateBostaDeliveries = async (
     throw new BadRequest("Maximum 50 orders per bulk request");
   }
 
-  const pickup = settings.bosta?.pickup;
-  if (
-    !pickup?.city ||
-    !pickup?.zoneId ||
-    !pickup?.districtId ||
-    !pickup?.firstLine
-  ) {
+  const pickup = settings.bosta?.pickup || {};
+  const pickupAddress = sanitizeBostaAddress(pickup);
+
+  const pickupCheck = validateBostaAddress(pickupAddress, "pickup");
+  if (!pickupCheck.valid) {
     throw new BadRequest(
-      "Bosta pickup address is not configured. Please set it in shipping settings.",
+      `Bosta pickup address is incomplete. Missing: ${pickupCheck.missing.join(
+        ", ",
+      )}.`,
     );
   }
-
-  const pickupAddress = {
-    city: pickup.city,
-    zoneId: pickup.zoneId,
-    districtId: pickup.districtId,
-    firstLine: pickup.firstLine,
-    secondLine: pickup.secondLine || "",
-    buildingNumber: String(pickup.buildingNumber || ""),
-    floor: String(pickup.floor || ""),
-    apartment: String(pickup.apartment || ""),
-  };
 
   const validOrders: Array<{
     orderId: string;
@@ -549,14 +551,14 @@ export const bulkCreateBostaDeliveries = async (
 
     try {
       if (!order_id) throw new Error("order_id is required");
-      if (!dropOffAddress?.city)
-        throw new Error("dropOffAddress.city is required");
-      if (!dropOffAddress?.zoneId)
-        throw new Error("dropOffAddress.zoneId is required");
-      if (!dropOffAddress?.districtId)
-        throw new Error("dropOffAddress.districtId is required");
-      if (!dropOffAddress?.firstLine)
-        throw new Error("dropOffAddress.firstLine is required");
+
+      const dropOffClean = sanitizeBostaAddress(dropOffAddress);
+      const dropCheck = validateBostaAddress(dropOffClean, "drop-off");
+      if (!dropCheck.valid) {
+        throw new Error(
+          `Drop-off address incomplete. Missing: ${dropCheck.missing.join(", ")}`,
+        );
+      }
 
       const order = await OrderModel.findById(order_id);
       if (!order) throw new Error("Order not found");
@@ -625,16 +627,7 @@ export const bulkCreateBostaDeliveries = async (
           phone: receiver.phone,
           email: receiver.email || "",
         },
-        dropOffAddress: {
-          city: dropOffAddress.city,
-          zoneId: dropOffAddress.zoneId,
-          districtId: dropOffAddress.districtId,
-          firstLine: dropOffAddress.firstLine,
-          secondLine: dropOffAddress.secondLine || "",
-          buildingNumber: String(dropOffAddress.buildingNumber || ""),
-          floor: String(dropOffAddress.floor || ""),
-          apartment: String(dropOffAddress.apartment || ""),
-        },
+        dropOffAddress: dropOffClean,
         pickupAddress,
         returnAddress: pickupAddress,
         businessReference: order._id.toString(),
@@ -767,7 +760,6 @@ export const bulkCreateBostaDeliveries = async (
         lastTrackAt: null,
       });
 
-      // ✅ نربط الشحنة بالأوردر
       v.order.bostaShipment = shipment._id;
       v.order.status = "processing";
       await v.order.save();
@@ -861,7 +853,6 @@ export const createBostaPickup = async (req: Request, res: Response) => {
   });
   if (!shipment) throw new BadRequest("Shipment not found");
 
-  // ✅ شيلنا الـ check على deliveryId — نتحقق على trackingNumber بدله
   if (!shipment.trackingNumber && !shipment.deliveryId) {
     throw new BadRequest("Shipment has no Bosta tracking number or deliveryId");
   }
@@ -886,22 +877,31 @@ export const createBostaPickup = async (req: Request, res: Response) => {
     numberOfPackages: 1,
   };
 
-  if (scheduledTimeSlot?.from && scheduledTimeSlot?.to) {
-    payload.scheduledTimeSlot = scheduledTimeSlot;
+  // ✅ Bosta بتطلب scheduledTimeSlot as STRING (مش object)
+  // examples: "10:00-14:00" أو "MORNING" أو "AFTERNOON"
+  if (scheduledTimeSlot) {
+    if (typeof scheduledTimeSlot === "string") {
+      // Already a string
+      payload.scheduledTimeSlot = scheduledTimeSlot;
+    } else if (scheduledTimeSlot?.from && scheduledTimeSlot?.to) {
+      // Object with from/to → convert to string
+      payload.scheduledTimeSlot = `${scheduledTimeSlot.from}-${scheduledTimeSlot.to}`;
+    }
   }
+
   if (pickup?.businessLocationId) {
     payload.businessLocationId = pickup.businessLocationId;
   }
   if (notes) payload.notes = notes;
 
+  console.log("🐛 Bosta pickup payload:", JSON.stringify(payload, null, 2));
+
   let bostaResponse: any;
   try {
     bostaResponse = await bostaService.createPickup(creds, payload);
   } catch (err: any) {
-    // ⚠️ لو فشل عشان الشحنة لسه مش متسجلة في Bosta — نجرب refresh الأول
     console.error("❌ Bosta pickup error:", err.message);
 
-    // نحاول نجيب بيانات الشحنة من Bosta بأي طريقة
     try {
       if (shipment.trackingNumber) {
         const fresh = await bostaService.getDeliveryByTrackingNumber(
@@ -909,7 +909,6 @@ export const createBostaPickup = async (req: Request, res: Response) => {
           shipment.trackingNumber,
         );
         if (fresh) {
-          // ✅ نحدّث الـ shipment بالبيانات الجديدة (deliveryId + status)
           shipment.deliveryId =
             fresh?.deliveryId || fresh?._id || shipment.deliveryId;
           shipment.status = fresh?.state?.value || shipment.status;
@@ -1046,7 +1045,7 @@ export const createBostaReturnDelivery = async (
     email: pickup.email || "",
   };
 
-  const pickupFromCustomer = {
+  const pickupFromCustomer = sanitizeBostaAddress({
     city: dropOffAddress?.city || originalShipment.dropOffAddress.city,
     zoneId: dropOffAddress?.zoneId || originalShipment.dropOffAddress.zoneId,
     districtId:
@@ -1055,31 +1054,15 @@ export const createBostaReturnDelivery = async (
       dropOffAddress?.firstLine || originalShipment.dropOffAddress.firstLine,
     secondLine:
       dropOffAddress?.secondLine || originalShipment.dropOffAddress.secondLine,
-    buildingNumber: String(
+    buildingNumber:
       dropOffAddress?.buildingNumber ||
-        originalShipment.dropOffAddress.buildingNumber ||
-        "",
-    ),
-    floor: String(
-      dropOffAddress?.floor || originalShipment.dropOffAddress.floor || "",
-    ),
-    apartment: String(
-      dropOffAddress?.apartment ||
-        originalShipment.dropOffAddress.apartment ||
-        "",
-    ),
-  };
+      originalShipment.dropOffAddress.buildingNumber,
+    floor: dropOffAddress?.floor || originalShipment.dropOffAddress.floor,
+    apartment:
+      dropOffAddress?.apartment || originalShipment.dropOffAddress.apartment,
+  });
 
-  const dropOffToStore = {
-    city: pickup.city,
-    zoneId: pickup.zoneId,
-    districtId: pickup.districtId,
-    firstLine: pickup.firstLine,
-    secondLine: pickup.secondLine || "",
-    buildingNumber: String(pickup.buildingNumber || ""),
-    floor: String(pickup.floor || ""),
-    apartment: String(pickup.apartment || ""),
-  };
+  const dropOffToStore = sanitizeBostaAddress(pickup);
 
   const packageWeight = Number(weight) || settings.bosta?.defaults?.weight || 1;
 
@@ -1458,6 +1441,11 @@ export const refreshBostaTracking = async (req: Request, res: Response) => {
 
   if (!shipment) throw new BadRequest("Shipment not found");
 
+  // ✅ Don't allow refresh on terminal states
+  if (shipment.status === "Cancelled") {
+    throw new BadRequest("Shipment is cancelled. Cannot refresh tracking.");
+  }
+
   if (!shipment.trackingNumber && !shipment.deliveryId) {
     throw new BadRequest("Shipment has no tracking number or deliveryId");
   }
@@ -1503,7 +1491,6 @@ export const refreshBostaTracking = async (req: Request, res: Response) => {
       bostaData?.trackingNumber || bostaData?.tracking?.number || null;
   }
 
-  // ✅ نحدّث deliveryId لو مش موجود
   if (!shipment.deliveryId) {
     shipment.deliveryId =
       bostaData?.deliveryId || bostaData?._id || shipment.deliveryId;
@@ -1602,11 +1589,14 @@ export const syncBostaShipment = async (req: Request, res: Response) => {
   });
   if (!shipment) throw new BadRequest("Shipment not found");
 
+  if (shipment.status === "Cancelled") {
+    throw new BadRequest("Shipment is cancelled. Cannot sync.");
+  }
+
   if (!shipment.deliveryId && !shipment.trackingNumber) {
     throw new BadRequest("Shipment has no Bosta deliveryId or trackingNumber");
   }
 
-  // ✅ نجيب بالـ deliveryId لو موجود، وإلا بالـ trackingNumber
   let bostaData: any = null;
   if (shipment.deliveryId) {
     bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
@@ -1647,6 +1637,13 @@ export const cancelBostaShipment = async (req: Request, res: Response) => {
   });
   if (!shipment) throw new BadRequest("Shipment not found");
 
+  if (shipment.status === "Cancelled") {
+    throw new BadRequest("Shipment is already cancelled.");
+  }
+  if (shipment.status === "Delivered") {
+    throw new BadRequest("Cannot cancel a delivered shipment.");
+  }
+
   if (!shipment.trackingNumber && !shipment.deliveryId) {
     throw new BadRequest("Shipment has no tracking number or deliveryId");
   }
@@ -1654,7 +1651,6 @@ export const cancelBostaShipment = async (req: Request, res: Response) => {
   let cancelled = false;
   let lastError: any = null;
 
-  // ✅ جرّب بالـ trackingNumber الأول (المسار الصح)
   if (shipment.trackingNumber) {
     try {
       await bostaService.cancelDeliveryByTracking(
@@ -1670,7 +1666,6 @@ export const cancelBostaShipment = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ لو فشل، جرّب بالـ deliveryId
   if (!cancelled && shipment.deliveryId) {
     try {
       await bostaService.cancelDelivery(creds, shipment.deliveryId);
@@ -1715,11 +1710,14 @@ export const getBostaLabel = async (req: Request, res: Response) => {
   });
   if (!shipment) throw new BadRequest("Shipment not found");
 
+  if (shipment.status === "Cancelled") {
+    throw new BadRequest("Shipment is cancelled. Label not available.");
+  }
+
   if (!shipment.deliveryId && !shipment.trackingNumber) {
     throw new BadRequest("Shipment has no Bosta deliveryId or trackingNumber");
   }
 
-  // ✅ نجيب بالـ deliveryId لو موجود، وإلا بالـ trackingNumber
   let bostaData: any = null;
   if (shipment.deliveryId) {
     bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
