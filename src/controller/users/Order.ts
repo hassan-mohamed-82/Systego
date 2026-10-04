@@ -386,27 +386,45 @@ export const createOrder = async (
     }
 
     // ═══════════════════════════════════════════════════════════
-    // ✅ 6.5) Get activeMethod from ShippingSettings
+    // ✅ 6.5) حدد الميثود الفعلي (من العنوان)
     // ═══════════════════════════════════════════════════════════
-    let activeMethod = "self";
-    try {
-      const superadminUser = await UserModel.findOne({ role: "superadmin" })
-        .select("_id")
-        .lean();
+    const addressIsBosta =
+      typeof shippingAddress === "object" &&
+      !!(shippingAddress as any)?.bostaCityId &&
+      !!(shippingAddress as any)?.bostaDistrictId;
 
-      if (superadminUser) {
-        const shippingSettings = await ShippingSettingsModel.findOne({
-          superadminId: (superadminUser as any)._id,
-        })
-          .select("activeMethod")
-          .lean();
+    let finalMethod: "self" | "bosta" | null = null;
 
-        if (shippingSettings?.activeMethod) {
-          activeMethod = shippingSettings.activeMethod;
+    if (orderType === "delivery") {
+      if (typeof shippingAddress === "string") {
+        // address ID — ناخد الميثود من activeMethod
+        try {
+          const superadminUser = await UserModel.findOne({ role: "superadmin" })
+            .select("_id")
+            .lean();
+
+          if (superadminUser) {
+            const settings = await ShippingSettingsModel.findOne({
+              superadminId: (superadminUser as any)._id,
+            })
+              .select("activeMethod")
+              .lean();
+
+            finalMethod = (settings?.activeMethod as any) || "self";
+          } else {
+            finalMethod = "self";
+          }
+        } catch (err) {
+          console.warn(
+            "⚠️ Could not fetch activeMethod, defaulting to self:",
+            err,
+          );
+          finalMethod = "self";
         }
+      } else {
+        // object — نحدد من bostaCityId
+        finalMethod = addressIsBosta ? "bosta" : "self";
       }
-    } catch (err) {
-      console.warn("⚠️ Could not fetch activeMethod, defaulting to self:", err);
     }
 
     // 7️⃣ Create Order
@@ -430,8 +448,8 @@ export const createOrder = async (
         paymentGateway,
         paymentStatus:
           paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-        shippingMethod: orderType === "delivery" ? activeMethod : null,
-        shipmentType: orderType === "delivery" ? activeMethod : null,
+        shippingMethod: finalMethod,
+        shipmentType: finalMethod,
       },
     ]);
 

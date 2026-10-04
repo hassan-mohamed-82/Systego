@@ -395,17 +395,43 @@ export const createBostaDeliveryFromOrder = async (
 
   const bostaResponse = await bostaService.createDelivery(creds, payload);
 
+  // ✅ استخراج الـ deliveryId + trackingNumber بشكل صحيح
+  const newDeliveryId =
+    bostaResponse?.deliveryId ||
+    bostaResponse?._id ||
+    bostaResponse?.data?.deliveryId ||
+    bostaResponse?.data?._id ||
+    null;
+
+  const newTrackingNumber =
+    bostaResponse?.trackingNumber ||
+    bostaResponse?.tracking?.number ||
+    bostaResponse?.data?.trackingNumber ||
+    bostaResponse?.data?.tracking?.number ||
+    null;
+
+  // ⚠️ لازم يكون فيه على الأقل واحد منهم
+  if (!newDeliveryId && !newTrackingNumber) {
+    console.error(
+      "❌ Bosta response has no deliveryId or trackingNumber:",
+      bostaResponse,
+    );
+    throw new BadRequest(
+      "Bosta did not return a deliveryId or trackingNumber. Please check the Bosta API response.",
+    );
+  }
+
   const shipment = await BostaShipmentModel.create({
     superadminId,
     relatedModel: "Order",
     relatedId: order._id.toString(),
     type: 10,
 
-    deliveryId: bostaResponse?.deliveryId || null,
-    trackingNumber:
-      bostaResponse?.trackingNumber || bostaResponse?.tracking?.number || null,
+    deliveryId: newDeliveryId,
+    trackingNumber: newTrackingNumber,
     awb: bostaResponse?.awb || null,
-    status: bostaResponse?.state?.value || bostaResponse?.status || null,
+    status:
+      bostaResponse?.state?.value || bostaResponse?.status || "PendingPickup",
     statusCode: bostaResponse?.state?.code || null,
     labelUrl: bostaResponse?.labelUrl || bostaResponse?.label || null,
 
@@ -422,7 +448,7 @@ export const createBostaDeliveryFromOrder = async (
 
     trackingHistory: [
       {
-        status: bostaResponse?.state?.value || null,
+        status: bostaResponse?.state?.value || "PendingPickup",
         statusCode: bostaResponse?.state?.code || null,
         snapshotAt: new Date(),
         data: bostaResponse,
@@ -434,7 +460,19 @@ export const createBostaDeliveryFromOrder = async (
     rawResponse: bostaResponse,
   });
 
+  // ✅ نربط الشحنة بالأوردر
+  (order as any).bostaShipment = shipment._id;
   order.status = "processing";
+
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    status: "processing",
+    description: `Bosta shipment created (${newTrackingNumber || newDeliveryId})`,
+    source: "bosta",
+    updatedBy: (req.user as any)?.id || null,
+    updatedAt: new Date(),
+  } as any);
+
   await order.save();
 
   SuccessResponse(res, {
@@ -665,7 +703,12 @@ export const bulkCreateBostaDeliveries = async (
           creds,
           v.payload,
         );
-        bostaIds.push(singleResponse?._id || singleResponse?.deliveryId || "");
+        const id =
+          singleResponse?._id ||
+          singleResponse?.deliveryId ||
+          singleResponse?.data?._id ||
+          "";
+        bostaIds.push(id);
       } catch (singleError: any) {
         errors.push({
           order_id: v.orderId,
@@ -724,6 +767,8 @@ export const bulkCreateBostaDeliveries = async (
         lastTrackAt: null,
       });
 
+      // ✅ نربط الشحنة بالأوردر
+      v.order.bostaShipment = shipment._id;
       v.order.status = "processing";
       await v.order.save();
     } catch (createError: any) {
@@ -815,8 +860,10 @@ export const createBostaPickup = async (req: Request, res: Response) => {
     superadminId,
   });
   if (!shipment) throw new BadRequest("Shipment not found");
-  if (!shipment.deliveryId) {
-    throw new BadRequest("Shipment has no Bosta deliveryId");
+
+  // ✅ شيلنا الـ check على deliveryId — نتحقق على trackingNumber بدله
+  if (!shipment.trackingNumber && !shipment.deliveryId) {
+    throw new BadRequest("Shipment has no Bosta tracking number or deliveryId");
   }
 
   const pickup = settings.bosta?.pickup;
@@ -847,7 +894,37 @@ export const createBostaPickup = async (req: Request, res: Response) => {
   }
   if (notes) payload.notes = notes;
 
-  const bostaResponse = await bostaService.createPickup(creds, payload);
+  let bostaResponse: any;
+  try {
+    bostaResponse = await bostaService.createPickup(creds, payload);
+  } catch (err: any) {
+    // ⚠️ لو فشل عشان الشحنة لسه مش متسجلة في Bosta — نجرب refresh الأول
+    console.error("❌ Bosta pickup error:", err.message);
+
+    // نحاول نجيب بيانات الشحنة من Bosta بأي طريقة
+    try {
+      if (shipment.trackingNumber) {
+        const fresh = await bostaService.getDeliveryByTrackingNumber(
+          creds,
+          shipment.trackingNumber,
+        );
+        if (fresh) {
+          // ✅ نحدّث الـ shipment بالبيانات الجديدة (deliveryId + status)
+          shipment.deliveryId =
+            fresh?.deliveryId || fresh?._id || shipment.deliveryId;
+          shipment.status = fresh?.state?.value || shipment.status;
+          shipment.lastSyncAt = new Date();
+          await shipment.save();
+        }
+      }
+    } catch (refreshErr) {
+      console.warn("⚠️ Refresh attempt failed:", refreshErr);
+    }
+
+    throw new BadRequest(
+      `Bosta pickup failed: ${err.message}. Try Sync Tracking first.`,
+    );
+  }
 
   (shipment as any).pickup = {
     pickupId: bostaResponse?._id || bostaResponse?.pickupId || null,
@@ -1037,15 +1114,28 @@ export const createBostaReturnDelivery = async (
 
   const bostaResponse = await bostaService.createDelivery(creds, payload);
 
+  const newDeliveryId =
+    bostaResponse?.deliveryId ||
+    bostaResponse?._id ||
+    bostaResponse?.data?.deliveryId ||
+    bostaResponse?.data?._id ||
+    null;
+
+  const newTrackingNumber =
+    bostaResponse?.trackingNumber ||
+    bostaResponse?.tracking?.number ||
+    bostaResponse?.data?.trackingNumber ||
+    bostaResponse?.data?.tracking?.number ||
+    null;
+
   const shipment = await BostaShipmentModel.create({
     superadminId,
     relatedModel: "Order",
     relatedId: order._id.toString(),
     type: returnType,
 
-    deliveryId: bostaResponse?._id || bostaResponse?.deliveryId || null,
-    trackingNumber:
-      bostaResponse?.trackingNumber || bostaResponse?.tracking?.number || null,
+    deliveryId: newDeliveryId,
+    trackingNumber: newTrackingNumber,
     awb: bostaResponse?.awb || null,
     status: bostaResponse?.state?.value || bostaResponse?.status || null,
     statusCode: bostaResponse?.state?.code || null,
@@ -1413,6 +1503,12 @@ export const refreshBostaTracking = async (req: Request, res: Response) => {
       bostaData?.trackingNumber || bostaData?.tracking?.number || null;
   }
 
+  // ✅ نحدّث deliveryId لو مش موجود
+  if (!shipment.deliveryId) {
+    shipment.deliveryId =
+      bostaData?.deliveryId || bostaData?._id || shipment.deliveryId;
+  }
+
   if (bostaData?.labelUrl) shipment.labelUrl = bostaData.labelUrl;
 
   shipment.trackingHistory = shipment.trackingHistory || [];
@@ -1505,11 +1601,21 @@ export const syncBostaShipment = async (req: Request, res: Response) => {
     superadminId,
   });
   if (!shipment) throw new BadRequest("Shipment not found");
-  if (!shipment.deliveryId) {
-    throw new BadRequest("Shipment has no Bosta deliveryId");
+
+  if (!shipment.deliveryId && !shipment.trackingNumber) {
+    throw new BadRequest("Shipment has no Bosta deliveryId or trackingNumber");
   }
 
-  const bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
+  // ✅ نجيب بالـ deliveryId لو موجود، وإلا بالـ trackingNumber
+  let bostaData: any = null;
+  if (shipment.deliveryId) {
+    bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
+  } else {
+    bostaData = await bostaService.getDeliveryByTrackingNumber(
+      creds,
+      shipment.trackingNumber!,
+    );
+  }
 
   shipment.status = bostaData?.state?.value || shipment.status;
   shipment.statusCode = bostaData?.state?.code || shipment.statusCode;
@@ -1608,11 +1714,22 @@ export const getBostaLabel = async (req: Request, res: Response) => {
     superadminId,
   });
   if (!shipment) throw new BadRequest("Shipment not found");
-  if (!shipment.deliveryId) {
-    throw new BadRequest("Shipment has no Bosta deliveryId");
+
+  if (!shipment.deliveryId && !shipment.trackingNumber) {
+    throw new BadRequest("Shipment has no Bosta deliveryId or trackingNumber");
   }
 
-  const bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
+  // ✅ نجيب بالـ deliveryId لو موجود، وإلا بالـ trackingNumber
+  let bostaData: any = null;
+  if (shipment.deliveryId) {
+    bostaData = await bostaService.getDelivery(creds, shipment.deliveryId);
+  } else {
+    bostaData = await bostaService.getDeliveryByTrackingNumber(
+      creds,
+      shipment.trackingNumber!,
+    );
+  }
+
   const labelUrl = bostaData?.labelUrl || bostaData?.label || shipment.labelUrl;
   if (!labelUrl) throw new BadRequest("Label is not available yet");
 
