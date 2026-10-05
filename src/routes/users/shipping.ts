@@ -6,7 +6,7 @@ import {
   getBostaCitiesForUser,
   getBostaDistrictsForUser,
   getBostaPricingForUser,
-} from "../../controller/users/Shipping";
+} from "../../controller/users/shipping";
 
 const route = Router();
 

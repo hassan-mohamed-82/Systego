@@ -30,7 +30,11 @@ import bostaService from "../../services/bosta.service";
 // ═══════════════════════════════════════════════════════════
 // 💵 Helper: احسب الـ markup
 // ═══════════════════════════════════════════════════════════
-const calculateMarkup = (bostaCost, markupValue, markupType) => {
+const calculateMarkup = (
+  bostaCost: number,
+  markupValue: number,
+  markupType: "fixed" | "percentage",
+) => {
   if (!markupValue || markupValue <= 0) return 0;
 
   if (markupType === "percentage") {
@@ -407,7 +411,10 @@ export const createOrder = async (
                 const pricing = await bostaService.getShipmentPricing(creds, {
                   pickupCity: settings.bosta.pickup.city,
                   dropOffCity,
-                  size: settings.bosta?.defaults?.size || "Normal",
+                  size: (settings.bosta?.defaults?.size || "Normal") as
+                    | "Normal"
+                    | "Light Bulky"
+                    | "Heavy Bulky",
                   type: "SEND",
                   // ❌ مفيش cod
                 });
@@ -453,7 +460,8 @@ export const createOrder = async (
             }
           }
         } catch (pricingErr) {
-          console.warn("⚠️ Bosta pricing failed:", pricingErr.message);
+          const err = pricingErr as Error;
+          console.warn("⚠️ Bosta pricing failed:", err.message);
           initialShippingCost = 0;
         }
       }

@@ -1,5 +1,6 @@
 // src/services/bosta.service.ts
-import axios, { AxiosInstance } from "axios";
+import axios from "axios";
+import type { AxiosInstance } from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
 
@@ -238,7 +239,7 @@ class BostaService {
       pickupCity: string;
       dropOffCity: string;
       cod?: number;
-      size?: "Normal" | "Light Bulky" | "Heavy Bulky";
+      size?: string;
       type?: string;
       tierIdSelector?: string;
       vatIncluded?: boolean;
