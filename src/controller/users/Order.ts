@@ -34,7 +34,7 @@ const calculateMarkup = (
   bostaCost: number,
   markupValue: number,
   markupType: "fixed" | "percentage",
-) => {
+): number => {
   if (!markupValue || markupValue <= 0) return 0;
 
   if (markupType === "percentage") {
@@ -376,21 +376,18 @@ export const createOrder = async (
       const totalServiceFee = cart.serviceFee || 0;
 
       // ═══════════════════════════════════════════════════════════
-      // ✅ احسب codAmountForPricing
+      // ✅ Base amount للـ COD (بدون شحن)
       // ═══════════════════════════════════════════════════════════
-      let codAmountForPricing = 0;
-      if (isCash) {
-        codAmountForPricing = productsTotal + totalServiceFee + totalTaxAmount;
-        shippingDetails.codAmount = codAmountForPricing;
-        shippingDetails.isCash = true;
-      }
+      const baseAmountForCod = productsTotal + totalServiceFee + totalTaxAmount;
 
       // ═══════════════════════════════════════════════════════════
-      // 🆕 Bosta Pricing — مع markup
+      // 🆕 Bosta Pricing — مع markup + iteration للـ COD
       // ═══════════════════════════════════════════════════════════
       if (finalMethod === "bosta") {
         try {
-          const superadminUser = await UserModel.findOne({ role: "superadmin" })
+          const superadminUser = await UserModel.findOne({
+            role: "superadmin",
+          })
             .select("_id")
             .lean();
 
@@ -408,32 +405,89 @@ export const createOrder = async (
                 "";
 
               if (dropOffCity) {
-                const pricing = await bostaService.getShipmentPricing(creds, {
-                  pickupCity: settings.bosta.pickup.city,
-                  dropOffCity,
-                  size: (settings.bosta?.defaults?.size || "Normal") as
-                    | "Normal"
-                    | "Light Bulky"
-                    | "Heavy Bulky",
-                  type: "SEND",
-                  // ❌ مفيش cod
-                });
-
-                const bostaCost = Number(pricing?.total || 0);
-
-                // 💵 Admin Markup
                 const markupValue = Number(settings.bosta?.shippingMarkup || 0);
                 const markupType =
-                  settings.bosta?.shippingMarkupType || "fixed";
-                const markup =
-                  markupValue > 0
-                    ? markupType === "percentage"
-                      ? bostaCost * (markupValue / 100)
-                      : markupValue
-                    : 0;
+                  (settings.bosta?.shippingMarkupType as
+                    | "fixed"
+                    | "percentage") || "fixed";
 
-                initialShippingCost =
-                  Math.round((bostaCost + markup) * 100) / 100;
+                let bostaCost = 0;
+                let markup = 0;
+                let finalPricing: any = null;
+                let codAmountForPricing = 0;
+
+                // ═══════════════════════════════════════════════════
+                // 🔄 COD: Iteration
+                // ═══════════════════════════════════════════════════
+                if (isCash) {
+                  let cod = baseAmountForCod;
+                  let shipping = 0;
+
+                  for (let i = 0; i < 3; i++) {
+                    const pricing = await bostaService.getShipmentPricing(
+                      creds,
+                      {
+                        pickupCity: settings.bosta.pickup.city,
+                        dropOffCity,
+                        size: settings.bosta?.defaults?.size || "Normal",
+                        type: "SEND",
+                        cod: cod,
+                      },
+                    );
+
+                    const newBostaCost = Number(pricing?.total || 0);
+                    const newMarkup = calculateMarkup(
+                      newBostaCost,
+                      markupValue,
+                      markupType,
+                    );
+                    const newShipping = newBostaCost + newMarkup;
+                    const newCod = baseAmountForCod + newShipping;
+
+                    console.log(`🔄 COD Iteration ${i + 1}:`, {
+                      cod,
+                      bostaCost: newBostaCost,
+                      codFee: pricing.codFee,
+                      zeroCodDiscount: pricing.zeroCodDiscount,
+                      markup: newMarkup,
+                      shipping: newShipping,
+                      newCod,
+                      diff: Math.abs(newCod - cod),
+                    });
+
+                    bostaCost = newBostaCost;
+                    markup = newMarkup;
+                    finalPricing = pricing;
+                    shipping = newShipping;
+                    codAmountForPricing = newCod;
+
+                    if (Math.abs(newCod - cod) < 0.5) {
+                      break;
+                    }
+
+                    cod = newCod;
+                  }
+
+                  initialShippingCost = shipping;
+                } else {
+                  // ═══════════════════════════════════════════════════
+                  // 💳 Online: مفيش COD
+                  // ═══════════════════════════════════════════════════
+                  const pricing = await bostaService.getShipmentPricing(creds, {
+                    pickupCity: settings.bosta.pickup.city,
+                    dropOffCity,
+                    size: settings.bosta?.defaults?.size || "Normal",
+                    type: "SEND",
+                    // مفيش cod
+                  });
+
+                  bostaCost = Number(pricing?.total || 0);
+                  markup = calculateMarkup(bostaCost, markupValue, markupType);
+                  initialShippingCost =
+                    Math.round((bostaCost + markup) * 100) / 100;
+                  finalPricing = pricing;
+                  codAmountForPricing = 0;
+                }
 
                 // 💾 حفظ التفاصيل
                 shippingDetails = {
@@ -443,18 +497,20 @@ export const createOrder = async (
                   markupValue,
                   codAmount: codAmountForPricing,
                   isCash,
-                  pricingSource: pricing.source,
-                  baseCost: pricing.baseCost || 0,
-                  vatAmount: pricing.vatAmount || 0,
-                  codFee: pricing.codFee || 0,
-                  zeroCodDiscount: pricing.zeroCodDiscount || 0,
-                  currency: pricing.currency || "EGP",
+                  pricingSource: finalPricing?.source || null,
+                  baseCost: finalPricing?.baseCost || 0,
+                  vatAmount: finalPricing?.vatAmount || 0,
+                  codFee: finalPricing?.codFee || 0,
+                  zeroCodDiscount: finalPricing?.zeroCodDiscount || 0,
+                  currency: finalPricing?.currency || "EGP",
                 };
 
-                console.log("💰 Bosta + markup:", {
+                console.log("💰 Final shipping details:", {
                   bostaCost,
                   markup,
                   shippingToCustomer: initialShippingCost,
+                  codAmount: codAmountForPricing,
+                  isCash,
                 });
               }
             }
