@@ -21,12 +21,24 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { FawryModel } from "../../models/schema/admin/Fawry";
 import { FawryService } from "../../utils/fawryService";
 import { CouponModel } from "../../models/schema/admin/coupons";
-import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
-import { TaxesModel } from "../../models/schema/admin/Taxes";
 import { DiscountModel } from "../../models/schema/admin/Discount";
 import { saveBase64Image } from "../../utils/handleImages";
-import { autoAssignOrder } from "../../services/deliveryAssignment.service";
 import { UserModel } from "../../models/schema/admin/User";
+import { getBostaCreds } from "../../utils/shipping/getBostaCreds";
+import bostaService from "../../services/bosta.service";
+
+// ═══════════════════════════════════════════════════════════
+// 💵 Helper: احسب الـ markup
+// ═══════════════════════════════════════════════════════════
+const calculateMarkup = (bostaCost, markupValue, markupType) => {
+  if (!markupValue || markupValue <= 0) return 0;
+
+  if (markupType === "percentage") {
+    return Math.round(bostaCost * (markupValue / 100) * 100) / 100;
+  }
+
+  return Number(markupValue);
+};
 
 // ===============================
 // 🟢 CREATE ORDER
@@ -64,7 +76,7 @@ export const createOrder = async (
       throw new BadRequest("Cart is empty");
     }
 
-    // 2️⃣ Payment Method
+    // 2️⃣ Payment Method — نحدد isCash بدري
     const paymentMethodDoc = await PaymentMethodModel.findOne({
       _id: paymentMethod,
       isActive: { $ne: false },
@@ -79,7 +91,9 @@ export const createOrder = async (
       name === "cash" ||
       arName === "كاش" ||
       name.includes("cash") ||
-      arName.includes("كاش");
+      name.includes("cod") ||
+      arName.includes("كاش") ||
+      arName.includes("الدفع عند الاستلام");
 
     const requiresProof =
       (paymentMethodDoc as any).requiresProof === true ||
@@ -97,6 +111,22 @@ export const createOrder = async (
     let resolvedWarehouseId: any = null;
     let shippingAddressData: any = null;
     let rawAddressForPaymob: any = {};
+
+    // 🆕 shippingDetails
+    let shippingDetails: any = {
+      bostaCost: 0,
+      markup: 0,
+      markupType: null,
+      markupValue: 0,
+      codAmount: 0,
+      isCash: false,
+      pricingSource: null,
+      baseCost: 0,
+      vatAmount: 0,
+      codFee: 0,
+      zeroCodDiscount: 0,
+      currency: "EGP",
+    };
 
     if (!orderType) throw new BadRequest("orderType is required");
     if (orderType !== "pickup" && orderType !== "delivery")
@@ -143,7 +173,6 @@ export const createOrder = async (
           buildingNumber: addressDoc.buildingNumber,
           uniqueIdentifier: addressDoc.uniqueIdentifier,
 
-          // 🆕 Bosta fields (لو العميل حفظهم)
           bostaCityId: (addressDoc as any).bostaCityId || "",
           bostaCityName: (addressDoc as any).bostaCityName || "",
           bostaZoneId: (addressDoc as any).bostaZoneId || "",
@@ -160,11 +189,8 @@ export const createOrder = async (
           street: addressDoc.street,
         };
 
-        // Shipping cost: self من zone، bosta = 0
         const isBosta = (addressDoc as any).bostaCityId;
-        if (isBosta) {
-          initialShippingCost = 0;
-        } else {
+        if (!isBosta) {
           initialShippingCost = Number(
             (addressDoc as any).zone?.shipingCost ||
               (addressDoc as any).city?.shipingCost ||
@@ -179,7 +205,6 @@ export const createOrder = async (
           shippingAddress.bostaCityId && shippingAddress.bostaDistrictId;
 
         if (isBosta) {
-          // ── Bosta address ──
           shippingAddressData = {
             details: shippingAddress.street,
             street: shippingAddress.street,
@@ -193,7 +218,6 @@ export const createOrder = async (
             buildingNumber: shippingAddress.buildingNumber,
             uniqueIdentifier: shippingAddress.uniqueIdentifier,
 
-            // Bosta fields
             bostaCityId: shippingAddress.bostaCityId,
             bostaCityName: shippingAddress.bostaCityName || "",
             bostaZoneId: shippingAddress.bostaZoneId || "",
@@ -209,10 +233,7 @@ export const createOrder = async (
             uniqueIdentifier: shippingAddress.uniqueIdentifier,
             street: shippingAddress.street,
           };
-
-          initialShippingCost = 0;
         } else {
-          // ── Self address ──
           const [cityDoc, zoneDoc] = await Promise.all([
             CityModels.findById(shippingAddress.city),
             ZoneModel.findById(shippingAddress.zone),
@@ -243,83 +264,294 @@ export const createOrder = async (
         }
       }
 
+      // ═══════════════════════════════════════════════════════════
+      // ✅ حدد finalMethod
+      // ═══════════════════════════════════════════════════════════
+      const addressIsBosta =
+        typeof shippingAddress === "object" &&
+        !!(shippingAddress as any)?.bostaCityId &&
+        !!(shippingAddress as any)?.bostaDistrictId;
+
+      let finalMethod: "self" | "bosta" | null = null;
+
+      if (typeof shippingAddress === "string") {
+        try {
+          const superadminUser = await UserModel.findOne({
+            role: "superadmin",
+          })
+            .select("_id")
+            .lean();
+
+          if (superadminUser) {
+            const settings = await ShippingSettingsModel.findOne({
+              superadminId: (superadminUser as any)._id,
+            })
+              .select("activeMethod")
+              .lean();
+
+            finalMethod = (settings?.activeMethod as any) || "self";
+          } else {
+            finalMethod = "self";
+          }
+        } catch (err) {
+          console.warn(
+            "⚠️ Could not fetch activeMethod, defaulting to self:",
+            err,
+          );
+          finalMethod = "self";
+        }
+      } else {
+        finalMethod = addressIsBosta ? "bosta" : "self";
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // 3.5️⃣ نحسب productsTotal الأول عشان نحتاجه للـ COD
+      // ═══════════════════════════════════════════════════════════
+      const discountIds = cart.cartItems
+        .map((i: any) => i.product?.discountId)
+        .filter((id: any) => !!id);
+
+      const discounts = discountIds.length
+        ? await DiscountModel.find({
+            _id: { $in: discountIds },
+            status: true,
+            applyIn: "E-commerce",
+          })
+        : [];
+
+      const discountMap = new Map(
+        discounts.map((d: any) => [d._id.toString(), d]),
+      );
+
+      const computeEffectivePrice = (product: any): number => {
+        const basePrice = Number(product.price || 0);
+        const discount = product.discountId
+          ? discountMap.get(product.discountId.toString())
+          : null;
+
+        if (!discount) return basePrice;
+
+        if (discount.type === "percentage") {
+          const discounted = basePrice - basePrice * discount.amount;
+          return Math.max(discounted, 0);
+        }
+
+        return Math.max(basePrice - discount.amount, 0);
+      };
+
+      const finalItems: any[] = [];
+      let recalculatedProductsTotal = 0;
+
+      for (const item of cart.cartItems) {
+        const qty = item.quantity;
+        const variantId = item.variant;
+
+        const stockUpdate = await Product_WarehouseModel.findOne({
+          productId: item.product._id,
+          warehouseId: resolvedWarehouseId,
+          productPriceId: variantId || null,
+        });
+        if (!stockUpdate)
+          throw new BadRequest(
+            `Product ${(item.product as any).name} is not available in the warehouse`,
+          );
+
+        const effectivePrice = computeEffectivePrice(item.product);
+        recalculatedProductsTotal += effectivePrice * qty;
+
+        finalItems.push({
+          product: item.product._id,
+          variant: variantId,
+          quantity: qty,
+          price: effectivePrice,
+        });
+      }
+
+      const productsTotal = recalculatedProductsTotal;
+      const totalTaxAmount = cart.taxAmount || 0;
+      const totalServiceFee = cart.serviceFee || 0;
+
+      // ═══════════════════════════════════════════════════════════
+      // ✅ احسب codAmountForPricing
+      // ═══════════════════════════════════════════════════════════
+      let codAmountForPricing = 0;
+      if (isCash) {
+        codAmountForPricing = productsTotal + totalServiceFee + totalTaxAmount;
+        shippingDetails.codAmount = codAmountForPricing;
+        shippingDetails.isCash = true;
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // 🆕 Bosta Pricing — مع markup
+      // ═══════════════════════════════════════════════════════════
+      if (finalMethod === "bosta") {
+        try {
+          const superadminUser = await UserModel.findOne({ role: "superadmin" })
+            .select("_id")
+            .lean();
+
+          if (superadminUser) {
+            const settings = await ShippingSettingsModel.findOne({
+              superadminId: superadminUser._id,
+            }).lean();
+
+            if (settings?.bosta?.enabled && settings?.bosta?.pickup?.city) {
+              const creds = getBostaCreds(settings);
+
+              const dropOffCity =
+                shippingAddressData?.bostaCityName ||
+                shippingAddressData?.city ||
+                "";
+
+              if (dropOffCity) {
+                const pricing = await bostaService.getShipmentPricing(creds, {
+                  pickupCity: settings.bosta.pickup.city,
+                  dropOffCity,
+                  size: settings.bosta?.defaults?.size || "Normal",
+                  type: "SEND",
+                  // ❌ مفيش cod
+                });
+
+                const bostaCost = Number(pricing?.total || 0);
+
+                // 💵 Admin Markup
+                const markupValue = Number(settings.bosta?.shippingMarkup || 0);
+                const markupType =
+                  settings.bosta?.shippingMarkupType || "fixed";
+                const markup =
+                  markupValue > 0
+                    ? markupType === "percentage"
+                      ? bostaCost * (markupValue / 100)
+                      : markupValue
+                    : 0;
+
+                initialShippingCost =
+                  Math.round((bostaCost + markup) * 100) / 100;
+
+                // 💾 حفظ التفاصيل
+                shippingDetails = {
+                  bostaCost,
+                  markup,
+                  markupType,
+                  markupValue,
+                  codAmount: codAmountForPricing,
+                  isCash,
+                  pricingSource: pricing.source,
+                  baseCost: pricing.baseCost || 0,
+                  vatAmount: pricing.vatAmount || 0,
+                  codFee: pricing.codFee || 0,
+                  zeroCodDiscount: pricing.zeroCodDiscount || 0,
+                  currency: pricing.currency || "EGP",
+                };
+
+                console.log("💰 Bosta + markup:", {
+                  bostaCost,
+                  markup,
+                  shippingToCustomer: initialShippingCost,
+                });
+              }
+            }
+          }
+        } catch (pricingErr) {
+          console.warn("⚠️ Bosta pricing failed:", pricingErr.message);
+          initialShippingCost = 0;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // Free shipping override
+      // ═══════════════════════════════════════════════════════════
       const hasFreeShippingProduct = cart.cartItems.some(
         (i: any) => i.product.free_shipping,
       );
 
-      if (hasFreeShippingProduct) {
+      if (hasFreeShippingProduct && finalMethod !== "bosta") {
         shippingCost = 0;
       } else {
         shippingCost = initialShippingCost;
       }
+
+      (cart as any).__finalItems = finalItems;
+      (cart as any).__productsTotal = productsTotal;
+      (cart as any).__totalTaxAmount = totalTaxAmount;
+      (cart as any).__totalServiceFee = totalServiceFee;
     }
 
-    // 3.5️⃣ Discounts
-    const discountIds = cart.cartItems
-      .map((i: any) => i.product?.discountId)
-      .filter((id: any) => !!id);
+    // ═══════════════════════════════════════════════════════════
+    // 4️⃣ Prepare items (لو orderType مش delivery)
+    // ═══════════════════════════════════════════════════════════
+    let finalItems: any[] = (cart as any).__finalItems || [];
+    let productsTotal: number = (cart as any).__productsTotal || 0;
+    let totalTaxAmount: number = (cart as any).__totalTaxAmount || 0;
+    let totalServiceFee: number = (cart as any).__totalServiceFee || 0;
 
-    const discounts = discountIds.length
-      ? await DiscountModel.find({
-          _id: { $in: discountIds },
-          status: true,
-          applyIn: "E-commerce",
-        })
-      : [];
+    if (orderType !== "delivery" || finalItems.length === 0) {
+      const discountIds = cart.cartItems
+        .map((i: any) => i.product?.discountId)
+        .filter((id: any) => !!id);
 
-    const discountMap = new Map(
-      discounts.map((d: any) => [d._id.toString(), d]),
-    );
+      const discounts = discountIds.length
+        ? await DiscountModel.find({
+            _id: { $in: discountIds },
+            status: true,
+            applyIn: "E-commerce",
+          })
+        : [];
 
-    const computeEffectivePrice = (product: any): number => {
-      const basePrice = Number(product.price || 0);
-      const discount = product.discountId
-        ? discountMap.get(product.discountId.toString())
-        : null;
+      const discountMap = new Map(
+        discounts.map((d: any) => [d._id.toString(), d]),
+      );
 
-      if (!discount) return basePrice;
+      const computeEffectivePrice = (product: any): number => {
+        const basePrice = Number(product.price || 0);
+        const discount = product.discountId
+          ? discountMap.get(product.discountId.toString())
+          : null;
 
-      if (discount.type === "percentage") {
-        const discounted = basePrice - basePrice * discount.amount;
-        return Math.max(discounted, 0);
+        if (!discount) return basePrice;
+
+        if (discount.type === "percentage") {
+          const discounted = basePrice - basePrice * discount.amount;
+          return Math.max(discounted, 0);
+        }
+
+        return Math.max(basePrice - discount.amount, 0);
+      };
+
+      finalItems = [];
+      let recalculatedProductsTotal = 0;
+
+      for (const item of cart.cartItems) {
+        const qty = item.quantity;
+        const variantId = item.variant;
+
+        const stockUpdate = await Product_WarehouseModel.findOne({
+          productId: item.product._id,
+          warehouseId: resolvedWarehouseId,
+          productPriceId: variantId || null,
+        });
+        if (!stockUpdate)
+          throw new BadRequest(
+            `Product ${(item.product as any).name} is not available in the warehouse`,
+          );
+
+        const effectivePrice = computeEffectivePrice(item.product);
+        recalculatedProductsTotal += effectivePrice * qty;
+
+        finalItems.push({
+          product: item.product._id,
+          variant: variantId,
+          quantity: qty,
+          price: effectivePrice,
+        });
       }
 
-      return Math.max(basePrice - discount.amount, 0);
-    };
-
-    // 4️⃣ Prepare items
-    const finalItems: any[] = [];
-    let recalculatedProductsTotal = 0;
-
-    for (const item of cart.cartItems) {
-      const qty = item.quantity;
-      const variantId = item.variant;
-
-      const stockUpdate = await Product_WarehouseModel.findOne({
-        productId: item.product._id,
-        warehouseId: resolvedWarehouseId,
-        productPriceId: variantId || null,
-      });
-      if (!stockUpdate)
-        throw new BadRequest(
-          `Product ${(item.product as any).name} is not available in the warehouse`,
-        );
-
-      const effectivePrice = computeEffectivePrice(item.product);
-      recalculatedProductsTotal += effectivePrice * qty;
-
-      finalItems.push({
-        product: item.product._id,
-        variant: variantId,
-        quantity: qty,
-        price: effectivePrice,
-      });
+      productsTotal = recalculatedProductsTotal;
+      totalTaxAmount = cart.taxAmount || 0;
+      totalServiceFee = cart.serviceFee || 0;
     }
 
     // 5️⃣ Final calculations
-    const productsTotal = recalculatedProductsTotal;
-    const totalTaxAmount = cart.taxAmount || 0;
-    const totalServiceFee = cart.serviceFee || 0;
     let couponDiscount = 0;
     let appliedCouponId = null;
 
@@ -375,6 +607,7 @@ export const createOrder = async (
           "No active automatic gateway config found for selected payment method",
         );
     }
+
     let imageUrl: string | undefined;
     if (proofImage) {
       imageUrl = await saveBase64Image(
@@ -386,20 +619,21 @@ export const createOrder = async (
     }
 
     // ═══════════════════════════════════════════════════════════
-    // ✅ 6.5) حدد الميثود الفعلي (من العنوان)
+    // ✅ 6.5) حدد الميثود الفعلي
     // ═══════════════════════════════════════════════════════════
-    const addressIsBosta =
+    const addressIsBostaFinal =
       typeof shippingAddress === "object" &&
       !!(shippingAddress as any)?.bostaCityId &&
       !!(shippingAddress as any)?.bostaDistrictId;
 
-    let finalMethod: "self" | "bosta" | null = null;
+    let finalMethodForOrder: "self" | "bosta" | null = null;
 
     if (orderType === "delivery") {
       if (typeof shippingAddress === "string") {
-        // address ID — ناخد الميثود من activeMethod
         try {
-          const superadminUser = await UserModel.findOne({ role: "superadmin" })
+          const superadminUser = await UserModel.findOne({
+            role: "superadmin",
+          })
             .select("_id")
             .lean();
 
@@ -410,20 +644,15 @@ export const createOrder = async (
               .select("activeMethod")
               .lean();
 
-            finalMethod = (settings?.activeMethod as any) || "self";
+            finalMethodForOrder = (settings?.activeMethod as any) || "self";
           } else {
-            finalMethod = "self";
+            finalMethodForOrder = "self";
           }
         } catch (err) {
-          console.warn(
-            "⚠️ Could not fetch activeMethod, defaulting to self:",
-            err,
-          );
-          finalMethod = "self";
+          finalMethodForOrder = "self";
         }
       } else {
-        // object — نحدد من bostaCityId
-        finalMethod = addressIsBosta ? "bosta" : "self";
+        finalMethodForOrder = addressIsBostaFinal ? "bosta" : "self";
       }
     }
 
@@ -448,12 +677,14 @@ export const createOrder = async (
         paymentGateway,
         paymentStatus:
           paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
-        shippingMethod: finalMethod,
-        shipmentType: finalMethod,
+        shippingMethod: finalMethodForOrder,
+        shipmentType: finalMethodForOrder,
+
+        // 🆕 تفاصيل الشحن
+        shippingDetails,
       },
     ]);
 
-    // ✅ statusHistory مبدئي
     order[0].statusHistory = [
       {
         status: "pending",
@@ -629,31 +860,8 @@ export const createOrder = async (
       }
     }
 
-    // 7️⃣ Clear cart
     if (shouldClearCart) {
       await CartModel.findOneAndDelete(cartQuery);
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // ✅ 8️⃣ Auto-assign لو shipmentType = "self"
-    // ═══════════════════════════════════════════════════════════
-    if (order[0].shipmentType === "self") {
-      try {
-        const superadminUser = await UserModel.findOne({ role: "superadmin" })
-          .select("_id")
-          .lean();
-
-        if (superadminUser) {
-          await autoAssignOrder(
-            order[0]._id.toString(),
-            (superadminUser as any)._id.toString(),
-          );
-        }
-      } catch (assignError: any) {
-        console.warn(
-          `⚠️ Auto-assign skipped for order ${order[0]._id}: ${assignError.message}`,
-        );
-      }
     }
 
     return SuccessResponse(

@@ -5,7 +5,8 @@ import {
   getActiveShippingMethod,
   getBostaCitiesForUser,
   getBostaDistrictsForUser,
-} from "../../controller/users/shipping";
+  getBostaPricingForUser,
+} from "../../controller/users/Shipping";
 
 const route = Router();
 
@@ -21,5 +22,8 @@ route.get("/bosta/cities", catchAsync(getBostaCitiesForUser));
 
 // Bosta Districts
 route.get("/bosta/districts/:cityId", catchAsync(getBostaDistrictsForUser));
+
+// 🆕 Bosta Pricing — العميل يعرف تكلفة التوصيل
+route.get("/bosta/pricing", catchAsync(getBostaPricingForUser));
 
 export default route;

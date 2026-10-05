@@ -5,6 +5,7 @@ import {
   getOnlineOrderById,
   updateOnlineOrderStatus,
   bulkCreateShipments,
+  updateOrderBostaAddress,
 } from "../../controller/admin/onlineOrders";
 import { authorizePermissions } from "../../middlewares/haspremission";
 import { catchAsync } from "../../utils/catchAsync";
@@ -33,6 +34,12 @@ router.patch(
   "/:id/status",
   authorizePermissions("orders", "Edit"),
   catchAsync(updateOnlineOrderStatus),
+);
+
+router.patch(
+  "/:id/bosta-address",
+  authorizePermissions("orders", "Edit"),
+  catchAsync(updateOrderBostaAddress),
 );
 
 export default router;

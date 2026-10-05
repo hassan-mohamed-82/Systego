@@ -10,8 +10,8 @@ const bostaAddressSchema = new Schema(
     lastName: { type: String, default: "" },
     phone: { type: String, default: "" },
     email: { type: String, default: "" },
-    city: { type: String, default: "" }, // اسم المدينة
-    cityId: { type: String, default: "" }, // Bosta city ID
+    city: { type: String, default: "" },
+    cityId: { type: String, default: "" },
     zoneId: { type: String, default: "" },
     districtId: { type: String, default: "" },
     firstLine: { type: String, default: "" },
@@ -20,14 +20,10 @@ const bostaAddressSchema = new Schema(
     floor: { type: String, default: "" },
     apartment: { type: String, default: "" },
 
-    // 🆕 Business Location — لو حساب Bosta فيه فروع محددة
     businessLocationId: { type: String, default: "" },
-
-    // 🆕 بيانات التواصل الافتراضية للـ pickup
     pickupContactName: { type: String, default: "" },
     pickupContactPhone: { type: String, default: "" },
 
-    // 🆕 الوقت الافتراضي للـ pickup
     defaultPickupTimeSlot: {
       from: { type: String, default: "10:00" },
       to: { type: String, default: "14:00" },
@@ -64,9 +60,18 @@ const bostaConfigSchema = new Schema(
     webhookUrl: { type: String, default: "" },
     webhookSecret: { type: String, default: "" },
 
-    // 🆕 إعدادات الـ pickup التلقائي
+    // ═══════════════════════════════════════════════════════════
+    // 💵 SHIPPING MARKUP — ربحك من كل شحنة
+    // ═══════════════════════════════════════════════════════════
+    shippingMarkup: { type: Number, default: 0, min: 0 },
+    shippingMarkupType: {
+      type: String,
+      enum: ["fixed", "percentage"],
+      default: "fixed",
+    },
+
     autoCreatePickup: { type: Boolean, default: true },
-    pickupLeadDays: { type: Number, default: 0, min: 0 }, // كام يوم بعد النهاردة
+    pickupLeadDays: { type: Number, default: 0, min: 0 },
 
     lastTestedAt: { type: Date, default: null },
     lastTestStatus: {

@@ -52,9 +52,6 @@ const orderSchema = new Schema(
       },
     ],
 
-    // ═══════════════════════════════════════════════════════════
-    // Shipping Address — Self + Bosta
-    // ═══════════════════════════════════════════════════════════
     shippingAddress: {
       details: { type: String },
       city: { type: String },
@@ -74,6 +71,9 @@ const orderSchema = new Schema(
       bostaDistrictName: { type: String, default: "" },
     },
 
+    // ═══════════════════════════════════════════════════════════
+    // 💰 Pricing
+    // ═══════════════════════════════════════════════════════════
     shippingPrice: { type: Number, required: true, default: 0 },
     totalOrderPrice: { type: Number, required: true },
     coupon: { type: Schema.Types.ObjectId, ref: "Coupon", required: false },
@@ -83,8 +83,39 @@ const orderSchema = new Schema(
     totalPriceAfterDiscount: { type: Number, default: 0 },
 
     // ═══════════════════════════════════════════════════════════
-    // Payment
+    // 🆕 Shipping Details — تفاصيل الشحن (للأرباح)
     // ═══════════════════════════════════════════════════════════
+    // العميل يدفع: bostaCost + markup
+    // انت تكسب: markup
+    // ═══════════════════════════════════════════════════════════
+    shippingDetails: {
+      // تفاصيل Bosta
+      bostaCost: { type: Number, default: 0 }, // تكلفة Bosta الفعلية
+      markup: { type: Number, default: 0 }, // ربحك
+      markupType: {
+        type: String,
+        enum: ["fixed", "percentage", null],
+        default: null,
+      },
+      markupValue: { type: Number, default: 0 }, // القيمة اللي اتحددت في الإعدادات
+
+      // تفاصيل إضافية
+      codAmount: { type: Number, default: 0 }, // المبلغ اللي هيتحصل كاش
+      isCash: { type: Boolean, default: false }, // هل COD؟
+      pricingSource: {
+        type: String,
+        enum: ["sector", "city", "fallback", null],
+        default: null,
+      },
+
+      // تفاصيل Bosta pricing الكاملة
+      baseCost: { type: Number, default: 0 },
+      vatAmount: { type: Number, default: 0 },
+      codFee: { type: Number, default: 0 },
+      zeroCodDiscount: { type: Number, default: 0 },
+      currency: { type: String, default: "EGP" },
+    },
+
     paymentMethod: {
       type: Schema.Types.ObjectId,
       ref: "PaymentMethod",
@@ -109,18 +140,10 @@ const orderSchema = new Schema(
     geideaCallbackPayload: { type: Schema.Types.Mixed },
     proofImage: { type: String },
 
-    // ═══════════════════════════════════════════════════════════
-    // 🆕 Order Status — String مفتوح (مش enum)
-    // ═══════════════════════════════════════════════════════════
-    // عشان يقبل أي status جديد من Bosta أو self
-    // القيم المعتادة:
-    //   pending, processing, out_for_delivery, delivered,
-    //   canceled, failed_to_deliver, returned, rejected, scheduled
     status: {
       type: String,
       default: "pending",
       index: true,
-      // ❌ شيلنا الـ enum عشان مرونة
     },
 
     statusDescription: {
@@ -128,7 +151,6 @@ const orderSchema = new Schema(
       default: "Your Order is Placed Successfully",
     },
 
-    // 🆕 تاريخ كل تغيير في الحالة
     statusHistory: [
       {
         status: { type: String, required: true },
@@ -147,9 +169,6 @@ const orderSchema = new Schema(
       },
     ],
 
-    // ═══════════════════════════════════════════════════════════
-    // Shipping Method (self / bosta)
-    // ═══════════════════════════════════════════════════════════
     shippingMethod: {
       type: String,
       enum: ["self", "bosta", null],
@@ -164,9 +183,6 @@ const orderSchema = new Schema(
       index: true,
     },
 
-    // ═══════════════════════════════════════════════════════════
-    // Self Shipment Details
-    // ═══════════════════════════════════════════════════════════
     selfShipment: {
       deliveryManId: {
         type: Schema.Types.ObjectId,
@@ -188,6 +204,7 @@ const orderSchema = new Schema(
           "out_for_delivery",
           "delivered",
           "failed",
+          "returned",
         ],
         default: "unassigned",
       },
@@ -206,13 +223,11 @@ const orderSchema = new Schema(
       outForDeliveryAt: { type: Date, default: null },
       deliveredAt: { type: Date, default: null },
       failedAt: { type: Date, default: null },
+      returnedAt: { type: Date, default: null },
       failureReason: { type: String, default: "" },
       deliveryNotes: { type: String, default: "" },
     },
 
-    // ═══════════════════════════════════════════════════════════
-    // 🆕 Bosta Shipment Details (cached من BostaShipment)
-    // ═══════════════════════════════════════════════════════════
     bostaShipment: {
       type: Schema.Types.ObjectId,
       ref: "BostaShipment",
@@ -225,9 +240,6 @@ const orderSchema = new Schema(
   },
 );
 
-// ═══════════════════════════════════════════════════════════
-// Indexes
-// ═══════════════════════════════════════════════════════════
 orderSchema.index({ shippingMethod: 1, status: 1 });
 orderSchema.index({ shipmentType: 1, status: 1 });
 orderSchema.index({

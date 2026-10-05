@@ -25,6 +25,23 @@ const getSuperadminSettings = async () => {
 };
 
 // ═══════════════════════════════════════════════════════════
+// 💵 Helper: احسب الـ markup
+// ═══════════════════════════════════════════════════════════
+const calculateMarkup = (
+  bostaCost: number,
+  markupValue: number,
+  markupType: "fixed" | "percentage",
+): number => {
+  if (!markupValue || markupValue <= 0) return 0;
+
+  if (markupType === "percentage") {
+    return Math.round(bostaCost * (markupValue / 100) * 100) / 100;
+  }
+
+  return Number(markupValue);
+};
+
+// ═══════════════════════════════════════════════════════════
 // 🛒 GET ACTIVE SHIPPING METHOD (E-commerce)
 // ═══════════════════════════════════════════════════════════
 export const getActiveShippingMethod = async (_req: Request, res: Response) => {
@@ -43,6 +60,7 @@ export const getActiveShippingMethod = async (_req: Request, res: Response) => {
       enabled: settings?.bosta?.enabled === true,
       citiesEndpoint: "/api/store/shipping/bosta/cities",
       districtsEndpoint: "/api/store/shipping/bosta/districts/:cityId",
+      pricingEndpoint: "/api/store/shipping/bosta/pricing",
     };
   }
 
@@ -108,4 +126,62 @@ export const getBostaDistrictsForUser = async (req: Request, res: Response) => {
     count: simplifiedDistricts.length,
     districts: simplifiedDistricts,
   });
+};
+
+// ═══════════════════════════════════════════════════════════
+// 🆕 GET BOSTA PRICING (E-commerce — للعميل)
+// العميل يدفع: bostaCost + markup
+// ═══════════════════════════════════════════════════════════
+export const getBostaPricingForUser = async (req: Request, res: Response) => {
+  const settings = await getSuperadminSettings();
+  if (!settings?.bosta?.enabled) throw new BadRequest("Bosta is not enabled");
+
+  const { dropOffCity, size, type } = req.query as any;
+  // ❌ شيلت cod من هنا
+
+  if (!dropOffCity) throw new BadRequest("dropOffCity is required");
+
+  const pickupCity = settings.bosta?.pickup?.city;
+  if (!pickupCity) throw new BadRequest("Pickup not configured");
+
+  const creds = getBostaCreds(settings as any);
+
+  try {
+    const pricing = await bostaService.getShipmentPricing(creds, {
+      pickupCity,
+      dropOffCity,
+      size: size || settings.bosta?.defaults?.size || "Normal",
+      type: type || "SEND",
+      // ❌ مفيش cod
+    });
+
+    const bostaCost = Number(pricing?.total || 0);
+
+    // 💵 Admin Markup
+    const markupValue = Number(settings.bosta?.shippingMarkup || 0);
+    const markupType = settings.bosta?.shippingMarkupType || "fixed";
+    const markup =
+      markupValue > 0
+        ? markupType === "percentage"
+          ? bostaCost * (markupValue / 100)
+          : markupValue
+        : 0;
+
+    const shippingToCustomer = Math.round((bostaCost + markup) * 100) / 100;
+
+    SuccessResponse(res, {
+      message: "Bosta pricing calculated successfully",
+      pickupCity,
+      dropOffCity,
+      pricing: {
+        total: shippingToCustomer, // ← العميل يدفع ده
+        bostaCost, // ← Bosta cost
+        markup, // ← ربحك
+        currency: pricing.currency,
+        source: pricing.source,
+      },
+    });
+  } catch (err: any) {
+    throw new BadRequest(`Failed to calculate pricing: ${err.message}`);
+  }
 };

@@ -9,7 +9,6 @@ import { DeliveryManModel } from "../../models/schema/admin/deliveryMan";
 import { SuccessResponse } from "../../utils/response";
 import { BadRequest, NotFound } from "../../Errors";
 import { ProductPriceOptionModel } from "../../models/schema/admin/product_price";
-import { autoAssignOrder } from "../../services/deliveryAssignment.service";
 import { getBostaCreds } from "../../utils/shipping/getBostaCreds";
 import bostaService from "../../services/bosta.service";
 
@@ -23,6 +22,7 @@ const SELF_TO_ORDER_STATUS: Record<string, string> = {
   out_for_delivery: "out_for_delivery",
   delivered: "delivered",
   failed: "failed_to_deliver",
+  returned: "returned",
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -50,6 +50,7 @@ const SELF_ALLOWED = [
   "out_for_delivery",
   "delivered",
   "failed",
+  "returned",
 ];
 
 const BOSTA_ALLOWED = [
@@ -319,6 +320,10 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
       order.selfShipment.failedAt = now;
       order.selfShipment.failureReason = statusDescription || "";
     }
+    if (status === "returned") {
+      // 🆕
+      order.selfShipment.returnedAt = now;
+    }
 
     // ✅ إحصائيات المندوب
     if (status === "delivered" || status === "failed") {
@@ -327,9 +332,13 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
         $inc:
           status === "delivered" ? { completedOrders: 1 } : { failedOrders: 1 },
       });
+    } else if (status === "returned") {
+      // 🆕
+      await DeliveryManModel.findByIdAndUpdate(deliveryManId, {
+        $pull: { currentOrders: order._id },
+      });
     }
 
-    // ✅ order.status حسب الـ mapping
     newOrderStatus = SELF_TO_ORDER_STATUS[status] || order.status;
   }
   // ═══════════════════════════════════════════════════════════
@@ -481,36 +490,19 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
   };
 
   // ═══════════════════════════════════════════════════════════
-  // 🅰️ SELF — auto assign
+  // 🅰️ SELF — manual assignment required
   // ═══════════════════════════════════════════════════════════
-  const selfOrders = orders.filter(
-    (o) => o.shipmentType === "self" && !o.selfShipment?.deliveryManId,
-  );
+  const selfOrders = orders.filter((o) => o.shipmentType === "self");
 
   for (const order of selfOrders) {
-    try {
-      const result = await autoAssignOrder(
-        order._id.toString(),
-        superadminId,
-        (req.user as any)?.id,
-      );
-
-      if (result.assigned) {
-        results.self.assigned++;
-      } else {
-        results.self.failed++;
-        results.self.errors.push({
-          order_id: order._id.toString(),
-          reference: order.reference,
-          error: result.reason || "Assignment failed",
-        });
-      }
-    } catch (err: any) {
+    if (order.selfShipment?.deliveryManId) {
+      results.self.assigned++;
+    } else {
       results.self.failed++;
       results.self.errors.push({
         order_id: order._id.toString(),
         reference: order.reference,
-        error: err.message || "Unknown error",
+        error: "Self orders require manual assignment",
       });
     }
   }
@@ -697,5 +689,67 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: `✅ Bulk complete: Self: ${results.self.assigned}, Bosta: ${results.bosta.created}`,
     results,
+  });
+};
+
+/**
+ * PATCH /admin/online-orders/:id/bosta-address
+ * Update Bosta address on the order
+ */
+export const updateOrderBostaAddress = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const {
+    bostaCityId,
+    bostaCityName,
+    bostaDistrictId,
+    bostaDistrictName,
+    bostaZoneId,
+    bostaZoneName,
+    firstLine,
+    buildingNumber,
+    floorNumber,
+    apartmentNumber,
+  } = req.body;
+
+  // Validation
+  if (!bostaCityId) throw new BadRequest("bostaCityId is required");
+  if (!bostaDistrictId) throw new BadRequest("bostaDistrictId is required");
+  if (!bostaZoneId) throw new BadRequest("bostaZoneId is required");
+  if (!firstLine) throw new BadRequest("firstLine is required");
+
+  const order = await OrderModel.findById(id);
+  if (!order) throw new NotFound("Order not found");
+
+  // ✅ نحدّث الـ shippingAddress
+  (order as any).shippingAddress = {
+    ...((order as any).shippingAddress || {}),
+    bostaCityId,
+    bostaCityName: bostaCityName || "",
+    bostaDistrictId,
+    bostaDistrictName: bostaDistrictName || "",
+    bostaZoneId,
+    bostaZoneName: bostaZoneName || "",
+    details: firstLine,
+    street: firstLine,
+    buildingNumber: buildingNumber || "",
+    floorNumber: floorNumber || "",
+    apartmentNumber: apartmentNumber || "",
+  };
+
+  // ✅ statusHistory
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    status: order.status,
+    description: `Bosta address updated by admin`,
+    source: "admin",
+    updatedBy: (req.user as any)?.id || null,
+    updatedAt: new Date(),
+  } as any);
+
+  await order.save();
+
+  SuccessResponse(res, {
+    message: "✅ Bosta address updated successfully",
+    order,
   });
 };

@@ -3,9 +3,6 @@ import Joi from "joi";
 
 const objectId = Joi.string().hex().length(24);
 
-// ═══════════════════════════════════════════════════════════
-// UPDATE SHIPPING SETTINGS
-// ═══════════════════════════════════════════════════════════
 export const updateShippingSettingsSchema = Joi.object({
   activeMethod: Joi.string().valid("self", "bosta"),
 
@@ -50,31 +47,27 @@ export const updateShippingSettingsSchema = Joi.object({
     codEnabled: Joi.boolean(),
     webhookUrl: Joi.string().uri().allow(""),
     webhookSecret: Joi.string().allow(""),
+
+    // 🆕 Shipping Markup
+    shippingMarkup: Joi.number().min(0),
+    shippingMarkupType: Joi.string().valid("fixed", "percentage"),
   }),
 
   freeShippingEnabled: Joi.boolean(),
 }).min(1);
 
-// ═══════════════════════════════════════════════════════════
-// UPDATE FREE SHIPPING PRODUCTS
-// ═══════════════════════════════════════════════════════════
 export const updateFreeShippingProductsSchema = Joi.object({
   productIds: Joi.array().items(objectId).required(),
 });
 
-// ═══════════════════════════════════════════════════════════
-// CREATE BOSTA DELIVERY (Send)
-// ═══════════════════════════════════════════════════════════
 export const createBostaDeliverySchema = Joi.object({
   order_id: Joi.string().required(),
-
   receiver: Joi.object({
     firstName: Joi.string().allow(""),
     lastName: Joi.string().allow(""),
     phone: Joi.string().required(),
     email: Joi.string().email().allow(""),
   }).optional(),
-
   dropOffAddress: Joi.object({
     city: Joi.string().required(),
     zoneId: Joi.string().required(),
@@ -87,29 +80,23 @@ export const createBostaDeliverySchema = Joi.object({
     floor: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
     apartment: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
   }).required(),
-
   cod: Joi.number().min(0).optional(),
   weight: Joi.number().min(0.1).optional(),
   notes: Joi.string().allow("").optional(),
   allowToOpenPackage: Joi.boolean().optional(),
 });
 
-// ═══════════════════════════════════════════════════════════
-// BULK CREATE BOSTA DELIVERIES
-// ═══════════════════════════════════════════════════════════
 export const bulkCreateBostaDeliveriesSchema = Joi.object({
   orders: Joi.array()
     .items(
       Joi.object({
         order_id: Joi.string().required(),
-
         receiver: Joi.object({
           firstName: Joi.string().allow(""),
           lastName: Joi.string().allow(""),
           phone: Joi.string().required(),
           email: Joi.string().email().allow(""),
         }).optional(),
-
         dropOffAddress: Joi.object({
           city: Joi.string().required(),
           zoneId: Joi.string().required(),
@@ -124,7 +111,6 @@ export const bulkCreateBostaDeliveriesSchema = Joi.object({
             .try(Joi.string(), Joi.number())
             .allow(""),
         }).required(),
-
         cod: Joi.number().min(0).optional(),
         weight: Joi.number().min(0.1).optional(),
         notes: Joi.string().allow("").optional(),
@@ -135,15 +121,9 @@ export const bulkCreateBostaDeliveriesSchema = Joi.object({
     .required(),
 });
 
-// ═══════════════════════════════════════════════════════════
-// CREATE BOSTA RETURN DELIVERY
-// ═══════════════════════════════════════════════════════════
 export const createBostaReturnSchema = Joi.object({
   order_id: Joi.string().required(),
-
-  // ✅ نوع الشحنة (اختياري — default 30)
   type: Joi.number().valid(10, 20, 30, 40, 50).optional(),
-
   dropOffAddress: Joi.object({
     city: Joi.string().allow(""),
     zoneId: Joi.string().allow(""),
@@ -156,7 +136,6 @@ export const createBostaReturnSchema = Joi.object({
     floor: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
     apartment: Joi.alternatives().try(Joi.string(), Joi.number()).allow(""),
   }).optional(),
-
   weight: Joi.number().min(0.1).optional(),
   notes: Joi.string().allow("").optional(),
   allowToOpenPackage: Joi.boolean().optional(),
