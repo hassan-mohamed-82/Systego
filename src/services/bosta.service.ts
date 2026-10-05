@@ -1,10 +1,7 @@
 // src/services/bosta.service.ts
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
-
-// ✅ Type بديل — بيشتغل مع أي نسخة axios
-type AxiosInstance = ReturnType<typeof axios.create>;
 
 // ═══════════════════════════════════════════════════════════
 // Bosta Address
