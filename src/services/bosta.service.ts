@@ -1,8 +1,10 @@
 // src/services/bosta.service.ts
 import axios from "axios";
-import type { AxiosInstance } from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
+
+// ✅ Type بديل — بيشتغل مع أي نسخة axios
+type AxiosInstance = ReturnType<typeof axios.create>;
 
 // ═══════════════════════════════════════════════════════════
 // Bosta Address
@@ -117,12 +119,12 @@ export const CITY_TO_SECTOR: Record<string, number> = {
 // 🎯 Pricing result interface
 // ═══════════════════════════════════════════════════════════
 export interface PricingResult {
-  total: number; // ⭐ اللي Bosta بتاخده منك (شامل كل حاجة)
-  baseCost: number; // سعر الشحن الأساسي قبل VAT
-  vatAmount: number; // قيمة VAT
-  codFee: number; // رسوم COD (لو فيه)
-  zeroCodDiscount: number; // خصم لما مفيش COD
-  pickupFee: number; // رسوم الاستلام (لو فيه)
+  total: number;
+  baseCost: number;
+  vatAmount: number;
+  codFee: number;
+  zeroCodDiscount: number;
+  pickupFee: number;
   currency: string;
   source: "sector" | "city" | "fallback";
 }
@@ -359,7 +361,7 @@ class BostaService {
       pickupCity: string;
       dropOffCity: string;
       cod?: number;
-      size?: "Normal" | "Light Bulky" | "Heavy Bulky";
+      size?: string; // ✅ string بدل union
       type?: string;
     },
   ): Promise<PricingResult> {
