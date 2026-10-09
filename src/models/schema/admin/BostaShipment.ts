@@ -9,20 +9,13 @@ const bostaShipmentSchema = new Schema(
       required: true,
       index: true,
     },
-
     relatedModel: {
       type: String,
       enum: ["Order", "Sale"],
       required: true,
       index: true,
     },
-    relatedId: {
-      type: String,
-      required: true,
-      index: true,
-    },
-
-    // ✅ نوع الشحنة: 10 = Send, 20 = Return
+    relatedId: { type: String, required: true, index: true },
     type: { type: Number, default: 10, index: true },
 
     deliveryId: { type: String, default: null, index: true },
@@ -31,7 +24,6 @@ const bostaShipmentSchema = new Schema(
 
     status: { type: String, default: null, index: true },
     statusCode: { type: Number, default: null },
-
     labelUrl: { type: String, default: null },
 
     cod: { type: Number, default: 0 },
@@ -60,16 +52,10 @@ const bostaShipmentSchema = new Schema(
     description: { type: String, default: "" },
     notes: { type: String, default: "" },
 
-    // ═══════════════════════════════════════════════════════════
-    // 🆕 Pickup Info — طلب استلام من الفرع
-    // ═══════════════════════════════════════════════════════════
     pickup: {
       pickupId: { type: String, default: null, index: true },
       scheduledDate: { type: String, default: null },
-      scheduledTimeSlot: {
-        from: { type: String, default: null },
-        to: { type: String, default: null },
-      },
+      scheduledTimeSlot: { type: Schema.Types.Mixed, default: null },
       status: { type: String, default: null },
       contactPerson: {
         firstName: { type: String, default: "" },
@@ -82,9 +68,6 @@ const bostaShipmentSchema = new Schema(
       rawResponse: { type: Schema.Types.Mixed, default: null },
     },
 
-    // ═══════════════════════════════════════════════════════════
-    // ✅ تاريخ التتبع — كل snapshot من Bosta بيتحفظ هنا
-    // ═══════════════════════════════════════════════════════════
     trackingHistory: [
       {
         status: { type: String, default: null },
@@ -101,8 +84,6 @@ const bostaShipmentSchema = new Schema(
   { timestamps: true },
 );
 
-// ✅ فهرس مركب: كل أوردر ممكن يكون ليه Send + Return
-// عشان كده مش unique على relatedId لوحده
 bostaShipmentSchema.index(
   { relatedModel: 1, relatedId: 1, type: 1 },
   { unique: true },

@@ -1,5 +1,5 @@
 // src/services/bosta.service.ts
-import axios, { AxiosInstance } from "axios";
+import axios from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
 
@@ -65,20 +65,38 @@ export interface BostaPickupPayload {
 }
 
 // ═══════════════════════════════════════════════════════════
+// 🆕 Pickup Location Payload
+// ═══════════════════════════════════════════════════════════
+export interface PickupLocationPayload {
+  locationName: string;
+  contacts: Array<{
+    firstName: string;
+    lastName: string;
+    phone: string;
+    isDefault: boolean;
+  }>;
+  address: {
+    city: string;
+    zoneId: string;
+    districtId: string;
+    firstLine: string;
+    secondLine?: string;
+    floor?: string;
+    apartment?: string;
+    buildingNumber?: string;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
 // 🗺️ City → Sector ID mapping
 // ═══════════════════════════════════════════════════════════
 export const CITY_TO_SECTOR: Record<string, number> = {
-  // Sector 1: Cairo & Giza
   cairo: 1,
   giza: 1,
-
-  // Sector 2: Alexandria & Behira
   alexandria: 2,
   behira: 2,
   "kafr alsheikh": 2,
   "kafr el sheikh": 2,
-
-  // Sector 3: Delta & Canal
   dakahlia: 3,
   damietta: 3,
   gharbia: 3,
@@ -88,13 +106,9 @@ export const CITY_TO_SECTOR: Record<string, number> = {
   ismailia: 3,
   "port said": 3,
   suez: 3,
-
-  // Sector 4: Near Upper
   fayoum: 4,
   "bani suif": 4,
   menya: 4,
-
-  // Sector 5: Far Upper & Matrouh
   assuit: 5,
   sohag: 5,
   qena: 5,
@@ -102,11 +116,7 @@ export const CITY_TO_SECTOR: Record<string, number> = {
   aswan: 5,
   matrouh: 5,
   "new valley": 5,
-
-  // Sector 6: North Coast
   "north coast": 6,
-
-  // Sector 7: Sinai & Red Sea
   "north sinai": 7,
   "south sinai": 7,
   "red sea": 7,
@@ -127,10 +137,7 @@ export interface PricingResult {
 }
 
 class BostaService {
-  // ═══════════════════════════════════════════════════════════
-  // client جديد لكل طلب
-  // ═══════════════════════════════════════════════════════════
-  private createClient({ apiKey, baseUrl }: BostaCredentials): AxiosInstance {
+  private createClient({ apiKey, baseUrl }: BostaCredentials) {
     if (!apiKey) throw new Error("❌ Bosta API key is missing");
 
     const client = axios.create({
@@ -190,39 +197,26 @@ class BostaService {
     return client;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🗺️ Get sector ID from city name
-  // ═══════════════════════════════════════════════════════════
   getSectorFromCity(cityName: string): number | null {
     if (!cityName) return null;
-
     const normalized = cityName.toLowerCase().trim();
-
-    if (CITY_TO_SECTOR[normalized]) {
-      return CITY_TO_SECTOR[normalized];
-    }
+    if (CITY_TO_SECTOR[normalized]) return CITY_TO_SECTOR[normalized];
 
     for (const [key, sector] of Object.entries(CITY_TO_SECTOR)) {
-      if (normalized.includes(key) || key.includes(normalized)) {
-        return sector;
-      }
+      if (normalized.includes(key) || key.includes(normalized)) return sector;
     }
-
     return null;
   }
 
   // ═══════════════════════════════════════════════════════════
   // 📍 CITIES
   // ═══════════════════════════════════════════════════════════
-  async getCities(creds: BostaCredentials) {
+  async getCities(creds: BostaCredentials): Promise<any[]> {
     const { data } = await this.createClient(creds).get("/cities");
     return data?.data?.list || data?.data || [];
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 📍 DISTRICTS
-  // ═══════════════════════════════════════════════════════════
-  async getDistricts(creds: BostaCredentials, cityId: string) {
+  async getDistricts(creds: BostaCredentials, cityId: string): Promise<any[]> {
     const { data } = await this.createClient(creds).get(
       `/cities/${cityId}/districts`,
     );
@@ -230,7 +224,69 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 💰 PRICING — Main Entry
+  // 📍 BUSINESS PICKUP LOCATIONS
+  // ═══════════════════════════════════════════════════════════
+  async getPickupLocations(creds: BostaCredentials): Promise<any> {
+    const { data } = await this.createClient(creds).get("/pickup-locations");
+    return data?.data || data;
+  }
+
+  async getPickupLocationById(
+    creds: BostaCredentials,
+    locationId: string,
+  ): Promise<any> {
+    const { data } = await this.createClient(creds).get(
+      `/pickup-locations/${locationId}`,
+    );
+    return data?.data || data;
+  }
+
+  async createPickupLocation(
+    creds: BostaCredentials,
+    payload: PickupLocationPayload,
+  ): Promise<any> {
+    const { data } = await this.createClient(creds).post(
+      "/pickup-locations",
+      payload,
+    );
+    return data?.data || data;
+  }
+
+  async updatePickupLocation(
+    creds: BostaCredentials,
+    locationId: string,
+    payload: any,
+  ): Promise<any> {
+    const { data } = await this.createClient(creds).put(
+      `/pickup-locations/${locationId}`,
+      payload,
+    );
+    return data?.data || data;
+  }
+
+  async deletePickupLocation(
+    creds: BostaCredentials,
+    locationId: string,
+  ): Promise<any> {
+    const { data } = await this.createClient(creds).delete(
+      `/pickup-locations/${locationId}`,
+    );
+    return data?.data || data;
+  }
+
+  async setDefaultPickupLocation(
+    creds: BostaCredentials,
+    locationId: string,
+  ): Promise<any> {
+    const { data } = await this.createClient(creds).put(
+      `/pickup-locations/${locationId}/default`,
+      {},
+    );
+    return data?.data || data;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 💰 PRICING
   // ═══════════════════════════════════════════════════════════
   async getShipmentPricing(
     creds: BostaCredentials,
@@ -247,14 +303,6 @@ class BostaService {
     const pickupSectorId = this.getSectorFromCity(params.pickupCity);
     const dropoffSectorId = this.getSectorFromCity(params.dropOffCity);
 
-    console.log("🔍 Sector lookup:", {
-      pickupCity: params.pickupCity,
-      pickupSectorId,
-      dropOffCity: params.dropOffCity,
-      dropoffSectorId,
-      cod: params.cod,
-    });
-
     if (pickupSectorId && dropoffSectorId) {
       try {
         const sectorData = await this.getSectorPricing(creds, {
@@ -267,24 +315,17 @@ class BostaService {
 
         return this.computePricingFromTier(sectorData, params.cod);
       } catch (err: any) {
-        console.warn(
-          "⚠️ Sector pricing failed, falling back to city pricing:",
-          err.message,
-        );
+        console.warn("⚠️ Sector pricing failed:", err.message);
       }
     }
 
     return this.getCityBasedPricing(creds, params);
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🧮 Compute total from tier config
-  // ═══════════════════════════════════════════════════════════
   private computePricingFromTier(sectorData: any, cod?: number): PricingResult {
     const tier = sectorData?.tier || sectorData?.data?.tier || sectorData;
 
     if (!tier || typeof tier !== "object") {
-      console.warn("⚠️ Invalid tier data, using fallback");
       return {
         total: 0,
         baseCost: 0,
@@ -327,16 +368,6 @@ class BostaService {
         (baseCost + vatAmount + codFee - zeroCodDiscount + pickupFee) * 100,
       ) / 100;
 
-    console.log("💰 Tier computation:", {
-      baseCost,
-      vatRate,
-      vatAmount,
-      cod,
-      codFee,
-      zeroCodDiscount,
-      total,
-    });
-
     return {
       total: Math.max(total, 0),
       baseCost,
@@ -349,16 +380,13 @@ class BostaService {
     };
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🔄 Fallback: city-based pricing
-  // ═══════════════════════════════════════════════════════════
   private async getCityBasedPricing(
     creds: BostaCredentials,
     params: {
       pickupCity: string;
       dropOffCity: string;
       cod?: number;
-      size?: string; // ✅ string بدل union
+      size?: string;
       type?: string;
     },
   ): Promise<PricingResult> {
@@ -412,9 +440,6 @@ class BostaService {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 💰 PRICING — 2) Sector-based calculator (raw)
-  // ═══════════════════════════════════════════════════════════
   async getSectorPricing(
     creds: BostaCredentials,
     params: {
@@ -424,7 +449,7 @@ class BostaService {
       type?: string;
       vatIncluded?: boolean;
     },
-  ) {
+  ): Promise<any> {
     const query = {
       pickupSectorId: params.pickupSectorId,
       tierIdSelector: params.tierIdSelector,
@@ -443,10 +468,10 @@ class BostaService {
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 💰 PRICING — 3) Insurance Fee Estimate
-  // ═══════════════════════════════════════════════════════════
-  async getInsuranceFeeEstimate(creds: BostaCredentials, goodsValue: number) {
+  async getInsuranceFeeEstimate(
+    creds: BostaCredentials,
+    goodsValue: number,
+  ): Promise<any> {
     const { data } = await this.createClient(creds).get(
       "/pricing/insuranceFeeEstimate",
       { params: { goodsValue } },
@@ -455,9 +480,12 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 📦 CREATE DELIVERY
+  // 📦 DELIVERIES
   // ═══════════════════════════════════════════════════════════
-  async createDelivery(creds: BostaCredentials, payload: BostaDeliveryPayload) {
+  async createDelivery(
+    creds: BostaCredentials,
+    payload: BostaDeliveryPayload,
+  ): Promise<any> {
     const { data } = await this.createClient(creds).post(
       "/deliveries?apiVersion=1",
       payload,
@@ -465,13 +493,10 @@ class BostaService {
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 📦 BULK CREATE
-  // ═══════════════════════════════════════════════════════════
   async createBulkDeliveries(
     creds: BostaCredentials,
     deliveries: BostaDeliveryPayload[],
-  ) {
+  ): Promise<any> {
     const { data } = await this.createClient(creds).post(
       "/deliveries/bulk?apiVersion=1",
       { deliveries },
@@ -479,46 +504,37 @@ class BostaService {
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🔍 GET DELIVERY BY ID
-  // ═══════════════════════════════════════════════════════════
-  async getDelivery(creds: BostaCredentials, deliveryId: string) {
+  async getDelivery(creds: BostaCredentials, deliveryId: string): Promise<any> {
     const { data } = await this.createClient(creds).get(
       `/deliveries/${deliveryId}`,
     );
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 🔍 GET DELIVERY BY TRACKING
-  // ═══════════════════════════════════════════════════════════
   async getDeliveryByTrackingNumber(
     creds: BostaCredentials,
     trackingNumber: string,
-  ) {
+  ): Promise<any> {
     const { data } = await this.createClient(creds).get(
       `/deliveries/business/${trackingNumber}`,
     );
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ❌ CANCEL DELIVERY
-  // ═══════════════════════════════════════════════════════════
-  async cancelDelivery(creds: BostaCredentials, deliveryId: string) {
+  async cancelDelivery(
+    creds: BostaCredentials,
+    deliveryId: string,
+  ): Promise<any> {
     const { data } = await this.createClient(creds).delete(
       `/deliveries/${deliveryId}`,
     );
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ❌ TERMINATE BY TRACKING
-  // ═══════════════════════════════════════════════════════════
   async cancelDeliveryByTracking(
     creds: BostaCredentials,
     trackingNumber: string,
-  ) {
+  ): Promise<any> {
     const { data } = await this.createClient(creds).delete(
       `/deliveries/business/${trackingNumber}/terminate`,
     );
@@ -526,32 +542,16 @@ class BostaService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 🚚 CREATE PICKUP
+  // 🚚 PICKUPS
   // ═══════════════════════════════════════════════════════════
-  async createPickup(creds: BostaCredentials, payload: BostaPickupPayload) {
+  async createPickup(
+    creds: BostaCredentials,
+    payload: BostaPickupPayload,
+  ): Promise<any> {
     const { data } = await this.createClient(creds).post("/pickups", payload);
     return data?.data || data;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 📅 GET PICKUP TIME SLOTS
-  // ═══════════════════════════════════════════════════════════
-  async getPickupTimeSlots(
-    creds: BostaCredentials,
-    params: {
-      date: string;
-      businessLocationId?: string;
-    },
-  ) {
-    const { data } = await this.createClient(creds).get("/pickups/time-slots", {
-      params,
-    });
-    return data?.data || data;
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // 📋 LIST PICKUPS
-  // ═══════════════════════════════════════════════════════════
   async listPickups(
     creds: BostaCredentials,
     params?: {
@@ -560,7 +560,7 @@ class BostaService {
       from?: string;
       to?: string;
     },
-  ) {
+  ): Promise<any> {
     const { data } = await this.createClient(creds).get("/pickups", {
       params,
     });

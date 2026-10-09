@@ -1,4 +1,4 @@
-// src/routes/Shipping.ts
+// src/routes/admin/Shipping.ts
 import { Router } from "express";
 import { catchAsync } from "../../utils/catchAsync";
 import { validate } from "../../middlewares/validation";
@@ -16,7 +16,6 @@ import {
   bulkCreateBostaDeliveries,
   createBostaReturnDelivery,
   createBostaPickup,
-  getBostaPickupTimeSlots,
   getBostaShipmentByOrder,
   syncBostaShipment,
   cancelBostaShipment,
@@ -29,7 +28,13 @@ import {
   getBostaShipmentPricing,
   getBostaSectorPricing,
   getBostaInsuranceEstimate,
+  getPendingPickups,
+  createDailyPickup,
+  listPickupLocations,
+  setDefaultPickupLocation,
+  syncPickupLocation,
 } from "../../controller/admin/Shipping";
+
 import {
   updateShippingSettingsSchema,
   updateFreeShippingProductsSchema,
@@ -74,6 +79,23 @@ route.get(
   catchAsync(getBostaDistricts),
 );
 
+// ═══════════════════════════════════════════════════════════
+// 🆕 Bosta Pickup Locations
+// ═══════════════════════════════════════════════════════════
+route.get(
+  "/bosta/pickup-locations",
+  authorizePermissions("zone", "View"),
+  catchAsync(listPickupLocations),
+);
+route.put(
+  "/bosta/pickup-locations/:locationId/default",
+  authorizePermissions("zone", "Edit"),
+  catchAsync(setDefaultPickupLocation),
+);
+
+// ═══════════════════════════════════════════════════════════
+// 💰 Bosta Pricing
+// ═══════════════════════════════════════════════════════════
 route.get(
   "/bosta/pricing/shipment",
   authorizePermissions("zone", "View"),
@@ -91,21 +113,28 @@ route.get(
 );
 
 // ═══════════════════════════════════════════════════════════
-// 🚚 Bosta Pickup
+// 🚚 Bosta Pickups
 // ═══════════════════════════════════════════════════════════
+route.get(
+  "/bosta/pickups/pending",
+  authorizePermissions("zone", "View"),
+  catchAsync(getPendingPickups),
+);
+
+route.post(
+  "/bosta/pickups/daily",
+  authorizePermissions("zone", "Edit"),
+  catchAsync(createDailyPickup),
+);
+
 route.post(
   "/bosta/pickups",
   authorizePermissions("zone", "Edit"),
   catchAsync(createBostaPickup),
 );
-route.get(
-  "/bosta/pickups/time-slots",
-  authorizePermissions("zone", "View"),
-  catchAsync(getBostaPickupTimeSlots),
-);
 
 // ═══════════════════════════════════════════════════════════
-// 📊 Bosta Shipments — Stats + List
+// 📊 Bosta Shipments
 // ═══════════════════════════════════════════════════════════
 route.get(
   "/bosta/shipments/stats",
@@ -119,7 +148,7 @@ route.get(
 );
 
 // ═══════════════════════════════════════════════════════════
-// 🚚 Bosta Shipments — Bulk (لازم قبل /from-order)
+// 🚚 Bosta Deliveries
 // ═══════════════════════════════════════════════════════════
 route.post(
   "/bosta/deliveries/bulk",
@@ -182,7 +211,11 @@ route.get(
   authorizePermissions("zone", "View"),
   catchAsync(getBostaLabel),
 );
-
+route.post(
+  "/bosta/pickup-locations/sync",
+  authorizePermissions("zone", "Edit"),
+  catchAsync(syncPickupLocation),
+);
 // ═══════════════════════════════════════════════════════════
 // Free shipping products
 // ═══════════════════════════════════════════════════════════
