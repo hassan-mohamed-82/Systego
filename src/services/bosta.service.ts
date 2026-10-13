@@ -323,63 +323,111 @@ class BostaService {
   }
 
   private computePricingFromTier(sectorData: any, cod?: number): PricingResult {
-    const tier = sectorData?.tier || sectorData?.data?.tier || sectorData;
+  const tier = sectorData?.tier || sectorData?.data?.tier;
+  const prices = sectorData?.prices || sectorData?.data?.prices;
 
-    if (!tier || typeof tier !== "object") {
-      return {
-        total: 0,
-        baseCost: 0,
-        vatAmount: 0,
-        codFee: 0,
-        zeroCodDiscount: 0,
-        pickupFee: 0,
-        currency: "EGP",
-        source: "fallback",
-      };
-    }
-
-    const baseCost = Number(tier?.cost || 0);
-    const vatRate = Number(tier?.country?.vat || 0.14);
-    const vatAmount = Math.round(baseCost * vatRate * 100) / 100;
-
-    let codFee = 0;
-    if (cod && cod > 0) {
-      const extraCodFee = tier?.extraCodFee;
-      if (extraCodFee?.percentage) {
-        const computedFee = cod * Number(extraCodFee.percentage);
-        const minFee = Number(extraCodFee.minimumFeeAmount || 0);
-        codFee = Math.max(computedFee, minFee);
-      } else if (extraCodFee?.fixedAmount) {
-        codFee = Number(extraCodFee.fixedAmount);
-      }
-    }
-
-    let zeroCodDiscount = 0;
-    if (!cod || cod === 0) {
-      if (tier?.zeroCodDiscount?.amount) {
-        zeroCodDiscount = Number(tier.zeroCodDiscount.amount);
-      }
-    }
-
-    const pickupFee = 0;
-
-    const total =
-      Math.round(
-        (baseCost + vatAmount + codFee - zeroCodDiscount + pickupFee) * 100,
-      ) / 100;
-
+  if (!tier || typeof tier !== "object") {
+    console.warn("⚠️ Invalid tier data, using fallback");
     return {
-      total: Math.max(total, 0),
-      baseCost,
-      vatAmount,
-      codFee,
-      zeroCodDiscount,
-      pickupFee,
-      currency: tier?.country?.currency || "EGP",
-      source: "sector",
+      total: 0,
+      baseCost: 0,
+      vatAmount: 0,
+      codFee: 0,
+      zeroCodDiscount: 0,
+      pickupFee: 0,
+      currency: "EGP",
+      source: "fallback",
     };
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 1. تحديد السعر من tierSizes
+  // ═══════════════════════════════════════════════════════════
+  let baseCost = Number(tier?.cost || 0); // fallback
+
+  // دوّر على الـ size في الـ prices
+  if (prices && Array.isArray(prices)) {
+    for (const price of prices) {
+      const serviceTypes = price?.tierServiceTypes || [];
+      for (const service of serviceTypes) {
+        if (service?.typeAlias === "Deliver" || service?.typeName === "SEND") {
+          const sizes = service?.tierSizes || [];
+          // دوّر على "Normal" أو أول حجم متاح
+          const normalSize = sizes.find(
+            (s: any) =>
+              s?.sizeAlias === "Normal" ||
+              s?.sizeName === "Normal" ||
+              s?.sizeName === "Small & Medium",
+          );
+          if (normalSize?.cost) {
+            baseCost = Number(normalSize.cost);
+          } else if (sizes[0]?.cost) {
+            baseCost = Number(sizes[0].cost);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 2. COD Fee
+  // ═══════════════════════════════════════════════════════════
+  let codFee = 0;
+  if (cod && cod > 0) {
+    const extraCodFee = tier?.extraCodFee;
+    if (extraCodFee?.percentage) {
+      const computedFee = cod * Number(extraCodFee.percentage);
+      const minFee = Number(extraCodFee.minimumFeeAmount || 0);
+      codFee = Math.max(computedFee, minFee);
+    } else if (extraCodFee?.fixedAmount) {
+      codFee = Number(extraCodFee.fixedAmount);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 3. Zero COD Discount
+  // ═══════════════════════════════════════════════════════════
+  let zeroCodDiscount = 0;
+  if (!cod || cod === 0) {
+    if (tier?.zeroCodDiscount?.amount) {
+      zeroCodDiscount = Number(tier.zeroCodDiscount.amount);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 4. VAT
+  // ═══════════════════════════════════════════════════════════
+  const vatRate = Number(tier?.country?.vat || 0.14);
+  const subtotal = baseCost + codFee - zeroCodDiscount;
+  const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
+
+  // ═══════════════════════════════════════════════════════════
+  // ✅ 5. Total
+  // ═══════════════════════════════════════════════════════════
+  const total = Math.round((subtotal + vatAmount) * 100) / 100;
+
+  console.log("💰 Pricing calculation:", {
+    baseCost,
+    cod,
+    codFee,
+    zeroCodDiscount,
+    vatRate,
+    vatAmount,
+    total,
+  });
+
+  return {
+    total: Math.max(total, 0),
+    baseCost,
+    vatAmount,
+    codFee,
+    zeroCodDiscount,
+    pickupFee: 0,
+    currency: tier?.country?.currency || "EGP",
+    source: "sector",
+  };
+}
   private async getCityBasedPricing(
     creds: BostaCredentials,
     params: {

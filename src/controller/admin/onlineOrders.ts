@@ -753,3 +753,57 @@ export const updateOrderBostaAddress = async (req: Request, res: Response) => {
     order,
   });
 };
+
+/**
+ * DELETE /admin/online-orders/:id
+ * حذف أوردر + الـ Bosta shipment المرتبط بيه (لو موجود)
+ */
+export const deleteOnlineOrder = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const order = await OrderModel.findById(id);
+  if (!order) throw new NotFound("Order not found");
+
+  // ❌ منع الحذف لو الأوردر في حالة نهائية مهمة
+  const blockedStatuses = ["delivered", "out_for_delivery", "processing"];
+  if (blockedStatuses.includes(order.status)) {
+    throw new BadRequest(
+      `Cannot delete order with status "${order.status}". Cancel or return it first.`,
+    );
+  }
+
+  // 🗑️ احذف الـ Bosta shipment لو موجود
+  const bostaShipment = await BostaShipmentModel.findOne({
+    relatedModel: "Order",
+    relatedId: id,
+    type: 10,
+  });
+
+  if (bostaShipment) {
+    // لو الـ shipment لسه عند Bosta، الأفضل تلغي الأول
+    if (
+      bostaShipment.deliveryId &&
+      !["Cancelled", "Returned", "Delivered"].includes(bostaShipment.status)
+    ) {
+      throw new BadRequest(
+        `Bosta shipment is still active (${bostaShipment.status}). Cancel it first.`,
+      );
+    }
+    await BostaShipmentModel.findByIdAndDelete(bostaShipment._id);
+  }
+
+  // 🧹 فك ربط المندوب لو self shipment
+  if ((order as any).selfShipment?.deliveryManId) {
+    await DeliveryManModel.findByIdAndUpdate(
+      (order as any).selfShipment.deliveryManId,
+      { $pull: { currentOrders: order._id } },
+    );
+  }
+
+  await OrderModel.findByIdAndDelete(id);
+
+  SuccessResponse(res, {
+    message: "✅ Order deleted successfully",
+    deletedId: id,
+  });
+};

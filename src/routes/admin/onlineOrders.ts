@@ -6,6 +6,7 @@ import {
   updateOnlineOrderStatus,
   bulkCreateShipments,
   updateOrderBostaAddress,
+  deleteOnlineOrder,
 } from "../../controller/admin/onlineOrders";
 import { authorizePermissions } from "../../middlewares/haspremission";
 import { catchAsync } from "../../utils/catchAsync";
@@ -41,5 +42,7 @@ router.patch(
   authorizePermissions("orders", "Edit"),
   catchAsync(updateOrderBostaAddress),
 );
+
+router.delete("/admin/online-orders/:id", deleteOnlineOrder);
 
 export default router;
