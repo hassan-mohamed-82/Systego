@@ -83,7 +83,10 @@ export const getAllOnlineOrders = async (req: Request, res: Response) => {
     "scheduled",
   ];
 
-  const filter: any = {};
+  // ✅ استثني الأوردرات المحذوفة (soft delete) من الجدول
+  const filter: any = {
+    isDeleted: { $ne: true },
+  };
 
   if (status && allowedStatuses.includes(status as string)) {
     filter.status = status;
@@ -261,8 +264,6 @@ export const getOnlineOrderById = async (req: Request, res: Response) => {
 
 /**
  * PATCH /admin/online-orders/:id/status
- *
- * 🎯 الموحّد: يحدّث selfShipment.status / bostaShipment.status + order.status
  */
 export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
   const adminId = (req.user as any)?.id;
@@ -304,14 +305,12 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
 
     const deliveryManId = order.selfShipment.deliveryManId;
 
-    // ✅ حدّث selfShipment.status
     order.selfShipment.status = status;
 
     if (statusDescription) {
       order.selfShipment.deliveryNotes = statusDescription;
     }
 
-    // ✅ Timestamps
     if (status === "picked_up") order.selfShipment.pickedUpAt = now;
     if (status === "out_for_delivery")
       order.selfShipment.outForDeliveryAt = now;
@@ -324,7 +323,6 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
       order.selfShipment.returnedAt = now;
     }
 
-    // ✅ إحصائيات المندوب
     if (status === "delivered" || status === "failed") {
       await DeliveryManModel.findByIdAndUpdate(deliveryManId, {
         $pull: { currentOrders: order._id },
@@ -362,18 +360,15 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
       throw new BadRequest("Bosta shipment record not found");
     }
 
-    // ✅ Don't allow manual status change on terminal states
     if (shipment.status === "Cancelled") {
       throw new BadRequest(
         "Bosta shipment is cancelled. Cannot update status manually.",
       );
     }
 
-    // ✅ حدّث bostaShipment.status
     shipment.status = status;
     shipment.lastSyncAt = now;
 
-    // ✅ نضيف snapshot للـ history
     shipment.trackingHistory = shipment.trackingHistory || [];
     shipment.trackingHistory.push({
       status,
@@ -384,13 +379,9 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
 
     await shipment.save();
 
-    // ✅ order.status حسب الـ mapping
     newOrderStatus = BOSTA_TO_ORDER_STATUS[status] || order.status;
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // 📝 order.status + statusDescription + statusHistory
-  // ═══════════════════════════════════════════════════════════
   order.status = newOrderStatus;
 
   if (statusDescription) {
@@ -412,7 +403,6 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
 
   await order.save();
 
-  // ✅ نرجّع الأوردر populated
   const populated = await OrderModel.findById(id)
     .populate({ path: "user", select: "_id name email phone" })
     .populate({ path: "paymentMethod", select: "_id name ar_name type" })
@@ -444,7 +434,6 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
 
 /**
  * 🚀 POST /admin/online-orders/bulk-create-shipments
- * Bulk create shipments for both Self + Bosta
  */
 export const bulkCreateShipments = async (req: Request, res: Response) => {
   const { order_ids } = req.body;
@@ -457,7 +446,6 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
     throw new BadRequest("Maximum 50 orders per bulk request");
   }
 
-  // ✅ superadminId + settings
   const superadminUser = await UserModel.findOne({ role: "superadmin" })
     .select("_id")
     .lean();
@@ -469,7 +457,6 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
   const superadminId = (superadminUser as any)._id.toString();
   const settings = await ShippingSettingsModel.findOne({ superadminId });
 
-  // ✅ نجيب الأوردرات
   const orders = await OrderModel.find({ _id: { $in: order_ids } });
 
   if (orders.length === 0) {
@@ -556,7 +543,6 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
 
         const addr: any = order.shippingAddress;
 
-        // ✅ نستخدم Bosta fields من الأوردر لو موجودة
         const dropOffAddress = {
           city: addr?.bostaCityName || addr?.city || "",
           zoneId: addr?.bostaZoneId || "",
@@ -662,7 +648,6 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
             description: payload.specs.packageDetails.description,
           });
 
-          // ✅ نربط الـ shipment بالأوردر
           (order as any).bostaShipment = shipment._id;
           order.status = "processing";
           await order.save();
@@ -692,7 +677,6 @@ export const bulkCreateShipments = async (req: Request, res: Response) => {
 
 /**
  * PATCH /admin/online-orders/:id/bosta-address
- * Update Bosta address on the order
  */
 export const updateOrderBostaAddress = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -709,7 +693,6 @@ export const updateOrderBostaAddress = async (req: Request, res: Response) => {
     apartmentNumber,
   } = req.body;
 
-  // Validation
   if (!bostaCityId) throw new BadRequest("bostaCityId is required");
   if (!bostaDistrictId) throw new BadRequest("bostaDistrictId is required");
   if (!bostaZoneId) throw new BadRequest("bostaZoneId is required");
@@ -718,7 +701,6 @@ export const updateOrderBostaAddress = async (req: Request, res: Response) => {
   const order = await OrderModel.findById(id);
   if (!order) throw new NotFound("Order not found");
 
-  // ✅ نحدّث الـ shippingAddress
   (order as any).shippingAddress = {
     ...((order as any).shippingAddress || {}),
     bostaCityId,
@@ -734,7 +716,6 @@ export const updateOrderBostaAddress = async (req: Request, res: Response) => {
     apartmentNumber: apartmentNumber || "",
   };
 
-  // ✅ statusHistory
   order.statusHistory = order.statusHistory || [];
   order.statusHistory.push({
     status: order.status,
@@ -754,23 +735,44 @@ export const updateOrderBostaAddress = async (req: Request, res: Response) => {
 
 /**
  * DELETE /admin/online-orders/:id
- * حذف أوردر + الـ Bosta shipment المرتبط بيه (لو موجود)
+ * 🗑️ Soft Delete: بيعلّم الأوردر isDeleted = true + status = "canceled"
+ * + Bosta shipment → "Cancelled"
+ * النتيجة: الأوردر يختفي من الجدول بس يفضل محفوظ في الـ DB
+ * ⚠️ الأدمن يقدر يحذف أي أوردر بأي status
  */
 export const deleteOnlineOrder = async (req: Request, res: Response) => {
+  const adminId = (req.user as any)?.id;
   const { id } = req.params;
 
   const order = await OrderModel.findById(id);
   if (!order) throw new NotFound("Order not found");
 
-  // ❌ منع الحذف لو الأوردر في حالة نهائية مهمة
-  const blockedStatuses = ["delivered", "out_for_delivery", "processing"];
-  if (blockedStatuses.includes(order.status)) {
-    throw new BadRequest(
-      `Cannot delete order with status "${order.status}". Cancel or return it first.`,
-    );
+  // 🚫 لو الأوردر اتحذف قبل كده
+  if ((order as any).isDeleted) {
+    throw new BadRequest("Order is already deleted");
   }
 
-  // 🗑️ احذف الـ Bosta shipment لو موجود
+  const now = new Date();
+
+  // ═══════════════════════════════════════════════════════════
+  // 1️⃣ علّم الأوردر إنه محذوف + غيّر الـ status لـ canceled
+  // ═══════════════════════════════════════════════════════════
+  (order as any).isDeleted = true;
+  order.status = "canceled";
+  order.statusDescription = "Order deleted by admin";
+
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    status: "canceled",
+    description: "Order canceled & hidden by admin (soft delete)",
+    source: "admin",
+    updatedBy: adminId || null,
+    updatedAt: now,
+  } as any);
+
+  // ═══════════════════════════════════════════════════════════
+  // 2️⃣ لو Bosta shipment موجود → غيّر حالته لـ Cancelled
+  // ═══════════════════════════════════════════════════════════
   const bostaShipment = await BostaShipmentModel.findOne({
     relatedModel: "Order",
     relatedId: id,
@@ -778,34 +780,47 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
   });
 
   if (bostaShipment) {
-    // لو الـ shipment لسه عند Bosta، الأفضل تلغي الأول
-    if (
-      bostaShipment.deliveryId &&
-      !["Cancelled", "Returned", "Delivered"].includes(
-        bostaShipment.status as string,
-      )
-    ) {
-      throw new BadRequest(
-        `Bosta shipment is still active (${bostaShipment.status}). Cancel it first.`,
-      );
-    }
+    bostaShipment.status = "Cancelled";
+    bostaShipment.lastSyncAt = now;
 
-    // ✅ الحل: String() عشان نتجنب TS error
-    await BostaShipmentModel.findByIdAndDelete(String(bostaShipment._id));
+    bostaShipment.trackingHistory = bostaShipment.trackingHistory || [];
+    bostaShipment.trackingHistory.push({
+      status: "Cancelled",
+      statusCode: bostaShipment.statusCode,
+      snapshotAt: now,
+      data: {
+        source: "admin_soft_delete",
+        description:
+          "Order deleted by admin — Bosta shipment marked as Cancelled",
+      },
+    } as any);
+
+    await bostaShipment.save();
   }
 
-  // 🧹 فك ربط المندوب لو self shipment
+  // ═══════════════════════════════════════════════════════════
+  // 3️⃣ لو self shipment → فك ربط المندوب + status = returned
+  // ═══════════════════════════════════════════════════════════
   if ((order as any).selfShipment?.deliveryManId) {
+    (order as any).selfShipment.status = "returned";
+
     await DeliveryManModel.findByIdAndUpdate(
       (order as any).selfShipment.deliveryManId,
       { $pull: { currentOrders: order._id } },
     );
   }
 
-  await OrderModel.findByIdAndDelete(String(order._id));
+  // ═══════════════════════════════════════════════════════════
+  // 4️⃣ احفظ الأوردر (مش بيتحذف — بس الـ isDeleted بيتغير)
+  // ═══════════════════════════════════════════════════════════
+  await order.save();
 
   SuccessResponse(res, {
     message: "✅ Order deleted successfully",
-    deletedId: id,
+    order: {
+      _id: order._id,
+      status: order.status,
+      isDeleted: (order as any).isDeleted,
+    },
   });
 };

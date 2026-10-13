@@ -85,30 +85,22 @@ const orderSchema = new Schema(
     // ═══════════════════════════════════════════════════════════
     // 🆕 Shipping Details — تفاصيل الشحن (للأرباح)
     // ═══════════════════════════════════════════════════════════
-    // العميل يدفع: bostaCost + markup
-    // انت تكسب: markup
-    // ═══════════════════════════════════════════════════════════
     shippingDetails: {
-      // تفاصيل Bosta
-      bostaCost: { type: Number, default: 0 }, // تكلفة Bosta الفعلية
-      markup: { type: Number, default: 0 }, // ربحك
+      bostaCost: { type: Number, default: 0 },
+      markup: { type: Number, default: 0 },
       markupType: {
         type: String,
         enum: ["fixed", "percentage", null],
         default: null,
       },
-      markupValue: { type: Number, default: 0 }, // القيمة اللي اتحددت في الإعدادات
-
-      // تفاصيل إضافية
-      codAmount: { type: Number, default: 0 }, // المبلغ اللي هيتحصل كاش
-      isCash: { type: Boolean, default: false }, // هل COD؟
+      markupValue: { type: Number, default: 0 },
+      codAmount: { type: Number, default: 0 },
+      isCash: { type: Boolean, default: false },
       pricingSource: {
         type: String,
         enum: ["sector", "city", "fallback", null],
         default: null,
       },
-
-      // تفاصيل Bosta pricing الكاملة
       baseCost: { type: Number, default: 0 },
       vatAmount: { type: Number, default: 0 },
       codFee: { type: Number, default: 0 },
@@ -234,6 +226,15 @@ const orderSchema = new Schema(
       default: null,
       index: true,
     },
+
+    // ═══════════════════════════════════════════════════════════
+    // 🆕 Soft Delete flag
+    // ═══════════════════════════════════════════════════════════
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -247,5 +248,6 @@ orderSchema.index({
   "selfShipment.status": 1,
 });
 orderSchema.index({ bostaShipment: 1 });
+orderSchema.index({ isDeleted: 1, status: 1 });
 
 export const OrderModel = model("Orders", orderSchema);
