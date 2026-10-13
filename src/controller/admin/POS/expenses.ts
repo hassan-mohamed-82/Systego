@@ -8,7 +8,6 @@ import { BankAccountModel } from "../../../models/schema/admin/Financial_Account
 import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
 import { ExpenseCategoryModel } from "../../../models/schema/admin/expensecategory";
 
-
 export const createExpense = async (req: Request, res: Response) => {
   const userId = req.user?.id;
   if (!userId) throw new UnauthorizedError("Unauthorized");
@@ -22,60 +21,57 @@ export const createExpense = async (req: Request, res: Response) => {
     throw new BadRequest("Amount must be greater than 0");
   }
 
-  // ✅ 1) هات الشيفت المفتوح للكاشير ده
+  // ✅ هات الشيفت المفتوح (اختياري الآن)
   const openShift = await CashierShift.findOne({
     cashierman_id: userId,
     status: "open",
   }).sort({ start_time: -1 });
 
-  if (!openShift) {
-    throw new BadRequest(
-      "You must open a cashier shift before creating an expense"
-    );
-  }
+  // ⭐️ التعديل: لا نرمي خطأ لو مفيش شيفت
+  // بدلاً من:
+  // if (!openShift) throw new BadRequest("You must open a cashier shift...");
 
-  // ✅ 2) تأكيد الكاتجوري
+  // نستخدمها فقط لو موجودة
+  const shift_id = openShift?._id || null;
+
+  // ✅ تأكيد الكاتجوري
   const category = await ExpenseCategoryModel.findById(Category_id);
   if (!category) throw new NotFound("Category not found");
 
-  // ✅ 3) حاول تخصم من الحساب المالي لو الـ balance يكفي
-  // نستخدم findOneAndUpdate بشرط balance >= amount
+  // ✅ خصم من الحساب المالي
   const updatedAccount = await BankAccountModel.findOneAndUpdate(
     {
       _id: financial_accountId,
       status: true,
-      in_POS: true,
-      balance: { $gte: amount },          // 👈 لازم يكون الرصيد كافي
+      balance: { $gte: amount },
     },
-    { $inc: { balance: -amount } },       // 👈 خصم المبلغ
-    { new: true }
+    { $inc: { balance: -amount } },
+    { new: true },
   );
 
   if (!updatedAccount) {
-    // يا إما الحساب مش لاقيه / مش active / مش in_POS / أو الرصيد مش كافي
     throw new BadRequest(
-      "Insufficient balance or financial account is not allowed in POS"
+      "Insufficient balance or financial account is invalid",
     );
   }
 
-  // ✅ 4) إنشاء الـ Expense مربوط فعلياً بالشيفت المفتوح
+  // ✅ إنشاء الـ Expense (shift_id قد يكون null)
   const expense = await ExpenseModel.create({
     name,
     amount,
     Category_id,
     note,
     financial_accountId,
-    shift_id: openShift._id,
+    shift_id, // ⭐️ قد يكون null
     cashier_id: userId,
   });
 
   SuccessResponse(res, {
     message: "Expense created successfully",
     expense,
-    account_balance: updatedAccount.balance, // لو حابب تشوف الرصيد بعد الخصم
+    account_balance: updatedAccount.balance,
   });
 };
-
 
 export const updateExpense = async (req: Request, res: Response) => {
   const userId = req.user?.id;
@@ -117,22 +113,21 @@ export const updateExpense = async (req: Request, res: Response) => {
       in_POS: true,
     },
     { $inc: { balance: balanceDifference } },
-    { new: true }
+    { new: true },
   );
 
   if (!updatedAccount) {
     throw new BadRequest(
-      "Financial account not found or is not allowed in POS"
+      "Financial account not found or is not allowed in POS",
     );
   }
 
   // Check if balance went negative after the update
   if (updatedAccount.balance < 0) {
     // Rollback the balance change
-    await BankAccountModel.findByIdAndUpdate(
-      expense.financial_accountId,
-      { $inc: { balance: -balanceDifference } }
-    );
+    await BankAccountModel.findByIdAndUpdate(expense.financial_accountId, {
+      $inc: { balance: -balanceDifference },
+    });
     throw new BadRequest("Insufficient balance in financial account");
   }
 
@@ -152,7 +147,7 @@ export const getExpenses = async (req: Request, res: Response) => {
 
   // 👇 غير cashier_id لـ cashierman_id عشان يطابق الشيفت
   const openShift = await CashierShift.findOne({
-    cashierman_id: userId,  // 👈 صححها
+    cashierman_id: userId, // 👈 صححها
     status: "open",
   }).sort({ start_time: -1 });
 
@@ -176,14 +171,16 @@ export const getExpenses = async (req: Request, res: Response) => {
   });
 };
 
-
 export const selectionExpense = async (req: Request, res: Response) => {
   const categories = await ExpenseCategoryModel.find({ status: true });
   const accounts = await BankAccountModel.find({ in_POS: true, status: true });
 
-  SuccessResponse(res, { message: "Selection data retrieved successfully", categories, accounts });
-}
-
+  SuccessResponse(res, {
+    message: "Selection data retrieved successfully",
+    categories,
+    accounts,
+  });
+};
 
 export const getExpenseById = async (req: Request, res: Response) => {
   const userId = req.user?.id;
@@ -192,8 +189,41 @@ export const getExpenseById = async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!id) throw new BadRequest("Expense ID is required");
 
-  const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId }).populate("Category_id", "name ar_name").populate("financial_accountId", "name ar_name");
+  const expense = await ExpenseModel.findOne({ _id: id, cashier_id: userId })
+    .populate("Category_id", "name ar_name")
+    .populate("financial_accountId", "name ar_name");
   if (!expense) throw new NotFound("Expense not found");
 
   SuccessResponse(res, { message: "Expense retrieved successfully", expense });
+};
+
+export const deleteExpense = async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) throw new UnauthorizedError("Unauthorized");
+
+  const { id } = req.params;
+  if (!id) throw new BadRequest("Expense ID is required");
+
+  // ✅ 1) هات المصروف
+  const expense = await ExpenseModel.findById(id);
+  if (!expense) throw new NotFound("Expense not found");
+
+  // ✅ 2) رجّع المبلغ للحساب المالي (عكس عملية الإنشاء)
+  const updatedAccount = await BankAccountModel.findOneAndUpdate(
+    { _id: expense.financial_accountId },
+    { $inc: { balance: +expense.amount } }, // ⭐️ رجّع الفلوس
+    { new: true },
+  );
+
+  if (!updatedAccount) {
+    throw new BadRequest("Financial account not found");
+  }
+
+  // ✅ 3) احذف المصروف
+  await ExpenseModel.findByIdAndDelete(id);
+
+  SuccessResponse(res, {
+    message: "Expense deleted successfully",
+    account_balance: updatedAccount.balance,
+  });
 };

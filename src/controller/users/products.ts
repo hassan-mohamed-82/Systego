@@ -10,11 +10,12 @@ import { NotFound } from "../../Errors/NotFound";
 import { DiscountModel } from "../../models/schema/admin/Discount";
 import { ProductSalesModel } from "../../models/schema/admin/POS/Sale";
 import { OrderModel } from "../../models/schema/users/Order";
+import { CategoryModel } from "../../models/schema/admin/category";
 
 export const buildProductAggregationPipeline = (
   productMatchStage: object,
   wishlistIds: mongoose.Types.ObjectId[],
-  onlineWarehouseIds: mongoose.Types.ObjectId[]
+  onlineWarehouseIds: mongoose.Types.ObjectId[],
 ): mongoose.PipelineStage[] => {
   return [
     { $match: { ...productMatchStage, Is_Online: true } },
@@ -368,20 +369,23 @@ export const getAllProducts = asyncHandler(
         .lean();
       if (user?.wishlist) {
         wishlistIds = user.wishlist.map(
-          (id) => new mongoose.Types.ObjectId(id.toString())
+          (id) => new mongoose.Types.ObjectId(id.toString()),
         );
       }
     }
 
     const matchStage: any = {};
-    if (req.query.is_featured === "true" || (req.query.is_featured as any) === true) {
+    if (
+      req.query.is_featured === "true" ||
+      (req.query.is_featured as any) === true
+    ) {
       matchStage.is_featured = true;
     }
 
     const pipeline = buildProductAggregationPipeline(
       matchStage,
       wishlistIds,
-      onlineWarehouseIds
+      onlineWarehouseIds,
     );
 
     pipeline.push({ $sort: { created_at: -1 } });
@@ -394,9 +398,9 @@ export const getAllProducts = asyncHandler(
         message: "All products retrieved successfully",
         data: productsWithStatus,
       },
-      200
+      200,
     );
-  }
+  },
 );
 
 // 🌟 Get Single Product By ID
@@ -420,7 +424,7 @@ export const getProductById = asyncHandler(
         .lean();
       if (user?.wishlist) {
         wishlistIds = user.wishlist.map(
-          (wId) => new mongoose.Types.ObjectId(wId.toString())
+          (wId) => new mongoose.Types.ObjectId(wId.toString()),
         );
       }
     }
@@ -428,7 +432,7 @@ export const getProductById = asyncHandler(
     const pipeline = buildProductAggregationPipeline(
       { _id: new mongoose.Types.ObjectId(id) },
       wishlistIds,
-      onlineWarehouseIds
+      onlineWarehouseIds,
     );
 
     const product = await ProductModel.aggregate(pipeline);
@@ -443,9 +447,9 @@ export const getProductById = asyncHandler(
         message: "Product retrieved successfully",
         data: product[0],
       },
-      200
+      200,
     );
-  }
+  },
 );
 
 // 🌟 Get Best Selling Products (Aggregating POS Sales and Online Orders)
@@ -491,7 +495,9 @@ export const getBestSellingProducts = asyncHandler(
       saleMatch["sale.createdAt"] = dateFilter;
     }
     if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
-      saleMatch["sale.warehouse_id"] = new mongoose.Types.ObjectId(warehouse_id);
+      saleMatch["sale.warehouse_id"] = new mongoose.Types.ObjectId(
+        warehouse_id,
+      );
     }
 
     const posPipeline: mongoose.PipelineStage[] = [
@@ -519,7 +525,13 @@ export const getBestSellingProducts = asyncHandler(
     // 3️⃣ Online Orders Pipeline (Excluding rejected/canceled/returned/refunded)
     const orderMatch: any = {
       status: {
-        $nin: ["rejected", "canceled", "refund", "returned", "failed_to_deliver"],
+        $nin: [
+          "rejected",
+          "canceled",
+          "refund",
+          "returned",
+          "failed_to_deliver",
+        ],
       },
     };
     if (hasDateFilter) {
@@ -591,7 +603,7 @@ export const getBestSellingProducts = asyncHandler(
         existing.totalSoldQuantity += item.onlineQuantity || 0;
         existing.onlineQuantity += item.onlineQuantity || 0;
         existing.totalRevenue = Number(
-          (existing.totalRevenue + (item.onlineRevenue || 0)).toFixed(2)
+          (existing.totalRevenue + (item.onlineRevenue || 0)).toFixed(2),
         );
         existing.onlineRevenue = Number((item.onlineRevenue || 0).toFixed(2));
         existing.ordersCount += item.onlineOrdersCount || 0;
@@ -621,7 +633,7 @@ export const getBestSellingProducts = asyncHandler(
         .lean();
       if (user?.wishlist) {
         wishlistIds = user.wishlist.map(
-          (id) => new mongoose.Types.ObjectId(id.toString())
+          (id) => new mongoose.Types.ObjectId(id.toString()),
         );
       }
     }
@@ -633,7 +645,7 @@ export const getBestSellingProducts = asyncHandler(
     }
 
     const soldProductIds = Array.from(salesMap.keys()).map(
-      (id) => new mongoose.Types.ObjectId(id)
+      (id) => new mongoose.Types.ObjectId(id),
     );
 
     if (soldProductIds.length > 0) {
@@ -645,7 +657,7 @@ export const getBestSellingProducts = asyncHandler(
     const pipeline = buildProductAggregationPipeline(
       productMatchStage,
       wishlistIds,
-      onlineWarehouseIds
+      onlineWarehouseIds,
     );
 
     const products = await ProductModel.aggregate(pipeline);
@@ -693,7 +705,7 @@ export const getBestSellingProducts = asyncHandler(
     const startIndex = (pageNum - 1) * limitNum;
     const paginatedProducts = productsWithSales.slice(
       startIndex,
-      startIndex + limitNum
+      startIndex + limitNum,
     );
 
     return SuccessResponse(
@@ -705,7 +717,83 @@ export const getBestSellingProducts = asyncHandler(
         limit: limitNum,
         data: paginatedProducts,
       },
-      200
+      200,
     );
-  }
+  },
+);
+
+export const getProductsByCategory = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+
+    // ✅ 1) تأكد إن الـ id صالح
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new NotFound("Category ID is invalid");
+    }
+
+    // ✅ 2) تأكد إن الكاتيجوري موجود و Is_Online = true
+    const category = await CategoryModel.findOne({
+      _id: id,
+      Is_Online: true,
+    }).lean();
+
+    if (!category) {
+      throw new NotFound("Category not found or not online");
+    }
+
+    // ✅ 3) جيب المستودعات الأونلاين
+    const onlineWarehouses = await WarehouseModel.find({ Is_Online: true })
+      .select("_id")
+      .lean();
+    const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
+
+    // ✅ 4) جيب الـ wishlist بتاع اليوزر (لو مسجل دخول)
+    let wishlistIds: mongoose.Types.ObjectId[] = [];
+    if (req.user?.id) {
+      const user = await CustomerModel.findById(req.user.id)
+        .select("wishlist")
+        .lean();
+      if (user?.wishlist) {
+        wishlistIds = user.wishlist.map(
+          (wId) => new mongoose.Types.ObjectId(wId.toString()),
+        );
+      }
+    }
+
+    // ✅ 5) ابنِ الـ pipeline بنفس اللي عندك
+    const matchStage: any = { categoryId: new mongoose.Types.ObjectId(id) };
+
+    // ⭐️ لو عايز تدعم query params إضافية (is_featured مثلاً)
+    if (
+      req.query.is_featured === "true" ||
+      (req.query.is_featured as any) === true
+    ) {
+      matchStage.is_featured = true;
+    }
+
+    const pipeline = buildProductAggregationPipeline(
+      matchStage,
+      wishlistIds,
+      onlineWarehouseIds,
+    );
+
+    pipeline.push({ $sort: { created_at: -1 } });
+
+    const products = await ProductModel.aggregate(pipeline);
+
+    return SuccessResponse(
+      res,
+      {
+        message: "Products retrieved successfully",
+        category: {
+          _id: category._id,
+          name: category.name,
+          ar_name: category.ar_name,
+        },
+        total: products.length,
+        data: products,
+      },
+      200,
+    );
+  },
 );

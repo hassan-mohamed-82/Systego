@@ -1,17 +1,19 @@
-import { Router } from 'express';
+import { Router } from "express";
 import {
   getAllProducts,
   getProductById,
   getBestSellingProducts,
-} from '../../controller/users/products';
-import { optionalAuthenticated } from '../../middlewares/optionalAuthenticated';
+  getProductsByCategory,
+} from "../../controller/users/products";
+import { optionalAuthenticated } from "../../middlewares/optionalAuthenticated";
 
 const productRoute = Router();
 
 productRoute.use(optionalAuthenticated);
 
-productRoute.get('/best-sellers', getBestSellingProducts);
-productRoute.get('/', getAllProducts);
-productRoute.get('/:id', getProductById);
+productRoute.get("/best-sellers", getBestSellingProducts);
+productRoute.get("/", getAllProducts);
+productRoute.get("/category/:id", getProductsByCategory);
+productRoute.get("/:id", getProductById);
 
 export default productRoute;
