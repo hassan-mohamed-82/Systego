@@ -1,3 +1,4 @@
+// controllers/cart/cartController.ts
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import asyncHandler from "express-async-handler";
@@ -13,16 +14,40 @@ import { AddressModel } from "../../models/schema/users/Address";
 import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 
-// --- دالة مساعدة لجلب معرف السلة ---
+/* =========================================================
+   Helper: Get Cart Query (user OR sessionId)
+========================================================= */
 const getCartQuery = (req: Request) => {
   const userId = req.user?.id;
   const sessionId = req.headers["x-session-id"] || req.body?.sessionId;
 
-  if (userId) return { user: userId };
-  if (sessionId) return { sessionId: sessionId };
-  throw new BadRequest("User ID or Session ID is required");
+  // ✅ لو userId ObjectId صالح → استخدمه
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    return { user: new mongoose.Types.ObjectId(userId) };
+  }
+
+  // ✅ لو UUID أو أي string → استخدم sessionId
+  if (sessionId && typeof sessionId === "string" && sessionId.trim()) {
+    return { sessionId: sessionId.trim() };
+  }
+
+  throw new BadRequest("Valid User ID or Session ID is required");
 };
 
+/* =========================================================
+   Helper: Extract userId from query safely
+   Returns ObjectId | null (never throws)
+========================================================= */
+const getUserIdFromQuery = (query: any): mongoose.Types.ObjectId | null => {
+  if (query && "user" in query && query.user) {
+    return query.user;
+  }
+  return null;
+};
+
+/* =========================================================
+   Helper: Active Discount Check
+========================================================= */
 const getActiveDiscount = (discount: any): any | null => {
   if (!discount) return null;
   if (discount.status !== true) return null;
@@ -34,6 +59,9 @@ const getActiveDiscount = (discount: any): any | null => {
   return discount;
 };
 
+/* =========================================================
+   Helper: Compute Final Price After Discount
+========================================================= */
 const computeFinalPrice = (basePrice: number, discount: any): number => {
   if (!discount) return basePrice;
   if (discount.type === "percentage") {
@@ -42,11 +70,13 @@ const computeFinalPrice = (basePrice: number, discount: any): number => {
   return Math.max(basePrice - discount.amount, 0);
 };
 
-// --- دالة الحسابات المركزية ---
+/* =========================================================
+   Core: Calculate Cart Totals (Safe for ObjectId | string | null)
+========================================================= */
 const calculateCartTotals = async (
   cart: any,
-  userId?: string,
-  warehouseId?: mongoose.Types.ObjectId[]
+  userId?: mongoose.Types.ObjectId | string | null,
+  warehouseId?: mongoose.Types.ObjectId[],
 ) => {
   let totalCartPrice = 0;
   let totalTaxAmount = 0;
@@ -74,6 +104,7 @@ const calculateCartTotals = async (
     totalCartPrice += currentPrice * item.quantity;
   }
 
+  /* -------- Service Fees -------- */
   const activeFees = await ServiceFeeModel.find({
     module: "online",
     status: true,
@@ -90,24 +121,36 @@ const calculateCartTotals = async (
         : fee.amount;
   });
 
+  /* -------- Shipping Cost -------- */
   const shippingSettings = await ShippingSettingsModel.findOne({
     singletonKey: "default",
   });
   let shippingCost = 0;
+
   if (!(shippingSettings?.freeShippingEnabled || hasFreeShippingProduct)) {
     if ((shippingSettings as any)?.self?.method === "flat_rate") {
       shippingCost = Number((shippingSettings as any)?.self?.flatRate || 0);
     } else if (userId) {
-      const address = await AddressModel.findOne({ user: userId }).populate(
-        "city zone"
-      );
-      shippingCost = address
-        ? Number(
-            (address.zone as any)?.shipingCost ||
-              (address.city as any)?.shipingCost ||
-              0
-          )
-        : 0;
+      // ✅ تحويل آمن إلى ObjectId
+      const userObjId =
+        userId instanceof mongoose.Types.ObjectId
+          ? userId
+          : mongoose.Types.ObjectId.isValid(userId)
+            ? new mongoose.Types.ObjectId(userId)
+            : null;
+
+      if (userObjId) {
+        const address = await AddressModel.findOne({
+          user: userObjId,
+        }).populate("city zone");
+        shippingCost = address
+          ? Number(
+              (address.zone as any)?.shipingCost ||
+                (address.city as any)?.shipingCost ||
+                0,
+            )
+          : 0;
+      }
     }
   }
 
@@ -115,7 +158,7 @@ const calculateCartTotals = async (
   cart.taxAmount = totalTaxAmount;
   cart.serviceFee = totalServiceFee;
 
-  // --- إعادة حساب الكوبون (Coupon Recalculation) ---
+  /* -------- Coupon Recalculation -------- */
   if (cart.coupon) {
     const coupon = await CouponModel.findById(cart.coupon);
     if (
@@ -129,12 +172,10 @@ const calculateCartTotals = async (
             ? (totalCartPrice * coupon.amount) / 100
             : coupon.amount;
       } else {
-        // إذا قل السعر عن الحد الأدنى، نحذف الكوبون
         cart.coupon = undefined;
         cart.couponDiscount = 0;
       }
     } else {
-      // إذا انتهى الكوبون أو نفذت كميته، نحذفه
       cart.coupon = undefined;
       cart.couponDiscount = 0;
     }
@@ -143,10 +184,13 @@ const calculateCartTotals = async (
   return { totalCartPrice, shippingCost };
 };
 
+/* =========================================================
+   Helper: Available Stock Across Online Warehouses
+========================================================= */
 const getAvailableStock = async (
   productId: mongoose.Types.ObjectId,
   productPriceId: mongoose.Types.ObjectId | null,
-  onlineWarehouseIds: mongoose.Types.ObjectId[]
+  onlineWarehouseIds: mongoose.Types.ObjectId[],
 ): Promise<number> => {
   const stock = await Product_WarehouseModel.aggregate([
     {
@@ -161,7 +205,9 @@ const getAvailableStock = async (
   return stock[0]?.total || 0;
 };
 
-// 1. مزامنة السلة بالكامل (The Sync Endpoint)
+/* =========================================================
+   1. Sync Cart
+========================================================= */
 export const syncCart = asyncHandler(async (req: Request, res: Response) => {
   const { items } = req.body;
   const query = getCartQuery(req);
@@ -176,17 +222,20 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
   for (const item of items) {
     const { productId, productVariantId, quantity } = item;
 
-    // Product must exist AND be storefront-eligible — previously a
-    // missing product silently priced at 0 instead of failing, and
-    // there was no check that the product (or its category) is
-    // actually online, unlike the listing endpoints.
+    /* ----- Validate productId ----- */
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      throw new BadRequest(`Invalid product ID: ${productId}`);
+    }
+
     const product = await ProductModel.findById(productId)
       .populate("discountId")
       .populate("categoryId", "Is_Online");
+
     if (!product) throw new NotFound(`Product not found: ${productId}`);
     if (!(product as any).Is_Online) {
       throw new BadRequest(`Product is not available online: ${productId}`);
     }
+
     const categoryData = (product as any).categoryId;
     const isCategoryOnline = Array.isArray(categoryData)
       ? categoryData.some((c: any) => c?.Is_Online === true)
@@ -194,40 +243,40 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 
     if (!isCategoryOnline) {
       throw new BadRequest(
-        `Product's category is not available online: ${productId}`
+        `Product's category is not available online: ${productId}`,
       );
     }
 
-    // If a variant is given, it must exist AND actually belong to
-    // this product — previously an unrelated product's variant ID
-    // could be attached to the wrong product with no validation.
+    /* ----- Validate variant ----- */
     let variant: any = null;
     if (productVariantId) {
+      if (!mongoose.Types.ObjectId.isValid(productVariantId)) {
+        throw new BadRequest(`Invalid variant ID: ${productVariantId}`);
+      }
       variant = await ProductPriceModel.findById(productVariantId);
       if (!variant) {
         throw new NotFound(`Product variant not found: ${productVariantId}`);
       }
       if (variant.productId.toString() !== productId.toString()) {
         throw new BadRequest(
-          `Variant ${productVariantId} does not belong to product ${productId}`
+          `Variant ${productVariantId} does not belong to product ${productId}`,
         );
       }
     }
 
+    /* ----- Check stock ----- */
     const availableStock = await getAvailableStock(
       new mongoose.Types.ObjectId(productId),
       productVariantId ? new mongoose.Types.ObjectId(productVariantId) : null,
-      onlineWarehouseIds
+      onlineWarehouseIds,
     );
     if (quantity > availableStock) {
       throw new BadRequest(
-        `Product ${productId} only has ${availableStock} in stock`
+        `Product ${productId} only has ${availableStock} in stock`,
       );
     }
 
-    // Same active-discount check used by the listing endpoints and
-    // calculateCartTotals — applies to variants too, not just the
-    // base product price.
+    /* ----- Compute price ----- */
     const discount = getActiveDiscount((product as any).discountId);
     const basePrice = variant ? variant.price : (product as any).price || 0;
     const currentPrice = computeFinalPrice(basePrice, discount);
@@ -240,14 +289,14 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // تحديث السلة
+  /* ----- Upsert cart ----- */
   await CartModel.findOneAndUpdate(
     query,
     { cartItems: validatedItems },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, new: true, setDefaultsOnInsert: true },
   );
 
-  // جلب السلة كاملة مع الحسابات (حل مشكلة fullCart is possibly null)
+  /* ----- Fetch full cart ----- */
   const fullCart = await CartModel.findOne(query)
     .populate({
       path: "cartItems.product",
@@ -257,21 +306,26 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     .populate("cartItems.variant");
 
   if (!fullCart) throw new NotFound("Cart processing failed");
+
+  const userIdForCalc = getUserIdFromQuery(query);
+
   const { shippingCost } = await calculateCartTotals(
     fullCart,
-    (query as any).user,
-    onlineWarehouseIds
+    userIdForCalc,
+    onlineWarehouseIds,
   );
   await fullCart.save();
 
   SuccessResponse(
     res,
     { message: "Cart synced successfully", cart: fullCart, shippingCost },
-    200
+    200,
   );
 });
 
-// 2. جلب السلة
+/* =========================================================
+   2. Get Cart
+========================================================= */
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
   const query = getCartQuery(req);
   const cart = await CartModel.findOne(query)
@@ -290,13 +344,18 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  
   const onlineWarehouses = await WarehouseModel.find({
     Is_Online: true,
   }).select("_id");
   const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
 
-  const { shippingCost } = await calculateCartTotals(cart, (query as any).user, onlineWarehouseIds);
+  const userIdForCalc = getUserIdFromQuery(query);
+
+  const { shippingCost } = await calculateCartTotals(
+    cart,
+    userIdForCalc,
+    onlineWarehouseIds,
+  );
   await cart.save();
 
   const cartObj: any = cart.toObject();
@@ -312,16 +371,20 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
         availableStock,
         inStock: availableStock >= item.quantity,
       };
-    })
+    }),
   );
 
   const responseCart = { ...cartObj, cartItems: enrichedItems };
   SuccessResponse(res, { cart: responseCart, shippingCost });
 });
 
+/* =========================================================
+   3. Apply Coupon
+========================================================= */
 export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
   const { couponCode } = req.body;
   const query = getCartQuery(req);
+  const userIdForCalc = getUserIdFromQuery(query);
 
   const cart = await CartModel.findOne(query)
     .populate({
@@ -332,10 +395,11 @@ export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
 
   if (!cart) throw new NotFound("Cart is empty");
 
+  /* ----- Remove coupon ----- */
   if (!couponCode) {
     cart.coupon = undefined;
     cart.couponDiscount = 0;
-    await calculateCartTotals(cart, (query as any).user);
+    await calculateCartTotals(cart, userIdForCalc);
     await cart.save();
     return SuccessResponse(res, {
       message: "Coupon removed successfully",
@@ -343,6 +407,7 @@ export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
+  /* ----- Validate coupon ----- */
   const coupon = await CouponModel.findOne({
     coupon_code: couponCode,
     available: { $gt: 0 },
@@ -351,10 +416,8 @@ export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
 
   if (!coupon) throw new BadRequest("Invalid coupon");
 
-  const { totalCartPrice } = await calculateCartTotals(
-    cart,
-    (query as any).user
-  );
+  const { totalCartPrice } = await calculateCartTotals(cart, userIdForCalc);
+
   if (totalCartPrice < (coupon.minimum_amount_for_use || 0)) {
     throw new BadRequest(`Minimum order is ${coupon.minimum_amount_for_use}`);
   }
@@ -369,7 +432,9 @@ export const applyCoupon = asyncHandler(async (req: Request, res: Response) => {
   SuccessResponse(res, { message: "Coupon applied successfully", cart });
 });
 
-// 4. مسح السلة
+/* =========================================================
+   4. Clear Cart
+========================================================= */
 export const clearCart = asyncHandler(async (req: Request, res: Response) => {
   await CartModel.findOneAndDelete(getCartQuery(req));
   SuccessResponse(res, { message: "Cart cleared" });

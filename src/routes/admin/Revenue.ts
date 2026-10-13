@@ -1,30 +1,56 @@
 import { Router } from "express";
 import {
-    createRevenue,
-    updateRevenue,
-    getRevenues,
-    getRevenueById,
-    selectionRevenue,
+  createRevenue,
+  updateRevenue,
+  getRevenues,
+  getRevenueById,
+  selectionRevenue,
+  deleteRevenue,
 } from "../../controller/admin/RevenueController";
 import { catchAsync } from "../../utils/catchAsync";
-import {authorizePermissions} from "../../middlewares/haspremission"
+import { authorizePermissions } from "../../middlewares/haspremission";
 
 const Route = Router();
 
-
 // Create a new revenue
-Route.post("/", authorizePermissions("Revenue","Add"), catchAsync(createRevenue));
+Route.post(
+  "/",
+  authorizePermissions("Revenue", "Add"),
+  catchAsync(createRevenue),
+);
 
 // Get selection data (categories and accounts)
-Route.get("/selection", authorizePermissions("Revenue","View"), catchAsync(selectionRevenue));
+Route.get(
+  "/selection",
+  authorizePermissions("Revenue", "View"),
+  catchAsync(selectionRevenue),
+);
 
 // Get all revenues for the authenticated admin
-Route.get("/", authorizePermissions("Revenue","View"), catchAsync(getRevenues));
+Route.get(
+  "/",
+  authorizePermissions("Revenue", "View"),
+  catchAsync(getRevenues),
+);
 
 // Get a specific revenue by ID
-Route.get("/:id", authorizePermissions("Revenue","View"), catchAsync(getRevenueById));
+Route.get(
+  "/:id",
+  authorizePermissions("Revenue", "View"),
+  catchAsync(getRevenueById),
+);
 
 // Update a revenue
-Route.put("/:id", authorizePermissions("Revenue","Edit"), catchAsync(updateRevenue));
+Route.put(
+  "/:id",
+  authorizePermissions("Revenue", "Edit"),
+  catchAsync(updateRevenue),
+);
+
+Route.delete(
+  "/:id",
+  authorizePermissions("Revenue", "Delete"),
+  catchAsync(deleteRevenue),
+);
 
 export default Route;

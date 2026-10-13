@@ -28,8 +28,7 @@ const normalizeWarehouseSelection = async (
   // Only look at warehouse_id when warehouse_ids array wasn't sent —
   // this avoids false conflicts when middleware injects warehouse_id
   // regardless of what the client actually provided.
-  const hasSingleWarehouseId =
-    !hasWarehouseIdsArray && !!payload?.warehouse_id;
+  const hasSingleWarehouseId = !hasWarehouseIdsArray && !!payload?.warehouse_id;
 
   // No more "not both" throw — warehouse_ids array always takes priority
   // over a middleware-injected warehouse_id.
@@ -128,6 +127,7 @@ const validateProductsInWarehouses = async (
       throw new BadRequest(`Product ${p.productId} not found`);
     }
 
+    // ⭐️ إذا المنتج له variation (productPriceId)
     if (p.productPriceId) {
       if (!mongoose.Types.ObjectId.isValid(p.productPriceId)) {
         throw new BadRequest(`Invalid productPriceId: ${p.productPriceId}`);
@@ -144,6 +144,8 @@ const validateProductsInWarehouses = async (
         );
       }
     } else {
+      // ⭐️ التعديل: تأكد إن المنتج موجود في مستودع واحد على الأقل
+      // (مش لازم يكون في كل المستودعات)
       const warehousesStock = await Product_WarehouseModel.find({
         productId: p.productId,
         warehouseId: { $in: warehouseIds },
@@ -151,17 +153,9 @@ const validateProductsInWarehouses = async (
         .select("warehouseId")
         .lean();
 
-      const existingWarehouseIds = new Set(
-        warehousesStock.map((ws: any) => ws.warehouseId.toString()),
-      );
-
-      const missingWarehouseIds = warehouseIds.filter(
-        (wid) => !existingWarehouseIds.has(wid),
-      );
-
-      if (missingWarehouseIds.length > 0) {
+      if (warehousesStock.length === 0) {
         throw new BadRequest(
-          `Product ${product.name || p.productId} is not assigned to all selected warehouses. Missing in warehouses: ${missingWarehouseIds.join(", ")}`,
+          `Product ${product.name || p.productId} is not available in any of the selected warehouses`,
         );
       }
     }
