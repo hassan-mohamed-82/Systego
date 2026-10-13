@@ -43,6 +43,6 @@ router.patch(
   catchAsync(updateOrderBostaAddress),
 );
 
-router.delete("/admin/online-orders/:id", deleteOnlineOrder);
+router.delete("/:id", deleteOnlineOrder);
 
 export default router;
