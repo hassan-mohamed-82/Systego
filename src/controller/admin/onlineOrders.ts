@@ -736,9 +736,7 @@ export const updateOrderBostaAddress = async (req: Request, res: Response) => {
 /**
  * DELETE /admin/online-orders/:id
  * 🗑️ Soft Delete: بيعلّم الأوردر isDeleted = true + status = "canceled"
- * + Bosta shipment → "Cancelled"
- * النتيجة: الأوردر يختفي من الجدول بس يفضل محفوظ في الـ DB
- * ⚠️ الأدمن يقدر يحذف أي أوردر بأي status
+ * + Bosta shipment → "Cancelled" (في DB + عند Bosta نفسه)
  */
 export const deleteOnlineOrder = async (req: Request, res: Response) => {
   const adminId = (req.user as any)?.id;
@@ -771,7 +769,7 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
   } as any);
 
   // ═══════════════════════════════════════════════════════════
-  // 2️⃣ لو Bosta shipment موجود → غيّر حالته لـ Cancelled
+  // 2️⃣ لو Bosta shipment موجود → الغيه عند Bosta + في الـ DB
   // ═══════════════════════════════════════════════════════════
   const bostaShipment = await BostaShipmentModel.findOne({
     relatedModel: "Order",
@@ -780,6 +778,35 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
   });
 
   if (bostaShipment) {
+    // 🔴 نادي Bosta API عشان نلغي الـ shipment فعلياً
+    if (
+      bostaShipment.deliveryId &&
+      bostaShipment.status !== "Cancelled" &&
+      !["Delivered", "Returned"].includes(bostaShipment.status || "")
+    ) {
+      try {
+        const settings = await ShippingSettingsModel.findOne({
+          superadminId: bostaShipment.superadminId,
+        });
+
+        if (settings?.bosta?.enabled) {
+          const creds = getBostaCreds(settings);
+          await bostaService.cancelDelivery(creds, bostaShipment.deliveryId);
+          console.log(
+            `✅ Bosta shipment ${bostaShipment.deliveryId} cancelled on Bosta side`,
+          );
+        }
+      } catch (err: any) {
+        // ⚠️ لو فشل الإلغاء عند Bosta، سجّل الخطأ
+        console.error(
+          `⚠️ Failed to cancel Bosta shipment ${bostaShipment.deliveryId}:`,
+          err.message,
+        );
+        // مش بنوقف الحذف — بنكمل عادي
+      }
+    }
+
+    // ✅ غيّر الحالة في الـ DB
     bostaShipment.status = "Cancelled";
     bostaShipment.lastSyncAt = now;
 
@@ -811,7 +838,7 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 4️⃣ احفظ الأوردر (مش بيتحذف — بس الـ isDeleted بيتغير)
+  // 4️⃣ احفظ الأوردر
   // ═══════════════════════════════════════════════════════════
   await order.save();
 
@@ -821,6 +848,7 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
       _id: order._id,
       status: order.status,
       isDeleted: (order as any).isDeleted,
+      bostaCancelled: !!bostaShipment,
     },
   });
 };
