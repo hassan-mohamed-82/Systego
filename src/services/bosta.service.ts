@@ -1,5 +1,5 @@
 // src/services/bosta.service.ts
-import axios, { AxiosInstance } from "axios";
+import axios from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
 
@@ -137,10 +137,9 @@ export interface PricingResult {
 }
 
 class BostaService {
-  private createClient({ apiKey, baseUrl }: BostaCredentials): AxiosInstance {
+  private createClient({ apiKey, baseUrl }: BostaCredentials): any {
     if (!apiKey) throw new Error("❌ Bosta API key is missing");
 
-    // ⬇️ الحل: cast لـ any عشان الـ data تتقرا من غير TypeScript errors
     const client = axios.create({
       baseURL: baseUrl,
       timeout: 20000,
@@ -344,7 +343,7 @@ class BostaService {
     // ═══════════════════════════════════════════════════════════
     // ✅ 1. تحديد السعر من tierSizes
     // ═══════════════════════════════════════════════════════════
-    let baseCost = Number(tier?.cost || 0); // fallback
+    let baseCost = Number(tier?.cost || 0);
 
     if (prices && Array.isArray(prices)) {
       for (const price of prices) {
