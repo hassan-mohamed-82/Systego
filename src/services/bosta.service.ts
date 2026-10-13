@@ -1,5 +1,5 @@
 // src/services/bosta.service.ts
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
 import { BostaCredentials } from "../utils/shipping/getBostaCreds";
 import { BadRequest } from "../Errors/BadRequest";
 
@@ -137,9 +137,10 @@ export interface PricingResult {
 }
 
 class BostaService {
-  private createClient({ apiKey, baseUrl }: BostaCredentials) {
+  private createClient({ apiKey, baseUrl }: BostaCredentials): AxiosInstance {
     if (!apiKey) throw new Error("❌ Bosta API key is missing");
 
+    // ⬇️ الحل: cast لـ any عشان الـ data تتقرا من غير TypeScript errors
     const client = axios.create({
       baseURL: baseUrl,
       timeout: 20000,
@@ -148,11 +149,11 @@ class BostaService {
         Authorization: apiKey,
         "X-Requested-By": "Systego",
       },
-    });
+    }) as any;
 
     client.interceptors.response.use(
-      (res) => res,
-      (error) => {
+      (res: any) => res,
+      (error: any) => {
         const bostaData = error.response?.data;
         const status = error.response?.status;
         const url = error.config?.url;
@@ -323,111 +324,113 @@ class BostaService {
   }
 
   private computePricingFromTier(sectorData: any, cod?: number): PricingResult {
-  const tier = sectorData?.tier || sectorData?.data?.tier;
-  const prices = sectorData?.prices || sectorData?.data?.prices;
+    const tier = sectorData?.tier || sectorData?.data?.tier;
+    const prices = sectorData?.prices || sectorData?.data?.prices;
 
-  if (!tier || typeof tier !== "object") {
-    console.warn("⚠️ Invalid tier data, using fallback");
-    return {
-      total: 0,
-      baseCost: 0,
-      vatAmount: 0,
-      codFee: 0,
-      zeroCodDiscount: 0,
-      pickupFee: 0,
-      currency: "EGP",
-      source: "fallback",
-    };
-  }
+    if (!tier || typeof tier !== "object") {
+      console.warn("⚠️ Invalid tier data, using fallback");
+      return {
+        total: 0,
+        baseCost: 0,
+        vatAmount: 0,
+        codFee: 0,
+        zeroCodDiscount: 0,
+        pickupFee: 0,
+        currency: "EGP",
+        source: "fallback",
+      };
+    }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ 1. تحديد السعر من tierSizes
-  // ═══════════════════════════════════════════════════════════
-  let baseCost = Number(tier?.cost || 0); // fallback
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 1. تحديد السعر من tierSizes
+    // ═══════════════════════════════════════════════════════════
+    let baseCost = Number(tier?.cost || 0); // fallback
 
-  // دوّر على الـ size في الـ prices
-  if (prices && Array.isArray(prices)) {
-    for (const price of prices) {
-      const serviceTypes = price?.tierServiceTypes || [];
-      for (const service of serviceTypes) {
-        if (service?.typeAlias === "Deliver" || service?.typeName === "SEND") {
-          const sizes = service?.tierSizes || [];
-          // دوّر على "Normal" أو أول حجم متاح
-          const normalSize = sizes.find(
-            (s: any) =>
-              s?.sizeAlias === "Normal" ||
-              s?.sizeName === "Normal" ||
-              s?.sizeName === "Small & Medium",
-          );
-          if (normalSize?.cost) {
-            baseCost = Number(normalSize.cost);
-          } else if (sizes[0]?.cost) {
-            baseCost = Number(sizes[0].cost);
+    if (prices && Array.isArray(prices)) {
+      for (const price of prices) {
+        const serviceTypes = price?.tierServiceTypes || [];
+        for (const service of serviceTypes) {
+          if (
+            service?.typeAlias === "Deliver" ||
+            service?.typeName === "SEND"
+          ) {
+            const sizes = service?.tierSizes || [];
+            const normalSize = sizes.find(
+              (s: any) =>
+                s?.sizeAlias === "Normal" ||
+                s?.sizeName === "Normal" ||
+                s?.sizeName === "Small & Medium",
+            );
+            if (normalSize?.cost) {
+              baseCost = Number(normalSize.cost);
+            } else if (sizes[0]?.cost) {
+              baseCost = Number(sizes[0].cost);
+            }
+            break;
           }
-          break;
         }
       }
     }
-  }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ 2. COD Fee
-  // ═══════════════════════════════════════════════════════════
-  let codFee = 0;
-  if (cod && cod > 0) {
-    const extraCodFee = tier?.extraCodFee;
-    if (extraCodFee?.percentage) {
-      const computedFee = cod * Number(extraCodFee.percentage);
-      const minFee = Number(extraCodFee.minimumFeeAmount || 0);
-      codFee = Math.max(computedFee, minFee);
-    } else if (extraCodFee?.fixedAmount) {
-      codFee = Number(extraCodFee.fixedAmount);
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 2. COD Fee
+    // ═══════════════════════════════════════════════════════════
+    let codFee = 0;
+    if (cod && cod > 0) {
+      const extraCodFee = tier?.extraCodFee;
+      if (extraCodFee?.percentage) {
+        const computedFee = cod * Number(extraCodFee.percentage);
+        const minFee = Number(extraCodFee.minimumFeeAmount || 0);
+        codFee = Math.max(computedFee, minFee);
+      } else if (extraCodFee?.fixedAmount) {
+        codFee = Number(extraCodFee.fixedAmount);
+      }
     }
-  }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ 3. Zero COD Discount
-  // ═══════════════════════════════════════════════════════════
-  let zeroCodDiscount = 0;
-  if (!cod || cod === 0) {
-    if (tier?.zeroCodDiscount?.amount) {
-      zeroCodDiscount = Number(tier.zeroCodDiscount.amount);
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 3. Zero COD Discount
+    // ═══════════════════════════════════════════════════════════
+    let zeroCodDiscount = 0;
+    if (!cod || cod === 0) {
+      if (tier?.zeroCodDiscount?.amount) {
+        zeroCodDiscount = Number(tier.zeroCodDiscount.amount);
+      }
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 4. VAT
+    // ═══════════════════════════════════════════════════════════
+    const vatRate = Number(tier?.country?.vat || 0.14);
+    const subtotal = baseCost + codFee - zeroCodDiscount;
+    const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
+
+    // ═══════════════════════════════════════════════════════════
+    // ✅ 5. Total
+    // ═══════════════════════════════════════════════════════════
+    const total = Math.round((subtotal + vatAmount) * 100) / 100;
+
+    console.log("💰 Pricing calculation:", {
+      baseCost,
+      cod,
+      codFee,
+      zeroCodDiscount,
+      vatRate,
+      vatAmount,
+      total,
+    });
+
+    return {
+      total: Math.max(total, 0),
+      baseCost,
+      vatAmount,
+      codFee,
+      zeroCodDiscount,
+      pickupFee: 0,
+      currency: tier?.country?.currency || "EGP",
+      source: "sector",
+    };
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ 4. VAT
-  // ═══════════════════════════════════════════════════════════
-  const vatRate = Number(tier?.country?.vat || 0.14);
-  const subtotal = baseCost + codFee - zeroCodDiscount;
-  const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
-
-  // ═══════════════════════════════════════════════════════════
-  // ✅ 5. Total
-  // ═══════════════════════════════════════════════════════════
-  const total = Math.round((subtotal + vatAmount) * 100) / 100;
-
-  console.log("💰 Pricing calculation:", {
-    baseCost,
-    cod,
-    codFee,
-    zeroCodDiscount,
-    vatRate,
-    vatAmount,
-    total,
-  });
-
-  return {
-    total: Math.max(total, 0),
-    baseCost,
-    vatAmount,
-    codFee,
-    zeroCodDiscount,
-    pickupFee: 0,
-    currency: tier?.country?.currency || "EGP",
-    source: "sector",
-  };
-}
   private async getCityBasedPricing(
     creds: BostaCredentials,
     params: {

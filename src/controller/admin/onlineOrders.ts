@@ -1,4 +1,4 @@
-// src/controller/admin/onlineOrders.js
+// src/controller/admin/onlineOrders.ts
 import { Request, Response } from "express";
 import { OrderModel } from "../../models/schema/users/Order";
 import { BostaShipmentModel } from "../../models/schema/admin/BostaShipment";
@@ -321,7 +321,6 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
       order.selfShipment.failureReason = statusDescription || "";
     }
     if (status === "returned") {
-      // 🆕
       order.selfShipment.returnedAt = now;
     }
 
@@ -333,7 +332,6 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
           status === "delivered" ? { completedOrders: 1 } : { failedOrders: 1 },
       });
     } else if (status === "returned") {
-      // 🆕
       await DeliveryManModel.findByIdAndUpdate(deliveryManId, {
         $pull: { currentOrders: order._id },
       });
@@ -783,13 +781,17 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
     // لو الـ shipment لسه عند Bosta، الأفضل تلغي الأول
     if (
       bostaShipment.deliveryId &&
-      !["Cancelled", "Returned", "Delivered"].includes(bostaShipment.status)
+      !["Cancelled", "Returned", "Delivered"].includes(
+        bostaShipment.status as string,
+      )
     ) {
       throw new BadRequest(
         `Bosta shipment is still active (${bostaShipment.status}). Cancel it first.`,
       );
     }
-    await BostaShipmentModel.findByIdAndDelete(bostaShipment._id);
+
+    // ✅ الحل: String() عشان نتجنب TS error
+    await BostaShipmentModel.findByIdAndDelete(String(bostaShipment._id));
   }
 
   // 🧹 فك ربط المندوب لو self shipment
@@ -800,7 +802,7 @@ export const deleteOnlineOrder = async (req: Request, res: Response) => {
     );
   }
 
-  await OrderModel.findByIdAndDelete(id);
+  await OrderModel.findByIdAndDelete(String(order._id));
 
   SuccessResponse(res, {
     message: "✅ Order deleted successfully",
