@@ -85,10 +85,15 @@ import GatewayRouter from "../../utils/dbGateway";
 import POSOnlineOrdersRouter from "./POS/onlineOrders";
 import DeliveryManRouter from "./DeliveryMan";
 import deliveryAssignmentRouter from "./DeliveryAssignment";
+import pleskProxyRouter from "./pleskProxy";
 
 export const route = Router();
 
 route.use("/tenant-info", tenantInfoRouter);
+
+// ✅ Plesk secure proxy — must be before auth middleware
+// The x-api-key is injected server-side, never exposed to the browser
+route.use("/plesk", pleskProxyRouter);
 
 route.use("/auth", authRouter);
 route.use(authenticated, authorizeRoles("admin", "superadmin"));
