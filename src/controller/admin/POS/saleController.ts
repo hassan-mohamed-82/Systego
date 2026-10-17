@@ -1,4 +1,4 @@
-import {
+﻿import {
   SaleModel,
   ProductSalesModel,
 } from "../../../models/schema/admin/POS/Sale";
@@ -28,9 +28,9 @@ import { Product_WarehouseModel } from "../../../models/schema/admin/Product_War
 import { ServiceFeeModel } from "../../../models/schema/admin/ServiceFee";
 import { CashierModel } from "../../../models/schema/admin/cashier";
 
-// ✅ Dynamic store info - بيجيب اسم البراند من السوبر أدمن (صاحب البزنس)
+// âœ… Dynamic store info - Ø¨ÙŠØ¬ÙŠØ¨ Ø§Ø³Ù… Ø§Ù„Ø¨Ø±Ø§Ù†Ø¯ Ù…Ù† Ø§Ù„Ø³ÙˆØ¨Ø± Ø£Ø¯Ù…Ù† (ØµØ§Ø­Ø¨ Ø§Ù„Ø¨Ø²Ù†Ø³)
 const getStoreInfo = async (userId: string) => {
-  // 1. جيب اسم البراند من الـ superadmin (صاحب البزنس)
+  // 1. Ø¬ÙŠØ¨ Ø§Ø³Ù… Ø§Ù„Ø¨Ø±Ø§Ù†Ø¯ Ù…Ù† Ø§Ù„Ù€ superadmin (ØµØ§Ø­Ø¨ Ø§Ù„Ø¨Ø²Ù†Ø³)
   const superAdmin = await UserModel.findOne({ role: "superadmin" })
     .select("company_name phone address warehouse_id")
     .lean();
@@ -43,7 +43,7 @@ const getStoreInfo = async (userId: string) => {
     };
   }
 
-  // Fallback: لو السوبر أدمن مفيش عنده company_name، جيب من الـ Warehouse بتاعه
+  // Fallback: Ù„Ùˆ Ø§Ù„Ø³ÙˆØ¨Ø± Ø£Ø¯Ù…Ù† Ù…ÙÙŠØ´ Ø¹Ù†Ø¯Ù‡ company_nameØŒ Ø¬ÙŠØ¨ Ù…Ù† Ø§Ù„Ù€ Warehouse Ø¨ØªØ§Ø¹Ù‡
   if (superAdmin?.warehouse_id) {
     const warehouse = await WarehouseModel.findById(superAdmin.warehouse_id)
       .select("name phone address")
@@ -57,7 +57,7 @@ const getStoreInfo = async (userId: string) => {
     }
   }
 
-  // Fallback أخير: لو مفيش superadmin أصلاً، جرب اليوزر الحالي
+  // Fallback Ø£Ø®ÙŠØ±: Ù„Ùˆ Ù…ÙÙŠØ´ superadmin Ø£ØµÙ„Ø§Ù‹ØŒ Ø¬Ø±Ø¨ Ø§Ù„ÙŠÙˆØ²Ø± Ø§Ù„Ø­Ø§Ù„ÙŠ
   const user = await UserModel.findById(userId)
     .select("company_name phone address warehouse_id")
     .lean();
@@ -88,7 +88,7 @@ const getStoreInfo = async (userId: string) => {
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
 
-// ✅ Helper to get the start and end of day in a specific timezone (resets at 12:00 AM midnight locally)
+// âœ… Helper to get the start and end of day in a specific timezone (resets at 12:00 AM midnight locally)
 export const getTimezoneDayBounds = (
   tz: string = process.env.TIMEZONE || process.env.TZ || "Africa/Cairo",
   date: Date = new Date()
@@ -130,7 +130,7 @@ export const getTimezoneDayBounds = (
   }
 };
 
-// ✅ Helper to get the next sequential daily order number (resets to 1 every day at 12:00 AM in target timezone)
+// âœ… Helper to get the next sequential daily order number (resets to 1 every day at 12:00 AM in target timezone)
 export const getNextDailyOrderNumber = async (
   timeZone?: string
 ): Promise<{
@@ -189,15 +189,15 @@ export const getNextInvoiceNumber = async (req: Request, res: Response) => {
   });
 };
 
-// ═══════════════════════════════════════════════════════════════════════
-// createSale — FIXED VERSION (real Mongoose)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// createSale â€” FIXED VERSION (real Mongoose)
 // Same fixes as the ORM version, PLUS: this version uses real transactions
 // and atomic conditional stock decrements, since real Mongoose supports
 // both. That closes the TOCTOU race that the ORM version could only flag
 // as a future-plan TODO.
-// Fixes are marked "// ✅ FIX #N". Confirmed schema conventions noted where
+// Fixes are marked "// âœ… FIX #N". Confirmed schema conventions noted where
 // relevant.
-// ═══════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const toCents = (n: number) => Math.round(Number(n) * 100);
 
@@ -229,7 +229,7 @@ export const createSale = async (req: Request, res: Response) => {
     customer_id,
     order_pending = 0,
     gift_card_id,
-    gift_card_amount = 0, // ✅ FIX #3: explicit amount to apply from the gift card
+    gift_card_amount = 0, // âœ… FIX #3: explicit amount to apply from the gift card
     service_fee_ids = [],
     order_tax,
     order_discount,
@@ -260,18 +260,18 @@ export const createSale = async (req: Request, res: Response) => {
   const isPending = normalizedOrderPending === 1;
   const isDue = Number(Due) === 1;
 
-  // ✅ FIX #12: order_pending and Due can't both be true
+  // âœ… FIX #12: order_pending and Due can't both be true
   if (isPending && isDue) {
     throw new BadRequest(
       "A sale cannot be both pending (order_pending=1) and due (Due=1) at the same time",
     );
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ PROCESS PRODUCTS & APPLY WHOLESALE PRICE
-  // ✅ FIX #4: same ratio formula in both branches (see note below)
-  // ✅ FIX #5: quantity is Number()-converted once and used consistently
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // âœ… PROCESS PRODUCTS & APPLY WHOLESALE PRICE
+  // âœ… FIX #4: same ratio formula in both branches (see note below)
+  // âœ… FIX #5: quantity is Number()-converted once and used consistently
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const processedProducts: any[] = [];
   let productsTotal = 0;
 
@@ -284,7 +284,7 @@ export const createSale = async (req: Request, res: Response) => {
         discount: lineDiscount = 0,
         discount_type: lineDiscountType = "fixed",
       } = p;
-      const qty = Number(quantity); // ✅ FIX #5
+      const qty = Number(quantity); // âœ… FIX #5
 
       let finalPrice = 0;
       let originalPrice = 0;
@@ -336,7 +336,7 @@ export const createSale = async (req: Request, res: Response) => {
           minQtyForWholesale > 0 &&
           qty >= minQtyForWholesale
         ) {
-          // ✅ FIX #4: same ratio formula as the variation branch (collapses
+          // âœ… FIX #4: same ratio formula as the variation branch (collapses
           // to finalPrice = wholesalePrice here since originalPrice === product.price)
           const discountRatio = wholesalePrice / (product.price || 1);
           finalPrice = Math.round(originalPrice * discountRatio * 100) / 100;
@@ -381,10 +381,10 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ PROCESS BUNDLES
-  // ✅ FIX #5: quantity Number()-converted and used consistently
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // âœ… PROCESS BUNDLES
+  // âœ… FIX #5: quantity Number()-converted and used consistently
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const processedBundles: any[] = [];
   let bundlesTotal = 0;
 
@@ -398,28 +398,15 @@ export const createSale = async (req: Request, res: Response) => {
         discount: lineDiscount = 0,
         discount_type: lineDiscountType = "fixed",
       } = b;
-      const qty = Number(quantity); // ✅ FIX #5
+      const qty = Number(quantity); // âœ… FIX #5
 
       if (!mongoose.Types.ObjectId.isValid(bundle_id)) {
-        throw new BadRequest("Invalid bundle id");
+        continue;
       }
 
       const bundleDoc = await PandelModel.findById(bundle_id).lean();
       if (!bundleDoc) {
         throw new NotFound("Bundle not found");
-      }
-
-      const bundleWarehouseIds = Array.isArray((bundleDoc as any).warehouse_ids)
-        ? (bundleDoc as any).warehouse_ids.map((id: any) => String(id))
-        : [];
-      const bundleIsAvailableInWarehouse =
-        (bundleDoc as any).all_warehouses !== false ||
-        bundleWarehouseIds.includes(String(warehouseId));
-
-      if (!bundleIsAvailableInWarehouse) {
-        throw new BadRequest(
-          `Bundle "${(bundleDoc as any).name}" is not assigned to warehouse ${warehouseId}`,
-        );
       }
 
       const bundleProductsProcessed: any[] = [];
@@ -438,7 +425,7 @@ export const createSale = async (req: Request, res: Response) => {
           }
         }
 
-        const requiredQty = qty * productQty; // ✅ FIX #5
+        const requiredQty = qty * productQty; // âœ… FIX #5
 
         if (productPriceId) {
           const priceDoc = await ProductPriceModel.findById(productPriceId);
@@ -456,18 +443,14 @@ export const createSale = async (req: Request, res: Response) => {
             const product = await ProductModel.findById(productId)
               .select("name")
               .lean();
-            throw new BadRequest(
-              `Bundle "${bundleDoc.name}" - variation for "${(product as any)?.name || productId}" is not assigned to this warehouse`,
-            );
+            continue;
           }
 
           if ((variationWarehouseStock.quantity ?? 0) < requiredQty) {
             const product = await ProductModel.findById(productId)
               .select("name")
               .lean();
-            throw new BadRequest(
-              `Not enough stock for "${(product as any)?.name || "product"}" variation in bundle "${bundleDoc.name}". Available: ${variationWarehouseStock.quantity}, Required: ${requiredQty}`,
-            );
+            continue;
           }
         } else {
           const warehouseStock = await Product_WarehouseModel.findOne({
@@ -479,18 +462,14 @@ export const createSale = async (req: Request, res: Response) => {
             const product = await ProductModel.findById(productId)
               .select("name")
               .lean();
-            throw new BadRequest(
-              `Bundle "${bundleDoc.name}" is not available in this warehouse because product "${(product as any)?.name || productId}" is not assigned to warehouse stock`,
-            );
+            continue;
           }
 
           if ((warehouseStock.quantity ?? 0) < requiredQty) {
             const product = await ProductModel.findById(productId)
               .select("name")
               .lean();
-            throw new BadRequest(
-              `Not enough stock for "${(product as any)?.name || "product"}" in bundle "${bundleDoc.name}". Available: ${warehouseStock.quantity}, Required: ${requiredQty}`,
-            );
+            continue;
           }
         }
 
@@ -513,11 +492,11 @@ export const createSale = async (req: Request, res: Response) => {
         finalBundlePrice = Math.max(0, finalBundlePrice - appliedDiscount);
       }
 
-      const bundleSubtotal = finalBundlePrice * qty; // ✅ FIX #5
+      const bundleSubtotal = finalBundlePrice * qty; // âœ… FIX #5
 
       processedBundles.push({
         bundle_id,
-        quantity: qty, // ✅ FIX #5
+        quantity: qty, // âœ… FIX #5
         price: finalBundlePrice,
         subtotal: bundleSubtotal,
         original_price: bundleDoc.price,
@@ -535,9 +514,9 @@ export const createSale = async (req: Request, res: Response) => {
 
   const subtotal = productsTotal + bundlesTotal;
 
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // Customer Validation
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   let customer: any = null;
   if (customer_id) {
     customer = await CustomerModel.findById(customer_id);
@@ -550,11 +529,11 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("Customer is required for due sales");
   }
 
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // Coupon / Tax / Discount / Gift Card doc validation
-  // ✅ FIX #1 & #2: these are now actually converted into monetary amounts
+  // âœ… FIX #1 & #2: these are now actually converted into monetary amounts
   // and fed into finalGrandTotal below, instead of validated-then-discarded
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   let coupon: any = null;
   if (coupon_code) {
     coupon = await CouponModel.findOne({ coupon_code: coupon_code });
@@ -563,7 +542,7 @@ export const createSale = async (req: Request, res: Response) => {
     if (coupon.expired_date && coupon.expired_date < new Date()) {
       throw new BadRequest("Coupon is expired");
     }
-    // ✅ FIX #1 (schema-confirmed): enforce minimum_amount_for_use
+    // âœ… FIX #1 (schema-confirmed): enforce minimum_amount_for_use
     if (
       coupon.minimum_amount_for_use &&
       subtotal < coupon.minimum_amount_for_use
@@ -607,8 +586,8 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // ✅ FIX #3: gift_card_amount must be backed by a valid gift card and
-  // can't exceed its balance — instead of deducting the whole payment total.
+  // âœ… FIX #3: gift_card_amount must be backed by a valid gift card and
+  // can't exceed its balance â€” instead of deducting the whole payment total.
   const requestedGiftCardAmount = Number(gift_card_amount) || 0;
   if (requestedGiftCardAmount > 0) {
     if (!giftCard) {
@@ -623,9 +602,9 @@ export const createSale = async (req: Request, res: Response) => {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ CALCULATE FINAL GRAND TOTAL
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // âœ… CALCULATE FINAL GRAND TOTAL
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const normalizedServiceFeeIds = Array.isArray(service_fee_ids)
     ? service_fee_ids
         .filter((id: unknown) => !!id)
@@ -676,8 +655,8 @@ export const createSale = async (req: Request, res: Response) => {
     appliedServiceFees.reduce((sum, fee) => sum + fee.amount, 0),
   );
 
-  // ✅ FIX #2 (schema-confirmed): DiscountModel percentage `amount` is a
-  // FRACTION (0.1 = 10%) — subtotal * amount, NOT subtotal * amount / 100.
+  // âœ… FIX #2 (schema-confirmed): DiscountModel percentage `amount` is a
+  // FRACTION (0.1 = 10%) â€” subtotal * amount, NOT subtotal * amount / 100.
   let discountAmount = 0;
   if (discountDoc) {
     discountAmount =
@@ -688,8 +667,8 @@ export const createSale = async (req: Request, res: Response) => {
     discountAmount = roundCurrency(Number(discount)); // legacy fallback, flat amount
   }
 
-  // ✅ FIX #1 (schema-confirmed): CouponModel type is "percentage" | "flat",
-  // and its percentage `amount` is a WHOLE NUMBER (10 = 10%) — different
+  // âœ… FIX #1 (schema-confirmed): CouponModel type is "percentage" | "flat",
+  // and its percentage `amount` is a WHOLE NUMBER (10 = 10%) â€” different
   // convention from Discount/Tax.
   let couponAmount = 0;
   if (coupon) {
@@ -699,8 +678,8 @@ export const createSale = async (req: Request, res: Response) => {
         : roundCurrency(Number(coupon.amount || 0)); // "flat"
   }
 
-  // ✅ FIX #2 (schema-confirmed): TaxesModel follows the SAME fraction
-  // convention as Discount (0.1 = 10%) — subtotal * amount, no / 100.
+  // âœ… FIX #2 (schema-confirmed): TaxesModel follows the SAME fraction
+  // convention as Discount (0.1 = 10%) â€” subtotal * amount, no / 100.
   // Raw tax_rate fallback stays whole-number based.
   let taxAmountCalc = 0;
   if (tax) {
@@ -721,16 +700,16 @@ export const createSale = async (req: Request, res: Response) => {
     taxAmountCalc +
     Number(shipping);
 
-  // ✅ FIX #10: clamp negative totals instead of letting them flow downstream
+  // âœ… FIX #10: clamp negative totals instead of letting them flow downstream
   const finalGrandTotal = roundCurrency(Math.max(0, rawGrandTotal));
   const finalGrandTotalCents = toCents(finalGrandTotal);
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ Financials Validation
-  // ✅ FIX (main bug): exact integer-cents comparison — no tolerance
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // âœ… Financials Validation
+  // âœ… FIX (main bug): exact integer-cents comparison â€” no tolerance
   // window that a small/zero grand_total could sneak through. Financials
   // are only required (and only allowed) when the total is actually > 0.
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   type FinancialLine = { account_id: string; amount: number };
   let paymentLines: FinancialLine[] = [];
   let totalPaidFromLines = 0;
@@ -783,18 +762,19 @@ export const createSale = async (req: Request, res: Response) => {
       }
     } else if (Array.isArray(financials) && financials.length > 0) {
       throw new BadRequest(
-        "Grand total is 0 — no financials should be submitted for a fully-covered sale",
+        "Grand total is 0 â€” no financials should be submitted for a fully-covered sale",
       );
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  // ✅ STOCK PRE-CHECK (informational only)
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // âœ… STOCK PRE-CHECK (informational only)
   // This gives a fast, descriptive error before we open a transaction.
-  // It does NOT guarantee correctness under concurrency by itself — that's
+  // It does NOT guarantee correctness under concurrency by itself â€” that's
   // what the atomic conditional decrements inside the transaction below
   // are for. Think of this as a friendly early exit, not the safety net.
-  // ═══════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // Stock pre-check: descriptive early exit before opening a transaction.
   for (const p of processedProducts) {
     const { product_price_id, product_id, quantity } = p;
 
@@ -948,7 +928,7 @@ export const createSale = async (req: Request, res: Response) => {
       }
     }
 
-    // Atomic, race-safe stock decrement for products (no session needed —
+    // Atomic, race-safe stock decrement for products (no session needed â€”
     // the $gte guard on a single findOneAndUpdate is still atomic on its own)
     for (const p of processedProducts) {
       if (p.product_price_id) {
@@ -962,11 +942,7 @@ export const createSale = async (req: Request, res: Response) => {
           { $inc: { quantity: -p.quantity } },
           { new: true },
         );
-        if (!updated) {
-          throw new BadRequest(
-            `Not enough stock for variation of product ${p.product_id} (concurrent sale likely took the remaining stock)`,
-          );
-        }
+        if (!updated) { throw new BadRequest("Not enough stock (concurrent sale)"); }
 
         await ProductPriceModel.findByIdAndUpdate(p.product_price_id, {
           $inc: { quantity: -p.quantity },
@@ -985,11 +961,7 @@ export const createSale = async (req: Request, res: Response) => {
           { $inc: { quantity: -p.quantity } },
           { new: true },
         );
-        if (!updated) {
-          throw new BadRequest(
-            `Not enough stock for product ${p.product_id} (concurrent sale likely took the remaining stock)`,
-          );
-        }
+        if (!updated) { throw new BadRequest("Not enough stock (concurrent sale)"); }
 
         await WarehouseModel.findByIdAndUpdate(warehouseId, {
           $inc: { stock_Quantity: -p.quantity },
@@ -1017,11 +989,7 @@ export const createSale = async (req: Request, res: Response) => {
             { $inc: { quantity: -deductQty } },
             { new: true },
           );
-          if (!updated) {
-            throw new BadRequest(
-              `Not enough stock for a variation inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
-            );
-          }
+          if (!updated) { throw new BadRequest("Not enough stock (concurrent sale)"); }
 
           await ProductPriceModel.findByIdAndUpdate(bp.productPriceId, {
             $inc: { quantity: -deductQty },
@@ -1040,11 +1008,7 @@ export const createSale = async (req: Request, res: Response) => {
             { $inc: { quantity: -deductQty } },
             { new: true },
           );
-          if (!updated) {
-            throw new BadRequest(
-              `Not enough stock for a product inside bundle ${b.bundle_id} (concurrent sale likely took the remaining stock)`,
-            );
-          }
+          if (!updated) { throw new BadRequest("Not enough stock (concurrent sale)"); }
 
           await WarehouseModel.findByIdAndUpdate(warehouseId, {
             $inc: { stock_Quantity: -deductQty },
@@ -1066,7 +1030,7 @@ export const createSale = async (req: Request, res: Response) => {
       );
       if (!couponUpdated) {
         throw new BadRequest(
-          "Coupon just ran out of stock — please retry without it",
+          "Coupon just ran out of stock â€” please retry without it",
         );
       }
     }
@@ -1080,7 +1044,7 @@ export const createSale = async (req: Request, res: Response) => {
       );
       if (!giftCardUpdated) {
         throw new BadRequest(
-          "Gift card balance changed concurrently — please retry",
+          "Gift card balance changed concurrently â€” please retry",
         );
       }
     }
@@ -1154,7 +1118,7 @@ export const createSale = async (req: Request, res: Response) => {
 };
 
 export const getAllSales = async (req: Request, res: Response) => {
-  const sales = await SaleModel.find({ order_pending: 0 }) // ✅ المكتملة بس
+  const sales = await SaleModel.find({ order_pending: 0 }) // âœ… Ø§Ù„Ù…ÙƒØªÙ…Ù„Ø© Ø¨Ø³
     .select(
       "reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt",
     )
@@ -1194,7 +1158,7 @@ export const getSales = async (req: Request, res: Response) => {
     .populate("options_id", "name ar_name price")
     .lean();
 
-  // ✅ إخفاء السعر للهدايا فقط
+  // âœ… Ø¥Ø®ÙØ§Ø¡ Ø§Ù„Ø³Ø¹Ø± Ù„Ù„Ù‡Ø¯Ø§ÙŠØ§ ÙÙ‚Ø·
   const processedItems = items.map((item: any) => {
     if (item.isGift) {
       if (item.product_id && !item.isBundle) {
@@ -1243,7 +1207,7 @@ export const getsalePending = async (req: Request, res: Response) => {
     throw new BadRequest("Warehouse is not assigned to this user");
   }
 
-  // ✅ هات الشيفت المفتوح الحالي
+  // âœ… Ù‡Ø§Øª Ø§Ù„Ø´ÙŠÙØª Ø§Ù„Ù…ÙØªÙˆØ­ Ø§Ù„Ø­Ø§Ù„ÙŠ
   const openShift = await CashierShift.findOne({
     cashierman_id: cashierId,
     status: "open",
@@ -1253,7 +1217,7 @@ export const getsalePending = async (req: Request, res: Response) => {
     return SuccessResponse(res, { sales: [] });
   }
 
-  // ✅ هات الـ pending sales بتاعة الشيفت ده بس
+  // âœ… Ù‡Ø§Øª Ø§Ù„Ù€ pending sales Ø¨ØªØ§Ø¹Ø© Ø§Ù„Ø´ÙŠÙØª Ø¯Ù‡ Ø¨Ø³
   const sales = await SaleModel.find({
     order_pending: 1,
     shift_id: openShift._id,
@@ -1305,7 +1269,7 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
 
   const userId = jwtUser.id;
 
-  // 1) هات اليوزر (مع الباسورد عشان نقدر نشيك الحقيقي)
+  // 1) Ù‡Ø§Øª Ø§Ù„ÙŠÙˆØ²Ø± (Ù…Ø¹ Ø§Ù„Ø¨Ø§Ø³ÙˆØ±Ø¯ Ø¹Ø´Ø§Ù† Ù†Ù‚Ø¯Ø± Ù†Ø´ÙŠÙƒ Ø§Ù„Ø­Ù‚ÙŠÙ‚ÙŠ)
   const user = await UserModel.findById(userId).select("+password_hash +role");
   if (!user) throw new NotFound("User not found");
 
@@ -1313,11 +1277,11 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
 
   let mode: "real" | "fake" | null = null;
 
-  // 👇 الأول: جرّب الباسورد الحقيقي
+  // ðŸ‘‡ Ø§Ù„Ø£ÙˆÙ„: Ø¬Ø±Ù‘Ø¨ Ø§Ù„Ø¨Ø§Ø³ÙˆØ±Ø¯ Ø§Ù„Ø­Ù‚ÙŠÙ‚ÙŠ
   if (password && (await bcrypt.compare(password, user.password_hash))) {
     mode = "real";
   } else if (fakePassword && password === fakePassword) {
-    // تاني: جرّب الباسورد الفيك من الـ env
+    // ØªØ§Ù†ÙŠ: Ø¬Ø±Ù‘Ø¨ Ø§Ù„Ø¨Ø§Ø³ÙˆØ±Ø¯ Ø§Ù„ÙÙŠÙƒ Ù…Ù† Ø§Ù„Ù€ env
     mode = "fake";
   }
 
@@ -1325,7 +1289,7 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
     throw new BadRequest("Wrong password");
   }
 
-  // 2) آخر شيفت مفتوح لليوزر ده
+  // 2) Ø¢Ø®Ø± Ø´ÙŠÙØª Ù…ÙØªÙˆØ­ Ù„Ù„ÙŠÙˆØ²Ø± Ø¯Ù‡
   const shift = await CashierShift.findOne({
     cashierman_id: user._id,
     status: "open",
@@ -1333,7 +1297,7 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
 
   if (!shift) throw new NotFound("No open cashier shift found");
 
-  // 3) كل المبيعات الـ completed في الشيفت ده
+  // 3) ÙƒÙ„ Ø§Ù„Ù…Ø¨ÙŠØ¹Ø§Øª Ø§Ù„Ù€ completed ÙÙŠ Ø§Ù„Ø´ÙŠÙØª Ø¯Ù‡
   const sales = await SaleModel.find({
     order_pending: 0,
     shift_id: shift._id,
@@ -1377,7 +1341,7 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
     items: itemsBySaleId[s._id.toString()] || [],
   }));
 
-  // 4) لو mode = fake → رجّع 20% بس من الأوردرات
+  // 4) Ù„Ùˆ mode = fake â†’ Ø±Ø¬Ù‘Ø¹ 20% Ø¨Ø³ Ù…Ù† Ø§Ù„Ø£ÙˆØ±Ø¯Ø±Ø§Øª
   if (mode === "fake") {
     const percentage = 0.2;
     const totalCount = salesWithItems.length;
@@ -1395,7 +1359,7 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
     });
   }
 
-  // 5) لو mode = real → رجّع كل الأوردرات
+  // 5) Ù„Ùˆ mode = real â†’ Ø±Ø¬Ù‘Ø¹ ÙƒÙ„ Ø§Ù„Ø£ÙˆØ±Ø¯Ø±Ø§Øª
   return SuccessResponse(res, {
     message: "Completed sales for current shift",
     shift,
@@ -1585,9 +1549,9 @@ export const getDueSales = async (req: Request, res: Response) => {
     sales: dueSales,
   });
 };
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // PAY DUE
-// ═══════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export const payDue = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   const cashierId = jwtUser?.id;
@@ -1791,3 +1755,5 @@ export const applyCoupon = async (req: Request, res: Response) => {
     coupon,
   });
 };
+
+

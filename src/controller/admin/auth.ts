@@ -13,6 +13,8 @@ import { SuccessResponse } from "../../utils/response";
 import { AppUser, UserPermission } from "../../types/custom";
 import { MODULES, ACTION_NAMES } from "../../types/constant";
 import { saveBase64Image } from "../../utils/handleImages";
+import { getTenantInfo } from "../../utils/tenantService";
+import { ForbiddenError } from "../../Errors/forbiddenError";
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   const { email, password } = req.body;
@@ -34,6 +36,26 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   const isMatch = await bcrypt.compare(password, user.password_hash as string);
   if (!isMatch) {
     throw new UnauthorizedError("Invalid email or password");
+  }
+
+  try {
+    const tenantInfo = await getTenantInfo();
+    const expired =
+      tenantInfo.subscription?.expired === true ||
+      tenantInfo.tenant?.status === "inactive";
+    if (expired) {
+      throw new ForbiddenError(
+        "Your subscription has expired. Please contact Systego support to renew.",
+        { code: "SUBSCRIPTION_EXPIRED" },
+      );
+    }
+  } catch (error: any) {
+    if (error instanceof ForbiddenError) {
+      throw error;
+    }
+    if (!error.message?.includes("not configured")) {
+      console.warn(`[login] Tenant verification skipped: ${error.message}`);
+    }
   }
 
   // ✅ جيب الـ permissions للـ Response (Frontend)

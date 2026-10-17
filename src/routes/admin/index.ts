@@ -57,6 +57,7 @@ import productMovementRouter from "./productMovement";
 import { authenticated } from "../../middlewares/authenticated";
 import { authorizeRoles } from "../../middlewares/authorized";
 import { enforceWarehouseScope } from "../../middlewares/warehouseScope";
+import { requireActiveTenant } from "../../middlewares/requireActiveTenant";
 import RevenueRouter from "./Revenue";
 import DashboardRouter from "./dsashboard";
 import ReturnPurchaseRouter from "./returnPurchase";
@@ -86,6 +87,7 @@ import POSOnlineOrdersRouter from "./POS/onlineOrders";
 import DeliveryManRouter from "./DeliveryMan";
 import deliveryAssignmentRouter from "./DeliveryAssignment";
 import pleskProxyRouter from "./pleskProxy";
+import subscriptionRouter from "./subscription";
 
 export const route = Router();
 
@@ -97,6 +99,8 @@ route.use("/plesk", pleskProxyRouter);
 
 route.use("/auth", authRouter);
 route.use(authenticated, authorizeRoles("admin", "superadmin"));
+route.use("/subscription", subscriptionRouter);
+route.use(requireActiveTenant);
 route.use(enforceWarehouseScope);
 route.use("/profile", ProfileRouter);
 route.use("/brand", brandRouter);

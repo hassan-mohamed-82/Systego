@@ -9,6 +9,7 @@ export const getTenantInfoController = catchAsync(async (req: Request, res: Resp
         return SuccessResponse(res, {
             message: "Tenant info retrieved successfully",
             ...tenantInfo,
+            subscription: tenantInfo.subscription || null,
         }, 200);
     } catch (error: any) {
         // If tenant service is not configured, return a default "all features enabled" response
@@ -16,7 +17,7 @@ export const getTenantInfoController = catchAsync(async (req: Request, res: Resp
             return SuccessResponse(res, {
                 message: "Tenant verification not configured — all features enabled by default",
                 tenant: null,
-                features: { haveEcommerce: true, haveMobileApp: true },
+                features: { haveEcommerce: true, haveMobileApp: true, haveAdminPanel: true },
                 package: null,
             }, 200);
         }

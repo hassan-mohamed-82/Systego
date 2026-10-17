@@ -20,6 +20,14 @@ export interface TenantFeatures {
     havePOS: boolean;
     haveReports: boolean;
     haveStockTake: boolean;
+    haveAdminPanel: boolean;
+}
+
+export interface TenantSubscription {
+    daysLeft: number | null;
+    endDate: string | Date | null;
+    expired: boolean;
+    paymentCycle?: string;
 }
 
 export interface TenantInfo {
@@ -32,7 +40,13 @@ export interface TenantInfo {
     package: {
         name: string | null;
         status: boolean;
+        monthly_price?: number | null;
+        quarterly_price?: number | null;
+        half_yearly_price?: number | null;
+        yearly_price?: number | null;
     };
+    subscription?: TenantSubscription | null;
+    locked?: boolean;
 }
 
 // ─── Cache ─────────────────────────────────────────────────────────
@@ -99,6 +113,8 @@ export async function getTenantInfo(): Promise<TenantInfo> {
             tenant: responseData.tenant,
             features: responseData.features,
             package: responseData.package,
+            subscription: responseData.subscription || null,
+            locked: responseData.locked,
         };
 
         // Update cache
@@ -127,4 +143,22 @@ export async function getTenantInfo(): Promise<TenantInfo> {
 export async function getFeatures(): Promise<TenantFeatures> {
     const info = await getTenantInfo();
     return info.features;
+}
+
+/**
+ * Submits a payment request (with optional screenshot) to Super Systego.
+ */
+export async function submitTenantPayment(payment_cycle: string, screenshot?: string): Promise<any> {
+    const client = getClient();
+    const { data } = await client.post("/api/tenant/submit-payment", { payment_cycle, screenshot });
+    return (data as any)?.data || data;
+}
+
+/**
+ * Gets the latest payment status from Super Systego.
+ */
+export async function getTenantPaymentStatus(): Promise<any> {
+    const client = getClient();
+    const { data } = await client.get("/api/tenant/payment-status");
+    return (data as any)?.data || data;
 }
