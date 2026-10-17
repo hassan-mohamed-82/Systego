@@ -186,6 +186,8 @@ const buildWarehouseProductList = async (
         different_price,
         variation_attributes,
         variations: formattedVariations,
+        // Stock scoped to the selected warehouse (0 if not present).
+        quantity: stockByProduct[product._id.toString()] ?? 0,
       };
     })
   );
