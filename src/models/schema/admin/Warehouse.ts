@@ -11,6 +11,11 @@ const WarehouseSchema = new Schema(
     number_of_products: { type: Number, default: 0 },
     stock_Quantity: { type: Number, default: 0 },
     Is_Online: { type: Boolean, default: false },
+    // Created/synced from Super Systego (branch list defined by the owner).
+    is_managed: { type: Boolean, default: false },
+    // When false, the branch was removed from the plan and is suspended:
+    // the admin sees a "contact support" notice.
+    enabled: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

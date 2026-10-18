@@ -1,4 +1,5 @@
 import axios from "axios";
+import { syncBranches } from "./branchSync";
 
 /**
  * TenantService: Communicates with Super Systego to verify this client's
@@ -21,6 +22,10 @@ export interface TenantFeatures {
     haveReports: boolean;
     haveStockTake: boolean;
     haveAdminPanel: boolean;
+    /** Number of branches (warehouses) allowed by the client's plan. */
+    branches: number;
+    /** Number of online branches allowed by the client's plan. */
+    online_branches: number;
 }
 
 export interface TenantSubscription {
@@ -47,6 +52,8 @@ export interface TenantInfo {
     };
     subscription?: TenantSubscription | null;
     locked?: boolean;
+    /** Branch definitions from Super Systego (name + online flag). */
+    branches_config?: Array<{ name: string; Is_Online: boolean }>;
 }
 
 // ─── Cache ─────────────────────────────────────────────────────────
@@ -115,11 +122,17 @@ export async function getTenantInfo(): Promise<TenantInfo> {
             package: responseData.package,
             subscription: responseData.subscription || null,
             locked: responseData.locked,
+            branches_config: Array.isArray(responseData.branches_config)
+                ? responseData.branches_config
+                : undefined,
         };
 
         // Update cache
         cachedData = tenantInfo;
         cachedAt = Date.now();
+
+        // Keep the tenant's branches in sync with the owner's configuration.
+        await syncBranches(tenantInfo.branches_config);
 
         console.log(`[TenantService] Verified tenant: ${tenantInfo.tenant?.company_name} | Ecommerce: ${tenantInfo.features?.haveEcommerce} | MobileApp: ${tenantInfo.features?.haveMobileApp}`);
 
