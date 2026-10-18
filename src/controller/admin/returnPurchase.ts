@@ -24,13 +24,15 @@ export const getPurchaseForReturn = async (req: Request, res: Response) => {
         throw new BadRequest("Purchase reference is required");
     }
 
+    const cleanRef = String(reference).replace(/^#/, "").trim();
+
     let purchase;
-    if (mongoose.Types.ObjectId.isValid(reference)) {
-        purchase = await PurchaseModel.findById(reference);
+    if (mongoose.Types.ObjectId.isValid(cleanRef)) {
+        purchase = await PurchaseModel.findById(cleanRef);
     }
 
     if (!purchase) {
-        purchase = await PurchaseModel.findOne({ reference: reference });
+        purchase = await PurchaseModel.findOne({ reference: cleanRef });
     }
 
     if (!purchase) {

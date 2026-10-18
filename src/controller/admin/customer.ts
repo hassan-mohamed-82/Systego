@@ -1,13 +1,14 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { CustomerModel, CustomerGroupModel } from '../../models/schema/admin/POS/customer';
 import { BadRequest } from '../../Errors/BadRequest';
 import { NotFound } from '../../Errors';
 import { SuccessResponse } from '../../utils/response';
 import { CountryModel } from '../../models/schema/admin/Country';
 import mongoose from 'mongoose';
-import { SaleModel } from '../../models/schema/admin/POS/Sale';
+import { SaleModel, ProductSalesModel } from '../../models/schema/admin/POS/Sale';
 import { PaymentModel } from '../../models/schema/admin/POS/payment';
 import { ReturnModel } from '../../models/schema/admin/POS/ReturnSale';
+import { OrderModel } from '../../models/schema/users/Order';
 
 // Create Customer
 export const createCustomer = async (req: Request, res: Response) => {
@@ -361,3 +362,194 @@ export const getCustomerSinglePageData = async (req: Request, res: Response) => 
     });
 };
 
+
+export const getCustomerOrders = async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const customer = await CustomerModel.findById(id);
+    if (!customer) {
+        throw new NotFound("Customer not found");
+    }
+
+    const sales = await SaleModel.find({
+        $or: [{ customer_id: id }, { Due_customer_id: id }],
+    })
+        .select('reference grand_total paid_amount remaining_amount date createdAt order_pending return_status')
+        .sort({ createdAt: -1 });
+
+    const saleIds = sales.map((s: any) => s._id);
+    const productSales = saleIds.length
+        ? await ProductSalesModel.find({ sale_id: { $in: saleIds } })
+            .populate('product_id', 'name image')
+            .populate('bundle_id', 'name')
+            .lean()
+        : [];
+    const itemsBySale: Record<string, any[]> = {};
+    productSales.forEach((ps: any) => {
+        const sid = String(ps.sale_id);
+        if (!itemsBySale[sid]) itemsBySale[sid] = [];
+        itemsBySale[sid].push({
+            _id: ps._id,
+            name: ps.product_id?.name || ps.bundle_id?.name || 'Item',
+            image: ps.product_id?.image,
+            quantity: ps.quantity,
+            price: ps.price,
+            subtotal: ps.subtotal,
+        });
+    });
+
+    const posOrders = sales.map((sale: any) => {
+        let status = 'completed';
+        if (sale.order_pending === 1) status = 'pending';
+        if (sale.return_status === 'full') status = 'returned';
+        else if (sale.return_status === 'partial') status = 'partially_returned';
+        return {
+            _id: sale._id,
+            source: 'pos',
+            reference: sale.reference,
+            total: sale.grand_total,
+            paid: sale.paid_amount,
+            remaining: sale.remaining_amount,
+            date: sale.date || sale.createdAt,
+            status,
+            items: itemsBySale[String(sale._id)] || [],
+        };
+    });
+
+    const onlineOrders = await OrderModel.find({ user: id })
+        .populate('cartItems.product', 'name image')
+        .select('reference totalOrderPrice totalPriceAfterDiscount status createdAt cartItems')
+        .sort({ createdAt: -1 });
+
+    const onlineMapped = onlineOrders.map((o: any) => {
+        const total = Number(o.totalPriceAfterDiscount || o.totalOrderPrice || 0);
+        return {
+            _id: o._id,
+            source: 'online',
+            reference: o.reference,
+            total,
+            paid: null,
+            remaining: null,
+            date: o.createdAt,
+            status: o.status || 'pending',
+            items: (o.cartItems || []).map((ci: any) => ({
+                _id: ci._id,
+                name: ci.product?.name || 'Item',
+                image: ci.product?.image,
+                quantity: ci.quantity,
+                price: ci.price,
+                subtotal: (ci.price || 0) * (ci.quantity || 0),
+            })),
+        };
+    });
+
+    const orders = [...posOrders, ...onlineMapped].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    const statusCounts: Record<string, number> = {};
+    const statusTotals: Record<string, number> = {};
+    let pendingTotal = 0;
+    const pendingOrders: any[] = [];
+    orders.forEach((o) => {
+        statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+        statusTotals[o.status] = (statusTotals[o.status] || 0) + Number(o.total || 0);
+        if (o.status === 'pending') {
+            pendingTotal += Number(o.total || 0);
+            pendingOrders.push({ _id: o._id, reference: o.reference, source: o.source, total: o.total, date: o.date, items: o.items });
+        }
+    });
+
+    SuccessResponse(res, {
+        message: 'Customer orders fetched successfully',
+        customer: { _id: customer._id, name: customer.name },
+        orders,
+        statusCounts,
+        statusTotals,
+        pendingTotal,
+        pendingOrders,
+        total: orders.length,
+    });
+};
+
+export const getCustomersWithOrders = async (req: Request, res: Response) => {
+    const customers = await CustomerModel.find()
+        .populate('country', 'name')
+        .populate('city', 'name')
+        .populate('customer_group_id', 'name status');
+
+    const sales = await SaleModel.find().select('customer_id Due_customer_id reference grand_total paid_amount remaining_amount date createdAt order_pending return_status');
+    const onlineOrders = await OrderModel.find().select('user reference totalOrderPrice totalPriceAfterDiscount status createdAt');
+
+    const byCustomer: Record<string, any[]> = {};
+    const push = (cid: string, order: any) => {
+        if (!cid) return;
+        if (!byCustomer[cid]) byCustomer[cid] = [];
+        byCustomer[cid].push(order);
+    };
+
+    sales.forEach((sale: any) => {
+        let status = 'completed';
+        if (sale.order_pending === 1) status = 'pending';
+        if (sale.return_status === 'full') status = 'returned';
+        else if (sale.return_status === 'partial') status = 'partially_returned';
+        const order = {
+            _id: sale._id,
+            source: 'pos',
+            reference: sale.reference,
+            total: sale.grand_total,
+            paid: sale.paid_amount,
+            remaining: sale.remaining_amount,
+            date: sale.date || sale.createdAt,
+            status,
+        };
+        if (sale.customer_id) push(String(sale.customer_id), order);
+        if (sale.Due_customer_id && sale.Due_customer_id !== sale.customer_id) push(String(sale.Due_customer_id), order);
+    });
+
+    onlineOrders.forEach((o: any) => {
+        if (!o.user) return;
+        push(String(o.user), {
+            _id: o._id,
+            source: 'online',
+            reference: o.reference,
+            total: Number(o.totalPriceAfterDiscount || o.totalOrderPrice || 0),
+            paid: null,
+            remaining: null,
+            date: o.createdAt,
+            status: o.status || 'pending',
+        });
+    });
+
+    const result = customers.map((c: any) => {
+        const orders = (byCustomer[String(c._id)] || []).sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        const statusCounts: Record<string, number> = {};
+        const statusTotals: Record<string, number> = {};
+        let pendingTotal = 0;
+        const pendingOrders: any[] = [];
+        orders.forEach((o) => {
+            statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+            statusTotals[o.status] = (statusTotals[o.status] || 0) + Number(o.total || 0);
+            if (o.status === 'pending') {
+                pendingTotal += Number(o.total || 0);
+                pendingOrders.push({ _id: o._id, reference: o.reference, source: o.source, total: o.total, date: o.date });
+            }
+        });
+        return {
+            ...c.toObject(),
+            orders,
+            statusCounts,
+            statusTotals,
+            pendingTotal,
+            pendingOrders,
+            totalOrders: orders.length,
+        };
+    });
+
+    SuccessResponse(res, {
+        message: 'Customers with orders fetched successfully',
+        customers: result,
+    });
+};

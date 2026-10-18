@@ -12,10 +12,16 @@ export const connectDB = async () => {
       return; // Return instead of throwing, so the server stays alive!
     }
 
-    // التعديل هنا: إضافة { family: 4 } كمعامل ثانٍ
+    console.log("Connecting to MongoDB:", uri.replace(/\/\/[^:]+:[^@]+@/, "//***:***@"));
+
+    // OU,O�O1O_USU, U�U+O: O�OOU?Oc { family: 4 } U�U.O1OU.U, O�OU+U?
     await mongoose.connect(uri, {
-      family: 4
+      family: 4,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 10000,
     });
+
+    mongoose.set("bufferCommands", false);
 
     console.log("MongoDB connected successfully");
 

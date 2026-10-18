@@ -2,7 +2,7 @@ import express from 'express';
 import { authorizePermissions } from "../../middlewares/haspremission"
 import {
     createCustomer, deleteCustomer, getCustomerById, getCustomers, getDueCustomers, updateCustomer
-    , getallgroups, getgroupbyid, creategroup, deletegroup, updategroup, getCountriesWithCities, getCustomerSinglePageData
+    , getallgroups, getgroupbyid, creategroup, deletegroup, updategroup, getCountriesWithCities, getCustomerSinglePageData, getCustomerOrders, getCustomersWithOrders
 } from '../../controller/admin/customer';
 import { catchAsync } from '../../utils/catchAsync';
 
@@ -12,6 +12,8 @@ router.post('/', authorizePermissions("POS", "Add"), authorizePermissions("custo
 router.get('/', authorizePermissions("customer", "View"), catchAsync(getCustomers));
 router.get('/countries', authorizePermissions("customer", "View"), catchAsync(getCountriesWithCities));
 router.get('/single-page/:id', authorizePermissions("customer", "View"), catchAsync(getCustomerSinglePageData));
+router.get('/with-orders', authorizePermissions("customer", "View"), catchAsync(getCustomersWithOrders));
+router.get('/:id/orders', authorizePermissions("customer", "View"), catchAsync(getCustomerOrders));
 
 // Due customers route (must be before /:id)
 router.get('/due', authorizePermissions("customer", "View"), catchAsync(getDueCustomers));
