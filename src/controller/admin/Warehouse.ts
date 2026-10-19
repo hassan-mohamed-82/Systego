@@ -3,6 +3,7 @@ import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
+import { enforceBranchLimit, getAllowedBranches } from "../../utils/branchLimit";
 
 // Helper function لتحديث حالة Online
 const setOnlineStatus = async (warehouseId: string) => {
@@ -22,6 +23,18 @@ export const createWarehouse = async (req: Request, res: Response) => {
 
   const existingWarehouse = await WarehouseModel.findOne({ name });
   if (existingWarehouse) throw new BadRequest("Warehouse already exists");
+
+  // Enforce the branch allowance set by the owner in Super Systego
+  // (0 = unlimited). Extras are blocked with an upgrade hint.
+  const allowed = await getAllowedBranches();
+  if (allowed > 0) {
+    const currentCount = await WarehouseModel.countDocuments();
+    if (currentCount >= allowed) {
+      throw new BadRequest(
+        `Your plan allows ${allowed} branch(es). To add more branches, please upgrade your plan and contact support.`,
+      );
+    }
+  }
 
   if (Is_Online === true) {
     await WarehouseModel.updateMany({}, { Is_Online: false });
@@ -45,6 +58,9 @@ export const createWarehouse = async (req: Request, res: Response) => {
 };
 
 export const getWarehouses = async (req: Request, res: Response) => {
+  // Suspend any branches beyond the plan's allowance before returning.
+  await enforceBranchLimit();
+
   const warehouses = await WarehouseModel.find();
   SuccessResponse(res, {
     message: "Get warehouses successfully",
