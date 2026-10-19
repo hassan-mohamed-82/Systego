@@ -17,7 +17,7 @@ export const getTenantInfoController = catchAsync(async (req: Request, res: Resp
             return SuccessResponse(res, {
                 message: "Tenant verification not configured — all features enabled by default",
                 tenant: null,
-                features: { haveEcommerce: true, haveMobileApp: true, haveAdminPanel: true },
+                features: { haveEcommerce: true, haveMobileApp: true },
                 package: null,
             }, 200);
         }

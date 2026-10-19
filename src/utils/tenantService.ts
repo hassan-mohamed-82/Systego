@@ -20,7 +20,6 @@ export interface TenantFeatures {
     havePOS: boolean;
     haveReports: boolean;
     haveStockTake: boolean;
-    haveAdminPanel: boolean;
     /** Number of branches (warehouses) allowed by the client's plan. */
     branches: number;
     /** Number of online branches allowed by the client's plan. */
