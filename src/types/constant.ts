@@ -63,7 +63,8 @@ export const MODULES = [
   "courier",
   "orderType",
   "stocktake",
-  "wasted"
+  "wasted",
+  "pickup_point"
 ] as const;
 
 // أسماء بس، من غير ids
