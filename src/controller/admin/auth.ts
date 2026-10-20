@@ -13,8 +13,6 @@ import { SuccessResponse } from "../../utils/response";
 import { AppUser, UserPermission } from "../../types/custom";
 import { MODULES, ACTION_NAMES } from "../../types/constant";
 import { saveBase64Image } from "../../utils/handleImages";
-import { getTenantInfo } from "../../utils/tenantService";
-import { ForbiddenError } from "../../Errors/forbiddenError";
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   const { email, password } = req.body;
@@ -38,25 +36,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  try {
-    const tenantInfo = await getTenantInfo();
-    const expired =
-      tenantInfo.subscription?.expired === true ||
-      tenantInfo.tenant?.status === "inactive";
-    if (expired) {
-      throw new ForbiddenError(
-        "Your subscription has expired. Please contact Systego support to renew.",
-        { code: "SUBSCRIPTION_EXPIRED" },
-      );
-    }
-  } catch (error: any) {
-    if (error instanceof ForbiddenError) {
-      throw error;
-    }
-    if (!error.message?.includes("not configured")) {
-      console.warn(`[login] Tenant verification skipped: ${error.message}`);
-    }
-  }
+  // NOTE: We intentionally do NOT block login when the tenant subscription is
+  // expired/inactive. The client must be able to log in and reach the
+  // "Payment Required" page to submit a renewal request. Everything else is
+  // still blocked by the `requireActiveTenant` middleware.
 
   // ✅ جيب الـ permissions للـ Response (Frontend)
   let mappedPermissions: UserPermission[] = [];
