@@ -3,8 +3,17 @@ import { SaleModel, ProductSalesModel } from "../../models/schema/admin/POS/Sale
 import { PurchaseModel } from "../../models/schema/admin/Purchase";
 import { PurchaseItemModel } from "../../models/schema/admin/purchase_item";
 import { ProductModel } from "../../models/schema/admin/products";
+import { WarehouseModel } from "../../models/schema/admin/Warehouse";
+import { CashierModel } from "../../models/schema/admin/cashier";
 import { SuccessResponse } from "../../utils/response";
 import mongoose from "mongoose";
+import {
+  resolveBranchIds,
+  resolvePosIds,
+  resolvePosShiftIds,
+  buildBranchFilter,
+  buildPosShiftFilter,
+} from "../../utils/reportFilters";
 
 // ═══════════════════════════════════════════════════════════
 // 📊 تقرير حركة المادة - Product Movement Report
@@ -30,6 +39,11 @@ export const getProductMovement = async (req: Request, res: Response) => {
     });
   }
 
+  // فلتر الفروع (الفرع = Warehouse) وفلتر نقاط البيع (POS = Cashier)
+  const branchIds = resolveBranchIds(req.query);
+  const posIds = resolvePosIds(req.query);
+  const shiftIds = await resolvePosShiftIds(posIds);
+
   const productObjectId = new mongoose.Types.ObjectId(product_id);
   const startDateObj = new Date(start_date);
   startDateObj.setHours(0, 0, 0, 0);
@@ -42,6 +56,8 @@ export const getProductMovement = async (req: Request, res: Response) => {
   const completedSales = await SaleModel.find({
     order_pending: 0,
     createdAt: { $gte: startDateObj, $lte: endDateObj },
+    ...buildBranchFilter(branchIds),
+    ...buildPosShiftFilter(shiftIds),
   })
     .select("_id")
     .lean();
@@ -87,6 +103,7 @@ export const getProductMovement = async (req: Request, res: Response) => {
         product_id: productObjectId,
         item_type: "product",
         createdAt: { $gte: startDateObj, $lte: endDateObj },
+        ...buildBranchFilter(branchIds),
       },
     },
     {
@@ -172,6 +189,21 @@ export const getProductMovement = async (req: Request, res: Response) => {
 // 🔽 بيانات السلكشن (قائمة المنتجات)
 // ═══════════════════════════════════════════════════════════
 export const selection = async (req: Request, res: Response) => {
-  const products = await ProductModel.find().select("name ar_name code image").lean();
-  return SuccessResponse(res, { products });
+  // فلتر الفروع (الفرع = Warehouse)
+  const branchIds = resolveBranchIds(req.query);
+
+  const warehouseQuery: any = { enabled: true };
+  if (branchIds.length > 0) warehouseQuery._id = { $in: branchIds };
+
+  // الكاشيرز (POS) — نرجع اللي تابعين للفروع المختارة فقط
+  const cashierQuery: any = { status: true, cashier_active: true };
+  if (branchIds.length > 0) cashierQuery.warehouse_id = { $in: branchIds };
+
+  const [products, warehouses, cashier] = await Promise.all([
+    ProductModel.find().select("name ar_name code image").lean(),
+    WarehouseModel.find(warehouseQuery).select("name ar_name").lean(),
+    CashierModel.find(cashierQuery).select("name ar_name warehouse_id").lean(),
+  ]);
+
+  return SuccessResponse(res, { products, warehouses, cashier });
 };

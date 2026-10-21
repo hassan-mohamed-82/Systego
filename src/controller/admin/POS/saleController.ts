@@ -238,6 +238,8 @@ export const createSale = async (req: Request, res: Response) => {
     shipping = 0,
     tax_rate = 0,
     discount = 0, // backward-compat fallback only, order_discount doc takes priority (FIX #2)
+    free_discount = 0, // ✅ خصم يدوي بالقيمة (Free discount) — بيتبعت من الـ POS
+    password, // ✅ باسورد تصريح الخصم اليدوي
     note,
     financials,
     coupon_code,
@@ -265,6 +267,28 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest(
       "A sale cannot be both pending (order_pending=1) and due (Due=1) at the same time",
     );
+  }
+
+  // Free discount requires the requesting user's password (POS sends it)
+  if (Number(free_discount) > 0) {
+    if (!password || typeof password !== "string") {
+      throw new BadRequest(
+        "Password is required to apply a free discount",
+      );
+    }
+
+    const requestingUser = await UserModel.findById(cashierId).select(
+      "+password_hash",
+    );
+
+    if (
+      !requestingUser?.password_hash ||
+      !(await bcrypt.compare(password, requestingUser.password_hash))
+    ) {
+      throw new BadRequest(
+        "Invalid password — free discount is not allowed",
+      );
+    }
   }
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -678,6 +702,24 @@ export const createSale = async (req: Request, res: Response) => {
         : roundCurrency(Number(coupon.amount || 0)); // "flat"
   }
 
+  // Free discount (manual amount sent by the POS as `free_discount`)
+  // It used to be ignored, so it never reached the sale, invoice or reports.
+  const requestedFreeDiscount = roundCurrency(
+    Math.max(0, Number(free_discount) || 0),
+  );
+  const maxFreeDiscount = Math.max(
+    0,
+    roundCurrency(subtotal - discountAmount - couponAmount),
+  );
+  const appliedFreeDiscount = roundCurrency(
+    Math.min(requestedFreeDiscount, maxFreeDiscount),
+  );
+
+  // Total order-level discount = Discount doc/legacy + manual free discount
+  const totalDiscountAmount = roundCurrency(
+    discountAmount + appliedFreeDiscount,
+  );
+
   // âœ… FIX #2 (schema-confirmed): TaxesModel follows the SAME fraction
   // convention as Discount (0.1 = 10%) â€” subtotal * amount, no / 100.
   // Raw tax_rate fallback stays whole-number based.
@@ -693,7 +735,7 @@ export const createSale = async (req: Request, res: Response) => {
 
   const rawGrandTotal =
     subtotal -
-    discountAmount -
+    totalDiscountAmount -
     couponAmount -
     requestedGiftCardAmount +
     serviceFeeTotal +
@@ -851,20 +893,22 @@ export const createSale = async (req: Request, res: Response) => {
     warehouse_id: warehouseId,
     account_id: accountIdsForSale,
     order_pending: normalizedOrderPending,
-    coupon_code: coupon ? coupon.coupon_code : "",
+    coupon_id: coupon ? coupon.coupon_code : "",
     applied_coupon: coupon ? true : false,
     coupon_amount: couponAmount,
     gift_card_id: giftCard ? giftCard._id : undefined,
     gift_card_amount: requestedGiftCardAmount,
     order_tax: tax ? tax._id : undefined,
     order_discount: discountDoc ? discountDoc._id : undefined,
-    discount_amount: discountAmount,
+    discount_amount: totalDiscountAmount,
+    order_discount_amount: discountAmount,
+    free_discount: appliedFreeDiscount,
     service_fees: appliedServiceFees,
     service_fee_total: serviceFeeTotal,
     shipping,
     tax_rate,
     tax_amount: taxAmountCalc,
-    discount: discountAmount,
+    discount: totalDiscountAmount,
     total: subtotal,
     grand_total: finalGrandTotal,
     paid_amount: paidAmountForDb,
@@ -1109,6 +1153,11 @@ export const createSale = async (req: Request, res: Response) => {
       products_total: productsTotal,
       bundles_total: bundlesTotal,
       subtotal: subtotal,
+      discount_amount: totalDiscountAmount,
+      order_discount_amount: discountAmount,
+      free_discount: appliedFreeDiscount,
+      coupon_amount: couponAmount,
+      gift_card_amount: requestedGiftCardAmount,
       service_fee_total: serviceFeeTotal,
       tax_amount: taxAmountCalc,
       shipping: Number(shipping),
@@ -1120,7 +1169,7 @@ export const createSale = async (req: Request, res: Response) => {
 export const getAllSales = async (req: Request, res: Response) => {
   const sales = await SaleModel.find({ order_pending: 0 }) // âœ… Ø§Ù„Ù…ÙƒØªÙ…Ù„Ø© Ø¨Ø³
     .select(
-      "reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt",
+      "reference grand_total service_fee_total paid_amount remaining_amount Due order_pending date createdAt discount discount_amount order_discount_amount free_discount coupon_amount gift_card_amount tax_amount",
     )
     .populate("customer_id", "name")
     .populate("Due_customer_id", "name")
@@ -1226,8 +1275,8 @@ export const getsalePending = async (req: Request, res: Response) => {
   })
     .populate("customer_id", "name email phone_number")
     .populate("warehouse_id", "name location")
-    .populate("order_tax", "name rate")
-    .populate("order_discount", "name rate")
+    .populate("order_tax", "name amount type")
+    .populate("order_discount", "name amount type")
     .populate("gift_card_id", "code amount")
     .sort({ createdAt: -1 })
     .lean();
@@ -1305,8 +1354,8 @@ export const getShiftCompletedSales = async (req: Request, res: Response) => {
   })
     .populate("customer_id", "name email phone_number")
     .populate("warehouse_id", "name location")
-    .populate("order_tax", "name rate")
-    .populate("order_discount", "name rate")
+    .populate("order_tax", "name amount type")
+    .populate("order_discount", "name amount type")
     .populate("gift_card_id", "code amount")
     .lean();
 
@@ -1378,8 +1427,8 @@ export const getSalePendingById = async (req: Request, res: Response) => {
     .populate("warehouse_id", "name ar_name")
     .populate("cashier_id", "name email")
     .populate("gift_card_id", "code balance")
-    .populate("order_tax", "name rate")
-    .populate("order_discount", "name discount_type discount_value")
+    .populate("order_tax", "name amount type")
+    .populate("order_discount", "name amount type")
     .lean();
 
   if (!sale) {
@@ -1451,17 +1500,18 @@ export const getSalePendingById = async (req: Request, res: Response) => {
   const payloadForCreateSale = {
     customer_id: (sale.customer_id as any)?._id || null,
     order_pending: 0,
-    coupon_id: sale.coupon_id || null,
+    coupon_code: sale.coupon_id || undefined,
     applied_coupon: sale.applied_coupon || false,
     gift_card_id: (sale.gift_card_id as any)?._id || null,
     tax_id: (sale.order_tax as any)?._id || null,
-    discount_id: (sale.order_discount as any)?._id || null,
-    shipping: sale.shipping || 0,
+    order_discount: (sale.order_discount as any)?._id || null,
     tax_rate: sale.tax_rate || 0,
     tax_amount: sale.tax_amount || 0,
     service_fee_total: sale.service_fee_total || 0,
     service_fees: sale.service_fees || [],
     discount: sale.discount || 0,
+    free_discount: sale.free_discount || 0,
+    shipping: sale.shipping || 0,
     total: sale.total || sale.grand_total,
     grand_total: sale.grand_total,
     note: sale.note || "",
@@ -1491,7 +1541,12 @@ export const getSalePendingById = async (req: Request, res: Response) => {
       subtotal: sale.total,
       tax_amount: sale.tax_amount,
       tax_rate: sale.tax_rate,
-      discount: sale.discount,
+      discount: sale.discount ?? sale.discount_amount ?? 0,
+      discount_amount: sale.discount_amount ?? sale.discount ?? 0,
+      order_discount_amount: sale.order_discount_amount || 0,
+      free_discount: sale.free_discount || 0,
+      coupon_amount: sale.coupon_amount || 0,
+      gift_card_amount: sale.gift_card_amount || 0,
       shipping: sale.shipping,
       grand_total: sale.grand_total,
       note: sale.note,

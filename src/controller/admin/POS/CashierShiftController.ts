@@ -36,7 +36,8 @@ export const startcashierShift = async (req: Request, res: Response) => {
       status: true,
       in_POS: true,
     })
-      .select("_id name image balance")
+      .select("_id name ar_name image balance")
+      .sort({ name: 1 })
       .lean();
 
     return SuccessResponse(res, {
@@ -91,7 +92,8 @@ export const startcashierShift = async (req: Request, res: Response) => {
     status: true,
     in_POS: true,
   })
-    .select("_id name image balance")
+    .select("_id name ar_name image balance")
+    .sort({ name: 1 })
     .lean();
 
   SuccessResponse(res, {
@@ -385,7 +387,8 @@ export const getCurrentShift = async (req: Request, res: Response) => {
         status: true,
         in_POS: true,
       })
-        .select("_id name image balance")
+        .select("_id name ar_name image balance")
+        .sort({ name: 1 })
         .lean()
     : [];
 

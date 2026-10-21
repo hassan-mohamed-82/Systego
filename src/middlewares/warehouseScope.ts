@@ -60,6 +60,61 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
     return next();
   }
 
+  // =========================================================
+  // Transfers are cross-warehouse by nature:
+  // - A scoped user can only SEND from their own warehouse.
+  // - A scoped user can only RECEIVE into their own warehouse.
+  // - Other warehouse IDs in the payload (destination on create,
+  //   source on receive) are allowed.
+  // =========================================================
+  const isTransferRoute =
+    req.path === "/transfer" ||
+    req.path.startsWith("/transfer/") ||
+    /^\/api\/admin\/transfer(?:\/|$|\?)/.test(req.originalUrl || "");
+
+  if (isTransferRoute) {
+    if (req.method === "POST") {
+      const fromWarehouseId = normalizeId(
+        (req.body as Record<string, unknown> | undefined)?.fromWarehouseId,
+      );
+
+      if (fromWarehouseId !== scopedWarehouseId) {
+        throw new UnauthorizedError(
+          "You can only create transfers from your assigned warehouse",
+        );
+      }
+
+      return next();
+    }
+
+    if (["PUT", "PATCH"].includes(req.method)) {
+      const targetWarehouseId = normalizeId(
+        (req.body as Record<string, unknown> | undefined)?.warehouseId,
+      );
+
+      if (targetWarehouseId !== scopedWarehouseId) {
+        throw new UnauthorizedError(
+          "You can only update transfers for your assigned warehouse",
+        );
+      }
+
+      return next();
+    }
+
+    // GET / DELETE: any warehouse id in params/query must match the scope
+    const transferIds: string[] = [];
+    collectWarehouseIds(req.params, transferIds);
+    collectWarehouseIds(req.query, transferIds);
+
+    if (transferIds.some((warehouseId) => warehouseId !== scopedWarehouseId)) {
+      throw new UnauthorizedError(
+        "You are not allowed to access another warehouse",
+      );
+    }
+
+    return next();
+  }
+
   const foundIds: string[] = [];
   collectWarehouseIds(req.params, foundIds);
   collectWarehouseIds(req.query, foundIds);

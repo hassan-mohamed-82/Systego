@@ -43,14 +43,17 @@ export const createBankAccount = async (req: Request, res: Response) => {
     throw new BadRequest("At least one warehouse is required");
   }
 
-  // التحقق من عدم تكرار الاسم
-  const existingAccount = await BankAccountModel.findOne({ name: name.trim() });
-  if (existingAccount) {
-    throw new BadRequest("Account name already exists");
-  }
-
   // ✅ التحقق من الـ warehouses (يدعم single و array)
   const validWarehouseIds = await validateWarehouses(warehouseId);
+
+  // ✅ منع تكرار الاسم داخل نفس الفرع فقط (يُسمح بنفس الاسم في فروع مختلفة)
+  const existingAccount = await BankAccountModel.findOne({
+    name: name.trim(),
+    warehouseId: { $in: validWarehouseIds },
+  });
+  if (existingAccount) {
+    throw new BadRequest("Account name already exists for this warehouse");
+  }
 
   // معالجة الصورة
   let imageUrl = "";
@@ -138,7 +141,7 @@ export const getBankAccountsForPOS = async (req: Request, res: Response) => {
     status: true,
     in_POS: true,
   })
-    .select("name image balance")
+    .select("name ar_name image balance")
     .sort({ name: 1 });
 
   SuccessResponse(res, { 
@@ -182,21 +185,41 @@ export const updateBankAccount = async (req: Request, res: Response) => {
     throw new NotFound("Bank account not found");
   }
 
+  // ✅ التحقق من الـ warehouses الجديدة (قبل فحص تكرار الاسم)
+  let validWarehouseIds: string[] | null = null;
+  if (warehouseId !== undefined) {
+    if (!warehouseId || (Array.isArray(warehouseId) && warehouseId.length === 0)) {
+      throw new BadRequest("At least one warehouse is required");
+    }
+    validWarehouseIds = await validateWarehouses(warehouseId);
+  }
+
   // ✅ تحديث الاسم
   if (name !== undefined) {
     if (typeof name !== "string" || !name.trim()) {
       throw new BadRequest("Name must be a non-empty string");
     }
+  }
 
-    // التحقق من عدم تكرار الاسم (باستثناء الحساب الحالي)
-    const existingAccount = await BankAccountModel.findOne({ 
-      name: name.trim(),
-      _id: { $ne: id }
+  // ✅ منع التكرار داخل نفس الفرع فقط (باستثناء الحساب الحالي)
+  // بنفحص لو الاسم أو الفروع اتغيروا
+  if (name !== undefined || validWarehouseIds) {
+    const targetName = name !== undefined ? name.trim() : bankAccount.name;
+    const targetWarehouseIds =
+      validWarehouseIds ??
+      (bankAccount.warehouseId as any[]).map((w) => w.toString());
+
+    const existingAccount = await BankAccountModel.findOne({
+      name: targetName,
+      _id: { $ne: id },
+      warehouseId: { $in: targetWarehouseIds },
     });
     if (existingAccount) {
-      throw new BadRequest("Account name already exists");
+      throw new BadRequest("Account name already exists for this warehouse");
     }
+  }
 
+  if (name !== undefined) {
     bankAccount.name = name.trim();
   }
 
@@ -208,11 +231,7 @@ export const updateBankAccount = async (req: Request, res: Response) => {
   }
 
   // ✅ تحديث الـ warehouses
-  if (warehouseId !== undefined) {
-    if (!warehouseId || (Array.isArray(warehouseId) && warehouseId.length === 0)) {
-      throw new BadRequest("At least one warehouse is required");
-    }
-    const validWarehouseIds = await validateWarehouses(warehouseId);
+  if (validWarehouseIds) {
     bankAccount.warehouseId = validWarehouseIds as any;
   }
 

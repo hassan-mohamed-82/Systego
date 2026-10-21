@@ -9,15 +9,42 @@ import { ExpenseModel } from '../../models/schema/admin/POS/expenses';
 import mongoose from 'mongoose';
 import { CashierModel } from '../../models/schema/admin/cashier';
 import { ReturnModel } from '../../models/schema/admin/POS/ReturnSale';
+import {
+    resolveBranchIds,
+    resolvePosIds,
+    resolveBranchCashierIds,
+} from '../../utils/reportFilters';
 
 
 export const getAllCashierShifts = async (req: Request, res: Response) => {
     const { status, cashierman_id, cashier_id } = req.query as any;
 
+    // فلتر الفروع (الفرع = Warehouse)
+    const branchIds = resolveBranchIds(req.query);
+    // فلتر نقاط البيع (POS = Cashier)
+    const posIds = resolvePosIds(req.query);
+
+    // الشيفت مربوط بالـ POS عن طريق cashier_id
+    let cashierFilterIds: mongoose.Types.ObjectId[] | null = null;
+    if (posIds.length > 0) cashierFilterIds = posIds;
+
+    if (branchIds.length > 0) {
+        const branchCashierIds = await resolveBranchCashierIds(branchIds);
+        cashierFilterIds = cashierFilterIds
+            ? cashierFilterIds.filter((id) =>
+                  branchCashierIds.some((branchCashierId) => branchCashierId.equals(id))
+              )
+            : branchCashierIds;
+    }
+
     const filter: any = {};
     if (status) filter.status = status;
     if (cashierman_id) filter.cashierman_id = cashierman_id;
-    if (cashier_id) filter.cashier_id = cashier_id;
+    if (cashierFilterIds) {
+        filter.cashier_id = { $in: cashierFilterIds };
+    } else if (cashier_id) {
+        filter.cashier_id = cashier_id;
+    }
 
     const shifts = await CashierShift.find(filter)
         .populate("cashierman_id", "username email role")
@@ -111,9 +138,8 @@ export const getCashierShiftDetails = async (req: Request, res: Response) => {
   })
     .populate("customer_id", "name email phone_number")
     .populate("warehouse_id", "name location")
-    .populate("order_tax", "name rate")
-    .populate("order_discount", "name rate")
-    .populate("coupon_id", "code discount_amount")
+    .populate("order_tax", "name amount type")
+    .populate("order_discount", "name amount type")
     .populate("gift_card_id", "code amount")
     .lean();
 

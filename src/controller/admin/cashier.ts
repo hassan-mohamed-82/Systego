@@ -154,9 +154,9 @@ export const updateCashier = async (req: Request, res: Response) => {
 };
 // جلب كل الـ Bank Accounts (للاختيار منها)
 export const getBankAccounts = async (req: Request, res: Response) => {
-  const bankAccounts = await BankAccountModel.find({ status: true, in_POS: true }).select(
-    "name balance status in_POS"
-  );
+  const bankAccounts = await BankAccountModel.find({ status: true, in_POS: true })
+    .select("name ar_name balance status in_POS")
+    .sort({ name: 1 });
   
   // الـ Warehouse مش محتاج populate - هو نفسه الـ model
   const warehouse = await WarehouseModel.find().select("name");

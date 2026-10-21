@@ -166,6 +166,9 @@ export const buildProductAggregationPipeline = (
         name: "$name",
         ar_name: "$ar_name",
         description: "$description",
+        // ✅ لازم ترجع مع الـ response عشان language middleware
+        // تبدلها بـ description لما اللغة تكون عربي
+        ar_description: "$ar_description",
         image: "$image",
         gallery_product: "$gallery_product",
         main_price: "$price",

@@ -4,6 +4,7 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors";
 import { SuccessResponse } from "../../utils/response";
 import { enforceBranchLimit, getAllowedBranches } from "../../utils/branchLimit";
+import { addWarehouseToCashAccount } from "../../utils/ensureCashAccount";
 
 // Helper function لتحديث حالة Online
 const setOnlineStatus = async (warehouseId: string) => {
@@ -50,6 +51,16 @@ export const createWarehouse = async (req: Request, res: Response) => {
     email,
     Is_Online: Is_Online || false,
   });
+
+  // ✅ نضيف الفرع الجديد لحساب Cash المشترك تلقائيًا
+  try {
+    await addWarehouseToCashAccount(warehouse._id.toString());
+  } catch (error) {
+    console.error(
+      `Failed to add warehouse ${warehouse._id} to Cash account:`,
+      error,
+    );
+  }
 
   SuccessResponse(res, {
     message: "Create warehouse successfully",

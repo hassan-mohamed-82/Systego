@@ -7,6 +7,14 @@ import { UserModel } from "../../models/schema/admin/User";
 import { SuccessResponse } from "../../utils/response";
 import mongoose from "mongoose";
 import { CashierModel } from "../../models/schema/admin/cashier";
+import {
+    resolveBranchIds,
+    resolvePosIds,
+    resolvePosShiftIds,
+    buildBranchFilter,
+    buildPosShiftFilter,
+    resolveDateFilter,
+} from "../../utils/reportFilters";
 import Warehouse from "../../routes/admin/Warehouse";
 import category from "../../routes/admin/category";
 
@@ -17,56 +25,39 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
     const {
         category_id,
         product_id,
-        warehouse_id,
-        cashier_id,
-        start_date,
-        end_date,
         sort_by = "count",      // count, total_price, product_name
         sort_order = "desc",    // asc, desc
         search,
     } = req.query as {
         category_id?: string;
         product_id?: string;
-        warehouse_id?: string;
-        cashier_id?: string;
-        start_date?: string;
-        end_date?: string;
         sort_by?: string;
         sort_order?: string;
         search?: string;
     };
 
     // ═══════════════════════════════════════════════════════════
-    // 📅 فلتر التاريخ
+    // 📅 فلتر التاريخ (يدعم start_date/startDate)
     // ═══════════════════════════════════════════════════════════
-    let dateFilter: any = {};
+    const { start: startDate, end: endDate, filter: dateFilter } =
+        resolveDateFilter(req.query);
 
-    if (start_date && end_date) {
-        dateFilter.createdAt = {
-            $gte: new Date(start_date),
-            $lte: new Date(new Date(end_date).setHours(23, 59, 59, 999)),
-        };
-    } else if (start_date) {
-        dateFilter.createdAt = { $gte: new Date(start_date) };
-    } else if (end_date) {
-        dateFilter.createdAt = { $lte: new Date(new Date(end_date).setHours(23, 59, 59, 999)) };
-    }
+    // ═══════════════════════════════════════════════════════════
+    // 🌿 فلتر الفروع (Warehouse) وفلتر نقاط البيع (POS = Cashier)
+    // ═══════════════════════════════════════════════════════════
+    const branchIds = resolveBranchIds(req.query);
+    const posIds = resolvePosIds(req.query);
+    const shiftIds = await resolvePosShiftIds(posIds);
 
     // ═══════════════════════════════════════════════════════════
     // 🔍 فلتر المبيعات (المكتملة فقط)
     // ═══════════════════════════════════════════════════════════
     let salesFilter: any = {
         ...dateFilter,
-        order_pending: 0
+        order_pending: 0,
+        ...buildBranchFilter(branchIds),
+        ...buildPosShiftFilter(shiftIds),
     };
-
-    if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
-        salesFilter.warehouse_id = new mongoose.Types.ObjectId(warehouse_id);
-    }
-
-    if (cashier_id && mongoose.Types.ObjectId.isValid(cashier_id)) {
-        salesFilter.cashier_id = new mongoose.Types.ObjectId(cashier_id);
-    }
 
     // هات الـ Sale IDs المطابقة للفلتر
     const matchingSales = await SaleModel.find(salesFilter).select("_id").lean();
@@ -214,14 +205,14 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
     return SuccessResponse(res, {
         message: "Product sales report generated successfully",
         period: {
-            start_date: start_date || "All time",
-            end_date: end_date || "All time",
+            start_date: startDate ? startDate.toISOString().split("T")[0] : "All time",
+            end_date: endDate ? endDate.toISOString().split("T")[0] : "All time",
         },
         filters: {
             category_id: category_id || null,
             product_id: product_id || null,
-            warehouse_id: warehouse_id || null,
-            cashier_id: cashier_id || null,
+            warehouse_ids: branchIds.map((id) => id.toString()),
+            cashier_ids: posIds.map((id) => id.toString()),
             search: search || null,
         },
         summary: {
@@ -237,11 +228,23 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
 
 
 export const selection = async (req: Request, res: Response) => {
+    // فلتر الفروع (الفرع = Warehouse)
+    const branchIds = resolveBranchIds(req.query);
 
-    const cashier = await CashierModel.find({ status: true, cashier_active: true })
-    const warehouses = await WarehouseModel.find()
-    const categories = await CategoryModel.find()
-    const products = await ProductModel.find()
+    const warehouseQuery: any = { enabled: true };
+    if (branchIds.length > 0) warehouseQuery._id = { $in: branchIds };
+
+    // الكاشيرز (POS) — نرجع اللي تابعين للفروع المختارة فقط
+    const cashierQuery: any = { status: true, cashier_active: true };
+    if (branchIds.length > 0) cashierQuery.warehouse_id = { $in: branchIds };
+
+    const [cashier, warehouses, categories, products] = await Promise.all([
+        CashierModel.find(cashierQuery),
+        WarehouseModel.find(warehouseQuery),
+        CategoryModel.find(),
+        ProductModel.find(),
+    ]);
+
     return SuccessResponse(res, {
         message: "Product sales report generated successfully",
         cashier,

@@ -6,6 +6,14 @@ import { BankAccountModel } from "../../models/schema/admin/Financial_Account";
 import { SuccessResponse } from "../../utils/response";
 import { catchAsync } from "../../utils/catchAsync";
 import mongoose from "mongoose";
+import {
+    resolveBranchIds,
+    resolvePosIds,
+    resolvePosShiftIds,
+    buildBranchFilter,
+    buildPosShiftFilter,
+    getBranchAccountFilters,
+} from "../../utils/reportFilters";
 
 // ═══════════════════════════════════════════════════════════
 // 📊 FINANCIAL REPORT
@@ -14,13 +22,9 @@ export const getFinancialReport = catchAsync(async (req: Request, res: Response)
     const {
         start_date,
         end_date,
-        warehouse_id,
-        cashier_id,
     } = req.query as {
         start_date?: string;
         end_date?: string;
-        warehouse_id?: string;
-        cashier_id?: string;
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -46,19 +50,26 @@ export const getFinancialReport = catchAsync(async (req: Request, res: Response)
     }
 
     // ═══════════════════════════════════════════════════════════
-    // 🔍 فلاتر إضافية
+    // 🌿 فلاتر الفروع (Warehouse) ونقاط البيع (POS = Cashier)
     // ═══════════════════════════════════════════════════════════
-    let salesFilter: any = { ...dateFilter };
-    let expensesFilter: any = { ...dateFilter };
+    const branchIds = resolveBranchIds(req.query);
+    const posIds = resolvePosIds(req.query);
+    const shiftIds = await resolvePosShiftIds(posIds);
 
-    if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
-        salesFilter.warehouse_id = new mongoose.Types.ObjectId(warehouse_id);
-    }
+    // المصروفات بتتسجل على الحساب البنكي المربوط بالفرع
+    const { accountFilter } = await getBranchAccountFilters(branchIds);
 
-    if (cashier_id && mongoose.Types.ObjectId.isValid(cashier_id)) {
-        salesFilter.cashier_id = new mongoose.Types.ObjectId(cashier_id);
-        expensesFilter.cashier_id = new mongoose.Types.ObjectId(cashier_id);
-    }
+    let salesFilter: any = {
+        ...dateFilter,
+        ...buildBranchFilter(branchIds),
+        ...buildPosShiftFilter(shiftIds),
+    };
+
+    let expensesFilter: any = {
+        ...dateFilter,
+        ...accountFilter,
+        ...buildPosShiftFilter(shiftIds),
+    };
 
     // ═══════════════════════════════════════════════════════════
     // 📈 1. إحصائيات المبيعات
@@ -189,13 +200,41 @@ export const getFinancialReport = catchAsync(async (req: Request, res: Response)
     });
 
     // المدفوعات حسب الحساب
-    const paymentsByAccount = await PaymentModel.aggregate([
+    // فلتر الفرع/الـ POS بيتطبق على الفاتورة المرتبطة بالدفع (Payment.sale_id)
+    const paymentPipeline: any[] = [
         {
             $match: {
                 ...dateFilter,
                 status: "completed",
             },
         },
+    ];
+
+    if (branchIds.length > 0 || shiftIds !== null) {
+        paymentPipeline.push(
+            {
+                $lookup: {
+                    from: "sales",
+                    localField: "sale_id",
+                    foreignField: "_id",
+                    as: "sale",
+                },
+            },
+            { $unwind: "$sale" },
+            {
+                $match: {
+                    ...(branchIds.length > 0
+                        ? { "sale.warehouse_id": { $in: branchIds } }
+                        : {}),
+                    ...(shiftIds !== null
+                        ? { "sale.shift_id": { $in: shiftIds } }
+                        : {}),
+                },
+            },
+        );
+    }
+
+    paymentPipeline.push(
         { $unwind: "$financials" },
         {
             $group: {
@@ -204,7 +243,9 @@ export const getFinancialReport = catchAsync(async (req: Request, res: Response)
                 transactionsCount: { $sum: 1 },
             },
         },
-    ]);
+    );
+
+    const paymentsByAccount = await PaymentModel.aggregate(paymentPipeline);
 
     // المصروفات حسب الحساب
     const expensesByAccount = await ExpenseModel.aggregate([

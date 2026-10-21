@@ -275,7 +275,9 @@ export const getAllSelections = async (req: Request, res: Response) => {
     in_POS: true,
     status: true,
     ...(warehouseId ? { warehouseId } : {}),
-  }).select("name balance warehouseId");
+  })
+    .select("name ar_name balance warehouseId")
+    .sort({ name: 1 });
   const taxes = await TaxesModel.find().select("name status amount type");
   const discounts = await DiscountModel.find().select(
     "name status amount type"
@@ -521,7 +523,8 @@ export const selectCashier = async (req: Request, res: Response) => {
     status: true,
     in_POS: true,
   })
-    .select("_id name image balance")
+    .select("_id name ar_name image balance")
+    .sort({ name: 1 })
     .lean();
 
   return SuccessResponse(res, {
@@ -547,7 +550,9 @@ export const getAccounts = async (req: Request, res: Response) => {
     in_POS: true,
     status: true,
     ...(warehouseId ? { warehouseId } : {}),
-  }).select("name balance warehouseId");
+  })
+    .select("name ar_name balance warehouseId")
+    .sort({ name: 1 });
   SuccessResponse(res, { message: "Accounts list", data: accounts });
 };
 

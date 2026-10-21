@@ -17,6 +17,13 @@ import { ProductModel } from "../../../models/schema/admin/products";
 import { PandelModel } from "../../../models/schema/admin/pandels";
 import { saveBase64Image } from "../../../utils/handleImages";
 import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
+import {
+  resolveBranchIds,
+  resolvePosIds,
+  resolvePosShiftIds,
+  buildBranchFilter,
+  buildPosShiftFilter,
+} from "../../../utils/reportFilters";
 // ═══════════════════════════════════════════════════════════
 // GET SALE FOR RETURN
 // ═══════════════════════════════════════════════════════════
@@ -73,8 +80,8 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       ],
     })
     .populate("gift_card_id", "code balance")
-    .populate("order_tax", "name rate")
-    .populate("order_discount", "name discount_type discount_value")
+    .populate("order_tax", "name amount type")
+    .populate("order_discount", "name amount type")
     .lean();
 
   const saleItems = await ProductSalesModel.find({ sale_id: sale._id })
@@ -182,6 +189,11 @@ export const getSaleForReturn = async (req: Request, res: Response) => {
       tax_amount: saleData?.tax_amount,
       tax_rate: saleData?.tax_rate,
       discount: saleData?.discount,
+      discount_amount: saleData?.discount_amount ?? saleData?.discount ?? 0,
+      order_discount_amount: saleData?.order_discount_amount || 0,
+      free_discount: saleData?.free_discount || 0,
+      coupon_amount: saleData?.coupon_amount || 0,
+      gift_card_amount: saleData?.gift_card_amount || 0,
       shipping: saleData?.shipping,
       grand_total: saleData?.grand_total,
       paid_amount: saleData?.paid_amount,
@@ -661,26 +673,43 @@ export const createReturn = async (req: Request, res: Response) => {
 // GET ALL RETURNS
 // ═══════════════════════════════════════════════════════════
 export const getAllReturns = async (req: Request, res: Response) => {
-  const jwtUser = req.user as any;
-  const warehouseId = jwtUser?.warehouse_id;
+  const {
+    page = 1,
+    limit = 20,
+    customer_id,
+    startDate,
+    start_date,
+    endDate,
+    end_date,
+  } = req.query;
 
-  const { page = 1, limit = 20, customer_id, startDate, endDate } = req.query;
+  // فلتر الفروع (الفرع = Warehouse) — الفاضي = كل الفروع
+  const branchIds = resolveBranchIds(req.query);
+  // فلتر نقاط البيع (POS = Cashier)
+  const posIds = resolvePosIds(req.query);
+  const shiftIds = await resolvePosShiftIds(posIds);
 
-  const query: any = { warehouse_id: warehouseId };
+  const query: any = {
+    ...buildBranchFilter(branchIds),
+    ...buildPosShiftFilter(shiftIds),
+  };
 
   if (customer_id && mongoose.Types.ObjectId.isValid(customer_id as string)) {
     query.customer_id = customer_id;
   }
 
-  if (startDate || endDate) {
+  const startedAt = startDate || start_date;
+  const endedAt = endDate || end_date;
+
+  if (startedAt || endedAt) {
     query.date = {};
-    if (startDate) {
-      const start = new Date(startDate as string);
+    if (startedAt) {
+      const start = new Date(startedAt as string);
       start.setHours(0, 0, 0, 0);
       query.date.$gte = start;
     }
-    if (endDate) {
-      const end = new Date(endDate as string);
+    if (endedAt) {
+      const end = new Date(endedAt as string);
       end.setHours(23, 59, 59, 999);
       query.date.$lte = end;
     }

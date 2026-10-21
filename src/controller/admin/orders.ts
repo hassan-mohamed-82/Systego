@@ -4,13 +4,27 @@ import { ProductSalesModel } from "../../models/schema/admin/POS/Sale";
 import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { SuccessResponse } from "../../utils/response";
+import {
+    resolveBranchIds,
+    resolvePosIds,
+    resolvePosShiftIds,
+    buildBranchFilter,
+    buildPosShiftFilter,
+} from "../../utils/reportFilters";
 
 /**
  * GET /orders
  * Returns all orders with shift, customer, cashier, and amount info
  */
 export const getAllOrders = async (req: Request, res: Response) => {
-    const orders = await SaleModel.find()
+    const branchIds = resolveBranchIds(req.query);
+    const posIds = resolvePosIds(req.query);
+    const shiftIds = await resolvePosShiftIds(posIds);
+
+    const orders = await SaleModel.find({
+        ...buildBranchFilter(branchIds),
+        ...buildPosShiftFilter(shiftIds),
+    })
         .populate("customer_id", "name phone_number email")
         .populate("shift_id", "start_time end_time status cashierman_id cashier_id")
         .populate("cashier_id", "username")
@@ -63,7 +77,7 @@ export const getOrderById = async (req: Request, res: Response) => {
 };
 
 /**
- * GET /orders/report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ * GET /orders/report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&warehouse_id=...&cashier_id=...
  * Returns orders within date range plus summary totals
  */
 export const getOrdersReport = async (req: Request, res: Response) => {
@@ -72,6 +86,11 @@ export const getOrdersReport = async (req: Request, res: Response) => {
     if (!startDate || !endDate) {
         throw new BadRequest("startDate and endDate query parameters are required");
     }
+
+    // فلتر الفروع (الفرع = Warehouse) وفلتر نقاط البيع (POS = Cashier)
+    const branchIds = resolveBranchIds(req.query);
+    const posIds = resolvePosIds(req.query);
+    const shiftIds = await resolvePosShiftIds(posIds);
 
     const start = new Date(startDate as string);
     const end = new Date(endDate as string);
@@ -89,6 +108,8 @@ export const getOrdersReport = async (req: Request, res: Response) => {
 
     const orders = await SaleModel.find({
         createdAt: { $gte: start, $lte: end },
+        ...buildBranchFilter(branchIds),
+        ...buildPosShiftFilter(shiftIds),
     })
         .populate("customer_id", "name phone_number email")
         .populate("shift_id", "start_time end_time status cashierman_id cashier_id")
@@ -108,6 +129,7 @@ export const getOrdersReport = async (req: Request, res: Response) => {
             acc.totalDiscount += order.discount || 0;
             acc.totalTax += order.tax_amount || 0;
             acc.totalShipping += order.shipping || 0;
+            acc.totalServiceFees += order.service_fee_total || 0;
             return acc;
         },
         {
@@ -116,6 +138,7 @@ export const getOrdersReport = async (req: Request, res: Response) => {
             totalDiscount: 0,
             totalTax: 0,
             totalShipping: 0,
+            totalServiceFees: 0,
         }
     );
 

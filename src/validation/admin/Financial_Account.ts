@@ -9,7 +9,6 @@ export const createBankAccountSchema = Joi.object({
   description: Joi.string().optional(),
   status: Joi.boolean().optional(),
   in_POS: Joi.boolean().optional(),
- 
 });
 
 export const updateBankAccountSchema = Joi.object({
@@ -21,5 +20,4 @@ export const updateBankAccountSchema = Joi.object({
   description: Joi.string().optional(),
   status: Joi.boolean().optional(),
   in_POS: Joi.boolean().optional(),
-  
 });

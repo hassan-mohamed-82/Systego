@@ -104,7 +104,18 @@ const SaleSchema = new Schema(
     shipping: { type: Number, default: 0 },
     tax_rate: { type: Number, default: 0 },
     tax_amount: { type: Number, default: 0 },
+    // ✅ إجمالي الخصم على الأوردر (خصم القائمة + الخصم اليدوي)
     discount: { type: Number, default: 0 },
+    // ✅ إجمالي الخصم (نفس discount) — للتوافق مع الفواتير والتقارير
+    discount_amount: { type: Number, default: 0 },
+    // ✅ قيمة الخصم اليدوي (free discount) لوحده
+    free_discount: { type: Number, default: 0 },
+    // ✅ قيمة الخصم المطبّق من Discount doc لوحده
+    order_discount_amount: { type: Number, default: 0 },
+    // ✅ قيمة خصم الكوبون
+    coupon_amount: { type: Number, default: 0 },
+    // ✅ المبلغ المخصوم من كارت الهدية
+    gift_card_amount: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
     paid_amount: { type: Number, default: 0 },
     note: { type: String, default: "" },

@@ -179,8 +179,10 @@ export const removeProductFromWarehouse = async (req: Request, res: Response) =>
 
   // بناء query للحذف
   const deleteQuery: any = { productId, warehouseId };
-  if (productPriceId) {
-    deleteQuery.productPriceId = productPriceId;
+  // ✅ لو اتبعتت (حتى لو null) لازم نحدد الـ variation بالظبط
+  // null = المنتج الأساسي بدون variation
+  if (productPriceId !== undefined) {
+    deleteQuery.productPriceId = productPriceId || null;
   }
 
   const stock = await Product_WarehouseModel.findOneAndDelete(deleteQuery);
@@ -274,7 +276,9 @@ export const getWarehouseProducts = async (req: Request, res: Response) => {
 
       return {
         ...stock.productId,
+        // ✅ كمية المخزن الفعلية للصف ده (مش product.quantity الإجمالية)
         quantity: stock.quantity,
+        stock_quantity: stock.quantity,
         low_stock: stock.low_stock,
         stockId: stock._id,
         productPriceId: stock.productPriceId,  // الـ variation المحدد

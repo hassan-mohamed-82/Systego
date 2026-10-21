@@ -111,7 +111,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         status: true,
         in_POS: true,
       })
-        .select("_id name image balance")
+        .select("_id name ar_name image balance")
+        .sort({ name: 1 })
         .lean();
     }
   }

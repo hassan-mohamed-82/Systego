@@ -21,13 +21,22 @@ import helmet from "helmet";
 import { connectDB } from "./models/connection";
 import { startCron } from "./utils/expiry_lowstock";
 import { seedOrderTypes } from "./seed/ordertype";
+import { ensureCashAccountForAllBranches } from "./utils/ensureCashAccount";
 import "./utils/bookingcheck";
 
 // dotenv.config();
 const app = express();
 
 // 🧩 Connect to DB
-connectDB().then(() => seedOrderTypes());
+connectDB().then(async () => {
+  await seedOrderTypes();
+  // ✅ تأكد إن فيه حساب Cash مشترك على كل الفروع (Idempotent)
+  try {
+    await ensureCashAccountForAllBranches();
+  } catch (error) {
+    console.error("❌ Failed to ensure shared Cash account:", error);
+  }
+});
 
 // 🧠 Security & middleware
 app.use(helmet({ crossOriginResourcePolicy: false }));

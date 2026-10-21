@@ -12,15 +12,18 @@ import { ProductModel } from "../../models/schema/admin/products";
 import { SuccessResponse } from "../../utils/response";
 import { getTenantInfo } from "../../utils/tenantService";
 import mongoose from "mongoose";
+import {
+  resolveBranchIds,
+  getBranchAccountFilters,
+} from "../../utils/reportFilters";
 
 // ═══════════════════════════════════════════════════════════
 // 📊 MAIN DASHBOARD API
 // ═══════════════════════════════════════════════════════════
 export const getDashboard = async (req: Request, res: Response) => {
-  const { start_date, end_date, warehouse_id } = req.query as {
+  const { start_date, end_date } = req.query as {
     start_date?: string;
     end_date?: string;
-    warehouse_id?: string;
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -42,11 +45,17 @@ export const getDashboard = async (req: Request, res: Response) => {
     dateFilter.createdAt = { $gte: startDateObj, $lte: endDateObj };
   }
 
-  // فلتر المخزن
-  let warehouseFilter: any = {};
-  if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
-    warehouseFilter.warehouse_id = new mongoose.Types.ObjectId(warehouse_id);
-  }
+  // فلتر الفروع (الفرع = Warehouse)
+  // يدعم اختيار فرع واحد أو أكتر، والفاضي = كل الفروع
+  const branchIds = resolveBranchIds(req.query);
+  const hasBranchFilter = branchIds.length > 0;
+  const warehouseFilter: any = hasBranchFilter
+    ? { warehouse_id: { $in: branchIds } }
+    : {};
+
+  // فلتر الحسابات البنكية للفروع المختارة (بعدين بيتطبق على المصروفات وطرق الدفع)
+  const { accountFilter, paymentAccountFilter } =
+    await getBranchAccountFilters(branchIds);
 
   // ═══════════════════════════════════════════════════════════
   // 📈 CARDS DATA
@@ -131,7 +140,10 @@ export const getDashboard = async (req: Request, res: Response) => {
   // 5️⃣ Total Expenses
   const periodExpenses = await ExpenseModel.aggregate([
     {
-      $match: dateFilter,
+      $match: {
+        ...dateFilter,
+        ...accountFilter,
+      },
     },
     {
       $group: {
@@ -184,6 +196,7 @@ export const getDashboard = async (req: Request, res: Response) => {
       $match: {
         ...dateFilter,
         status: "completed",
+        ...paymentAccountFilter,
       },
     },
     { $unwind: "$financials" },
@@ -262,7 +275,10 @@ export const getDashboard = async (req: Request, res: Response) => {
   // 4️⃣ Restock Over Time (Line Chart - Purchases)
   const restockTrend = await PurchaseModel.aggregate([
     {
-      $match: dateFilter,
+      $match: {
+        ...dateFilter,
+        ...warehouseFilter,
+      },
     },
     {
       $group: {
@@ -294,6 +310,15 @@ export const getDashboard = async (req: Request, res: Response) => {
       $match: {
         ...transferDateFilter,
         status: "received",
+        // لو في فلتر فروع: التحويلات اللي ليها علاقة بالفروع المختارة (منها أو لها)
+        ...(hasBranchFilter
+          ? {
+              $or: [
+                { fromWarehouseId: { $in: branchIds } },
+                { toWarehouseId: { $in: branchIds } },
+              ],
+            }
+          : {}),
       },
     },
     {
@@ -350,6 +375,8 @@ export const getDashboard = async (req: Request, res: Response) => {
     {
       $match: {
         quantity: { $gt: 0 },
+        // اسم الحقل هنا warehouseId وليس warehouse_id
+        ...(hasBranchFilter ? { warehouseId: { $in: branchIds } } : {}),
       },
     },
     {
@@ -412,6 +439,14 @@ export const getDashboard = async (req: Request, res: Response) => {
   }
 
   // ═══════════════════════════════════════════════════════════
+  // 🌿 BRANCHES LIST (للـ filter dropdown في الفرونت)
+  // ═══════════════════════════════════════════════════════════
+  const branches = await WarehouseModel.find({ enabled: true })
+    .select("name ar_name address Is_Online enabled")
+    .sort({ createdAt: 1 })
+    .lean();
+
+  // ═══════════════════════════════════════════════════════════
   // 📤 RESPONSE
   // ═══════════════════════════════════════════════════════════
   return SuccessResponse(res, {
@@ -419,6 +454,14 @@ export const getDashboard = async (req: Request, res: Response) => {
     period: {
       start_date: startDateObj.toISOString().split("T")[0],
       end_date: endDateObj.toISOString().split("T")[0],
+    },
+
+    // الفروع المتاحة للفلترة (branch = warehouse)
+    branches,
+
+    // الفلتر المطبق حالياً (مصفوفة فاضية = كل الفروع)
+    filters: {
+      warehouse_ids: branchIds.map((id) => id.toString()),
     },
 
     // ═══════════════════════════════════════════════════════════
@@ -476,6 +519,12 @@ export const getDashboard = async (req: Request, res: Response) => {
 // 📊 QUICK STATS (للـ Header أو Summary سريع)
 // ═══════════════════════════════════════════════════════════
 export const getQuickStats = async (req: Request, res: Response) => {
+  // فلتر الفروع (اختياري) — نفس منطق الداشبورد الرئيسي
+  const branchIds = resolveBranchIds(req.query);
+  const warehouseFilter: any =
+    branchIds.length > 0 ? { warehouse_id: { $in: branchIds } } : {};
+  const { accountFilter } = await getBranchAccountFilters(branchIds);
+
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date();
@@ -487,6 +536,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
       $match: {
         createdAt: { $gte: todayStart, $lte: todayEnd },
         order_pending: 0,
+        ...warehouseFilter,
       },
     },
     {
@@ -503,6 +553,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
     {
       $match: {
         createdAt: { $gte: todayStart, $lte: todayEnd },
+        ...accountFilter,
       },
     },
     {
@@ -514,7 +565,10 @@ export const getQuickStats = async (req: Request, res: Response) => {
   ]);
 
   // أوردرات معلقة
-  const pendingOrders = await SaleModel.countDocuments({ order_pending: 1 });
+  const pendingOrders = await SaleModel.countDocuments({
+    order_pending: 1,
+    ...warehouseFilter,
+  });
 
   // ديون العملاء
   const totalDue = await SaleModel.aggregate([
@@ -522,6 +576,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
       $match: {
         Due: 1,
         remaining_amount: { $gt: 0 },
+        ...warehouseFilter,
       },
     },
     {
