@@ -441,7 +441,9 @@ export const getDashboard = async (req: Request, res: Response) => {
   // ═══════════════════════════════════════════════════════════
   // 🌿 BRANCHES LIST (للـ filter dropdown في الفرونت)
   // ═══════════════════════════════════════════════════════════
-  const branches = await WarehouseModel.find({ enabled: true })
+  // `enabled` may be missing on legacy branches (created before the field
+  // existed). Treat missing as enabled so old branches still show up.
+  const branches = await WarehouseModel.find({ enabled: { $ne: false } })
     .select("name ar_name address Is_Online enabled")
     .sort({ createdAt: 1 })
     .lean();

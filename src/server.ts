@@ -22,6 +22,7 @@ import { connectDB } from "./models/connection";
 import { startCron } from "./utils/expiry_lowstock";
 import { seedOrderTypes } from "./seed/ordertype";
 import { ensureCashAccountForAllBranches } from "./utils/ensureCashAccount";
+import { ensureWarehouseEnabled } from "./utils/ensureWarehouseEnabled";
 import "./utils/bookingcheck";
 
 // dotenv.config();
@@ -30,6 +31,18 @@ const app = express();
 // 🧩 Connect to DB
 connectDB().then(async () => {
   await seedOrderTypes();
+
+  // ✅ الفروع القديمة اتعملت قبل ما نضيف حقل enabled، فممكن يكون ناقص فيها.
+  // من غير الـ backfill ده أي query بيفلتر بـ { enabled: true } مش هيلاقيها.
+  try {
+    const fixedBranches = await ensureWarehouseEnabled();
+    if (fixedBranches > 0) {
+      console.log(`✅ Enabled ${fixedBranches} legacy warehouse(s)`);
+    }
+  } catch (error) {
+    console.error("❌ Failed to backfill legacy warehouse enabled flag:", error);
+  }
+
   // ✅ تأكد إن فيه حساب Cash مشترك على كل الفروع (Idempotent)
   try {
     await ensureCashAccountForAllBranches();

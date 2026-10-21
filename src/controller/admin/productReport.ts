@@ -231,7 +231,8 @@ export const selection = async (req: Request, res: Response) => {
     // فلتر الفروع (الفرع = Warehouse)
     const branchIds = resolveBranchIds(req.query);
 
-    const warehouseQuery: any = { enabled: true };
+    // Missing `enabled` means a legacy branch; treat it as enabled.
+    const warehouseQuery: any = { enabled: { $ne: false } };
     if (branchIds.length > 0) warehouseQuery._id = { $in: branchIds };
 
     // الكاشيرز (POS) — نرجع اللي تابعين للفروع المختارة فقط

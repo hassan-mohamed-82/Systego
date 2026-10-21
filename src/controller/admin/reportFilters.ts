@@ -11,7 +11,8 @@ import { resolveBranchIds } from "../../utils/reportFilters";
 export const getReportFilterOptions = async (req: Request, res: Response) => {
   const branchIds = resolveBranchIds(req.query);
 
-  const warehouseQuery: any = { enabled: true };
+  // Missing `enabled` means a legacy branch; treat it as enabled.
+  const warehouseQuery: any = { enabled: { $ne: false } };
   if (branchIds.length > 0) warehouseQuery._id = { $in: branchIds };
 
   const cashierQuery: any = { status: true };
