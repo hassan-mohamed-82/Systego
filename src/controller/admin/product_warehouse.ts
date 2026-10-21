@@ -206,9 +206,9 @@ export const removeProductFromWarehouse = async (req: Request, res: Response) =>
 };
 
 // ==================== جلب منتجات مخزن معين (مع دعم الـ Variations) ====================
-export const getWarehouseProducts = async (req: Request, res: Response) => {
-  const { warehouseId } = req.params;
-
+// Shared by the admin product-warehouse page and the POS warehouse page so
+// both return exactly the same shape (warehouse, products, totalProducts).
+export const buildWarehouseProducts = async (warehouseId: string) => {
   const warehouse = await WarehouseModel.findById(warehouseId);
   if (!warehouse) throw new NotFound("Warehouse not found");
 
@@ -291,11 +291,17 @@ export const getWarehouseProducts = async (req: Request, res: Response) => {
   // فلتر الـ null products
   const validProducts = products.filter((p) => p !== null);
 
-  SuccessResponse(res, {
+  return {
     warehouse,
     products: validProducts,
     totalProducts: validProducts.length,
-  });
+  };
+};
+
+export const getWarehouseProducts = async (req: Request, res: Response) => {
+  const { warehouseId } = req.params;
+  const data = await buildWarehouseProducts(warehouseId);
+  SuccessResponse(res, data);
 };
 
 // ==================== نقل كمية بين مخزنين (مع دعم الـ Variations) ====================

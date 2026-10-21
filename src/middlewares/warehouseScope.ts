@@ -61,6 +61,21 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
   }
 
   // =========================================================
+  // POS transfers are scoped inside POSTransferController:
+  // - create always forces fromWarehouseId = the cashier's warehouse
+  // - receive/reject always forces warehouseId = the cashier's warehouse
+  // The destination is intentionally allowed to be another warehouse,
+  // so the generic body-scope check below must not run for this route.
+  // =========================================================
+  const isPOSTransferRoute = /^\/api\/admin\/pos\/transfer(?:\/|$|\?)/.test(
+    req.originalUrl || "",
+  );
+
+  if (isPOSTransferRoute) {
+    return next();
+  }
+
+  // =========================================================
   // Transfers are cross-warehouse by nature:
   // - A scoped user can only SEND from their own warehouse.
   // - A scoped user can only RECEIVE into their own warehouse.
