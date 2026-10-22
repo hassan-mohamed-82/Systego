@@ -535,12 +535,26 @@ export const selectCashier = async (req: Request, res: Response) => {
 };
 
 // 1. Warehouses
+// كل الفروع (warehouses) تظهر للمستخدم — مش بس الفرع المخصّص له،
+// عشان التحويل بين الفروع وأي اختيار فرع في الـ POS يبقى كامل.
 export const getWarehouses = async (req: Request, res: Response) => {
   const warehouseId = req.user?.warehouse_id;
-  const warehouses = await WarehouseModel.find(
-    warehouseId ? { _id: warehouseId } : {}
-  ).select("name");
-  SuccessResponse(res, { message: "Warehouses list", data: warehouses });
+  const warehouses = await WarehouseModel.find()
+    .select("name")
+    .sort({ name: 1 });
+
+  // الفرع المخصّص للمستخدم أول القائمة (لو موجود)
+  const ordered = warehouseId
+    ? warehouses.sort((a, b) =>
+        String(a._id) === String(warehouseId)
+          ? -1
+          : String(b._id) === String(warehouseId)
+            ? 1
+            : 0,
+      )
+    : warehouses;
+
+  SuccessResponse(res, { message: "Warehouses list", data: ordered });
 };
 
 // 2. Bank Accounts
