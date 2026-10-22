@@ -3,7 +3,7 @@ import { validate } from "../../middlewares/validation";
 import { catchAsync } from "../../utils/catchAsync";
 import {
     getTransferById,createTransfer,getTransfersForWarehouse,gettransferin,gettransferout,updateTransferStatus
-    ,getalltransfers
+    ,getalltransfers, deleteTransfer
 } from "../../controller/admin/Transfer";
 import {
     createTransferSchema,updateTransferStatusSchema
@@ -18,6 +18,7 @@ route.get("/get/:warehouseId",  authorizePermissions("transfer","View"), catchAs
 route.get("/gettransferin/:warehouseId",authorizePermissions("transfer","View"), catchAsync(gettransferin));
 route.get("/gettransferout/:warehouseId",authorizePermissions("transfer","View"), catchAsync(gettransferout));
 route.put("/:id",authorizePermissions("transfer","Edit"), validate(updateTransferStatusSchema), catchAsync(updateTransferStatus));
+route.delete("/:id", authorizePermissions("transfer","Delete"), catchAsync(deleteTransfer));
 route.get("/:id",authorizePermissions("transfer","View"), catchAsync(getTransferById));
 route.get("/",authorizePermissions("transfer","View"), catchAsync(getalltransfers));
 

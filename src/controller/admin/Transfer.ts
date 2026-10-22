@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { TransferModel } from "../../models/schema/admin/Transfer";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { BadRequest } from "../../Errors/BadRequest";
@@ -588,5 +589,51 @@ export const getalltransfers = async (req: Request, res: Response) => {
   SuccessResponse(res, {
     message: "All transfers retrieved successfully",
     transfers,
+  });
+};
+
+// =========================================================
+// DELETE TRANSFER
+// ✅ pending / rejected فقط (مفيش حركة مخزون)
+// ❌ received ممنوع — محتاج عكس حركة المخزون
+// ✅ superadmin يمسح أي تحويل، وغير المقيّد لازم يكون طرف فيه
+// =========================================================
+export const deleteTransfer = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("Invalid transfer id");
+  }
+
+  const transfer = await TransferModel.findById(id);
+  if (!transfer) throw new NotFound("Transfer not found");
+
+  if (transfer.status === "received") {
+    throw new BadRequest(
+      "Received transfers cannot be deleted because stock has already been moved",
+    );
+  }
+
+  const scopedWarehouseId =
+    req.user?.role === "superadmin" ? null : req.user?.warehouse_id || null;
+
+  if (scopedWarehouseId) {
+    const isParty =
+      String(transfer.fromWarehouseId) === scopedWarehouseId ||
+      String(transfer.toWarehouseId) === scopedWarehouseId;
+
+    if (!isParty) {
+      throw new UnauthorizedError(
+        "You are not allowed to access another warehouse",
+      );
+    }
+  }
+
+  await TransferModel.findByIdAndDelete(id);
+
+  SuccessResponse(res, {
+    message: "Transfer deleted successfully",
+    id,
+    status: transfer.status,
   });
 };
