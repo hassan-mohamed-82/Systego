@@ -131,26 +131,17 @@ const calculateCartTotals = async (
     if ((shippingSettings as any)?.self?.method === "flat_rate") {
       shippingCost = Number((shippingSettings as any)?.self?.flatRate || 0);
     } else if (userId) {
-      // ✅ تحويل آمن إلى ObjectId
-      const userObjId =
-        userId instanceof mongoose.Types.ObjectId
-          ? userId
-          : mongoose.Types.ObjectId.isValid(userId)
-            ? new mongoose.Types.ObjectId(userId)
-            : null;
-
-      if (userObjId) {
-        const address = await AddressModel.findOne({
-          user: userObjId,
-        }).populate("city zone");
-        shippingCost = address
-          ? Number(
-              (address.zone as any)?.shipingCost ||
-                (address.city as any)?.shipingCost ||
-                0,
-            )
-          : 0;
-      }
+      // Address.user stores the Customer UUID string
+      const address = await AddressModel.findOne({
+        user: userId,
+      }).populate("city zone");
+      shippingCost = address
+        ? Number(
+            (address.zone as any)?.shipingCost ||
+              (address.city as any)?.shipingCost ||
+              0,
+          )
+        : 0;
     }
   }
 

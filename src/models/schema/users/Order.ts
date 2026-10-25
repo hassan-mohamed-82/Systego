@@ -123,6 +123,19 @@ const orderSchema = new Schema(
       enum: ["unpaid", "pending", "paid", "failed"],
       default: "unpaid",
     },
+
+    // 🆕 نوع الدفع: كامل / تقسيط
+    paymentType: {
+      type: String,
+      enum: ["full", "installment"],
+      default: "full",
+    },
+    // 🆕 خطة التقسيط المرتبطة بالأوردر
+    installmentPlan: {
+      type: Schema.Types.ObjectId,
+      ref: "InstallmentPlan",
+      default: null,
+    },
     paymobOrderId: { type: String },
     paymobTransactionId: { type: String },
     paymobIframeUrl: { type: String },

@@ -615,9 +615,25 @@ export const getPaymentMethods = async (req: Request, res: Response) => {
 
 // 8. Customers
 export const getCustomers = async (req: Request, res: Response) => {
-  const customers = await CustomerModel.find().select(
-    "name phone_number email address"
-  );
+  const search = String(req.query.search || "").trim();
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+
+  const filter: any = {};
+
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { phone_number: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  const customers = await CustomerModel.find(filter)
+    .select("name phone_number email address is_Due amount_Due")
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+
   SuccessResponse(res, { message: "Customers list", data: customers });
 };
 

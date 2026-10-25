@@ -12,6 +12,12 @@ import { PaymobModel } from "../../models/schema/admin/Paymob";
 import { GeideaModel } from "../../models/schema/admin/Geidea";
 import { CustomerModel } from "../../models/schema/admin/POS/customer";
 import { SuccessResponse } from "../../utils/response";
+import {
+  calculateInstallmentSchedule,
+  createInstallmentPlan,
+  getInstallmentSettings,
+  serializePlan,
+} from "../../utils/installment";
 import { NotFound, BadRequest } from "../../Errors";
 import { PaymobService } from "../../utils/paymobService";
 import { initializeGeideaPayment } from "../../utils/geadiaService";
@@ -59,7 +65,11 @@ export const createOrder = async (
     proofImage,
     orderType = "delivery",
     warehouseId,
+    paymentType = "full", // "full" | "installment"
+    installment, // { months, down_payment?, notes? }
   } = req.body;
+
+  const isInstallment = String(paymentType) === "installment";
 
   try {
     // 1️⃣ Find Cart
@@ -106,7 +116,7 @@ export const createOrder = async (
     const hasProof =
       typeof proofImage === "string" && proofImage.trim().length > 0;
 
-    if (requiresProof && !hasProof) {
+    if (requiresProof && !hasProof && !isInstallment) {
       throw new BadRequest("Proof image required for manual payment");
     }
 
@@ -636,9 +646,26 @@ export const createOrder = async (
       totalTaxAmount -
       couponDiscount;
 
+    // 🆕 خطة التقسيط (اختيار مباشر من العميل — التحصيل من الفرع/الأدمن)
+    let installmentCalculation: any = null;
+    if (isInstallment) {
+      if (!userId) {
+        throw new BadRequest("You must be logged in to pay in installments");
+      }
+
+      const settings = await getInstallmentSettings();
+
+      installmentCalculation = calculateInstallmentSchedule({
+        total: totalPrice,
+        downPayment: Number(installment?.down_payment || 0),
+        months: Number(installment?.months),
+        settings: settings as any,
+      });
+    }
+
     // 6️⃣ Payment gateways
     const geideaConfig =
-      paymentMethodDoc.type === "automatic"
+      !isInstallment && paymentMethodDoc.type === "automatic"
         ? await GeideaModel.findOne({
             payment_method_id: paymentMethodDoc._id,
             isActive: true,
@@ -646,7 +673,7 @@ export const createOrder = async (
         : null;
 
     const paymobConfig =
-      paymentMethodDoc.type === "automatic"
+      !isInstallment && paymentMethodDoc.type === "automatic"
         ? await PaymobModel.findOne({
             payment_method_id: paymentMethodDoc._id,
             isActive: true,
@@ -654,7 +681,7 @@ export const createOrder = async (
         : null;
 
     const fawryConfig =
-      paymentMethodDoc.type === "automatic"
+      !isInstallment && paymentMethodDoc.type === "automatic"
         ? await FawryModel.findOne({
             payment_method_id: paymentMethodDoc._id,
             isActive: true,
@@ -662,7 +689,7 @@ export const createOrder = async (
         : null;
 
     let paymentGateway: "manual" | "paymob" | "geidea" | "fawry" = "manual";
-    if (paymentMethodDoc.type === "automatic") {
+    if (!isInstallment && paymentMethodDoc.type === "automatic") {
       if (geideaConfig) paymentGateway = "geidea";
       else if (paymobConfig) paymentGateway = "paymob";
       else if (fawryConfig) paymentGateway = "fawry";
@@ -736,11 +763,15 @@ export const createOrder = async (
         coupon: appliedCouponId,
         couponDiscount: couponDiscount,
         paymentMethod: paymentMethod.toString(),
+        paymentType: isInstallment ? "installment" : "full",
         proofImage: imageUrl,
         status: "pending",
         paymentGateway,
-        paymentStatus:
-          paymentMethodDoc.type === "automatic" ? "pending" : "unpaid",
+        paymentStatus: isInstallment
+          ? "unpaid"
+          : paymentMethodDoc.type === "automatic"
+            ? "pending"
+            : "unpaid",
         shippingMethod: finalMethodForOrder,
         shipmentType: finalMethodForOrder,
 
@@ -759,6 +790,35 @@ export const createOrder = async (
       },
     ] as any;
     await order[0].save();
+
+    // 🆕 إنشاء خطة التقسيط فوراً بعد إنشاء الأوردر
+    let installmentPlan: any = null;
+    if (isInstallment && installmentCalculation) {
+      const createdPlan = await createInstallmentPlan({
+        source: "ecommerce",
+        orderId: order[0]._id,
+        customerId: String(userId),
+        warehouseId: resolvedWarehouseId,
+        orderReference: String(order[0]._id),
+        total: totalPrice,
+        downPayment: Number(installmentCalculation.down_payment || 0),
+        months: Number(installmentCalculation.installments_count),
+        settings: {
+          enabled: true,
+          interest_type: installmentCalculation.interest_type,
+          interest_value: installmentCalculation.interest_value,
+          max_installments: Number(installmentCalculation.installments_count),
+          min_down_payment_percent: 0,
+        },
+        startDate: installmentCalculation.start_date,
+        notes: installment?.notes || "",
+      });
+
+      order[0].installmentPlan = createdPlan.plan._id;
+      await order[0].save();
+
+      installmentPlan = serializePlan(createdPlan.plan, createdPlan.items);
+    }
 
     let paymentData: any = null;
     let shouldClearCart = true;
@@ -934,6 +994,7 @@ export const createOrder = async (
         message: "Order created successfully",
         order: order[0],
         payment: paymentData,
+        installment_plan: installmentPlan,
       },
       201,
     );

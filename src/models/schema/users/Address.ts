@@ -4,7 +4,8 @@ import mongoose, { Schema, model } from "mongoose";
 const addressSchema = new Schema(
   {
     user: {
-      type: Schema.Types.ObjectId,
+      // Customer _id is a UUID string (not ObjectId)
+      type: Schema.Types.String,
       ref: "Customer",
       required: true,
       index: true,

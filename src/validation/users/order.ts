@@ -55,6 +55,18 @@ export const createOrderSchema = Joi.object({
     "any.required": "Payment method is required",
   }),
 
+  // 🆕 الدفع بالتقسيط
+  paymentType: Joi.string().valid("full", "installment").default("full"),
+  installment: Joi.object({
+    months: Joi.number().integer().min(1).max(60).required(),
+    down_payment: Joi.number().min(0).default(0),
+    notes: Joi.string().allow("").optional(),
+  }).when("paymentType", {
+    is: "installment",
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+
   proofImage: Joi.string().optional(),
   sessionId: Joi.string().optional(),
 });

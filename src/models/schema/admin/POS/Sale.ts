@@ -44,6 +44,20 @@ const SaleSchema = new Schema(
       default: 0,
     },
 
+    // 🆕 نوع الدفع: كامل / آجل / تقسيط
+    payment_type: {
+      type: String,
+      enum: ["full", "due", "installment"],
+      default: "full",
+    },
+
+    // 🆕 خطة التقسيط المرتبطة بالفاتورة (لو payment_type = installment)
+    installment_plan_id: {
+      type: Schema.Types.String,
+      ref: "InstallmentPlan",
+      default: null,
+    },
+
     // ✅ المبلغ المتبقي
     remaining_amount: {
       type: Number,

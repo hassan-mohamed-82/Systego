@@ -15,6 +15,7 @@ import warehouseRouter from "./Warehouse";
 import storeSettingsRoutes from "./storeSettings";
 import ecommerceDataRouter from "../admin/ecommerceData";
 import userShippingRoutes from "./shipping";
+import installmentRouter from "./installments";
 
 import bundleRouter from "./bundle";
 
@@ -36,6 +37,7 @@ userRoute.use("/payment-methods", paymentMethodRouter);
 userRoute.use("/address", addressRouter);
 userRoute.use("/cart", cartRouter);
 userRoute.use("/order", orderRouter);
+userRoute.use("/installments", installmentRouter);
 userRoute.use("/order-type", orderTypeRouter);
 userRoute.use("/warehouse", warehouseRouter);
 

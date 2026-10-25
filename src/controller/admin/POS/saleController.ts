@@ -20,6 +20,12 @@ import { GiftCardModel } from "../../../models/schema/admin/POS/giftCard";
 import { BankAccountModel } from "../../../models/schema/admin/Financial_Account";
 import { PandelModel } from "../../../models/schema/admin/pandels";
 import { CashierShift } from "../../../models/schema/admin/POS/CashierShift";
+import {
+  calculateInstallmentSchedule,
+  createInstallmentPlan,
+  getInstallmentSettings,
+  serializePlan,
+} from "../../../utils/installment";
 import mongoose from "mongoose";
 import { ProductModel } from "../../../models/schema/admin/products";
 import { UserModel } from "../../../models/schema/admin/User";
@@ -244,6 +250,8 @@ export const createSale = async (req: Request, res: Response) => {
     financials,
     coupon_code,
     Due = 0,
+    payment_type = "full", // "full" | "installment"
+    installment, // { months, down_payment?, start_date?, notes? }
   } = req.body;
 
   const warehouse = await WarehouseModel.findById(warehouseId);
@@ -261,11 +269,24 @@ export const createSale = async (req: Request, res: Response) => {
   const normalizedOrderPending = Number(order_pending) === 0 ? 0 : 1;
   const isPending = normalizedOrderPending === 1;
   const isDue = Number(Due) === 1;
+  const isInstallment = String(payment_type) === "installment";
 
   // âœ… FIX #12: order_pending and Due can't both be true
   if (isPending && isDue) {
     throw new BadRequest(
       "A sale cannot be both pending (order_pending=1) and due (Due=1) at the same time",
+    );
+  }
+
+  // 🆕 التقسيط لا يتوافق مع الآجل ولا مع الأوردر المعلّق
+  if (isInstallment && isDue) {
+    throw new BadRequest(
+      "A sale cannot be both installment (payment_type=installment) and due (Due=1)",
+    );
+  }
+  if (isInstallment && isPending) {
+    throw new BadRequest(
+      "Installment sales must be completed (order_pending=0)",
     );
   }
 
@@ -553,6 +574,10 @@ export const createSale = async (req: Request, res: Response) => {
     throw new BadRequest("Customer is required for due sales");
   }
 
+  if (isInstallment && !customer) {
+    throw new BadRequest("Customer is required for installment sales");
+  }
+
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // Coupon / Tax / Discount / Gift Card doc validation
   // âœ… FIX #1 & #2: these are now actually converted into monetary amounts
@@ -756,13 +781,34 @@ export const createSale = async (req: Request, res: Response) => {
   let paymentLines: FinancialLine[] = [];
   let totalPaidFromLines = 0;
 
-  if (!isPending && !isDue) {
-    if (finalGrandTotalCents > 0) {
+  // 🆕 خطة التقسيط: بنحسبها الأول عشان نعرف المقدم المطلوب تحصيله
+  let installmentCalculation: any = null;
+  if (isInstallment) {
+    const settings = await getInstallmentSettings();
+    installmentCalculation = calculateInstallmentSchedule({
+      total: finalGrandTotal,
+      downPayment: Number(installment?.down_payment || 0),
+      months: Number(installment?.months),
+      settings: settings as any,
+      startDate: installment?.start_date
+        ? new Date(installment.start_date)
+        : new Date(),
+    });
+  }
+
+  const expectedPaidNow = isInstallment
+    ? roundCurrency(Number(installmentCalculation?.down_payment || 0))
+    : finalGrandTotal;
+
+  if (isInstallment || (!isPending && !isDue)) {
+    if (expectedPaidNow > 0) {
       const finArr = financials as any[];
 
       if (!finArr || !Array.isArray(finArr) || finArr.length === 0) {
         throw new BadRequest(
-          "Financials are required for completed sale (order_pending = 0)",
+          isInstallment
+            ? "Financials are required for the installment down payment"
+            : "Financials are required for completed sale (order_pending = 0)",
         );
       }
 
@@ -782,9 +828,11 @@ export const createSale = async (req: Request, res: Response) => {
 
       totalPaidFromLines = paymentLines.reduce((sum, p) => sum + p.amount, 0);
 
-      if (toCents(totalPaidFromLines) !== finalGrandTotalCents) {
+      if (toCents(totalPaidFromLines) !== toCents(expectedPaidNow)) {
         throw new BadRequest(
-          `Sum of payments (${totalPaidFromLines.toFixed(2)}) must equal grand_total (${finalGrandTotal.toFixed(2)})`,
+          isInstallment
+            ? `Sum of payments (${totalPaidFromLines.toFixed(2)}) must equal the down payment (${expectedPaidNow.toFixed(2)})`
+            : `Sum of payments (${totalPaidFromLines.toFixed(2)}) must equal grand_total (${finalGrandTotal.toFixed(2)})`,
         );
       }
 
@@ -803,8 +851,13 @@ export const createSale = async (req: Request, res: Response) => {
         }
       }
     } else if (Array.isArray(financials) && financials.length > 0) {
+      if (isInstallment) {
+        throw new BadRequest(
+          "No down payment is required - do not submit financials for an installment sale",
+        );
+      }
       throw new BadRequest(
-        "Grand total is 0 â€” no financials should be submitted for a fully-covered sale",
+        "Grand total is 0 — no financials should be submitted for a fully-covered sale",
       );
     }
   }
@@ -873,8 +926,16 @@ export const createSale = async (req: Request, res: Response) => {
       ? Array.from(new Set(paymentLines.map((p) => p.account_id)))
       : [];
 
-  const paidAmountForDb = !isPending && !isDue ? totalPaidFromLines : 0;
-  const remainingAmount = isDue ? finalGrandTotal : 0;
+  const paidAmountForDb = isInstallment
+    ? roundCurrency(Number(installmentCalculation?.down_payment || 0))
+    : !isPending && !isDue
+      ? totalPaidFromLines
+      : 0;
+  const remainingAmount = isInstallment
+    ? roundCurrency(finalGrandTotal - Number(installmentCalculation?.down_payment || 0))
+    : isDue
+      ? finalGrandTotal
+      : 0;
   let sale: any;
 
   const clientTz =
@@ -888,8 +949,10 @@ export const createSale = async (req: Request, res: Response) => {
     daily_order_number: dailyOrderNumber,
     date: new Date(),
     customer_id: customer ? customer._id : undefined,
-    Due_customer_id: isDue && customer ? customer._id : undefined,
+    Due_customer_id:
+      customer && (isDue || isInstallment) ? customer._id : undefined,
     Due: isDue ? 1 : 0,
+    payment_type: isInstallment ? "installment" : isDue ? "due" : "full",
     warehouse_id: warehouseId,
     account_id: accountIdsForSale,
     order_pending: normalizedOrderPending,
@@ -1074,7 +1137,7 @@ export const createSale = async (req: Request, res: Response) => {
       );
       if (!couponUpdated) {
         throw new BadRequest(
-          "Coupon just ran out of stock â€” please retry without it",
+          "Coupon just ran out of stock — please retry without it",
         );
       }
     }
@@ -1088,12 +1151,42 @@ export const createSale = async (req: Request, res: Response) => {
       );
       if (!giftCardUpdated) {
         throw new BadRequest(
-          "Gift card balance changed concurrently â€” please retry",
+          "Gift card balance changed concurrently — please retry",
         );
       }
     }
   }
   
+  // 🆕 إنشاء خطة التقسيط بعد حفظ الفاتورة وتحصيل المقدم
+  let installmentPlan: any = null;
+  if (isInstallment && installmentCalculation && customer) {
+    const createdPlan = await createInstallmentPlan({
+      source: "pos",
+      saleId: String(sale._id),
+      customerId: String(customer._id),
+      warehouseId,
+      orderReference: saleRef,
+      total: finalGrandTotal,
+      downPayment: Number(installmentCalculation.down_payment || 0),
+      months: Number(installmentCalculation.installments_count),
+      settings: {
+        enabled: true,
+        interest_type: installmentCalculation.interest_type,
+        interest_value: installmentCalculation.interest_value,
+        max_installments: Number(installmentCalculation.installments_count),
+        min_down_payment_percent: 0,
+      },
+      startDate: installmentCalculation.start_date,
+      notes: installment?.notes || "",
+      createdBy: cashierId,
+    });
+
+    sale.installment_plan_id = String(createdPlan.plan._id);
+    await sale.save();
+
+    installmentPlan = serializePlan(createdPlan.plan, createdPlan.items);
+  }
+
   const fullSale = await SaleModel.findById(sale._id)
     .populate("customer_id", "name email phone_number")
     .populate("Due_customer_id", "name email phone_number")
@@ -1140,15 +1233,18 @@ export const createSale = async (req: Request, res: Response) => {
   const storeInfo = await getStoreInfo(cashierId);
 
   return SuccessResponse(res, {
-    message: isDue
-      ? `Due sale created. Amount owed: ${remainingAmount}`
-      : "Sale created successfully",
+    message: isInstallment
+      ? `Installment sale created successfully. Down payment: ${paidAmountForDb}, installments: ${installmentCalculation?.installments_count || 0}`
+      : isDue
+        ? `Due sale created. Amount owed: ${remainingAmount}`
+        : "Sale created successfully",
     store: storeInfo,
     printer_settings: printerSettings,
     sale: fullSale,
     items: formattedItems,
     service_fees: appliedServiceFees,
     wholesale_applied: processedProducts.some((p) => p.is_wholesale),
+    installment_plan: installmentPlan,
     pricing_details: {
       products_total: productsTotal,
       bundles_total: bundlesTotal,
