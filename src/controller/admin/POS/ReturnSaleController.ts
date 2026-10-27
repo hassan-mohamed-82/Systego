@@ -18,7 +18,7 @@ import { PandelModel } from "../../../models/schema/admin/pandels";
 import { saveBase64Image } from "../../../utils/handleImages";
 import { Product_WarehouseModel } from "../../../models/schema/admin/Product_Warehouse";
 import {
-  resolveBranchIds,
+  resolveBranchIdsForUser,
   resolvePosIds,
   resolvePosShiftIds,
   buildBranchFilter,
@@ -684,7 +684,7 @@ export const getAllReturns = async (req: Request, res: Response) => {
   } = req.query;
 
   // فلتر الفروع (الفرع = Warehouse) — الفاضي = كل الفروع
-  const branchIds = resolveBranchIds(req.query);
+  const branchIds = resolveBranchIdsForUser(req.query, req.user);
   // فلتر نقاط البيع (POS = Cashier)
   const posIds = resolvePosIds(req.query);
   const shiftIds = await resolvePosShiftIds(posIds);

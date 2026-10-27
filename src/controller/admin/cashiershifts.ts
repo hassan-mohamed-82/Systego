@@ -10,7 +10,7 @@ import mongoose from 'mongoose';
 import { CashierModel } from '../../models/schema/admin/cashier';
 import { ReturnModel } from '../../models/schema/admin/POS/ReturnSale';
 import {
-    resolveBranchIds,
+    resolveBranchIdsForUser,
     resolvePosIds,
     resolveBranchCashierIds,
 } from '../../utils/reportFilters';
@@ -20,7 +20,7 @@ export const getAllCashierShifts = async (req: Request, res: Response) => {
     const { status, cashierman_id, cashier_id } = req.query as any;
 
     // فلتر الفروع (الفرع = Warehouse)
-    const branchIds = resolveBranchIds(req.query);
+    const branchIds = resolveBranchIdsForUser(req.query, req.user);
     // فلتر نقاط البيع (POS = Cashier)
     const posIds = resolvePosIds(req.query);
 

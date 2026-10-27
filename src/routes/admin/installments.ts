@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { catchAsync } from "../../utils/catchAsync";
-import { authorizePermissions } from "../../middlewares/haspremission";
+import { authorizeAnyPermission } from "../../middlewares/haspremission";
 import {
   cancelInstallmentPlan,
   getCustomerInstallmentPlans,
@@ -19,60 +19,60 @@ const router = Router();
 // ⚙️ إعدادات التقسيط (الفايدة / أقصى عدد أقساط / أقل مقدم)
 router.get(
   "/settings",
-  authorizePermissions("POS", "View"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "View"),
   catchAsync(getInstallmentSettingsController),
 );
 router.put(
   "/settings",
-  authorizePermissions("Admin", "Edit"),
+  authorizeAnyPermission(["installments", "Admin"], "Edit"),
   catchAsync(updateInstallmentSettings),
 );
 
 // 🧮 معاينة قبل الدفع (POS أو الأدمن)
 router.post(
   "/preview",
-  authorizePermissions("POS", "View"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "View"),
   catchAsync(previewInstallment),
 );
 
 // ⏰ الأقساط المستحقة
 router.get(
   "/due",
-  authorizePermissions("POS", "View"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "View"),
   catchAsync(listDueInstallments),
 );
 
 // 📋 الخطط
 router.get(
   "/plans",
-  authorizePermissions("POS", "View"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "View"),
   catchAsync(listInstallmentPlans),
 );
 router.get(
   "/plans/:id",
-  authorizePermissions("POS", "View"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "View"),
   catchAsync(getInstallmentPlan),
 );
 router.put(
   "/plans/:planId/items/:itemId/pay",
-  authorizePermissions("POS", "Edit"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "Edit"),
   catchAsync(payInstallment),
 );
 router.put(
   "/plans/:planId/items/:itemId",
-  authorizePermissions("POS", "Edit"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "Edit"),
   catchAsync(updateInstallmentItem),
 );
 router.put(
   "/plans/:id/cancel",
-  authorizePermissions("POS", "Edit"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "Edit"),
   catchAsync(cancelInstallmentPlan),
 );
 
 // 👤 خطط عميل
 router.get(
   "/customer/:customerId",
-  authorizePermissions("POS", "View"),
+  authorizeAnyPermission(["installments", "POS", "Admin"], "View"),
   catchAsync(getCustomerInstallmentPlans),
 );
 

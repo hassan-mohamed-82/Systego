@@ -44,6 +44,26 @@ export const resolveBranchIds = (query: any): mongoose.Types.ObjectId[] =>
     "warehouse_id",
   );
 
+/**
+ * 🔒 نسخة آمنة للتقارير: لو المستخدم مربوط بفرع (warehouse_id في التوكن)
+ * بنرجّع فرعه بس ونتجاهل أي فلتر جاي من الـ query.
+ * الأدمن اللي مش مربوط بفرع (أو السوبر أدمن) بيختار براحته زي الأول.
+ */
+export const resolveBranchIdsForUser = (
+  query: any,
+  user?: { warehouse_id?: string | null } | null,
+): mongoose.Types.ObjectId[] => {
+  const scoped = user?.warehouse_id;
+  if (!scoped) return resolveBranchIds(query);
+
+  const id = String(scoped);
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    // id غير صالح → نرجّع id عشوائي عشان مفيش نتايج (أأمن من "كل الفروع")
+    return [new mongoose.Types.ObjectId()];
+  }
+  return [new mongoose.Types.ObjectId(id)];
+};
+
 // نقاط البيع: ?cashier_id=id أو ?pos_id=... (مفصولة بفاصلة أو متكررة)
 export const resolvePosIds = (query: any): mongoose.Types.ObjectId[] =>
   toObjectIdList(

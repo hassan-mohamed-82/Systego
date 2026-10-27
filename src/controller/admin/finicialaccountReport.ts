@@ -7,7 +7,7 @@ import { SuccessResponse } from "../../utils/response";
 import { catchAsync } from "../../utils/catchAsync";
 import mongoose from "mongoose";
 import {
-    resolveBranchIds,
+    resolveBranchIdsForUser,
     resolvePosIds,
     resolvePosShiftIds,
     buildBranchFilter,
@@ -52,7 +52,7 @@ export const getFinancialReport = catchAsync(async (req: Request, res: Response)
     // ═══════════════════════════════════════════════════════════
     // 🌿 فلاتر الفروع (Warehouse) ونقاط البيع (POS = Cashier)
     // ═══════════════════════════════════════════════════════════
-    const branchIds = resolveBranchIds(req.query);
+    const branchIds = resolveBranchIdsForUser(req.query, req.user);
     const posIds = resolvePosIds(req.query);
     const shiftIds = await resolvePosShiftIds(posIds);
 

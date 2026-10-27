@@ -14,6 +14,7 @@ import { getTenantInfo } from "../../utils/tenantService";
 import mongoose from "mongoose";
 import {
   resolveBranchIds,
+  resolveBranchIdsForUser,
   getBranchAccountFilters,
 } from "../../utils/reportFilters";
 
@@ -47,7 +48,16 @@ export const getDashboard = async (req: Request, res: Response) => {
 
   // فلتر الفروع (الفرع = Warehouse)
   // يدعم اختيار فرع واحد أو أكتر، والفاضي = كل الفروع
-  const branchIds = resolveBranchIds(req.query);
+  //
+  // 🔒 لو المستخدم مربوط بفرع (warehouse_id في التوكن) → الداشبورد بيبقى
+  // مقفول على فرعه بس، وأي warehouse_id يبعته في الـ query بيتجاهل.
+  // الأدمن اللي مش مربوط بفرع (أو السوبر أدمن) بيختار أي فرع براحته.
+  const scopedWarehouseId = req.user?.warehouse_id || null;
+
+  const branchIds = scopedWarehouseId
+    ? [new mongoose.Types.ObjectId(String(scopedWarehouseId))]
+    : resolveBranchIds(req.query);
+
   const hasBranchFilter = branchIds.length > 0;
   const warehouseFilter: any = hasBranchFilter
     ? { warehouse_id: { $in: branchIds } }
@@ -443,10 +453,16 @@ export const getDashboard = async (req: Request, res: Response) => {
   // ═══════════════════════════════════════════════════════════
   // `enabled` may be missing on legacy branches (created before the field
   // existed). Treat missing as enabled so old branches still show up.
-  const branches = await WarehouseModel.find({ enabled: { $ne: false } })
-    .select("name ar_name address Is_Online enabled")
-    .sort({ createdAt: 1 })
-    .lean();
+  // 🔒 المستخدم المربوط بفرع بيشوف فرعه بس في القائمة (لو مش متاح، بنجيبه بالـ id
+  // عشان نعرض اسمه في الواجهة حتى لو متوقف).
+  const branches = scopedWarehouseId
+    ? await WarehouseModel.find({ _id: scopedWarehouseId })
+        .select("name ar_name address Is_Online enabled")
+        .lean()
+    : await WarehouseModel.find({ enabled: { $ne: false } })
+        .select("name ar_name address Is_Online enabled")
+        .sort({ createdAt: 1 })
+        .lean();
 
   // ═══════════════════════════════════════════════════════════
   // 📤 RESPONSE
@@ -464,6 +480,8 @@ export const getDashboard = async (req: Request, res: Response) => {
     // الفلتر المطبق حالياً (مصفوفة فاضية = كل الفروع)
     filters: {
       warehouse_ids: branchIds.map((id) => id.toString()),
+      // 🔒 true = المستخدم مربوط بفرع ومش قادر يغيّره
+      warehouse_locked: !!scopedWarehouseId,
     },
 
     // ═══════════════════════════════════════════════════════════
@@ -522,7 +540,7 @@ export const getDashboard = async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════
 export const getQuickStats = async (req: Request, res: Response) => {
   // فلتر الفروع (اختياري) — نفس منطق الداشبورد الرئيسي
-  const branchIds = resolveBranchIds(req.query);
+  const branchIds = resolveBranchIdsForUser(req.query, req.user);
   const warehouseFilter: any =
     branchIds.length > 0 ? { warehouse_id: { $in: branchIds } } : {};
   const { accountFilter } = await getBranchAccountFilters(branchIds);

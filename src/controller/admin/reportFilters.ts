@@ -2,14 +2,14 @@ import { Request, Response } from "express";
 import { WarehouseModel } from "../../models/schema/admin/Warehouse";
 import { CashierModel } from "../../models/schema/admin/cashier";
 import { SuccessResponse } from "../../utils/response";
-import { resolveBranchIds } from "../../utils/reportFilters";
+import { resolveBranchIdsForUser } from "../../utils/reportFilters";
 
 // ═══════════════════════════════════════════════════════════
 // 🌿 خيارات فلاتر التقارير (الفروع + نقاط البيع)
 // endpoint خفيف مخصص للـ dropdowns بدون تحميل منتجات أو بيانات
 // ═══════════════════════════════════════════════════════════
 export const getReportFilterOptions = async (req: Request, res: Response) => {
-  const branchIds = resolveBranchIds(req.query);
+  const branchIds = resolveBranchIdsForUser(req.query, req.user);
 
   // Missing `enabled` means a legacy branch; treat it as enabled.
   const warehouseQuery: any = { enabled: { $ne: false } };

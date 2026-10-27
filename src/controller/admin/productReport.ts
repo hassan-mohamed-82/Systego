@@ -8,7 +8,7 @@ import { SuccessResponse } from "../../utils/response";
 import mongoose from "mongoose";
 import { CashierModel } from "../../models/schema/admin/cashier";
 import {
-    resolveBranchIds,
+    resolveBranchIdsForUser,
     resolvePosIds,
     resolvePosShiftIds,
     buildBranchFilter,
@@ -45,7 +45,7 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
     // ═══════════════════════════════════════════════════════════
     // 🌿 فلتر الفروع (Warehouse) وفلتر نقاط البيع (POS = Cashier)
     // ═══════════════════════════════════════════════════════════
-    const branchIds = resolveBranchIds(req.query);
+    const branchIds = resolveBranchIdsForUser(req.query, req.user);
     const posIds = resolvePosIds(req.query);
     const shiftIds = await resolvePosShiftIds(posIds);
 
@@ -229,7 +229,7 @@ export const getProductSalesReport = async (req: Request, res: Response) => {
 
 export const selection = async (req: Request, res: Response) => {
     // فلتر الفروع (الفرع = Warehouse)
-    const branchIds = resolveBranchIds(req.query);
+    const branchIds = resolveBranchIdsForUser(req.query, req.user);
 
     // Missing `enabled` means a legacy branch; treat it as enabled.
     const warehouseQuery: any = { enabled: { $ne: false } };

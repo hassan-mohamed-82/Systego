@@ -6,7 +6,19 @@ import { RoleModel } from "../../models/schema/admin/roles";
 import {  NotFound } from "../../Errors";
 import { BadRequest } from "../../Errors/BadRequest";
 import { SuccessResponse } from "../../utils/response";
-import { MODULES, ACTION_NAMES, ModuleName, ActionName } from "../../types/constant";
+import {
+  MODULES,
+  PERMISSION_MODULES,
+  MERGED_MODULE_ALIASES,
+  ACTION_NAMES,
+  ModuleName,
+  ActionName,
+} from "../../types/constant";
+import {
+  MODULE_GROUPS,
+  getModuleMeta,
+  moduleGroupOrder,
+} from "../../types/moduleMeta";
 type IncomingAction = ActionName | { id?: string; action: ActionName };
 
 interface IncomingPermission {
@@ -214,10 +226,18 @@ export const getRolePermissions = async (req: Request, res: Response, next: Next
   }
 
   // Full Matrix - كل الموديولات مع enabled/disabled
-  const permissions = MODULES.map((mod) => {
-    const found = role.permissions.find((p) => p.module === mod);
+  const permissions = PERMISSION_MODULES.map((mod) => {
+    // بندور كمان على الأسماء القديمة المدمجة (dashboard → home)
+    const aliases = MERGED_MODULE_ALIASES[mod] || [];
+    const found =
+      role.permissions.find((p) => p.module === mod) ||
+      role.permissions.find((p) => aliases.includes(p.module));
+    const meta = getModuleMeta(mod);
     return {
       module: mod,
+      label: meta.en,
+      label_ar: meta.ar,
+      group: meta.group,
       actions: ACTION_NAMES.map((actionName) => {
         const existingAction = found?.actions.find((a) => a.action === actionName);
         return {
@@ -246,9 +266,10 @@ export const getRolePermissions = async (req: Request, res: Response, next: Next
       status: role.status,
     },
     permissions,           // Full matrix for checkboxes UI
+    groups: MODULE_GROUPS, // تجميع الموديولات لعرض منظم
     activePermissions,     // Only enabled permissions
     summary: {
-      totalModules: MODULES.length,
+      totalModules: PERMISSION_MODULES.length,
       activeModules: activePermissions.length,
       totalActions: activePermissions.reduce((acc, p) => acc + p.actions.length, 0),
     },
@@ -592,32 +613,36 @@ export const getModulesAndActions = async (
   res: Response,
   next: NextFunction
 ) => {
-  const modules = MODULES.map((moduleName, index) => ({
-    id: index + 1,
-    name: moduleName,
-    label: formatModuleName(moduleName),
-    actions: ACTION_NAMES.map((actionName, actionIndex) => ({
-      id: actionIndex + 1,
-      name: actionName,
-    })),
-  }));
+  const modules = PERMISSION_MODULES.map((moduleName) => {
+    const meta = getModuleMeta(moduleName);
+    return {
+      name: moduleName,
+      label: meta.en,
+      label_ar: meta.ar,
+      group: meta.group,
+      actions: ACTION_NAMES.map((actionName, actionIndex) => ({
+        id: actionIndex + 1,
+        name: actionName,
+      })),
+    };
+  })
+    .sort((a, b) => {
+      const groupDiff = moduleGroupOrder(a.group) - moduleGroupOrder(b.group);
+      if (groupDiff !== 0) return groupDiff;
+      return a.label.localeCompare(b.label);
+    })
+    .map((module, index) => ({ id: index + 1, ...module }));
 
   SuccessResponse(res, {
     message: "Modules and actions fetched successfully",
     modules,
+    groups: MODULE_GROUPS,
     actions: ACTION_NAMES,
     summary: {
-      totalModules: MODULES.length,
+      totalModules: PERMISSION_MODULES.length,
       totalActions: ACTION_NAMES.length,
-      totalPermissions: MODULES.length * ACTION_NAMES.length,
+      totalPermissions: PERMISSION_MODULES.length * ACTION_NAMES.length,
     },
   });
 };
-
-function formatModuleName(name: string): string {
-  return name
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
 

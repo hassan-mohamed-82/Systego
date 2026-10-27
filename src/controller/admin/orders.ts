@@ -5,7 +5,7 @@ import { BadRequest } from "../../Errors/BadRequest";
 import { NotFound } from "../../Errors/NotFound";
 import { SuccessResponse } from "../../utils/response";
 import {
-    resolveBranchIds,
+    resolveBranchIdsForUser,
     resolvePosIds,
     resolvePosShiftIds,
     buildBranchFilter,
@@ -17,7 +17,7 @@ import {
  * Returns all orders with shift, customer, cashier, and amount info
  */
 export const getAllOrders = async (req: Request, res: Response) => {
-    const branchIds = resolveBranchIds(req.query);
+    const branchIds = resolveBranchIdsForUser(req.query, req.user);
     const posIds = resolvePosIds(req.query);
     const shiftIds = await resolvePosShiftIds(posIds);
 
@@ -88,7 +88,7 @@ export const getOrdersReport = async (req: Request, res: Response) => {
     }
 
     // فلتر الفروع (الفرع = Warehouse) وفلتر نقاط البيع (POS = Cashier)
-    const branchIds = resolveBranchIds(req.query);
+    const branchIds = resolveBranchIdsForUser(req.query, req.user);
     const posIds = resolvePosIds(req.query);
     const shiftIds = await resolvePosShiftIds(posIds);
 
