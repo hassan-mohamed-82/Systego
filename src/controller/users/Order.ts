@@ -30,6 +30,7 @@ import { CouponModel } from "../../models/schema/admin/coupons";
 import { DiscountModel } from "../../models/schema/admin/Discount";
 import { saveBase64Image } from "../../utils/handleImages";
 import { UserModel } from "../../models/schema/admin/User";
+import { NotificationModel } from "../../models/schema/admin/Notfication";
 import { getBostaCreds } from "../../utils/shipping/getBostaCreds";
 import bostaService from "../../services/bosta.service";
 
@@ -790,6 +791,24 @@ export const createOrder = async (
       },
     ] as any;
     await order[0].save();
+
+    // 🔔 Create a notification record for admin navbar
+    try {
+      await NotificationModel.create({
+        type: "new_order",
+        message: `New online order #${order[0]._id}`,
+      });
+    } catch (e) {
+      console.warn("notification create failed", e);
+    }
+
+    // 🔔 Notify admin clients about the new online order (real-time)
+    try {
+      const io = (req as any).app?.get?.("io");
+      if (io) io.emit("new_order", order[0]);
+    } catch (e) {
+      console.warn("socket emit failed", e);
+    }
 
     // 🆕 إنشاء خطة التقسيط فوراً بعد إنشاء الأوردر
     let installmentPlan: any = null;

@@ -87,6 +87,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
 });
+app.set("io", io);
 
 // 🔌 Socket.IO connection
 io.on("connection", (socket) => {
