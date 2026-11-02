@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { OrderModel } from "../models/schema/users/Order";
 import { DeliveryManModel } from "../models/schema/admin/deliveryMan";
 import { WarehouseModel } from "../models/schema/admin/Warehouse";
+import { PickupPointModel } from "../models/schema/admin/PickupPoint";
 import { ShippingSettingsModel } from "../models/schema/admin/ShippingSettings";
 import { BadRequest } from "../Errors/BadRequest";
 
@@ -60,9 +61,30 @@ export const manualAssignOrder = async (
     });
   }
 
-  const onlineWarehouse = await WarehouseModel.findOne({ Is_Online: true });
+  // ✅ Auto-pick an active PickupPoint (from PickupPoint table added via
+  // Shipping page). Use its branch_id as the pickup warehouse. Fall back to
+  // the first online warehouse when no active pickup point exists.
+  let onlineWarehouse: any = null;
+  let pickupPoint: any = null;
+
+  try {
+    pickupPoint = await PickupPointModel.findOne({ is_active: true })
+      .sort({ createdAt: -1 })
+      .lean();
+  } catch (e) {
+    pickupPoint = null;
+  }
+
+  if (pickupPoint?.branch_id) {
+    onlineWarehouse = await WarehouseModel.findById(pickupPoint.branch_id).lean();
+  }
+
   if (!onlineWarehouse) {
-    throw new BadRequest("No online warehouse found");
+    onlineWarehouse = await WarehouseModel.findOne({ Is_Online: true });
+  }
+
+  if (!onlineWarehouse) {
+    throw new BadRequest("No online warehouse / pickup point found");
   }
 
   const now = new Date();
@@ -71,6 +93,8 @@ export const manualAssignOrder = async (
   order.selfShipment = {
     deliveryManId: deliveryMan._id,
     warehouseId: onlineWarehouse._id,
+    pickupPointId: pickupPoint?._id || null,
+    pickupPointName: pickupPoint?.name || "",
     status: "assigned",
     assignedAt: now,
     assignedBy: userId as any,
@@ -116,6 +140,7 @@ export const manualAssignOrder = async (
     deliveryManName: deliveryMan.name,
     warehouseId: onlineWarehouse._id,
     warehouseName: onlineWarehouse.name,
+    pickupPointName: pickupPoint?.name || null,
   };
 };
 

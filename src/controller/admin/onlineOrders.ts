@@ -130,6 +130,10 @@ export const getAllOnlineOrders = async (req: Request, res: Response) => {
       path: "selfShipment.warehouseId",
       select: "_id name address",
     })
+    .populate({
+      path: "selfShipment.pickupPointId",
+      select: "_id name address",
+    })
     .select("+shippingMethod +shipmentType +selfShipment")
     .lean();
 
@@ -238,6 +242,10 @@ export const getOnlineOrderById = async (req: Request, res: Response) => {
     })
     .populate({
       path: "selfShipment.warehouseId",
+      select: "_id name address",
+    })
+    .populate({
+      path: "selfShipment.pickupPointId",
       select: "_id name address",
     })
     .lean();

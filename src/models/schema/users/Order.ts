@@ -200,6 +200,15 @@ const orderSchema = new Schema(
         ref: "Warehouse",
         default: null,
       },
+      pickupPointId: {
+        type: Schema.Types.ObjectId,
+        ref: "PickupPoint",
+        default: null,
+      },
+      pickupPointName: {
+        type: String,
+        default: "",
+      },
       status: {
         type: String,
         enum: [
