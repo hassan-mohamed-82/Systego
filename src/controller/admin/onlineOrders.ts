@@ -291,6 +291,36 @@ export const updateOnlineOrderStatus = async (req: Request, res: Response) => {
   // 👤 SELF
   // ═══════════════════════════════════════════════════════════
   if (method === "self") {
+    // ═══════════════════════════════════════════════════════════
+    // 🟢 ACCEPT: pending → processing (admin accepts the order).
+    // لا يحتاج delivery man — بس تحديث حالة الأوردر.
+    // ═══════════════════════════════════════════════════════════
+    if (status === "processing" && order.status === "pending") {
+      order.status = "processing";
+
+      order.statusHistory = order.statusHistory || [];
+      order.statusHistory.push({
+        status: "processing",
+        description: statusDescription || "Order accepted by admin",
+        source: "admin",
+        updatedBy: adminId || null,
+        updatedAt: now,
+      } as any);
+
+      await order.save();
+
+      const populated = await OrderModel.findById(id)
+        .populate({ path: "user", select: "_id name email phone" })
+        .populate({ path: "paymentMethod", select: "_id name ar_name type" })
+        .lean();
+
+      SuccessResponse(res, {
+        message: "✅ Order accepted",
+        order: populated,
+      });
+      return;
+    }
+
     if (!SELF_ALLOWED.includes(status)) {
       throw new BadRequest(
         `Invalid self status. Allowed: ${SELF_ALLOWED.join(", ")}`,
