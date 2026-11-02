@@ -1686,7 +1686,7 @@ export const deleteSalePending = async (req: Request, res: Response) => {
   const isSuperAdmin = jwtUser?.role === "superadmin";
   const { id } = req.params;
 
-  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+  if (!id || typeof id !== "string" || !id.trim()) {
     throw new BadRequest("Valid sale id is required");
   }
 
