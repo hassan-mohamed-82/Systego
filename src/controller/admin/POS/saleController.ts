@@ -1674,6 +1674,55 @@ export const getSalePendingById = async (req: Request, res: Response) => {
   });
 };
 
+/**
+ * حذف طلب Pending نهائيًا من غير موافقة مدير.
+ * الطلبات الـ pending بتتعمل من غير خصم مخزون ومفيش عليها مدفوعات أو قيود
+ * مالية (شوف createSale: كل العمليات دي جوه if (!isPending))، فالحذف هنا
+ * بيمسح الفاتورة وسطور المنتجات بس.
+ */
+export const deleteSalePending = async (req: Request, res: Response) => {
+  const jwtUser = req.user as any;
+  const warehouseId = jwtUser?.warehouse_id;
+  const isSuperAdmin = jwtUser?.role === "superadmin";
+  const { id } = req.params;
+
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequest("Valid sale id is required");
+  }
+
+  if (!warehouseId && !isSuperAdmin) {
+    throw new BadRequest("Warehouse is not assigned to this user");
+  }
+
+  const filter: Record<string, any> = {
+    _id: id,
+    order_pending: { $in: [1, "1", true] },
+  };
+
+  // نفس نطاق صفحة Pending Orders: الفواتير بتاعة نفس الفرع
+  if (warehouseId) {
+    filter.warehouse_id = warehouseId;
+  }
+
+  const sale = await SaleModel.findOne(filter);
+
+  if (!sale) {
+    throw new NotFound("Pending sale not found");
+  }
+
+  // sale_id في ProductSales مكتوب String، فنبعت الشكلين عشان نضمن المسح
+  await ProductSalesModel.deleteMany({
+    sale_id: { $in: [sale._id.toString(), sale._id] },
+  });
+  await SaleModel.deleteOne({ _id: sale._id });
+
+  return SuccessResponse(res, {
+    message: "Pending sale deleted successfully",
+    sale_id: sale._id.toString(),
+    reference: sale.reference || "",
+  });
+};
+
 export const getDueSales = async (req: Request, res: Response) => {
   const jwtUser = req.user as any;
   const warehouseId = jwtUser?.warehouse_id;

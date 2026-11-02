@@ -1,6 +1,7 @@
 import express from 'express';
 import { createSale, getSalePendingById, getSales, getsalePending,
-     getShiftCompletedSales, getDueSales, payDue, getAllSales, applyCoupon, getNextInvoiceNumber } from '../../../controller/admin/POS/saleController';
+     getShiftCompletedSales, getDueSales, payDue, getAllSales, applyCoupon, getNextInvoiceNumber,
+     deleteSalePending } from '../../../controller/admin/POS/saleController';
 import { catchAsync } from '../../../utils/catchAsync';
 import { authorizePermissions } from '../../../middlewares/haspremission';
 const router = express.Router();
@@ -15,6 +16,7 @@ router.post('/sales/complete', authorizePermissions("POS", "View"), catchAsync(g
 router.get("/sales/dues", authorizePermissions("POS", "View"), catchAsync(getDueSales));
 router.post("/sales/pay-due", authorizePermissions("POS", "Add"), catchAsync(payDue));
 router.get("/sales/sales/pending/:sale_id", authorizePermissions("POS", "View"), catchAsync(getSalePendingById));
+router.delete("/sales/pending/:id", authorizePermissions("POS", "Delete"), catchAsync(deleteSalePending));
 router.get("/sales/:id", authorizePermissions("POS", "View"), catchAsync(getSales));
 
 export default router;

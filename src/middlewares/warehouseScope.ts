@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { UnauthorizedError } from "../Errors/unauthorizedError";
+import { ForbiddenError } from "../Errors/forbiddenError";
 
 const WAREHOUSE_KEYS = ["warehouse_id", "warehouseId", "WarehouseId", "fromWarehouseId", "toWarehouseId"];
 
@@ -94,8 +95,13 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
       );
 
       if (fromWarehouseId !== scopedWarehouseId) {
-        throw new UnauthorizedError(
+        throw new ForbiddenError(
           "You can only create transfers from your assigned warehouse",
+          {
+            code: "WAREHOUSE_SCOPE_DENIED",
+            required_warehouse_id: scopedWarehouseId,
+            received_warehouse_id: fromWarehouseId,
+          },
         );
       }
 
@@ -108,8 +114,13 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
       );
 
       if (targetWarehouseId !== scopedWarehouseId) {
-        throw new UnauthorizedError(
+        throw new ForbiddenError(
           "You can only update transfers for your assigned warehouse",
+          {
+            code: "WAREHOUSE_SCOPE_DENIED",
+            required_warehouse_id: scopedWarehouseId,
+            received_warehouse_id: targetWarehouseId,
+          },
         );
       }
 
@@ -122,8 +133,13 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
     collectWarehouseIds(req.query, transferIds);
 
     if (transferIds.some((warehouseId) => warehouseId !== scopedWarehouseId)) {
-      throw new UnauthorizedError(
+      throw new ForbiddenError(
         "You are not allowed to access another warehouse",
+        {
+          code: "WAREHOUSE_SCOPE_DENIED",
+          required_warehouse_id: scopedWarehouseId,
+          received_warehouse_ids: transferIds,
+        },
       );
     }
 
@@ -137,7 +153,11 @@ export function enforceWarehouseScope(req: Request, res: Response, next: NextFun
 
   const hasViolation = foundIds.some((warehouseId) => warehouseId !== scopedWarehouseId);
   if (hasViolation) {
-    throw new UnauthorizedError("You are not allowed to access another warehouse");
+    throw new ForbiddenError("You are not allowed to access another warehouse", {
+      code: "WAREHOUSE_SCOPE_DENIED",
+      required_warehouse_id: scopedWarehouseId,
+      received_warehouse_ids: foundIds,
+    });
   }
 
   if (["GET", "DELETE"].includes(req.method)) {
