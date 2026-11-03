@@ -19,7 +19,9 @@ const getClient = () => {
 
     return axios.create({
         baseURL,
-        timeout: 120_000, // 2 minutes — syncs can take a while
+        // A release that changes package.json runs `npm ci` on the client, which
+        // can take several minutes. Keep this well above the install timeout.
+        timeout: 15 * 60_000,
         headers: {
             "Content-Type": "application/json",
             "x-api-key": apiKey,
