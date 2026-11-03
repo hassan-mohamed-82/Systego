@@ -52,42 +52,21 @@ export const checkForChanges = async (clientName: string) => {
     }
 };
 
-/** Full sync: frontend + backend (async - polls status until done) */
+/** Full sync: frontend + backend (async - returns immediately, admin polls) */
 export const syncAll = async (clientName: string) => {
     try {
-        const { data: startData }: any = await getClient().post("/api/update/sync", { clientName });
+        const { data } = await getClient().post("/api/update/sync", { clientName });
+        return data;
+    } catch (error) {
+        return handleAxiosError(error);
+    }
+};
 
-        // If the updater returns immediately (async mode), poll for completion.
-        if (startData?.data?.status === 'started' || startData?.data?.status === 'running') {
-            const maxWait = 15 * 60_000;
-            const pollInterval = 3_000;
-            const deadline = Date.now() + maxWait;
-
-            while (Date.now() < deadline) {
-                await new Promise((r) => setTimeout(r, pollInterval));
-                try {
-                    const { data: statusData }: any = await getClient().get(`/api/update/status/${clientName}`);
-                    const status = statusData?.data?.status;
-                    if (status === 'completed') {
-                        return statusData;
-                    }
-                    if (status === 'failed') {
-                        throw new AppError(
-                            statusData?.data?.error || 'Sync failed',
-                            500,
-                            statusData?.data,
-                        );
-                    }
-                } catch (pollErr: any) {
-                    // If it's an AppError (sync failed), rethrow.
-                    if (pollErr instanceof AppError) throw pollErr;
-                    // Otherwise ignore transient poll errors and retry.
-                }
-            }
-            throw new AppError('Sync timed out after 15 minutes', 504, null);
-        }
-
-        return startData;
+/** Poll sync status for a client */
+export const getSyncStatus = async (clientName: string) => {
+    try {
+        const { data } = await getClient().get(`/api/update/status/${clientName}`);
+        return data;
     } catch (error) {
         return handleAxiosError(error);
     }

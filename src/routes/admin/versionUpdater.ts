@@ -3,6 +3,7 @@ import { catchAsync } from "../../utils/catchAsync";
 import {
     checkForChanges,
     syncAll,
+    getSyncStatus,
     syncFrontend,
     syncBackend,
 } from "../../controller/admin/VersionUpdater";
@@ -14,6 +15,10 @@ route.post("/", catchAsync(checkForChanges));
 
 // Sync all (frontend + backend)
 route.post("/sync", catchAsync(syncAll));
+
+// Get sync status (polling)
+route.get("/status/:clientName", catchAsync(getSyncStatus));
+route.post("/status", catchAsync(getSyncStatus));
 
 // Sync frontend only
 route.post("/sync-frontend", catchAsync(syncFrontend));

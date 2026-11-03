@@ -34,7 +34,25 @@ export const syncAll = async (req: Request, res: Response, next: NextFunction) =
     const result = await versionUpdater.syncAll(clientName.trim());
 
     SuccessResponse(res, {
-        message: "Full sync completed",
+        message: "Full sync started",
+        result,
+    });
+};
+
+// =========================
+// Get Sync Status
+// =========================
+export const getSyncStatus = async (req: Request, res: Response, next: NextFunction) => {
+    const clientName = (req.params.clientName || req.body?.clientName || "").trim();
+
+    if (!clientName) {
+        throw new BadRequest("clientName is required");
+    }
+
+    const result = await versionUpdater.getSyncStatus(clientName);
+
+    SuccessResponse(res, {
+        message: "Sync status",
         result,
     });
 };
