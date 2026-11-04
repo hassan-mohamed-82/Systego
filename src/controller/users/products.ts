@@ -68,7 +68,6 @@ export const buildProductAggregationPipeline = (
     },
     { $unwind: { path: "$brandData", preserveNullAndEmptyArrays: true } },
 
-    // Category — must be online too
     // Category — must be online too, and a product can belong to multiple
     {
       $lookup: {
@@ -104,11 +103,10 @@ export const buildProductAggregationPipeline = (
     { $unwind: { path: "$discountData", preserveNullAndEmptyArrays: true } },
 
     // 3️⃣ A discount only counts as active if status is true AND it's
-    // scoped to E-commerce — previously this just checked existence,
-    // so disabled or POS-only discounts were still applied online.
+    // scoped to E-commerce. applyIn can be a string OR an array, same as
+    // getActiveDiscount in the cart controller, so prices match everywhere.
     // ⚠️ Field names ("status", "applyIn") and the value "E-commerce"
-    // are inferred from the original comment — confirm against the
-    // actual DiscountModel schema before relying on this.
+    // are inferred — confirm against the actual DiscountModel schema.
     {
       $addFields: {
         activeDiscount: {
@@ -117,7 +115,18 @@ export const buildProductAggregationPipeline = (
               $and: [
                 { $gt: ["$discountData", null] },
                 { $eq: ["$discountData.status", true] },
-                { $eq: ["$discountData.applyIn", "E-commerce"] },
+                {
+                  $in: [
+                    "E-commerce",
+                    {
+                      $cond: [
+                        { $isArray: "$discountData.applyIn" },
+                        "$discountData.applyIn",
+                        [{ $ifNull: ["$discountData.applyIn", null] }],
+                      ],
+                    },
+                  ],
+                },
               ],
             },
             then: "$discountData",
@@ -166,7 +175,7 @@ export const buildProductAggregationPipeline = (
         name: "$name",
         ar_name: "$ar_name",
         description: "$description",
-        // ✅ لازم ترجع مع الـ response عشان language middleware
+        // لازم ترجع مع الـ response عشان language middleware
         // تبدلها بـ description لما اللغة تكون عربي
         ar_description: "$ar_description",
         image: "$image",
@@ -218,11 +227,34 @@ export const buildProductAggregationPipeline = (
           },
         },
 
+        // إجمالي ستوك المنتج (مجموع كل الفاريشنز + أي ستوك مش مربوط بفاريشن).
         // Defaults to 0 for products with no stock rows in any online
         // warehouse — they're still shown, not dropped. Add
         // `{ $match: { totalQuantity: { $gt: 0 } } }` after this stage
         // if out-of-stock products should be hidden instead.
         quantity: "$totalQuantity",
+
+        // NEW: ستوك متسجل على المنتج نفسه (productPriceId = null) مش على أي فاريشن.
+        // لو المنتج ليه SKUs والرقم ده أكبر من 0 → فيه مشكلة في الداتا،
+        // لأن ده ستوك ميقدرش يتباع من الكارت.
+        unassigned_quantity: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: "$variantStocks",
+                  as: "vs",
+                  cond: {
+                    $eq: [{ $ifNull: ["$$vs.productPriceId", null] }, null],
+                  },
+                },
+              },
+              as: "u",
+              in: "$$u.quantity",
+            },
+          },
+        },
+
         is_favorite: { $in: ["$_id", wishlistIds] },
         categories: {
           $map: {
@@ -312,8 +344,8 @@ export const buildProductAggregationPipeline = (
 
               code: "$$price.code",
               gallery: "$$price.gallery",
-              // Also defaults to 0 rather than being absent when a
-              // variant has no stock in any online warehouse.
+              // ستوك الفاريشن ده لوحده. Defaults to 0 rather than being
+              // absent when a variant has no stock in any online warehouse.
               quantity: {
                 $let: {
                   vars: {
@@ -352,6 +384,47 @@ export const buildProductAggregationPipeline = (
           },
         },
         created_at: "$createdAt",
+      },
+    },
+
+    // NEW: علّم كل SKU هل فيه ستوك ولا لأ
+    {
+      $addFields: {
+        in_stock: { $gt: ["$quantity", 0] },
+        skus: {
+          $map: {
+            input: "$skus",
+            as: "s",
+            in: {
+              $mergeObjects: [
+                "$$s",
+                { in_stock: { $gt: ["$$s.quantity", 0] } },
+              ],
+            },
+          },
+        },
+      },
+    },
+
+    // NEW: ملخصات جاهزة للفرونت (من غير ما يلف على كل الفاريشنز)
+    {
+      $addFields: {
+        variants_count: { $size: "$skus" },
+        in_stock_variants_count: {
+          $size: {
+            $filter: { input: "$skus", as: "s", cond: "$$s.in_stock" },
+          },
+        },
+        // الـ options الموجودة فعلًا في SKUs ليها ستوك
+        available_option_ids: {
+          $reduce: {
+            input: {
+              $filter: { input: "$skus", as: "s", cond: "$$s.in_stock" },
+            },
+            initialValue: [],
+            in: { $setUnion: ["$$value", "$$this.option_ids"] },
+          },
+        },
       },
     },
   ];
@@ -729,12 +802,12 @@ export const getProductsByCategory = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
 
-    // ✅ 1) تأكد إن الـ id صالح
+    // 1) تأكد إن الـ id صالح
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new NotFound("Category ID is invalid");
     }
 
-    // ✅ 2) تأكد إن الكاتيجوري موجود و Is_Online = true
+    // 2) تأكد إن الكاتيجوري موجود و Is_Online = true
     const category = await CategoryModel.findOne({
       _id: id,
       Is_Online: true,
@@ -744,13 +817,13 @@ export const getProductsByCategory = asyncHandler(
       throw new NotFound("Category not found or not online");
     }
 
-    // ✅ 3) جيب المستودعات الأونلاين
+    // 3) جيب المستودعات الأونلاين
     const onlineWarehouses = await WarehouseModel.find({ Is_Online: true })
       .select("_id")
       .lean();
     const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
 
-    // ✅ 4) جيب الـ wishlist بتاع اليوزر (لو مسجل دخول)
+    // 4) جيب الـ wishlist بتاع اليوزر (لو مسجل دخول)
     let wishlistIds: mongoose.Types.ObjectId[] = [];
     if (req.user?.id) {
       const user = await CustomerModel.findById(req.user.id)
@@ -763,10 +836,9 @@ export const getProductsByCategory = asyncHandler(
       }
     }
 
-    // ✅ 5) ابنِ الـ pipeline بنفس اللي عندك
+    // 5) ابنِ الـ pipeline
     const matchStage: any = { categoryId: new mongoose.Types.ObjectId(id) };
 
-    // ⭐️ لو عايز تدعم query params إضافية (is_featured مثلاً)
     if (
       req.query.is_featured === "true" ||
       (req.query.is_featured as any) === true

@@ -15,18 +15,36 @@ import { SuccessResponse } from "../../utils/response";
 import { NotFound, BadRequest } from "../../Errors";
 
 /* =========================================================
+   Types
+========================================================= */
+type StockIssueReason =
+  | "OUT_OF_STOCK"
+  | "INSUFFICIENT_STOCK"
+  | "VARIANT_REQUIRED";
+
+interface StockIssue {
+  productId: string;
+  productName: string;
+  variantId: string | null;
+  variantCode: string | null;
+  variantLabel: string | null; // e.g. "Color: Red / Size: L"
+  options: { variation: string | null; value: string | null }[];
+  requested: number;
+  available: number;
+  reason: StockIssueReason;
+}
+
+/* =========================================================
    Helper: Get Cart Query (user OR sessionId)
 ========================================================= */
 const getCartQuery = (req: Request) => {
   const userId = req.user?.id;
   const sessionId = req.headers["x-session-id"] || req.body?.sessionId;
 
-  // ✅ لو userId ObjectId صالح → استخدمه
   if (userId && mongoose.Types.ObjectId.isValid(userId)) {
     return { user: new mongoose.Types.ObjectId(userId) };
   }
 
-  // ✅ لو UUID أو أي string → استخدم sessionId
   if (sessionId && typeof sessionId === "string" && sessionId.trim()) {
     return { sessionId: sessionId.trim() };
   }
@@ -36,7 +54,6 @@ const getCartQuery = (req: Request) => {
 
 /* =========================================================
    Helper: Extract userId from query safely
-   Returns ObjectId | null (never throws)
 ========================================================= */
 const getUserIdFromQuery = (query: any): mongoose.Types.ObjectId | null => {
   if (query && "user" in query && query.user) {
@@ -71,7 +88,7 @@ const computeFinalPrice = (basePrice: number, discount: any): number => {
 };
 
 /* =========================================================
-   Core: Calculate Cart Totals (Safe for ObjectId | string | null)
+   Core: Calculate Cart Totals
 ========================================================= */
 const calculateCartTotals = async (
   cart: any,
@@ -131,7 +148,6 @@ const calculateCartTotals = async (
     if ((shippingSettings as any)?.self?.method === "flat_rate") {
       shippingCost = Number((shippingSettings as any)?.self?.flatRate || 0);
     } else if (userId) {
-      // Address.user stores the Customer UUID string
       const address = await AddressModel.findOne({
         user: userId,
       }).populate("city zone");
@@ -197,11 +213,126 @@ const getAvailableStock = async (
 };
 
 /* =========================================================
+   Helper: Variant Info (NEW)
+   يجيب كود الـ SKU + أسماء الـ options بتاعته (Color: Red / Size: L)
+   عشان نعرف بالظبط أنهي فاريشن هو، حتى لو المنتج ليه 1000.
+   بيشتغل على فاريشن واحد بس (اللي في الكارت) فمفيش مشكلة أداء.
+========================================================= */
+const getVariantInfo = async (variantId: string | null | undefined) => {
+  const empty = {
+    code: null as string | null,
+    label: null as string | null,
+    options: [] as { variation: string | null; value: string | null }[],
+  };
+
+  if (!variantId || !mongoose.Types.ObjectId.isValid(variantId)) return empty;
+
+  const [info] = await ProductPriceModel.aggregate([
+    { $match: { _id: new mongoose.Types.ObjectId(variantId) } },
+    {
+      $lookup: {
+        from: "productpriceoptions",
+        localField: "_id",
+        foreignField: "product_price_id",
+        as: "po",
+      },
+    },
+    {
+      $lookup: {
+        from: "options",
+        localField: "po.option_id",
+        foreignField: "_id",
+        as: "opts",
+      },
+    },
+    {
+      $lookup: {
+        from: "variations",
+        localField: "opts.variationId",
+        foreignField: "_id",
+        as: "vars",
+      },
+    },
+    {
+      $project: {
+        code: 1,
+        opts: { _id: 1, name: 1, ar_name: 1, variationId: 1 },
+        vars: { _id: 1, name: 1, ar_name: 1 },
+      },
+    },
+  ]);
+
+  if (!info) return empty;
+
+  const options = (info.opts || []).map((o: any) => {
+    const v = (info.vars || []).find(
+      (x: any) => String(x._id) === String(o.variationId),
+    );
+    return { variation: v?.name ?? null, value: o.name ?? null };
+  });
+
+  const label =
+    options
+      .map((o: any) => (o.variation ? `${o.variation}: ${o.value}` : o.value))
+      .filter(Boolean)
+      .join(" / ") ||
+    info.code ||
+    null;
+
+  return { code: info.code ?? null, label, options };
+};
+
+/* =========================================================
+   Helper: Resolve Variant
+   - الفاريشن مبعوت → يرجّعه
+   - مش مبعوت + SKU واحد → يختاره تلقائي
+   - مش مبعوت + أكتر من SKU → required = true
+   - مفيش SKUs → منتج بسيط
+========================================================= */
+const resolveVariantId = async (
+  productId: string,
+  productVariantId?: string,
+): Promise<{ variantId?: string; required: boolean }> => {
+  if (productVariantId) return { variantId: productVariantId, required: false };
+
+  const prices = await ProductPriceModel.find({ productId })
+    .select("_id")
+    .lean();
+
+  if (prices.length === 1) {
+    return { variantId: prices[0]._id.toString(), required: false };
+  }
+  if (prices.length > 1) return { required: true };
+
+  return { required: false };
+};
+
+/* =========================================================
+   Helper: Build readable message from issues
+========================================================= */
+const buildIssuesMessage = (issues: StockIssue[]): string => {
+  const MAX = 5;
+  const parts = issues.slice(0, MAX).map((i) => {
+    const name = i.variantLabel
+      ? `"${i.productName}" (${i.variantLabel})`
+      : `"${i.productName}"`;
+    if (i.reason === "VARIANT_REQUIRED") return `${name}: variant required`;
+    return `${name}: requested ${i.requested}, available ${i.available}`;
+  });
+  const more = issues.length > MAX ? ` (+${issues.length - MAX} more)` : "";
+  return `Some items are unavailable: ${parts.join(" | ")}${more}`;
+};
+
+/* =========================================================
    1. Sync Cart
 ========================================================= */
 export const syncCart = asyncHandler(async (req: Request, res: Response) => {
   const { items } = req.body;
   const query = getCartQuery(req);
+
+  if (!Array.isArray(items)) {
+    throw new BadRequest("items must be an array");
+  }
 
   const onlineWarehouses = await WarehouseModel.find({
     Is_Online: true,
@@ -209,6 +340,7 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
   const onlineWarehouseIds = onlineWarehouses.map((w) => w._id);
 
   const validatedItems = [];
+  const stockIssues: StockIssue[] = []; // NEW: نجمع كل المشاكل بدل ما نقف عند أول واحدة
 
   for (const item of items) {
     const { productId, productVariantId, quantity } = item;
@@ -216,6 +348,11 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     /* ----- Validate productId ----- */
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new BadRequest(`Invalid product ID: ${productId}`);
+    }
+
+    /* ----- Validate quantity ----- */
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new BadRequest(`Invalid quantity for product ${productId}`);
     }
 
     const product = await ProductModel.findById(productId)
@@ -227,6 +364,8 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
       throw new BadRequest(`Product is not available online: ${productId}`);
     }
 
+    const productName = (product as any).name || String(productId);
+
     const categoryData = (product as any).categoryId;
     const isCategoryOnline = Array.isArray(categoryData)
       ? categoryData.some((c: any) => c?.Is_Online === true)
@@ -234,23 +373,44 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 
     if (!isCategoryOnline) {
       throw new BadRequest(
-        `Product's category is not available online: ${productId}`,
+        `Product's category is not available online: "${productName}"`,
       );
+    }
+
+    /* ----- Resolve variant ----- */
+    const { variantId: resolvedVariantId, required } = await resolveVariantId(
+      String(productId),
+      productVariantId,
+    );
+
+    if (required) {
+      stockIssues.push({
+        productId: String(productId),
+        productName,
+        variantId: null,
+        variantCode: null,
+        variantLabel: null,
+        options: [],
+        requested: quantity,
+        available: 0,
+        reason: "VARIANT_REQUIRED",
+      });
+      continue;
     }
 
     /* ----- Validate variant ----- */
     let variant: any = null;
-    if (productVariantId) {
-      if (!mongoose.Types.ObjectId.isValid(productVariantId)) {
-        throw new BadRequest(`Invalid variant ID: ${productVariantId}`);
+    if (resolvedVariantId) {
+      if (!mongoose.Types.ObjectId.isValid(resolvedVariantId)) {
+        throw new BadRequest(`Invalid variant ID: ${resolvedVariantId}`);
       }
-      variant = await ProductPriceModel.findById(productVariantId);
+      variant = await ProductPriceModel.findById(resolvedVariantId);
       if (!variant) {
-        throw new NotFound(`Product variant not found: ${productVariantId}`);
+        throw new NotFound(`Product variant not found: ${resolvedVariantId}`);
       }
       if (variant.productId.toString() !== productId.toString()) {
         throw new BadRequest(
-          `Variant ${productVariantId} does not belong to product ${productId}`,
+          `Variant ${resolvedVariantId} does not belong to product "${productName}"`,
         );
       }
     }
@@ -258,13 +418,24 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     /* ----- Check stock ----- */
     const availableStock = await getAvailableStock(
       new mongoose.Types.ObjectId(productId),
-      productVariantId ? new mongoose.Types.ObjectId(productVariantId) : null,
+      resolvedVariantId ? new mongoose.Types.ObjectId(resolvedVariantId) : null,
       onlineWarehouseIds,
     );
+
     if (quantity > availableStock) {
-      throw new BadRequest(
-        `Product ${productId} only has ${availableStock} in stock`,
-      );
+      const info = await getVariantInfo(resolvedVariantId);
+      stockIssues.push({
+        productId: String(productId),
+        productName,
+        variantId: resolvedVariantId || null,
+        variantCode: info.code,
+        variantLabel: info.label,
+        options: info.options,
+        requested: quantity,
+        available: availableStock,
+        reason: availableStock === 0 ? "OUT_OF_STOCK" : "INSUFFICIENT_STOCK",
+      });
+      continue;
     }
 
     /* ----- Compute price ----- */
@@ -274,10 +445,23 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 
     validatedItems.push({
       product: productId,
-      variant: productVariantId || undefined,
+      variant: resolvedVariantId || undefined,
       quantity: quantity,
       price: currentPrice,
     });
+  }
+
+  /* ----- لو فيه أي مشاكل ستوك: رجّعها كلها مرة واحدة ----- */
+  if (stockIssues.length > 0) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: "STOCK_ISSUES",
+        message: buildIssuesMessage(stockIssues),
+        items: stockIssues,
+      },
+    });
+    return;
   }
 
   /* ----- Upsert cart ----- */
@@ -316,6 +500,7 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 
 /* =========================================================
    2. Get Cart
+   كل item دلوقتي فيه: availableStock + inStock + variantInfo
 ========================================================= */
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
   const query = getCartQuery(req);
@@ -357,10 +542,14 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
       const availableStock = productId
         ? await getAvailableStock(productId, productPriceId, onlineWarehouseIds)
         : 0;
+      const variantInfo = productPriceId
+        ? await getVariantInfo(String(productPriceId))
+        : null;
       return {
         ...item,
         availableStock,
         inStock: availableStock >= item.quantity,
+        variantInfo, // { code, label, options[] } أو null
       };
     }),
   );
