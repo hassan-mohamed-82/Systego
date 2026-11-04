@@ -291,39 +291,6 @@ export const createProduct = async (req: Request, res: Response) => {
   });
 };
 
-// بتجمّع الفاريشنز على مستوى المنتج (Color / Size ...) وتحسب quantity لكل option
-// quantity بتاع الـ option = مجموع ستوك كل الـ SKUs اللي فيها الـ option ده
-const buildVariationsWithQuantity = (formattedPrices: any[]) => {
-  const grouped = new Map<
-    string,
-    Map<string, { _id: any; name: string; quantity: number }>
-  >();
-
-  for (const price of formattedPrices) {
-    const skuQty = Number(price.quantity) || 0;
-
-    for (const v of price.variations || []) {
-      if (!grouped.has(v.name)) grouped.set(v.name, new Map());
-      const opts = grouped.get(v.name)!;
-
-      for (const o of v.options || []) {
-        const key = String(o._id);
-        const existing = opts.get(key);
-        if (existing) {
-          existing.quantity += skuQty;
-        } else {
-          opts.set(key, { _id: o._id, name: o.name, quantity: skuQty });
-        }
-      }
-    }
-  }
-
-  return Array.from(grouped, ([name, opts]) => ({
-    name,
-    options: Array.from(opts.values()),
-  }));
-};
-
 // ==================== جلب كل المنتجات ====================
 export const getProduct = async (
   req: Request,
@@ -425,7 +392,6 @@ export const getProduct = async (
         totalQuantity,
         stocks,
         prices: formattedPrices,
-        variations: buildVariationsWithQuantity(formattedPrices),
       };
     }),
   );
@@ -523,7 +489,6 @@ export const getOneProduct = async (
       totalQuantity,
       stocks,
       prices: formattedPrices,
-      variations: buildVariationsWithQuantity(formattedPrices),
     },
     message: "Product fetched successfully",
   });

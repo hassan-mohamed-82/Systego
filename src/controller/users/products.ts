@@ -103,10 +103,11 @@ export const buildProductAggregationPipeline = (
     { $unwind: { path: "$discountData", preserveNullAndEmptyArrays: true } },
 
     // 3️⃣ A discount only counts as active if status is true AND it's
-    // scoped to E-commerce. applyIn can be a string OR an array, same as
-    // getActiveDiscount in the cart controller, so prices match everywhere.
+    // scoped to E-commerce — previously this just checked existence,
+    // so disabled or POS-only discounts were still applied online.
     // ⚠️ Field names ("status", "applyIn") and the value "E-commerce"
-    // are inferred — confirm against the actual DiscountModel schema.
+    // are inferred from the original comment — confirm against the
+    // actual DiscountModel schema before relying on this.
     {
       $addFields: {
         activeDiscount: {
@@ -115,18 +116,7 @@ export const buildProductAggregationPipeline = (
               $and: [
                 { $gt: ["$discountData", null] },
                 { $eq: ["$discountData.status", true] },
-                {
-                  $in: [
-                    "E-commerce",
-                    {
-                      $cond: [
-                        { $isArray: "$discountData.applyIn" },
-                        "$discountData.applyIn",
-                        [{ $ifNull: ["$discountData.applyIn", null] }],
-                      ],
-                    },
-                  ],
-                },
+                { $eq: ["$discountData.applyIn", "E-commerce"] },
               ],
             },
             then: "$discountData",
@@ -227,34 +217,11 @@ export const buildProductAggregationPipeline = (
           },
         },
 
-        // إجمالي ستوك المنتج (مجموع كل الفاريشنز + أي ستوك مش مربوط بفاريشن).
         // Defaults to 0 for products with no stock rows in any online
         // warehouse — they're still shown, not dropped. Add
         // `{ $match: { totalQuantity: { $gt: 0 } } }` after this stage
         // if out-of-stock products should be hidden instead.
         quantity: "$totalQuantity",
-
-        // NEW: ستوك متسجل على المنتج نفسه (productPriceId = null) مش على أي فاريشن.
-        // لو المنتج ليه SKUs والرقم ده أكبر من 0 → فيه مشكلة في الداتا،
-        // لأن ده ستوك ميقدرش يتباع من الكارت.
-        unassigned_quantity: {
-          $sum: {
-            $map: {
-              input: {
-                $filter: {
-                  input: "$variantStocks",
-                  as: "vs",
-                  cond: {
-                    $eq: [{ $ifNull: ["$$vs.productPriceId", null] }, null],
-                  },
-                },
-              },
-              as: "u",
-              in: "$$u.quantity",
-            },
-          },
-        },
-
         is_favorite: { $in: ["$_id", wishlistIds] },
         categories: {
           $map: {
@@ -285,146 +252,66 @@ export const buildProductAggregationPipeline = (
               name: "$$v.name",
               ar_name: "$$v.ar_name",
               options: {
-                $filter: {
-                  input: "$rawOptions",
-                  as: "o",
-                  cond: { $eq: ["$$o.variationId", "$$v._id"] },
-                },
-              },
-            },
-          },
-        },
-        skus: {
-          $map: {
-            input: "$prices",
-            as: "price",
-            in: {
-              _id: "$$price._id",
-              price: "$$price.price",
-
-              // 5️⃣ Discounted price per SKU
-              final_price: {
-                $cond: {
-                  if: { $gt: ["$activeDiscount", null] },
-                  then: {
-                    $cond: {
-                      if: { $eq: ["$activeDiscount.type", "percentage"] },
-                      then: {
-                        $max: [
-                          {
-                            $subtract: [
-                              "$$price.price",
-                              {
-                                $multiply: [
-                                  "$$price.price",
-                                  "$activeDiscount.amount",
-                                ],
-                              },
-                            ],
-                          },
-                          0,
-                        ],
-                      },
-                      else: {
-                        $max: [
-                          {
-                            $subtract: [
-                              "$$price.price",
-                              "$activeDiscount.amount",
-                            ],
-                          },
-                          0,
-                        ],
-                      },
-                    },
-                  },
-                  else: "$$price.price",
-                },
-              },
-
-              code: "$$price.code",
-              gallery: "$$price.gallery",
-              // ستوك الفاريشن ده لوحده. Defaults to 0 rather than being
-              // absent when a variant has no stock in any online warehouse.
-              quantity: {
-                $let: {
-                  vars: {
-                    stockObj: {
-                      $arrayElemAt: [
-                        {
-                          $filter: {
-                            input: "$variantStocks",
-                            as: "vs",
-                            cond: {
-                              $eq: ["$$vs.productPriceId", "$$price._id"],
-                            },
-                          },
-                        },
-                        0,
-                      ],
-                    },
-                  },
-                  in: { $ifNull: ["$$stockObj.quantity", 0] },
-                },
-              },
-              option_ids: {
                 $map: {
                   input: {
                     $filter: {
-                      input: "$priceOptions",
-                      as: "po",
-                      cond: { $eq: ["$$po.product_price_id", "$$price._id"] },
+                      input: "$rawOptions",
+                      as: "o",
+                      cond: { $eq: ["$$o.variationId", "$$v._id"] },
                     },
                   },
-                  as: "filteredPo",
-                  in: "$$filteredPo.option_id",
+                  as: "opt",
+                  in: {
+                    $mergeObjects: [
+                      "$$opt",
+                      {
+                        // ستوك الـ option ده = مجموع ستوك كل الـ SKUs اللي فيها الـ option ده
+                        quantity: {
+                          $sum: {
+                            $map: {
+                              input: {
+                                $filter: {
+                                  input: "$variantStocks",
+                                  as: "vs",
+                                  cond: {
+                                    $in: [
+                                      "$$vs.productPriceId",
+                                      {
+                                        $map: {
+                                          input: {
+                                            $filter: {
+                                              input: "$priceOptions",
+                                              as: "po",
+                                              cond: {
+                                                $eq: [
+                                                  "$$po.option_id",
+                                                  "$$opt._id",
+                                                ],
+                                              },
+                                            },
+                                          },
+                                          as: "x",
+                                          in: "$$x.product_price_id",
+                                        },
+                                      },
+                                    ],
+                                  },
+                                },
+                              },
+                              as: "m",
+                              in: "$$m.quantity",
+                            },
+                          },
+                        },
+                      },
+                    ],
+                  },
                 },
               },
             },
           },
         },
         created_at: "$createdAt",
-      },
-    },
-
-    // NEW: علّم كل SKU هل فيه ستوك ولا لأ
-    {
-      $addFields: {
-        in_stock: { $gt: ["$quantity", 0] },
-        skus: {
-          $map: {
-            input: "$skus",
-            as: "s",
-            in: {
-              $mergeObjects: [
-                "$$s",
-                { in_stock: { $gt: ["$$s.quantity", 0] } },
-              ],
-            },
-          },
-        },
-      },
-    },
-
-    // NEW: ملخصات جاهزة للفرونت (من غير ما يلف على كل الفاريشنز)
-    {
-      $addFields: {
-        variants_count: { $size: "$skus" },
-        in_stock_variants_count: {
-          $size: {
-            $filter: { input: "$skus", as: "s", cond: "$$s.in_stock" },
-          },
-        },
-        // الـ options الموجودة فعلًا في SKUs ليها ستوك
-        available_option_ids: {
-          $reduce: {
-            input: {
-              $filter: { input: "$skus", as: "s", cond: "$$s.in_stock" },
-            },
-            initialValue: [],
-            in: { $setUnion: ["$$value", "$$this.option_ids"] },
-          },
-        },
       },
     },
   ];
