@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import asyncHandler from "express-async-handler";
 import { CartModel } from "../../models/schema/users/Cart";
 import { ProductModel } from "../../models/schema/admin/products";
-import { ProductPriceModel } from "../../models/schema/admin/product_price";
+import { ProductPriceModel, ProductPriceOptionModel } from "../../models/schema/admin/product_price";
 import { ShippingSettingsModel } from "../../models/schema/admin/ShippingSettings";
 import { ServiceFeeModel } from "../../models/schema/admin/ServiceFee";
 import { CouponModel } from "../../models/schema/admin/coupons";
@@ -378,10 +378,79 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     }
 
     /* ----- Resolve variant ----- */
-    const { variantId: resolvedVariantId, required } = await resolveVariantId(
-      String(productId),
-      productVariantId,
-    );
+    // 1) Direct variant id (only if it actually exists in DB)
+    let resolvedVariantId: string | undefined;
+    let required = false;
+
+    if (productVariantId && mongoose.Types.ObjectId.isValid(productVariantId)) {
+      const direct = await ProductPriceModel.findById(productVariantId);
+      if (direct && direct.productId.toString() === productId.toString()) {
+        resolvedVariantId = productVariantId;
+      }
+    }
+
+    // 2) Resolve from provided options (variationId + optionId pairs)
+    const providedOptions = Array.isArray((item as any).options)
+      ? (item as any).options
+      : [];
+    if (!resolvedVariantId && providedOptions.length > 0) {
+      const optionIds = providedOptions
+        .map((o: any) => o?.optionId)
+        .filter((id: any) => id && mongoose.Types.ObjectId.isValid(id))
+        .map((id: any) => String(id));
+
+      if (optionIds.length > 0) {
+        const prices = await ProductPriceModel.find({ productId }).select("_id").lean();
+        // Prefer exact match (same number of options)
+        let matched: string | undefined;
+        for (const p of prices) {
+          const opts = await ProductPriceOptionModel.find({ product_price_id: p._id })
+            .select("option_id")
+            .lean();
+          const poIds = opts.map((o: any) => String(o.option_id));
+          if (
+            optionIds.length === poIds.length &&
+            optionIds.every((id: string) => poIds.includes(id))
+          ) {
+            matched = String(p._id);
+            break;
+          }
+        }
+        // Fallback: superset match
+        if (!matched) {
+          for (const p of prices) {
+            const opts = await ProductPriceOptionModel.find({ product_price_id: p._id })
+              .select("option_id")
+              .lean();
+            const poIds = opts.map((o: any) => String(o.option_id));
+            if (optionIds.every((id: string) => poIds.includes(id))) {
+              matched = String(p._id);
+              break;
+            }
+          }
+        }
+        if (matched) {
+          resolvedVariantId = matched;
+        } else {
+          required = true;
+        }
+      }
+    }
+
+    // 3) Auto-resolve for products without provided variant/options
+    if (!resolvedVariantId && !required && providedOptions.length === 0) {
+      const auto = await resolveVariantId(String(productId), productVariantId);
+      resolvedVariantId = auto.variantId;
+      required = auto.required;
+    }
+
+    // 4) If options were provided but no variant resolved → required
+    if (!resolvedVariantId && providedOptions.length > 0 && !required) {
+      // try single-variant auto
+      const prices = await ProductPriceModel.find({ productId }).select("_id").lean();
+      if (prices.length === 1) resolvedVariantId = String(prices[0]._id);
+      else if (prices.length > 1) required = true;
+    }
 
     if (required) {
       stockIssues.push({
@@ -406,9 +475,16 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
       }
       variant = await ProductPriceModel.findById(resolvedVariantId);
       if (!variant) {
-        throw new NotFound(`Product variant not found: ${resolvedVariantId}`);
+        // Don't hard-fail; fall back to product-level if single variant
+        const prices = await ProductPriceModel.find({ productId }).select("_id").lean();
+        if (prices.length === 1) {
+          resolvedVariantId = String(prices[0]._id);
+          variant = await ProductPriceModel.findById(resolvedVariantId);
+        } else {
+          throw new NotFound(`Product variant not found: ${resolvedVariantId}`);
+        }
       }
-      if (variant.productId.toString() !== productId.toString()) {
+      if (variant && variant.productId.toString() !== productId.toString()) {
         throw new BadRequest(
           `Variant ${resolvedVariantId} does not belong to product "${productName}"`,
         );
