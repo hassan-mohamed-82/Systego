@@ -1,0 +1,435 @@
+{
+  "info": {
+    "_postman_id": "b3f6f0d2-5c1e-4f5a-9a5e-1a2b3c4d5e6f",
+    "name": "Systego - Ecommerce Online Orders",
+    "description": "Public ecommerce online-orders API (X-API-KEY only, no JWT).\n\nSet the `apiKey` collection/environment variable to the tenant key (SUPER_SYSTEGO_API_KEY).\n\nEndpoints:\n- POST {{baseUrl}}/api/public/online-orders\n- POST {{baseUrl}}/api/public/online-orders/accept?id=ORD-5091\n- POST {{baseUrl}}/api/public/online-orders/reject?id=ORD-5092",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": "ORD-5091"
+    },
+    {
+      "key": "orderId2",
+      "value": "ORD-5092"
+    }
+  ],
+  "item": [
+    {
+      "name": "1) Create Online Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 or 201', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Response has success = true', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "});",
+              "",
+              "pm.test('Response contains an order', function () {",
+              "  pm.expect(json.data.order).to.be.an('object');",
+              "  pm.expect(json.data.order.id).to.eql(pm.variables.get('orderId'));",
+              "});",
+              "",
+              "pm.test('New order status is pending', function () {",
+              "  pm.expect(json.data.order.status).to.eql('pending');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-KEY",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{orderId}}\",\n  \"customer_name\": \"أحمد محمود\",\n  \"customer_phone\": \"01206610346\",\n  \"total_price\": 650.00,\n  \"currency\": \"EGP\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders"
+          ]
+        },
+        "description": "Creates a pending online order. Safe to run more than once: retries with the same id return the existing order with 200 and `created: false`."
+      }
+    },
+    {
+      "name": "2) Create Second Order (for reject test)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200 or 201', function () {",
+              "  pm.expect([200, 201]).to.include(pm.response.code);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Response contains the second order', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.order.id).to.eql(pm.variables.get('orderId2'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-KEY",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{orderId2}}\",\n  \"customer_name\": \"محمد علي\",\n  \"customer_phone\": \"01000000000\",\n  \"total_price\": 320.50,\n  \"currency\": \"EGP\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders"
+          ]
+        },
+        "description": "A second order is needed because accept/reject are only allowed from `pending`. Use ORD-5091 for accept and ORD-5092 for reject."
+      }
+    },
+    {
+      "name": "3) Accept Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Order status is processing', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.order.status).to.eql('processing');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-KEY",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders/accept?id={{orderId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders",
+            "accept"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "{{orderId}}"
+            }
+          ]
+        },
+        "description": "Accepts the order: pending → processing. The order id is passed as a query parameter: ?id=ORD-5091."
+      }
+    },
+    {
+      "name": "4) Reject Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Order status is canceled', function () {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.order.status).to.eql('canceled');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-KEY",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders/reject?id={{orderId2}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders",
+            "reject"
+          ],
+          "query": [
+            {
+              "key": "id",
+              "value": "{{orderId2}}"
+            }
+          ]
+        },
+        "description": "Rejects the order: pending → canceled. The order id is passed as a query parameter: ?id=ORD-5092."
+      }
+    },
+    {
+      "name": "5) Accept Without ID (expect 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 400', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Error says id is required', function () {",
+              "  pm.expect(json.success).to.eql(false);",
+              "  pm.expect(json.error.message).to.include('id is required');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-KEY",
+            "value": "{{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders/accept",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders",
+            "accept"
+          ]
+        },
+        "description": "Validates that the id query parameter is required."
+      }
+    },
+    {
+      "name": "6) Wrong API Key (expect 401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 401', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Error says invalid API key', function () {",
+              "  pm.expect(json.success).to.eql(false);",
+              "  pm.expect(json.error.message).to.include('Invalid API key');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-KEY",
+            "value": "wrong-key"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"ORD-5099\",\n  \"customer_name\": \"Test\",\n  \"customer_phone\": \"01206610346\",\n  \"total_price\": 100,\n  \"currency\": \"EGP\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders"
+          ]
+        },
+        "description": "Validates the API key guard."
+      }
+    },
+    {
+      "name": "7) Missing API Key (expect 401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 401', function () {",
+              "  pm.response.to.have.status(401);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "",
+              "pm.test('Error says header is missing', function () {",
+              "  pm.expect(json.success).to.eql(false);",
+              "  pm.expect(json.error.message).to.include('Missing X-API-KEY header');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"ORD-5100\",\n  \"customer_name\": \"Test\",\n  \"customer_phone\": \"01206610346\",\n  \"total_price\": 100,\n  \"currency\": \"EGP\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/public/online-orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "public",
+            "online-orders"
+          ]
+        },
+        "description": "Validates that X-API-KEY is required."
+      }
+    }
+  ]
+}

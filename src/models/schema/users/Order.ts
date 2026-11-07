@@ -19,6 +19,27 @@ const orderSchema = new Schema(
       },
     },
 
+    // 🆕 External order id coming from an ecommerce / integration client.
+    // Used by the public online-orders API so the caller can accept/reject
+    // its own order id without knowing the MongoDB _id.
+    externalId: {
+      type: String,
+      trim: true,
+      index: { unique: true, sparse: true },
+    },
+
+    // 🆕 Raw customer data sent by the ecommerce integration.
+    customerName: { type: String, trim: true, default: "" },
+    customerPhone: { type: String, trim: true, default: "" },
+
+    // 🆕 Order currency (the integration can send EGP, USD, ...).
+    currency: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "EGP",
+    },
+
     user: {
       type: Schema.Types.String,
       ref: "Customer",
