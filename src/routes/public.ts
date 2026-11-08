@@ -13,7 +13,7 @@ const publicRouter = Router();
 publicRouter.get("/products", getPublicProducts);
 
 // Public (no JWT) e-commerce order status endpoints — protected by x-api-key.
-// The order identifier is sent as a query string: ?order_id=ORD-5091
+// The order identifier is sent as a query string: ?id=11088739
 publicRouter.get(
   "/orders/accept",
   requireWebhookApiKey,

@@ -57,12 +57,6 @@ const orderSchema = new Schema(
       trim: true,
       index: { unique: true, sparse: true },
     },
-    currency: {
-      type: String,
-      trim: true,
-      uppercase: true,
-      default: "EGP",
-    },
 
     orderType: {
       type: String,
@@ -149,10 +143,7 @@ const orderSchema = new Schema(
     paymentMethod: {
       type: Schema.Types.ObjectId,
       ref: "PaymentMethod",
-      // Kept optional so older/imported orders can still be saved when an
-      // external platform updates their status. Storefront checkout always
-      // sets it.
-      required: false,
+      required: true,
     },
     paymentGateway: {
       type: String,
