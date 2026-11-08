@@ -47,6 +47,23 @@ const orderSchema = new Schema(
       index: { sparse: true },
     },
 
+    // ═══════════════════════════════════════════════════════════
+    // 🛒 External e-commerce sync
+    // ═══════════════════════════════════════════════════════════
+    // The order id returned by the external platform (when it sends one back
+    // in its webhook response). Used to resolve `?id=` in accept/reject.
+    externalOrderId: {
+      type: String,
+      trim: true,
+      index: { unique: true, sparse: true },
+    },
+    currency: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "EGP",
+    },
+
     orderType: {
       type: String,
       enum: ORDER_TYPES,
@@ -132,7 +149,10 @@ const orderSchema = new Schema(
     paymentMethod: {
       type: Schema.Types.ObjectId,
       ref: "PaymentMethod",
-      required: true,
+      // Kept optional so older/imported orders can still be saved when an
+      // external platform updates their status. Storefront checkout always
+      // sets it.
+      required: false,
     },
     paymentGateway: {
       type: String,

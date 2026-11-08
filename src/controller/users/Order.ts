@@ -33,6 +33,7 @@ import { UserModel } from "../../models/schema/admin/User";
 import { NotificationModel } from "../../models/schema/admin/Notfication";
 import { getBostaCreds } from "../../utils/shipping/getBostaCreds";
 import bostaService from "../../services/bosta.service";
+import { syncOrderToExternalPlatform } from "../../utils/externalOrderSync";
 
 // ═══════════════════════════════════════════════════════════
 // 💵 Helper: احسب الـ markup
@@ -1012,6 +1013,17 @@ export const createOrder = async (
     if (shouldClearCart) {
       await CartModel.findOneAndDelete(cartQuery);
     }
+
+    // 🔗 Forward the order to the external e-commerce platform (best effort).
+    // Not awaited on purpose: a slow/unreachable external platform must not
+    // delay or fail the customer's checkout.
+    void syncOrderToExternalPlatform({
+      orderId: order[0]._id.toString(),
+      reference: order[0].reference,
+      userId: userId || null,
+      totalPrice,
+      currency: (order[0] as any).currency || "EGP",
+    });
 
     return SuccessResponse(
       res,
