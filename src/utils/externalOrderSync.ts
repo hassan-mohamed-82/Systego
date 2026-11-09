@@ -110,11 +110,19 @@ export const syncOrderToExternalPlatform = async (
     currency: (input.currency || "EGP").toUpperCase(),
   };
 
+  // The external platform expects form-encoded data (not JSON).
+  const form = new URLSearchParams();
+  form.append("id", String(payload.id));
+  form.append("customer_name", payload.customer_name);
+  form.append("customer_phone", payload.customer_phone);
+  form.append("total_price", String(payload.total_price));
+  form.append("currency", payload.currency);
+
   try {
-    const response = await axios.post(url, payload, {
+    const response = await axios.post(url, form, {
       timeout: 10_000,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
         "X-API-KEY": apiKey,
       },
