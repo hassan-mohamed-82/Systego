@@ -26,7 +26,9 @@ const mergeCarts = async (userId: string, sessionId: string | undefined) => {
             // merge products from guest cart to user cart
             guestCart.cartItems.forEach(guestItem => {
                 const existingItem = userCart.cartItems.find(
-                    item => item.product.toString() === guestItem.product.toString()
+                    item =>
+                        item.product.toString() === guestItem.product.toString() &&
+                        String(item.variant || "") === String(guestItem.variant || "")
                 );
 
                 if (existingItem) {

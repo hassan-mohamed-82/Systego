@@ -41,8 +41,9 @@ const getCartQuery = (req: Request) => {
   const userId = req.user?.id;
   const sessionId = req.headers["x-session-id"] || req.body?.sessionId;
 
-  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
-    return { user: new mongoose.Types.ObjectId(userId) };
+  // Customer ids are UUIDs (not Mongo ObjectIds), so do not require ObjectId validity.
+  if (userId && typeof userId === "string" && userId.trim()) {
+    return { user: userId.trim() };
   }
 
   if (sessionId && typeof sessionId === "string" && sessionId.trim()) {
@@ -540,15 +541,37 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
+  /* ----- Resolve target cart (prefer user cart, fall back to session cart) ----- */
+  const userId = req.user?.id;
+  const sessionId =
+    (req.headers["x-session-id"] as string) ||
+    (req.body?.sessionId as string);
+
+  let targetQuery: any = query;
+  if (userId && sessionId) {
+    const userCart = await CartModel.findOne({ user: String(userId).trim() });
+    if (userCart) {
+      targetQuery = { _id: userCart._id };
+    } else {
+      const sessionCart = await CartModel.findOne({
+        sessionId: String(sessionId).trim(),
+      });
+      if (sessionCart) targetQuery = { _id: sessionCart._id };
+    }
+  }
+
   /* ----- Upsert cart ----- */
+  const updateDoc: any = { cartItems: validatedItems };
+  if (userId) updateDoc.user = String(userId).trim();
+
   await CartModel.findOneAndUpdate(
-    query,
-    { cartItems: validatedItems },
+    targetQuery,
+    updateDoc,
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
 
   /* ----- Fetch full cart ----- */
-  const fullCart = await CartModel.findOne(query)
+  const fullCart = await CartModel.findOne(targetQuery)
     .populate({
       path: "cartItems.product",
       select: "name ar_name image price free_shipping taxesId discountId",
@@ -558,7 +581,7 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 
   if (!fullCart) throw new NotFound("Cart processing failed");
 
-  const userIdForCalc = getUserIdFromQuery(query);
+  const userIdForCalc = (req.user?.id as any) || getUserIdFromQuery(targetQuery);
 
   const { shippingCost } = await calculateCartTotals(
     fullCart,
@@ -580,13 +603,36 @@ export const syncCart = asyncHandler(async (req: Request, res: Response) => {
 ========================================================= */
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
   const query = getCartQuery(req);
-  const cart = await CartModel.findOne(query)
+  let cart = await CartModel.findOne(query)
     .populate({
       path: "cartItems.product",
       select: "name ar_name image price free_shipping taxesId discountId",
       populate: [{ path: "taxesId" }, { path: "discountId" }],
     })
     .populate("cartItems.variant");
+
+  // Fallback: if the user cart is empty/missing, try the session cart (legacy/mixed state).
+  const userId = req.user?.id;
+  const sessionId =
+    (req.headers["x-session-id"] as string) || (req.body?.sessionId as string);
+  if (
+    userId &&
+    sessionId &&
+    (!cart || !cart.cartItems || cart.cartItems.length === 0)
+  ) {
+    const sessionCart = await CartModel.findOne({
+      sessionId: String(sessionId).trim(),
+    })
+      .populate({
+        path: "cartItems.product",
+        select: "name ar_name image price free_shipping taxesId discountId",
+        populate: [{ path: "taxesId" }, { path: "discountId" }],
+      })
+      .populate("cartItems.variant");
+    if (sessionCart && sessionCart.cartItems && sessionCart.cartItems.length > 0) {
+      cart = sessionCart;
+    }
+  }
 
   if (!cart || cart.cartItems.length === 0) {
     return SuccessResponse(res, {

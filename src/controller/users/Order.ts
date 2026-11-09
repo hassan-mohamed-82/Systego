@@ -81,13 +81,31 @@ export const createOrder = async (
       );
     }
 
-    const orConditions: any[] = [];
-    if (userId) orConditions.push({ user: userId });
-    if (sessionId) orConditions.push({ sessionId: sessionId });
-    const cartQuery =
-      orConditions.length > 1
-        ? { $or: orConditions }
-        : orConditions[0] || {};
+    // Resolve the cart consistently with the cart controller:
+    // - logged-in customers are keyed by their (UUID) user id
+    // - guests are keyed by sessionId
+    // Fall back to the session cart when the user cart is empty/missing
+    // (legacy state where items were stored under sessionId).
+    let cartQuery: any;
+    if (userId && sessionId) {
+      const userCart = await CartModel.findOne({ user: String(userId).trim() });
+      if (userCart && userCart.cartItems && userCart.cartItems.length > 0) {
+        cartQuery = { user: String(userId).trim() };
+      } else {
+        const sessionCart = await CartModel.findOne({
+          sessionId: String(sessionId).trim(),
+        });
+        if (sessionCart && sessionCart.cartItems && sessionCart.cartItems.length > 0) {
+          cartQuery = { sessionId: String(sessionId).trim() };
+        } else {
+          cartQuery = { user: String(userId).trim() };
+        }
+      }
+    } else if (userId) {
+      cartQuery = { user: String(userId).trim() };
+    } else {
+      cartQuery = { sessionId: String(sessionId).trim() };
+    }
 
     const cart = await CartModel.findOne(cartQuery).populate({
       path: "cartItems.product",
