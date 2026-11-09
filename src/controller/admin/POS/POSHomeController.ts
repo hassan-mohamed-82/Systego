@@ -180,7 +180,8 @@ const buildWarehouseProductList = async (
 
       return {
         _id: product._id,
-        name: product.ar_name || product.name,
+        name: product.name,
+        ar_name: product.ar_name,
         price: product.price,
         image: product.image,
         different_price,

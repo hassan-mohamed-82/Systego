@@ -36,6 +36,18 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     throw new UnauthorizedError("Invalid email or password");
   }
 
+  // ⛔ POS clients cannot work without a warehouse: block the login with a 400
+  // so the POS/Electron app can show a clear "no warehouse" toast instead of
+  // landing on the cashier screen and failing on every warehouse-scoped call.
+  const isPosClient =
+    String(req.headers["x-pos-client"] || "").toLowerCase() === "true";
+
+  if (isPosClient && !user.warehouse_id) {
+    throw new BadRequest("This user is not assigned to any warehouse", {
+      code: "USER_NO_WAREHOUSE",
+    });
+  }
+
   // NOTE: We intentionally do NOT block login when the tenant subscription is
   // expired/inactive. The client must be able to log in and reach the
   // "Payment Required" page to submit a renewal request. Everything else is
